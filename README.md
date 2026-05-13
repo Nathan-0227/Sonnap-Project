@@ -46,9 +46,15 @@ Figma 設計稿： [(https://www.figma.com/files/team/1633021850224699912/recent
 ```
 
 欄位說明 (給開發者的指南)
+
 欄位名稱	類型	說明
+
 pet_mood	String	寵物心情：happy, tired, bored, anxious
+
 current_activity	String	當前動畫狀態：sleeping, dreaming, waking_up
+
 motion_count	Integer	翻身次數（由影像組提供）
+
 dream_summary	String	由 Gemini API 生成的夢境描述
+
 energy_level	Integer	0-100，影響寵物動畫的活躍度
