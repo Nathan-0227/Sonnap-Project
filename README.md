@@ -45,16 +45,23 @@ Figma 網址： [(https://www.figma.com/files/team/1633021850224699912/recents-a
 
 ```
 
-欄位說明 (給開發者的指南)
+欄位說明 (開發者指南)
+pet_mood (String)：寵物心情，支援狀態包括：happy, tired, bored, anxious。
 
-欄位名稱	類型	說明
+current_activity (String)：當前動畫狀態，支援狀態包括：sleeping, dreaming, waking_up。
 
-pet_mood	String	寵物心情：happy, tired, bored, anxious
+motion_count (Integer)：翻身次數，由影像組提供之偵測數據。
 
-current_activity	String	當前動畫狀態：sleeping, dreaming, waking_up
+dream_summary (String)：由 Gemini API 生成的夢境描述文字。
 
-motion_count	Integer	翻身次數（由影像組提供）
+energy_level (Integer)：數值範圍 0-100，用於影響寵物動畫的活躍度。
 
-dream_summary	String	由 Gemini API 生成的夢境描述
 
-energy_level	Integer	0-100，影響寵物動畫的活躍度
+
+🛠 開發規範 (Workflow)
+
+為了確保團隊協作順暢，請所有組員遵守以下規則：
+
+1.請勿直接 Push 到 main 分支。請從 main 切出新分支開發：git checkout -b feature/功能名稱。
+2.遇到 Bug 或需要討論功能時，請在 GitHub Issues 建立任務，避免資訊散落在通訊軟體。
+3.Commit Message 請保持簡潔（如：feat: 新增睡眠數據欄位）。
