@@ -3,8 +3,10 @@ import json
 import time
 from datetime import datetime
 
-# 初始化攝影機 (0 通常是內建攝影機)
-cap = cv2.VideoCapture(0)
+# 格式為：rtsp://帳號:密碼@攝影機的IP地址:554/stream1
+# 舉例（假設你在 App 設定的帳號是 admin，密碼是 password123，攝影機 IP 是 192.168.1.100）：
+tapo_url = "rtsp://admin:password123@192.168.1.100:554/stream1"
+cap = cv2.VideoCapture(tapo_url)
 
 if not cap.isOpened():
     print("Error: 無法開啟攝影機。")
