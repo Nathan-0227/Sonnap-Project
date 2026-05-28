@@ -5,8 +5,8 @@ from datetime import datetime
 
 # 格式為：rtsp://帳號:密碼@攝影機的IP地址:554/stream1
 # 舉例（假設你在 App 設定的帳號是 admin，密碼是 password123，攝影機 IP 是 192.168.1.100）：
-tapo_url = "rtsp://imqs113:Monica113@@10.106.43.253:554/stream1"
-cap = cv2.VideoCapture(tapo_url)
+tapo_url = "rtsp://imqs113:Monica113%40@192.168.137.59/stream1"
+cap = cv2.VideoCapture(tapo_url, cv2.CAP_FFMPEG)
 
 if not cap.isOpened():
     print("Error: 無法開啟攝影機。")
