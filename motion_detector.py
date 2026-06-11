@@ -6,10 +6,10 @@ from datetime import datetime
 import os
 
 # ==================== 🛠️ 設定區 ====================
-tapo_url = "rtsp://imqs113:Monica113@192.168.137.59:554/stream1"
+tapo_url = "rtsp://imqs113:Monica113@192.168.50.204:554/stream1"
 
-START_TIME = "22:40:00"  # 自動啟動時間
-END_TIME   = "22:41:00"  # 自動關閉與存檔時間
+START_TIME = "15:02:00"  # 自動啟動時間
+END_TIME   = "15:03:00"  # 自動關閉與存檔時間
 
 # 🏃 動作靈敏度設定 (數值越小越靈敏)
 MOTION_LARGE =  100000    # 超過此數值判定為「大翻身 (large_turn)」
