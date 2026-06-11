@@ -1,0 +1,21 @@
+{
+  "session_id": "20260528_2348",
+  "status": {
+    "pet_mood": "tired",
+    "current_activity": "sleeping",
+    "energy_level": 70
+  },
+  "metrics": {
+    "motion_count": 1660,
+    "sleep_duration_minutes": null,
+    "ambient_noise_db": null,
+    "sleep_start_time": "2026-05-18T21:04:00+08:00",
+    "wake_time": "2026-05-21T01:50:00+08:00",
+    "garmin_records": 5047
+  },
+  "ai_content": {
+    "dream_summary": null,
+    "advice": null
+  },
+  "timestamp": "2026-05-28T23:48:47Z"
+}

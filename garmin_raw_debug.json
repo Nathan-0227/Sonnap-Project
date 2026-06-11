@@ -1,0 +1,598 @@
+{
+  "generated_at": "2026-05-28T15:48:47Z",
+  "fetch_days": [
+    "2026-05-19",
+    "2026-05-20",
+    "2026-05-21"
+  ],
+  "summary": [
+    {
+      "date": "2026-05-19",
+      "sleep": {
+        "ok": true,
+        "method": "get_sleep_data",
+        "shape": "dict(keys=['dailySleepDTO', 'remSleepData', 'restingHeartRate', 'skinTempDataExists', 'sleepHeartRate', 'sleepLevels', 'sleepMovement', 'sleepStress'])",
+        "records_added": 553,
+        "attempts": []
+      },
+      "heart_rate": {
+        "ok": true,
+        "method": "get_heart_rates",
+        "shape": "dict(keys=['calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'heartRateValueDescriptors', 'heartRateValues', 'lastSevenDaysAvgRestingHeartRate', 'maxHeartRate', 'minHeartRate'])",
+        "records_added": 458,
+        "attempts": []
+      },
+      "stress": {
+        "ok": true,
+        "method": "get_stress_data",
+        "shape": "dict(keys=['avgStressLevel', 'calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'maxStressLevel', 'startTimestampGMT', 'startTimestampLocal', 'stressChartValueOffset'])",
+        "records_added": 254,
+        "attempts": []
+      },
+      "steps": {
+        "ok": true,
+        "method": "get_steps_data",
+        "shape": "list[96]",
+        "records_added": 96,
+        "attempts": []
+      },
+      "raw_sample": {
+        "sleep": {
+          "dailySleepDTO": {
+            "type": "dict",
+            "len": 22,
+            "sample": {
+              "id": 1779138240000,
+              "userProfilePK": 143260915,
+              "calendarDate": "2026-05-19",
+              "sleepTimeSeconds": 14160,
+              "napTimeSeconds": 0,
+              "sleepWindowConfirmed": true,
+              "sleepWindowConfirmationType": "enhanced_confirmed_final",
+              "sleepStartTimestampGMT": 1779138240000
+            }
+          },
+          "sleepMovement": {
+            "type": "list",
+            "len": 371,
+            "sample": [
+              {
+                "startGMT": "2026-05-18T20:04:00.0",
+                "endGMT": "2026-05-18T20:05:00.0",
+                "activityLevel": 5.7214746822092435
+              },
+              {
+                "startGMT": "2026-05-18T20:05:00.0",
+                "endGMT": "2026-05-18T20:06:00.0",
+                "activityLevel": 5.300661301685827
+              },
+              {
+                "startGMT": "2026-05-18T20:06:00.0",
+                "endGMT": "2026-05-18T20:07:00.0",
+                "activityLevel": 4.875943674296663
+              }
+            ]
+          },
+          "remSleepData": true,
+          "sleepLevels": {
+            "type": "list",
+            "len": 15,
+            "sample": [
+              {
+                "startGMT": "2026-05-18T21:03:00.0",
+                "endGMT": "2026-05-18T21:16:00.0",
+                "activityLevel": 1.0
+              },
+              {
+                "startGMT": "2026-05-18T21:16:00.0",
+                "endGMT": "2026-05-18T21:28:00.0",
+                "activityLevel": 0.0
+              },
+              {
+                "startGMT": "2026-05-18T21:28:00.0",
+                "endGMT": "2026-05-18T21:29:00.0",
+                "activityLevel": 3.0
+              }
+            ]
+          },
+          "sleepHeartRate": {
+            "type": "list",
+            "len": 126,
+            "sample": [
+              {
+                "value": 73,
+                "startGMT": 1779138240000
+              },
+              {
+                "value": 73,
+                "startGMT": 1779138360000
+              },
+              {
+                "value": 71,
+                "startGMT": 1779138480000
+              }
+            ]
+          },
+          "sleepStress": {
+            "type": "list",
+            "len": 84,
+            "sample": [
+              {
+                "value": 20,
+                "startGMT": 1779138180000
+              },
+              {
+                "value": 19,
+                "startGMT": 1779138360000
+              },
+              {
+                "value": 23,
+                "startGMT": 1779138540000
+              }
+            ]
+          },
+          "skinTempDataExists": false,
+          "restingHeartRate": 66
+        },
+        "heart_rate": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-19",
+          "startTimestampGMT": "2026-05-18T16:00:00.0",
+          "endTimestampGMT": "2026-05-19T16:00:00.0",
+          "startTimestampLocal": "2026-05-19T00:00:00.0",
+          "endTimestampLocal": "2026-05-20T00:00:00.0",
+          "maxHeartRate": 152,
+          "minHeartRate": 35
+        },
+        "stress": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-19",
+          "startTimestampGMT": "2026-05-18T16:00:00.0",
+          "endTimestampGMT": "2026-05-19T16:00:00.0",
+          "startTimestampLocal": "2026-05-19T00:00:00.0",
+          "endTimestampLocal": "2026-05-20T00:00:00.0",
+          "maxStressLevel": 97,
+          "avgStressLevel": 25
+        },
+        "steps": {
+          "type": "list",
+          "len": 96,
+          "sample": [
+            {
+              "startGMT": "2026-05-18T16:00:00.0",
+              "endGMT": "2026-05-18T16:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-18T16:15:00.0",
+              "endGMT": "2026-05-18T16:30:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-18T16:30:00.0",
+              "endGMT": "2026-05-18T16:45:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-18T16:45:00.0",
+              "endGMT": "2026-05-18T17:00:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-18T17:00:00.0",
+              "endGMT": "2026-05-18T17:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-05-20",
+      "sleep": {
+        "ok": true,
+        "method": "get_sleep_data",
+        "shape": "dict(keys=['dailySleepDTO', 'remSleepData', 'restingHeartRate', 'skinTempDataExists', 'sleepHeartRate', 'sleepLevels', 'sleepMovement', 'sleepStress'])",
+        "records_added": 847,
+        "attempts": []
+      },
+      "heart_rate": {
+        "ok": true,
+        "method": "get_heart_rates",
+        "shape": "dict(keys=['calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'heartRateValueDescriptors', 'heartRateValues', 'lastSevenDaysAvgRestingHeartRate', 'maxHeartRate', 'minHeartRate'])",
+        "records_added": 633,
+        "attempts": []
+      },
+      "stress": {
+        "ok": true,
+        "method": "get_stress_data",
+        "shape": "dict(keys=['avgStressLevel', 'calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'maxStressLevel', 'startTimestampGMT', 'startTimestampLocal', 'stressChartValueOffset'])",
+        "records_added": 376,
+        "attempts": []
+      },
+      "steps": {
+        "ok": true,
+        "method": "get_steps_data",
+        "shape": "list[96]",
+        "records_added": 96,
+        "attempts": []
+      },
+      "raw_sample": {
+        "sleep": {
+          "dailySleepDTO": {
+            "type": "dict",
+            "len": 22,
+            "sample": {
+              "id": 1779220500000,
+              "userProfilePK": 143260915,
+              "calendarDate": "2026-05-20",
+              "sleepTimeSeconds": 25920,
+              "napTimeSeconds": 0,
+              "sleepWindowConfirmed": true,
+              "sleepWindowConfirmationType": "enhanced_confirmed",
+              "sleepStartTimestampGMT": 1779220500000
+            }
+          },
+          "sleepMovement": {
+            "type": "list",
+            "len": 561,
+            "sample": [
+              {
+                "startGMT": "2026-05-19T18:55:00.0",
+                "endGMT": "2026-05-19T18:56:00.0",
+                "activityLevel": 5.528471835629254
+              },
+              {
+                "startGMT": "2026-05-19T18:56:00.0",
+                "endGMT": "2026-05-19T18:57:00.0",
+                "activityLevel": 5.044784752800517
+              },
+              {
+                "startGMT": "2026-05-19T18:57:00.0",
+                "endGMT": "2026-05-19T18:58:00.0",
+                "activityLevel": 4.537999227886591
+              }
+            ]
+          },
+          "remSleepData": true,
+          "sleepLevels": {
+            "type": "list",
+            "len": 18,
+            "sample": [
+              {
+                "startGMT": "2026-05-19T19:54:00.0",
+                "endGMT": "2026-05-19T20:01:00.0",
+                "activityLevel": 1.0
+              },
+              {
+                "startGMT": "2026-05-19T20:01:00.0",
+                "endGMT": "2026-05-19T20:53:00.0",
+                "activityLevel": 0.0
+              },
+              {
+                "startGMT": "2026-05-19T20:53:00.0",
+                "endGMT": "2026-05-19T21:30:00.0",
+                "activityLevel": 1.0
+              }
+            ]
+          },
+          "sleepHeartRate": {
+            "type": "list",
+            "len": 221,
+            "sample": [
+              {
+                "value": 65,
+                "startGMT": 1779220440000
+              },
+              {
+                "value": 66,
+                "startGMT": 1779220560000
+              },
+              {
+                "value": 66,
+                "startGMT": 1779220680000
+              }
+            ]
+          },
+          "sleepStress": {
+            "type": "list",
+            "len": 148,
+            "sample": [
+              {
+                "value": 16,
+                "startGMT": 1779220440000
+              },
+              {
+                "value": 16,
+                "startGMT": 1779220620000
+              },
+              {
+                "value": 15,
+                "startGMT": 1779220800000
+              }
+            ]
+          },
+          "skinTempDataExists": false,
+          "restingHeartRate": 67
+        },
+        "heart_rate": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-20",
+          "startTimestampGMT": "2026-05-19T16:00:00.0",
+          "endTimestampGMT": "2026-05-20T16:00:00.0",
+          "startTimestampLocal": "2026-05-20T00:00:00.0",
+          "endTimestampLocal": "2026-05-21T00:00:00.0",
+          "maxHeartRate": 137,
+          "minHeartRate": 58
+        },
+        "stress": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-20",
+          "startTimestampGMT": "2026-05-19T16:00:00.0",
+          "endTimestampGMT": "2026-05-20T16:00:00.0",
+          "startTimestampLocal": "2026-05-20T00:00:00.0",
+          "endTimestampLocal": "2026-05-21T00:00:00.0",
+          "maxStressLevel": 89,
+          "avgStressLevel": 23
+        },
+        "steps": {
+          "type": "list",
+          "len": 96,
+          "sample": [
+            {
+              "startGMT": "2026-05-19T16:00:00.0",
+              "endGMT": "2026-05-19T16:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-19T16:15:00.0",
+              "endGMT": "2026-05-19T16:30:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-19T16:30:00.0",
+              "endGMT": "2026-05-19T16:45:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-19T16:45:00.0",
+              "endGMT": "2026-05-19T17:00:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-19T17:00:00.0",
+              "endGMT": "2026-05-19T17:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-05-21",
+      "sleep": {
+        "ok": true,
+        "method": "get_sleep_data",
+        "shape": "dict(keys=['dailySleepDTO', 'remSleepData', 'restingHeartRate', 'skinTempDataExists', 'sleepHeartRate', 'sleepLevels', 'sleepMovement', 'sleepStress'])",
+        "records_added": 910,
+        "attempts": []
+      },
+      "heart_rate": {
+        "ok": true,
+        "method": "get_heart_rates",
+        "shape": "dict(keys=['calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'heartRateValueDescriptors', 'heartRateValues', 'lastSevenDaysAvgRestingHeartRate', 'maxHeartRate', 'minHeartRate'])",
+        "records_added": 499,
+        "attempts": []
+      },
+      "stress": {
+        "ok": true,
+        "method": "get_stress_data",
+        "shape": "dict(keys=['avgStressLevel', 'calendarDate', 'endTimestampGMT', 'endTimestampLocal', 'maxStressLevel', 'startTimestampGMT', 'startTimestampLocal', 'stressChartValueOffset'])",
+        "records_added": 246,
+        "attempts": []
+      },
+      "steps": {
+        "ok": true,
+        "method": "get_steps_data",
+        "shape": "list[79]",
+        "records_added": 79,
+        "attempts": []
+      },
+      "raw_sample": {
+        "sleep": {
+          "dailySleepDTO": {
+            "type": "dict",
+            "len": 22,
+            "sample": {
+              "id": 1779295500000,
+              "userProfilePK": 143260915,
+              "calendarDate": "2026-05-21",
+              "sleepTimeSeconds": 32400,
+              "napTimeSeconds": 0,
+              "sleepWindowConfirmed": true,
+              "sleepWindowConfirmationType": "auto_confirmed_final",
+              "sleepStartTimestampGMT": 1779295500000
+            }
+          },
+          "sleepMovement": {
+            "type": "list",
+            "len": 665,
+            "sample": [
+              {
+                "startGMT": "2026-05-20T15:45:00.0",
+                "endGMT": "2026-05-20T15:46:00.0",
+                "activityLevel": 5.673179469176255
+              },
+              {
+                "startGMT": "2026-05-20T15:46:00.0",
+                "endGMT": "2026-05-20T15:47:00.0",
+                "activityLevel": 5.226584774166367
+              },
+              {
+                "startGMT": "2026-05-20T15:47:00.0",
+                "endGMT": "2026-05-20T15:48:00.0",
+                "activityLevel": 4.761468606198226
+              }
+            ]
+          },
+          "remSleepData": true,
+          "sleepLevels": {
+            "type": "list",
+            "len": 18,
+            "sample": [
+              {
+                "startGMT": "2026-05-20T16:45:00.0",
+                "endGMT": "2026-05-20T18:06:00.0",
+                "activityLevel": 1.0
+              },
+              {
+                "startGMT": "2026-05-20T18:06:00.0",
+                "endGMT": "2026-05-20T20:48:00.0",
+                "activityLevel": 0.0
+              },
+              {
+                "startGMT": "2026-05-20T20:48:00.0",
+                "endGMT": "2026-05-20T21:47:00.0",
+                "activityLevel": 1.0
+              }
+            ]
+          },
+          "sleepHeartRate": {
+            "type": "list",
+            "len": 182,
+            "sample": [
+              {
+                "value": 74,
+                "startGMT": 1779295440000
+              },
+              {
+                "value": 73,
+                "startGMT": 1779295560000
+              },
+              {
+                "value": 74,
+                "startGMT": 1779295680000
+              }
+            ]
+          },
+          "sleepStress": {
+            "type": "list",
+            "len": 183,
+            "sample": [
+              {
+                "value": 11,
+                "startGMT": 1779295320000
+              },
+              {
+                "value": 21,
+                "startGMT": 1779295500000
+              },
+              {
+                "value": 14,
+                "startGMT": 1779295680000
+              }
+            ]
+          },
+          "skinTempDataExists": false,
+          "restingHeartRate": 61
+        },
+        "heart_rate": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-21",
+          "startTimestampGMT": "2026-05-20T16:00:00.0",
+          "endTimestampGMT": "2026-05-21T11:44:00.0",
+          "startTimestampLocal": "2026-05-21T00:00:00.0",
+          "endTimestampLocal": "2026-05-22T00:00:00.0",
+          "maxHeartRate": 149,
+          "minHeartRate": 56
+        },
+        "stress": {
+          "userProfilePK": 143260915,
+          "calendarDate": "2026-05-21",
+          "startTimestampGMT": "2026-05-20T16:00:00.0",
+          "endTimestampGMT": "2026-05-21T11:44:00.0",
+          "startTimestampLocal": "2026-05-21T00:00:00.0",
+          "endTimestampLocal": "2026-05-21T19:44:00.0",
+          "maxStressLevel": 96,
+          "avgStressLevel": 26
+        },
+        "steps": {
+          "type": "list",
+          "len": 79,
+          "sample": [
+            {
+              "startGMT": "2026-05-20T16:00:00.0",
+              "endGMT": "2026-05-20T16:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-20T16:15:00.0",
+              "endGMT": "2026-05-20T16:30:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-20T16:30:00.0",
+              "endGMT": "2026-05-20T16:45:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sedentary",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-20T16:45:00.0",
+              "endGMT": "2026-05-20T17:00:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sleeping",
+              "activityLevelConstant": true
+            },
+            {
+              "startGMT": "2026-05-20T17:00:00.0",
+              "endGMT": "2026-05-20T17:15:00.0",
+              "steps": 0,
+              "pushes": 0,
+              "primaryActivityLevel": "sleeping",
+              "activityLevelConstant": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
