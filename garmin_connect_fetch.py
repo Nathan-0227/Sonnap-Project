@@ -1,12 +1,45 @@
 import argparse
 import json
 import os
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
-
 from garmin_importer import build_project_payload, build_standard_payload
 
+def gmt_to_local_iso(gmt_value, tz_hours=8):
+    """
+    Force Garmin GMT/UTC time to local ISO time.
 
+    Important:
+    Some previous code may have already appended +08:00 to a GMT time.
+    So here we ignore any existing timezone label and treat the clock time as UTC.
+    Example:
+    2026-06-10T18:58:00+08:00
+    -> treat as 2026-06-10 18:58 UTC
+    -> output 2026-06-11T02:58:00+08:00
+    """
+    if not gmt_value:
+        return None
+
+    text = str(gmt_value).replace("Z", "")
+
+    # Remove timezone suffix if it already exists
+    if "+" in text:
+        text = text.split("+")[0]
+    elif len(text) > 19 and "-" in text[19:]:
+        text = text[:19]
+
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+    # Force Garmin GMT time to UTC
+    dt = dt.replace(tzinfo=timezone.utc)
+
+    local_tz = timezone(timedelta(hours=tz_hours))
+    return dt.astimezone(local_tz).isoformat()
+
+    
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch Garmin Connect data and convert to Sonnap standard JSON."
@@ -218,8 +251,10 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
         sleep_root.get("sleepEndTimestampGMT", sleep_root.get("endTimestampGMT")),
         tz,
     )
-    _add(records, sleep_start, "sleep_start_time", sleep_start, "datetime")
-    _add(records, sleep_end, "wake_time", sleep_end, "datetime")
+    sleep_start_local = gmt_to_local_iso(sleep_start, 8)
+    sleep_end_local = gmt_to_local_iso(sleep_end, 8)
+    _add(records, sleep_start_local, "sleep_start_time", sleep_start_local, "datetime")
+    _add(records, sleep_end_local, "wake_time", sleep_end_local, "datetime")
 
     stage_map = {
         "remSleepSeconds": "rem",
@@ -230,8 +265,10 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
     for key, stage_name in stage_map.items():
         duration = sleep_root.get(key)
         if duration is not None:
-            _add(records, sleep_start or f"{day_str}T00:00:00{tz}", "sleep_stage", stage_name, "stage")
-            _add(records, sleep_start or f"{day_str}T00:00:00{tz}", f"{stage_name}_duration_sec", int(duration), "sec")
+            base_ts = sleep_start_local or f"{day_str}T00:00:00{tz}"
+            _add(records, base_ts, "sleep_stage", stage_name, "stage")
+            _add(records, base_ts, f"{stage_name}_duration_sec", int(duration), "sec")
+    
 
     sleep_levels = raw.get("sleepLevelsMap")
     if isinstance(sleep_levels, dict):
@@ -242,8 +279,10 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
             for item in level_data:
                 if not isinstance(item, dict):
                     continue
-                ts = _iso_from_epoch_any(item.get("startTimeGMT"), tz)
-                end_ts = _iso_from_epoch_any(item.get("endTimeGMT"), tz)
+                
+                ts = gmt_to_local_iso(_iso_from_epoch_any(item.get("startTimeGMT"), tz), 8)
+                end_ts = gmt_to_local_iso(_iso_from_epoch_any(item.get("endTimeGMT"), tz), 8)
+                
                 _add(records, ts, "sleep_stage", level, "stage")
                 _add(records, ts, "sleep_segment_start", ts, "datetime")
                 _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
@@ -256,22 +295,28 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
             level = _sleep_stage_from_activity_level(
                 item.get("activityLevel", item.get("sleepLevel", item.get("level")))
             )
-            ts = _iso_from_garmin_str(item.get("startGMT", item.get("startTimeGMT")), tz)
-            if ts is None:
-                ts = _iso_from_epoch_any(item.get("startGMT", item.get("startTimeGMT")), tz)
-            end_ts = _iso_from_garmin_str(item.get("endGMT", item.get("endTimeGMT")), tz)
-            if end_ts is None:
-                end_ts = _iso_from_epoch_any(item.get("endGMT", item.get("endTimeGMT")), tz)
-            if level:
-                _add(records, ts, "sleep_stage", level, "stage")
-            _add(records, ts, "sleep_segment_start", ts, "datetime")
-            _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
+
+        ts_raw = _iso_from_garmin_str(item.get("startGMT", item.get("startTimeGMT")), tz)
+        if ts_raw is None:
+            ts_raw = _iso_from_epoch_any(item.get("startGMT", item.get("startTimeGMT")), tz)
+
+        end_ts_raw = _iso_from_garmin_str(item.get("endGMT", item.get("endTimeGMT")), tz)
+        if end_ts_raw is None:
+            end_ts_raw = _iso_from_epoch_any(item.get("endGMT", item.get("endTimeGMT")), tz)
+
+        ts = gmt_to_local_iso(ts_raw, 8)
+        end_ts = gmt_to_local_iso(end_ts_raw, 8)
+        
+        if level:
+            _add(records, ts, "sleep_stage", level, "stage")
+        _add(records, ts, "sleep_segment_start", ts, "datetime")
+        _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
 
     if isinstance(raw.get("sleepHeartRate"), list):
         for item in raw["sleepHeartRate"]:
             if not isinstance(item, dict):
                 continue
-            ts = _iso_from_epoch_any(item.get("startGMT"), tz)
+            ts = gmt_to_local_iso(_iso_from_epoch_any(item.get("startGMT"), tz), 8)
             value = item.get("value")
             if value is not None:
                 try:
@@ -283,7 +328,7 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
         for item in raw["sleepMovement"]:
             if not isinstance(item, dict):
                 continue
-            ts = _iso_from_garmin_str(item.get("startGMT"), tz)
+            ts = gmt_to_local_iso(_iso_from_garmin_str(item.get("startGMT"), tz), 8)
             level = item.get("activityLevel")
             if level is not None:
                 try:
@@ -292,9 +337,9 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
                     pass
 
     resting_hr = raw.get("restingHeartRate")
-    if resting_hr is not None and sleep_start:
+    if resting_hr is not None and sleep_start_local:
         try:
-            _add(records, sleep_start, "resting_heart_rate", int(resting_hr), "bpm")
+            _add(records, sleep_start_local, "resting_heart_rate", int(resting_hr), "bpm")
         except (TypeError, ValueError):
             pass
 
