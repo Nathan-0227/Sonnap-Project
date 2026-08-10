@@ -68,18 +68,21 @@ energy_level (Integer)：數值範圍 0-100，用於影響寵物動畫的活躍�
 
 3.Commit Message 請保持簡潔（如：feat: 新增睡眠數據欄位）。
 
-## Garmin 資料匯入（手動匯出）
+## Garmin 睡眠資料與評分
 
-專案提供 `garmin_importer.py`，可將 Garmin CSV 匯出檔轉換為：
-- `garmin_standard_data.json`（標準化時間序列）
-- `garmin_project_payload.json`（目前 Sonnap API payload 格式）
+從 Garmin 手錶抓資料，經過整理、特徵抽取，算出每晚的睡眠品質分數（0–100）。
 
 快速開始：
-1. 將 Garmin 匯出 CSV 放到 `garmin_export/`
-2. 執行 `python garmin_importer.py`
-3. 參考 `GARMIN_IMPORT_GUIDE.md` 了解欄位對照與參數
+1. 安裝套件：`pip install garminconnect`
+2. 在 `garmin/.env` 填入 `GARMIN_EMAIL` 與 `GARMIN_PASSWORD`
+3. 執行整條 pipeline：
 
-若要測試 Garmin Connect 直連抓取（PoC）：
-1. 安裝 `pip install garminconnect`
-2. 設定 `GARMIN_EMAIL`、`GARMIN_PASSWORD`
-3. 執行 `python garmin_connect_fetch.py --days 3`
+```bash
+python garmin/run_pipeline.py --fetch --days 30   # 重新抓資料並計算
+python garmin/run_pipeline.py                     # 用現有資料重算
+```
+
+結果在 `garmin/data/garmin_sleep_quality_final.csv`。
+
+詳細流程、各步驟說明、已知限制見 [`garmin/README.md`](garmin/README.md)；
+評分權重的文獻依據見 [`Research-Background/Garmin手錶分數.md`](Research-Background/Garmin手錶分數.md)。
