@@ -2,8 +2,75 @@ import argparse
 import json
 import os
 from datetime import UTC, date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
-from garmin_importer import build_project_payload, build_standard_payload
+
+# 【2026-08-11】生成的資料檔集中放在 garmin/data/，讓 garmin/ 目錄下只留程式碼。
+# 用 Path(__file__).parent 而非相對路徑字串，這樣不管從哪個工作目錄執行都能正確定位。
+DATA_DIR = Path(__file__).parent / "data"
+ENV_FILE = Path(__file__).parent / ".env"
+
+
+def _load_env_file(path: Path = ENV_FILE) -> None:
+    """
+    把 garmin/.env 裡的設定讀進環境變數。
+
+    【2026-08-11 修正】先前 .env 檔案雖然存在，但程式完全沒有讀它——只有
+    os.getenv() 去讀環境變數，導致使用者以為填了 .env 就能用，實際上還是得
+    每次手動設環境變數或帶 --email/--password 參數。
+
+    不用 python-dotenv 套件而是自己解析，理由是專案規範「優先用標準庫，
+    非必要不加依賴」，而 .env 的格式很單純（KEY=VALUE 一行一個），
+    自己讀十幾行就夠了，不值得為此多一個外部套件。
+
+    已存在的環境變數優先（不覆蓋），這樣臨時想用別的帳號時，
+    可以直接設環境變數蓋過 .env，不必去改檔案。
+    """
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        # 跳過空行與註解行
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # 去掉包住值的引號（有些人習慣寫 KEY="value"）
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        # setdefault 語意：已經有的環境變數不覆蓋
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+# 一定要在 parse_args() 之前執行——argparse 的 default 是用 os.getenv() 取值，
+# 那些 default 在函式定義時就會被求值，太晚載入 .env 就來不及了。
+_load_env_file()
+
+
+def build_standard_payload(device_id: str, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    把抓下來的原始 records 包成標準格式的 JSON，寫入 garmin_standard_data.json。
+    下游的 analyze_garmin_sleep.py 就是讀這個檔案。
+
+    records 會先依 timestamp 排序——下游 analyze 在配對「入睡→起床」時假設
+    資料是按時間順序的，這裡先排好可以避免下游拿到亂序資料。
+
+    【2026-08-11 搬移記錄】此函式原本放在 garmin_importer.py（讀手動匯出 CSV 的
+    替代入口），由本檔案 import 過來使用。因該替代入口實際從未被使用
+    （garmin_export/ 資料夾從未存在），已刪除該檔並將此函式搬移至此，
+    消除跨檔依賴。同時修正 source 標籤：原本寫死為 "garmin_connect_manual_export"，
+    導致 API 抓下來的資料被標記成「手動匯出」，與事實不符，現改為正確標示來源。
+    """
+    return {
+        "device_id": device_id,
+        "source": "garmin_connect_api",
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "total_records": len(records),
+        "records": sorted(records, key=lambda x: x["timestamp"]),
+    }
+
 
 def gmt_to_local_iso(gmt_value, tz_hours=8):
     """
@@ -77,13 +144,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default="garmin_standard_data.json",
+        default=str(DATA_DIR / "garmin_standard_data.json"),
         help="Output path for normalized records.",
-    )
-    parser.add_argument(
-        "--project-output",
-        default="garmin_project_payload.json",
-        help="Output path for project payload format.",
     )
     parser.add_argument(
         "--tz",
@@ -287,30 +349,43 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
                 _add(records, ts, "sleep_segment_start", ts, "datetime")
                 _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
 
-    # Vivoactive shape: sleepLevels with numeric activityLevel (0=deep,1=light,2=rem,3=awake)
+    # Vivoactive 形狀：sleepLevels 是一個清單，每筆用數字 activityLevel 表示睡眠階段
+    # (0=deep 深睡, 1=light 淺睡, 2=rem, 3=awake 清醒)
     if isinstance(raw.get("sleepLevels"), list):
+        # 逐筆走訪清單裡的每一個睡眠時間段
         for item in raw.get("sleepLevels", []):
+            # 不是 dict 的雜訊資料直接跳過
             if not isinstance(item, dict):
                 continue
+
+            # 把數字 activityLevel 轉成文字階段名稱 (deep/light/rem/awake)
             level = _sleep_stage_from_activity_level(
                 item.get("activityLevel", item.get("sleepLevel", item.get("level")))
             )
 
-        ts_raw = _iso_from_garmin_str(item.get("startGMT", item.get("startTimeGMT")), tz)
-        if ts_raw is None:
-            ts_raw = _iso_from_epoch_any(item.get("startGMT", item.get("startTimeGMT")), tz)
+            # --- 以下這整段必須在 for 迴圈「裡面」，才能逐筆處理每個時間段 ---
+            # (原本的 bug：這段被縮排到迴圈外，導致 (a) 清單為空時 item 未定義而崩潰，
+            #  (b) 有資料時也只處理最後一筆，其餘時間段全被丟掉)
 
-        end_ts_raw = _iso_from_garmin_str(item.get("endGMT", item.get("endTimeGMT")), tz)
-        if end_ts_raw is None:
-            end_ts_raw = _iso_from_epoch_any(item.get("endGMT", item.get("endTimeGMT")), tz)
+            # 取這個時間段的「開始時間」：先試 Garmin 字串格式，失敗再試 epoch 數字格式
+            ts_raw = _iso_from_garmin_str(item.get("startGMT", item.get("startTimeGMT")), tz)
+            if ts_raw is None:
+                ts_raw = _iso_from_epoch_any(item.get("startGMT", item.get("startTimeGMT")), tz)
 
-        ts = gmt_to_local_iso(ts_raw, 8)
-        end_ts = gmt_to_local_iso(end_ts_raw, 8)
-        
-        if level:
-            _add(records, ts, "sleep_stage", level, "stage")
-        _add(records, ts, "sleep_segment_start", ts, "datetime")
-        _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
+            # 取這個時間段的「結束時間」：同樣先字串後 epoch
+            end_ts_raw = _iso_from_garmin_str(item.get("endGMT", item.get("endTimeGMT")), tz)
+            if end_ts_raw is None:
+                end_ts_raw = _iso_from_epoch_any(item.get("endGMT", item.get("endTimeGMT")), tz)
+
+            # 把 GMT 時間轉成本地時間 (+8 小時)
+            ts = gmt_to_local_iso(ts_raw, 8)
+            end_ts = gmt_to_local_iso(end_ts_raw, 8)
+
+            # 寫入三筆記錄：睡眠階段、時間段起點、時間段終點
+            if level:
+                _add(records, ts, "sleep_stage", level, "stage")
+            _add(records, ts, "sleep_segment_start", ts, "datetime")
+            _add(records, end_ts, "sleep_segment_end", end_ts, "datetime")
 
     if isinstance(raw.get("sleepHeartRate"), list):
         for item in raw["sleepHeartRate"]:
@@ -484,6 +559,32 @@ def _parse_steps_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
             _add(records, ts, "steps", parsed, "count")
 
 
+def _parse_daily_steps(day_str: str, raw: Any, tz: str, records: List[Dict[str, Any]]) -> None:
+    """
+    從 get_daily_steps 取「官方每日總步數」，與 Garmin App 主畫面顯示一致。
+    回傳形狀：[{"calendarDate":"2026-06-11","totalSteps":195,"stepGoal":3860,...}]
+    時間戳設在該日中午（避開睡眠區間），這樣在 analyze 會被歸到正確的日曆日。
+    """
+    items = raw if isinstance(raw, list) else [raw]
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        cal = item.get("calendarDate", day_str)
+        ts = f"{cal}T15:00:00{tz}"
+        total = item.get("totalSteps")
+        if total is not None:
+            try:
+                _add(records, ts, "daily_steps", int(total), "count")
+            except (TypeError, ValueError):
+                pass
+        goal = item.get("stepGoal")
+        if goal is not None:
+            try:
+                _add(records, ts, "step_goal", int(goal), "count")
+            except (TypeError, ValueError):
+                pass
+
+
 def _inject_movement_proxy(records: List[Dict[str, Any]]) -> None:
     # If no explicit movement metric from Garmin, use awake segments as coarse movement proxy.
     has_movement = any(r.get("metric") == "movement" for r in records)
@@ -607,7 +708,8 @@ def main() -> None:
             day_str,
         )
         stress_result = _safe_get_with_meta(client, ["get_stress_data", "get_stress"], day_str)
-        steps_result = _safe_get_with_meta(client, ["get_steps_data", "get_stats_and_body"], day_str)
+        # 改用官方每日步數 get_daily_steps(start, end)，與 Garmin App 顯示一致
+        steps_result = _safe_get_with_meta(client, ["get_daily_steps"], day_str, day_str)
 
         sleep_data = sleep_result["data"]
         heart_rate_data = heart_rate_result["data"]
@@ -627,7 +729,7 @@ def main() -> None:
         stress_count = len(records) - before
 
         before = len(records)
-        _parse_steps_data(day_str, steps_data, args.tz, records)
+        _parse_daily_steps(day_str, steps_data, args.tz, records)
         steps_count = len(records) - before
 
         debug_row: Dict[str, Any] = {
@@ -672,12 +774,9 @@ def main() -> None:
 
     _inject_movement_proxy(records)
     standard_payload = build_standard_payload(args.device_id, records)
-    project_payload = build_project_payload(standard_payload)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(standard_payload, f, ensure_ascii=False, indent=2)
-    with open(args.project_output, "w", encoding="utf-8") as f:
-        json.dump(project_payload, f, ensure_ascii=False, indent=2)
 
     if args.raw_debug_output:
         raw_debug_payload = {
@@ -692,7 +791,6 @@ def main() -> None:
     print(f"- fetched_days: {len(fetched_days)}")
     print(f"- records: {standard_payload['total_records']}")
     print(f"- standard output: {args.output}")
-    print(f"- project output:  {args.project_output}")
     if args.raw_debug_output:
         print(f"- raw debug:       {args.raw_debug_output}")
     print("- parser details per day:")
