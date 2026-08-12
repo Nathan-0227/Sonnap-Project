@@ -57,11 +57,19 @@ GARMIN_DATA = ROOT / "garmin" / "data"
 AI_DATA = ROOT / "ai" / "data"
 OUTPUT_PATH = ROOT / "app" / "assets" / "data" / "app_payload.json"
 
-# TAPO 報告可能出現的位置。目前實際存在的是 app/ 那份；
-# tapo/ 那個路徑是隊友之後把程式碼整併回去時的預期位置，先列著。
+# TAPO 單檔報告的候選位置。
+#
+# ⚠️ 2026-08-12 起 `app/sleep_report.json` 已刪除（它與 `tapo/` 那份是同一支程式
+#    跑錯資料夾的複本）。剩下的 `tapo/sleep_report.json` 內容是 17:26 開始、
+#    只有 29 秒的測試錄影，會被 load_tapo_report() 的白天時段門檻擋掉——
+#    這是正確行為，不是 bug。
+#
+#    真正的整晚資料在 `tapo/sleep_reports/<日期>/sleep_report_*.json`（每夜一份），
+#    尚未接入。接入時要注意那邊的 report_date 是「報告產生時間」不是「那一夜」，
+#    日期必須從 video_clip 檔名取。
 TAPO_REPORT_CANDIDATES = [
     ROOT / "tapo" / "sleep_report.json",
-    ROOT / "app" / "sleep_report.json",
+    ROOT / "app" / "sleep_report.json",  # 已刪除，留著讓舊 clone 仍能運作
 ]
 
 SCHEMA_VERSION = 1
