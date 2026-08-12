@@ -317,12 +317,20 @@ class _HeaderCardState extends State<HeaderCard> {
                             fontSize: 14,
                           ),
                         ),
-                        Text(
-                          timeLeft,
-                          style: const TextStyle(
-                            color: Color(0xFFFFD96A),
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
+                        // 倒數字串較長時（例如 "23h 42m"）在 30px 字級下會
+                        // 換行，把 150×150 的圓環撐破、出現黃黑斜線。
+                        // 因為長度隨當下時間變化，這個問題只在某些時段出現。
+                        // FittedBox 讓它需要時等比縮小而不是換行。
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            timeLeft,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: Color(0xFFFFD96A),
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const Text(
