@@ -7,6 +7,144 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 團隊分工：PM/系統整合、UI/UX（Figma）、App 前端、影像工程（OpenCV）、AI/數據處理，共 5 人。
 
+---
+
+## 🔖 交接區：目前狀態與下一步（2026-08-11．新對話請先讀這段）
+
+這段是「現在在哪、接下來做什麼」。底下的其他章節是**累積的歷史記錄**，
+裡面有些標題（例如「Next Development Goal」）寫的是當時的下一步，**現在已經過期**，
+不要照著做。以這段為準。
+
+### 工作位置（重要）
+
+**唯一該用的位置：`C:\Users\user\Projects\Sonnap-Project`**（真正的 git clone）
+
+桌面上那份 `OneDrive\桌面\Sonnap-Project-main\Sonnap-舊工作副本_勿用\` 是最初下載的 zip，
+**沒有版控、已停用**。它裡面只剩三樣東西沒被搬過來，都是刻意的：`garmin/.env`（帳密）、
+除錯 log、`garmin/data/_backup_20260811/`（重抓資料前的保險）。
+
+> 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
+
+### git 狀態
+
+Garmin 評分系統已透過 **PR #9 合併進 `main`**（commit `11310b1`）。
+`main` 現在同時有你的 `garmin/` 與隊友的 Flutter app（`app/`，156 個檔）。
+團隊規範：**不可直接 push main**，一律從 main 切 `feature/*` 分支開 PR。
+
+### 已完成
+
+- Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 3 秒跑完
+- 46 晚實測資料（2026-05-28 ~ 08-10），每晚 0–100 分 + Good/Normal/Poor/Bad
+- Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12）+ SRI（呈現不計分）
+- 完整文獻依據：`Research-Background/Garmin手錶分數.md`
+
+### 下一步（完整計劃在 `C:\Users\user\.claude\plans\encapsulated-squishing-rivest.md`）
+
+計劃檔存在全域 `~/.claude/plans/`，**換工作目錄後仍讀得到**，細節請直接讀它。摘要：
+
+| | 內容 | 狀態 |
+|---|---|---|
+| Part 0 | 推上 GitHub | ✅ 已完成（PR #9 已合併） |
+| Part A | 基礎建設：`requirements.txt`、修 `.gitignore`、`.env.example` | ✅ 已完成（2026-08-12） |
+| Part B | **AI 睡眠顧問**，獨立 `ai/` 資料夾 | ✅ 已完成（2026-08-12，含真實 API 呼叫） |
+| Part C | `PROJECT_STATUS.md` 現況報告（給團隊/教授） | ✅ 已完成（2026-08-12） |
+| Part D | **資料交接層**：`build_app_payload.py` + `main.py` 接真資料 | ✅ 已完成（2026-08-12） |
+| Part E | **Flutter 資料層**：4 個 model + `services/` + HomeScreen | ✅ 已完成（2026-08-12） |
+
+> 這一輪的完整計劃在 `C:\Users\user\.claude\plans\plan-app-graceful-pie.md`
+> （取代舊的 `encapsulated-squishing-rivest.md`——那份寫於 `app/` 併入之前，
+> 它假設「前端完全不存在」，這個前提已經失效）。
+
+**Part B 已於 2026-08-12 完成真實呼叫**：`ai/.env` 的 `ANTHROPIC_API_KEY` 已填
+（該檔已被 gitignore 擋住，`git check-ignore` 驗證過），模型設為 `claude-sonnet-5`。
+
+⚠️ **第一次真實呼叫就抓到兩個 prompt 層的 bug，兩個都已修好（`PROMPT_VERSION` 升到 v2）。
+這兩個都不是「模型偶爾出錯」，是 prompt 結構本身有問題，記在這裡避免改回去：**
+
+1. **「日記中間幾頁是空白的」意象被誤用在 REM 有測到的夜晚。**
+   這個意象不是修辭，是把「手錶沒測到 REM」誠實寫進敘事的機制——用在有資料的夜晚，
+   等於對使用者謊稱這段沒有記錄，跟 payload 那三個誠實 null 是同一件事。
+   實例：2026-08-09 的 REM = 29 分鐘（9.0%），模型仍寫了空白頁。
+   **根因是 few-shot 把兩個獨立條件綁在一起**——範例二同時是「評級 Bad」又是「REM 未測得」，
+   模型在 Bad 的夜晚就整段照抄。
+   修法（三層，缺一不可）：
+   - 調色盤那一行改成**只有 `rem_unmeasured` 為真時才放進 system prompt**
+     （`build_system_prompt()`）
+   - REM 有測到時**明確禁止**，不只是不提供（`PALETTE_REM_MEASURED`）
+   - few-shot 拆成兩版依當晚條件挑（`build_few_shot()`）
+   - `validate()` 加 `MISSING_RECORD_MOTIFS` 關鍵字擋，通不過就重試
+   **第四層真的救到了**：修好前三層之後重跑，模型第 1 次仍寫出「沒看清」被驗證擋下，
+   重試才過。光把選項拿掉不夠，模型自己的先驗會把它帶回來。
+
+2. **簡體字混進 zh-TW 輸出**：`claude-sonnet-5` 寫出「門边」（門正體、边簡體，同一個詞裡兩種字形）。
+   已加 `SIMPLIFIED_CHARS` 檢查 + FORMAT_RULES 明寫「一律臺灣正體中文」。
+   該集合**刻意不含 于／后／里**——那些字正體中文本來就會用（皇后、公里），
+   誤判的代價是整晚退回規則式文字。
+
+3. **我自己的驗證規則太寬，反而害 3 晚退回規則式**（全量跑完才發現）：
+   第一版把「沒看清」列為無條件禁詞，但 `PALETTE_REM_MEASURED` 才剛叫模型
+   「REM 比例低要寫夢很淡、很快就過去」——而「來不及看清楚就散掉」正是那個意思，
+   是在形容夢很模糊，**不是**在宣稱資料不存在。prompt 跟驗證規則互相打架。
+   已收窄成兩組：`MISSING_RECORD_MOTIFS`（空白/留白/沒有記錄/沒看見等無條件擋）
+   與「`SECTION_WORDS` + `VAGUE_VERBS` 同時出現才擋」（「中間…沒看清」擋、
+   「來不及看清楚」放行）。收窄後回歸測試：原始錯誤文字仍被擋、正常說法放行、
+   既有 43 晚零誤判。
+
+**最終結果：46 晚全部由 LLM 生成（0 晚 fallback），全數重新驗證通過。**
+`app/assets/data/app_payload.json` 的 `ai_content.is_ai_generated` 已是 `true`。
+
+⚠️ **另修掉 `run_pipeline.py` 的跨終端機 bug**：它第一行就印中文標題，在 Windows
+Git Bash（cp1252）下**跑任何步驟之前就 UnicodeEncodeError 崩掉**，PowerShell 則沒事——
+同一台機器兩種結果。已加 `sys.stdout.reconfigure` + 對子行程設 `PYTHONIOENCODING=utf-8`
+（設環境變數而非逐支腳本改，這樣新增步驟時不會忘記）。
+
+`ADVICE_LANG` 這個設定**沒有實作**（輸出固定正體中文，prompt 本身就是中文寫的）。
+`.env.example` 已改成誠實說明，不要以為改那個變數就能換語言。
+
+Part A 那個已驗證的坑（`.gitignore` 的 `.env.*` 會連 `.env.example` 一起擋掉）
+已用 `!.env.example` 修好並實測確認。同時新增了 `turn_*.mp4`——
+兩支 TAPO 程式都會產生**臥室錄影片段**，原本沒有任何規則擋住它們。
+
+Part B 的已定案決策（不要重新討論）：
+- **模型用 Claude API**（Anthropic），用標準庫 `urllib.request` 打，**不裝 SDK**
+  （理由：這功能不會讓 `requirements.txt` 多任何一行）
+- AI 程式**獨立成 `ai/` 資料夾**，不要塞進 `garmin/`
+- AI 要**整合 Garmin + TAPO** 給建議；TAPO 目前無真實資料 → 介面設計成有資料才自動啟用
+- AI 的真正價值在**跨夜趨勢**（規則式 `recommendation` 46 晚只產生 8 種字串），
+  數值判斷仍留在 Python 規則層，模型只負責敘事
+
+### 前端整合的現況（2026-08-12 更新）
+
+三個阻塞點都已解除：4 個 0 bytes 的 model 已填好、新增了 `app/lib/services/`、
+`main.py` 已改成回傳真實資料。
+
+**資料通道走 bundled asset，不走 HTTP**（已定案）：
+
+```
+garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
+                                                    ├─→ Flutter rootBundle 讀
+                                                    └─→ main.py 對外服務同一個檔
+```
+
+只產一份檔的理由：兩份就會有「App 顯示的跟 API 回傳的對不上」這種最難查的 bug。
+`rootBundle` 與 `dart:convert` 都是內建的，所以**這條路徑沒有讓 `pubspec.yaml`
+多任何一個套件**。之後要接 HTTP 只要實作 `sleep_repository.dart` 裡預留的
+`ApiSleepRepository`（那時才需要加 `http` 套件）。
+
+**還沒接的**：`report_screen.dart`（Insights 頁，34 KB，資料寫死在 `CustomPainter`
+內部）與 `assistant_screen.dart` 的問答。`payload` 裡已經帶了 `history`（最近 30 晚），
+要接 Insights 時不用改後端。
+
+⚠️ **動 `app/` 之前先問 Jeremy**——那是他負責的部分。這一輪只碰了
+「0 bytes 的空檔 + 全新檔案 + `home_screen.dart`」，刻意避開 `report_screen.dart`
+以降低衝突面。
+
+### 安全規範（一直有效）
+
+`garmin/.env` 有**真實 Garmin 帳號密碼**。絕不提交、絕不在回覆中印出或引用其內容。
+
+---
+
 ## 資料契約（Data Contract）
 
 所有模組最終都要組成這個格式給後端 API：
@@ -34,7 +172,8 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
   ⚠️ RTSP 帳密目前明碼寫死在檔案第 10 行，之後要改成環境變數。
 - `garmin/` — Garmin 手錶資料匯入（目前我正在做這部分，見下方詳細狀態）。
 - `Research-Background/` — 首頁設計的文獻依據（行為科學/遊戲化理論）。
-- `docs`、`app` 目前只是空的佔位檔案。
+- `app/` — Flutter 前端（隊友負責，PR #8 合併進來，156 個檔）。狀態見上方交接區。
+- `docs` — 43 bytes 的佔位**檔案**（不是資料夾，所以無法在裡面放東西），待團隊決定怎麼處理。
 
 ## Garmin 資料 Pipeline（已完成，見 `garmin/README.md`）
 
@@ -84,7 +223,10 @@ evaluate 讀到三週前的 features 檔，完全沒有錯誤訊息）。
 - ✅ `build_project_payload()` 沒按「一晚」分組（把 13 天算成一晚）
   → 2026-08-11 已連同 `garmin_importer.py` 一併刪除（該函式的產出從來沒有任何程式讀取）
 
-### Next Development Goal（下一步：Sleep Feature Extraction + Quality Evaluation）
+### ✅ 已完成的舊規劃：Sleep Feature Extraction + Quality Evaluation
+
+> ⚠️ 這節原標題是「Next Development Goal（下一步）」，**已於 2026-07 全部完成**，
+> 保留下來只是歷史記錄。真正的下一步請看檔案開頭的「🔖 交接區」。
 
 延續現有 pipeline，新增兩支腳本（此規劃已跟另一個 AI 助手的建議比對過，方向正確，
 但補上了資料完整性前置修正，避免建立在有瑕疵的資料上）：

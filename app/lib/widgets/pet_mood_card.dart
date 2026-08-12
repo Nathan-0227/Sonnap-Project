@@ -17,7 +17,10 @@ class PetMoodCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 150,
+      // 原本是固定 height: 150。改成 minHeight 是因為較長的心情字（例如
+      // "Anxious"，contract 的四個合法值之一）在 150 高度下會撐破版面、
+      // 出現黃黑斜線。改成下限之後短字維持原樣，只有放不下時才長高。
+      constraints: const BoxConstraints(minHeight: 150),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF10265A),
