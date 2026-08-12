@@ -1,0 +1,37 @@
+[
+    {
+        "date": "2026-08-02",
+        "time": "080000",
+        "quality_score": 0,
+        "total_events": 1177,
+        "file_path": "c:\\Users\\USER\\Documents\\3-1\\BD4\\sleep_reports\\2026-08-02\\sleep_report_080000.json"
+    },
+    {
+        "date": "2026-08-04",
+        "time": "003653",
+        "quality_score": 0,
+        "total_events": 6649,
+        "file_path": "c:\\Users\\USER\\Documents\\3-1\\BD4\\sleep_reports\\2026-08-04\\sleep_report_003653.json"
+    },
+    {
+        "date": "2026-08-04",
+        "time": "103000",
+        "quality_score": 0,
+        "total_events": 2078,
+        "file_path": "c:\\Users\\USER\\Documents\\3-1\\BD4\\sleep_reports\\2026-08-04\\sleep_report_103000.json"
+    },
+    {
+        "date": "2026-08-05",
+        "time": "103000",
+        "quality_score": 0,
+        "total_events": 5558,
+        "file_path": "c:\\Users\\USER\\Documents\\3-1\\BD4\\sleep_reports\\2026-08-05\\sleep_report_103000.json"
+    },
+    {
+        "date": "2026-08-06",
+        "time": "103000",
+        "quality_score": 0,
+        "total_events": 7428,
+        "file_path": "c:\\Users\\USER\\Documents\\3-1\\BD4\\sleep_reports\\2026-08-06\\sleep_report_103000.json"
+    }
+]

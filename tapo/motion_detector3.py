@@ -4,7 +4,7 @@ import time
 import numpy as np
 from datetime import datetime
 import os
-import mysql.connector  # 👈 修正：補上遺漏的資料庫連線套件
+
 
 # ==================== 🛠️ 設定區 ====================
 tapo_url = "rtsp://imqs113:Monica113@192.168.50.204:554/stream1"
@@ -15,14 +15,6 @@ END_TIME   = "15:14:00"  # 自動關閉與存檔時間
 # 🏃 動作靈敏度設定 (數值越小越靈敏)
 MOTION_LARGE =  100000    # 超過此數值判定為「大翻身 (large_turn)」
 MOTION_MICRO = 10000      # 超過此數值判定為「微動 (micro_motion)」
-
-# 🌐 phpMyAdmin 資料庫設定
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",          
-    "database": "sonnap"      # 👈 修正：已幫你設定為你們小組的 sonnap 資料庫
-}
 # ==================================================
 
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
@@ -79,6 +71,7 @@ try:
             _, thresh = cv2.threshold(fgmask, 200, 255, cv2.THRESH_BINARY)
             motion_area = cv2.countNonZero(thresh)
             
+            # 使用頂部設定的參數做動態分級
             motion_type = "none"
             if motion_area > MOTION_LARGE: 
                 motion_type = "large_turn"
@@ -123,17 +116,23 @@ try:
                     "video_clip": video_filename if motion_type == "large_turn" else "none"
                 })
 
-            # 📺 5. 專業級 UI 文字排版
+            # 📺 5. 專業級 UI 文字排版 (解決重疊問題)
+            # 畫出一個黑色的半透明背景遮罩，讓文字更好讀
             cv2.rectangle(frame, (10, 10), (420, 140), (0, 0, 0), -1)
-            cv2.addWeighted(frame, 0.6, frame, 0.4, 0, frame)
+            cv2.addWeighted(frame, 0.6, frame, 0.4, 0, frame) # 讓方框變半透明
             
-            if motion_type == "large_turn": status_color = (0, 0, 255)
-            elif motion_type == "micro_motion": status_color = (0, 255, 255)
-            else: status_color = (0, 255, 0)
+            # 設定不同狀態的文字顏色
+            if motion_type == "large_turn":
+                status_color = (0, 0, 255) # 紅色 (大動作)
+            elif motion_type == "micro_motion":
+                status_color = (0, 255, 255) # 黃色 (微動)
+            else:
+                status_color = (0, 255, 0) # 綠色 (安靜)
 
+            # 分層次繪製文字，微調字體大小(0.7)與粗細(2)避免黏在一起
             cv2.putText(frame, f"SYS TIME: {current_time}", (25, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"MOTION  : {motion_type.upper()} ({motion_area})", (25, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-            cv2.putText(frame, f"AUDIO   : {sound_db} dB ({sound_type})", (25, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (244, 186, 91), 2)
+            cv2.putText(frame, f"AUDIO   : {sound_db} dB ({sound_type})", (25, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (254, 186, 91), 2)
             
             cv2.imshow("Tapo C200 Live Feed", frame)
 
@@ -142,7 +141,7 @@ try:
                 now_str = END_TIME
 
             if now_str >= END_TIME:
-                print(f"🌅 [{now_str}] 到達結束時間！正在導出整晚報告並上傳資料庫...")
+                print(f"🌅 [{now_str}] 到達結束時間！正在導出整晚報告...")
                 if video_writer is not None:
                     video_writer.release()
                     video_writer = None
@@ -151,61 +150,28 @@ try:
                 is_monitoring = False
                 report_generated_today = True
                 
-                # 計算摘要數據
                 large_turns = sum(1 for x in sleep_timeline if x["motion_level"] == "large_turn")
                 snore_events = sum(1 for x in sleep_timeline if x["sound_level"] == "snoring_or_noise")
-                total_events = len(sleep_timeline)
-                quality_score = max(50, 100 - (large_turns * 5) - (snore_events * 2))
-                report_date = datetime.now().strftime("%Y-%m-%d")
-
                 final_report = {
-                    "report_date": report_date,
+                    "report_date": datetime.now().strftime("%Y-%m-%d"),
                     "summary": {
-                        "total_events": total_events,
+                        "total_events": len(sleep_timeline),
                         "large_turn_count": large_turns,
                         "snore_count": snore_events,
-                        "sleep_quality_score": quality_score
+                        "sleep_quality_score": max(50, 100 - (large_turns * 5) - (snore_events * 2))
                     },
                     "timeline": sleep_timeline
                 }
                 
-                # 保留本地 JSON 檔案備份
                 json_output_path = os.path.join(current_dir, "sleep_report.json")
                 with open(json_output_path, "w", encoding="utf-8") as f:
                     json.dump(final_report, f, ensure_ascii=False, indent=4)
-                print(f"💾 [成功] 本地 JSON 已更新: {json_output_path}")
-
-                # 🌐 ⚡ 修正：正確縮排的整個 try-except-finally 區塊
-                try:
-                    print("🌐 正在自動連線至 phpMyAdmin 資料庫...")
-                    conn = mysql.connector.connect(**DB_CONFIG)
-                    cursor = conn.cursor()
-                    
-                    timeline_json_str = json.dumps(sleep_timeline, ensure_ascii=False)
-                    
-                    sql_query = """
-                    INSERT INTO sleep_records 
-                    (report_date, total_events, large_turn_count, snore_count, sleep_quality_score, timeline) 
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """
-                    sql_values = (report_date, total_events, large_turns, snore_events, quality_score, timeline_json_str)
-                    
-                    cursor.execute(sql_query, sql_values)
-                    conn.commit()
-                    print("🚀 [大成功] 資料與影片紀錄已成功直奔 phpMyAdmin！資料表已安全更新。")
-                    
-                except Exception as err:
-                    print(f"❌ 自動寫入資料庫失敗，錯誤原因: {err}")
-                    
-                finally:
-                    if 'conn' in locals() and conn.is_connected():
-                        cursor.close()
-                        conn.close()
-                        print("🔌 資料庫連線已安全中斷。系統持續背景待命。\n")
+                
+                print(f"💾 [成功] 報告已安全存入路徑: {json_output_path}\n")
 
         time.sleep(0.01)
 
 except KeyboardInterrupt:
     if video_writer is not None: video_writer.release()
     cv2.destroyAllWindows()
-    print("\n👋 系統已安全關閉。")
+    print("\n👋 系統關閉。")

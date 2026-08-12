@@ -1,0 +1,14 @@
+{
+    "date": "2026-08-06",
+    "total_reports": 1,
+    "reports": [
+        {
+            "time": "103000",
+            "quality_score": 0,
+            "total_events": 7428,
+            "large_turns": 42,
+            "snore_count": 40,
+            "file": "sleep_report_103000.json"
+        }
+    ]
+}
