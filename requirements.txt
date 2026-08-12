@@ -1,0 +1,26 @@
+# Sonnap 專案的 Python 相依套件
+#
+# 安裝：pip install -r requirements.txt
+#
+# 這份清單是實際掃描全專案 import 得出的，不是憑印象列的。
+# 刻意不釘版本號——學生專案，釘死會增加維護負擔，且目前沒有版本相容問題。
+#
+# 註：AI 睡眠顧問（ai/）不在這份清單裡，這是刻意的。它用標準庫的
+#     urllib.request 直接打 Claude API，不裝任何 SDK，所以不需要新增相依。
+
+# --- Garmin 資料抓取 ---
+# ⚠️ 社群維護的非官方套件。Garmin 改動 Connect 介面時可能失效，
+#    屆時需要更新此套件或改寫 garmin/garmin_connect_fetch.py。
+garminconnect
+
+# --- 後端 API（main.py）---
+fastapi
+uvicorn          # 跑 FastAPI 需要，程式碼裡不會 import 但沒有它起不來
+                 # 執行：uvicorn main:app --reload
+
+# --- TAPO 攝影機動作偵測 ---
+# tapo/motion_detector.py 與 app/sleep_monitor.py 都需要
+opencv-python           # import cv2
+numpy
+mysql-connector-python  # import mysql.connector（只有 tapo/motion_detector.py 用到，
+                        # app/sleep_monitor.py 那份是寫 JSON 不寫 DB）

@@ -1,7 +1,26 @@
 __pycache__/
 *.py[cod]
+
+# 帳密檔絕不進版控。
+# ⚠️ 第 4 行的 .env.* 會連 .env.example 一起擋掉，所以第 5 行要把它放行——
+#    否則隊友 clone 下來看不到範本，不知道要填哪些 key。
+#    順序不能顛倒：gitignore 的否定規則必須寫在對應的忽略規則之後。
 .env
 .env.*
+!.env.example
+
 debug-*.log
 *.log
 .cursor/
+
+# AI 助手的本機設定（每個人的權限選擇不同，不該共用）。
+# .claude/ 底下若之後放共用的東西（例如團隊約定的 skill），再個別放行。
+.claude/settings.local.json
+
+# 攝影機錄下的臥室影片片段（隱私，絕不進版控）。
+# tapo/motion_detector.py 與 app/sleep_monitor.py 都會在自己的目錄下產生
+# turn_YYYYmmdd_HHMMSS.mp4，所以規則放在根目錄讓它遞迴套用到所有子資料夾。
+turn_*.mp4
+
+# 重抓 Garmin 資料前的本機備份，純屬保險，不需要共用
+garmin/data/_backup_*/
