@@ -6,7 +6,7 @@ run_pipeline.py
 ═══════════════════════════════════════════════════════════════════
 為什麼需要這支腳本
 ═══════════════════════════════════════════════════════════════════
-這條 pipeline 有 5 個步驟，每一步都吃前一步的輸出。麻煩的是：
+這條 pipeline 有 6 個步驟，每一步都吃前一步的輸出。麻煩的是：
 **漏跑中間某一步不會報錯，只會安靜地用舊資料算出新結果。**
 
 實際發生過（2026-08-10）：改完 analyze_garmin_sleep.py 之後，只跑了
@@ -20,23 +20,42 @@ analyze → evaluate，漏掉中間的 extract_sleep_features。evaluate 照樣
 ═══════════════════════════════════════════════════════════════════
 使用方式
 ═══════════════════════════════════════════════════════════════════
-    python run_pipeline.py                # 跑步驟 2-5（用現有的原始資料重算）
+    python run_pipeline.py                # 跑步驟 2-6（用現有的原始資料重算）
     python run_pipeline.py --fetch        # 含步驟 1，重新從 Garmin API 抓資料
     python run_pipeline.py --fetch --days 30    # 抓最近 30 天
 
 預設不含步驟 1（抓取），因為抓取要連 Garmin 伺服器、耗時且有頻率限制，
 多數情況下你只是改了評分邏輯要重算，不需要重抓原始資料。
+
+最後一步（build_app_payload.py）在專案根目錄而不是 garmin/，因為它要整合
+garmin + ai + tapo 三個來源，不屬於任何單一子系統。它的產出
+app/assets/data/app_payload.json 同時是 Flutter 打包的 asset 與
+main.py 對外服務的資料來源——只有一份檔，所以兩邊不可能不一致。
 """
 
 import argparse
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-# 本檔案所在目錄（= garmin/），所有步驟腳本都在這裡
+# Windows 的 Git Bash / cmd 預設用 cp1252，印中文會直接 UnicodeEncodeError。
+# 這支腳本第一行就會印中文標題，所以沒有這段的話**在跑任何步驟之前就崩掉**。
+# （2026-08-12 實測：PowerShell 沒事、Git Bash 直接炸，同一台機器。）
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
+# 子行程也要一起處理——它們各自是獨立的 Python 直譯器，不會繼承上面那兩行。
+# 設環境變數比逐支腳本加 reconfigure 可靠：新增步驟時不會忘記。
+CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+# 本檔案所在目錄（= garmin/），步驟 1-4 的腳本都在這裡
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR / "data"
+# 專案根目錄，步驟 5 的腳本在這裡
+ROOT_DIR = SCRIPT_DIR.parent
 
 # ═══════════════════════════════════════════════════════════════════
 # Pipeline 定義：(腳本檔名, 這一步在做什麼, 主要產出)
@@ -65,6 +84,30 @@ STEPS = [
     ),
 ]
 
+# 步驟 5 單獨定義，因為它不在 garmin/ 底下。
+# build_app_payload.py 在專案根目錄——它要整合 garmin + ai + tapo 三個來源，
+# 不屬於任何單一子系統，放進 garmin/ 會名不副實。
+# （同樣的理由，ai/ 也是獨立資料夾而不是塞進 garmin/。）
+PAYLOAD_STEP = (
+    ROOT_DIR / "build_app_payload.py",
+    "組出 App 用的單一 payload（Flutter asset 與 main.py 共用同一份檔）",
+    ROOT_DIR / "app" / "assets" / "data" / "app_payload.json",
+)
+
+# AI 步驟也單獨定義，預設不執行（比照 --fetch 的模式）。
+#
+# 為什麼是 opt-in：設成必跑會破壞 3 秒的開發循環，而且違反本腳本自己的契約
+# （任一步失敗即中止）——API 掛掉不該中止一個根本不需要 LLM 的評分重算。
+# 但設成完全獨立的腳本又會重演 2026-08-10 那個坑（沒人記得跑，然後安靜地
+# 產出過期內容），所以掛在這裡當可選步驟。
+#
+# 位置在 payload 之前：這樣當晚生成的建議可以直接被 payload 收進去。
+AI_STEP = (
+    ROOT_DIR / "ai" / "generate_advice.py",
+    "產生 AI 睡眠建議與寵物夢境日記（需要 ai/.env 裡的 ANTHROPIC_API_KEY）",
+    ROOT_DIR / "ai" / "data" / "ai_advice.json",
+)
+
 # 步驟 1 單獨定義，因為它預設不執行（要連 Garmin 伺服器）
 FETCH_STEP = (
     "garmin_connect_fetch.py",
@@ -88,25 +131,39 @@ def parse_args():
         default=None,
         help="搭配 --fetch 使用，指定要抓最近幾天（傳給 garmin_connect_fetch.py）。",
     )
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="產生 AI 睡眠建議（需要 ANTHROPIC_API_KEY）。預設不執行；"
+             "這一步失敗不會中止 pipeline。",
+    )
     return parser.parse_args()
 
 
-def run_step(index, total, script, description, output, extra_args=None):
+def run_step(index, total, script, description, output, extra_args=None,
+             allow_failure=False):
     """
-    執行單一步驟。回傳 True 代表成功。
+    執行單一步驟。回傳 True 代表可以繼續往下跑。
+
+    allow_failure=True 時，即使該步驟失敗也回傳 True（只印警告）。
+    目前只有 AI 步驟用到：LLM 呼叫失敗不該中止整條評分 pipeline，
+    因為後面的步驟完全不需要 AI 的產出就能正確完成。
 
     用 subprocess 而不是 import 各腳本的 main()，理由：
     每支腳本都是獨立的命令列工具（有自己的 argparse），用 subprocess 呼叫
     等同於使用者手動執行，行為完全一致；若改用 import，argparse 會去讀
     run_pipeline.py 自己的命令列參數而爆掉，還得為此改寫每一支腳本。
     """
+    # script / output 可以是「相對 garmin/ 的檔名」或「絕對路徑」。
+    # pathlib 的 / 運算子遇到絕對路徑會直接取用它、忽略左邊，
+    # 所以步驟 5（在專案根目錄）不需要為它另寫一套邏輯。
     script_path = SCRIPT_DIR / script
     if not script_path.exists():
         print(f"\n✗ 找不到 {script}，pipeline 中止。")
         return False
 
     print(f"\n{'=' * 70}")
-    print(f"[步驟 {index}/{total}] {script}")
+    print(f"[步驟 {index}/{total}] {script_path.name}")
     print(f"          {description}")
     print(f"{'=' * 70}")
 
@@ -117,10 +174,14 @@ def run_step(index, total, script, description, output, extra_args=None):
         cmd.extend(extra_args)
 
     started = time.time()
-    result = subprocess.run(cmd, cwd=str(SCRIPT_DIR))
+    result = subprocess.run(cmd, cwd=str(SCRIPT_DIR), env=CHILD_ENV)
     elapsed = time.time() - started
 
     if result.returncode != 0:
+        if allow_failure:
+            print(f"\n⚠ 步驟 {index} 失敗（exit code {result.returncode}），"
+                  "但這一步允許失敗，pipeline 繼續。")
+            return True
         print(f"\n✗ 步驟 {index} 失敗（exit code {result.returncode}），pipeline 中止。")
         print("  後續步驟不會執行——這是刻意的：讓失敗停在這裡，")
         print("  避免後面的步驟拿到不完整或過期的資料，算出看似正常實則錯誤的結果。")
@@ -128,10 +189,11 @@ def run_step(index, total, script, description, output, extra_args=None):
 
     # 確認產出檔真的有生出來（腳本可能 exit 0 但因為某些分支沒寫檔）
     out_path = DATA_DIR / output
+    shown = out_path.relative_to(ROOT_DIR).as_posix()
     if out_path.exists():
-        print(f"\n✓ 步驟 {index} 完成（{elapsed:.1f} 秒）→ data/{output}")
+        print(f"\n✓ 步驟 {index} 完成（{elapsed:.1f} 秒）→ {shown}")
     else:
-        print(f"\n⚠ 步驟 {index} 回報成功，但找不到預期產出 data/{output}，請檢查。")
+        print(f"\n⚠ 步驟 {index} 回報成功，但找不到預期產出 {shown}，請檢查。")
     return True
 
 
@@ -140,6 +202,9 @@ def main():
 
     # 組出這次要跑的步驟清單
     steps = list(STEPS)
+    if args.ai:
+        steps.append(AI_STEP)  # 要在 payload 之前，當晚的建議才進得了 payload
+    steps.append(PAYLOAD_STEP)
     if args.fetch:
         steps.insert(0, FETCH_STEP)
 
@@ -155,14 +220,17 @@ def main():
         if script == FETCH_STEP[0] and args.days is not None:
             extra = ["--days", str(args.days)]
 
-        if not run_step(i, total, script, description, output, extra):
+        # AI 步驟允許失敗：LLM 掛掉不該中止一個不需要 LLM 的評分重算
+        if not run_step(i, total, script, description, output, extra,
+                        allow_failure=(script == AI_STEP[0])):
             # 任一步失敗就整條中止，並用非零 exit code 讓外部（CI、批次檔）也知道失敗
             sys.exit(1)
 
     elapsed = time.time() - started
     print(f"\n{'=' * 70}")
     print(f"✓ Pipeline 全部完成（總耗時 {elapsed:.1f} 秒）")
-    print(f"  最終結果：data/garmin_sleep_quality_final.csv / .json")
+    print(f"  評分結果：garmin/data/garmin_sleep_quality_final.csv / .json")
+    print(f"  App 資料：app/assets/data/app_payload.json")
     print(f"{'=' * 70}")
 
 
