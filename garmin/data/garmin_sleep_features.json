@@ -20,7 +20,10 @@
     "avg_heart_rate": 71.17,
     "resting_heart_rate": 58,
     "avg_stress_score": 11.39,
-    "movement_count": 375,
+    "movement_sample_minutes": 375,
+    "movement_level_mean": 2.339,
+    "movement_level_max": 7.639,
+    "movement_active_minutes": 292,
     "total_steps": 8321
   },
   {
@@ -44,7 +47,10 @@
     "avg_heart_rate": 56.75,
     "resting_heart_rate": 54,
     "avg_stress_score": 1.58,
-    "movement_count": 750,
+    "movement_sample_minutes": 750,
+    "movement_level_mean": 1.064,
+    "movement_level_max": 5.723,
+    "movement_active_minutes": 246,
     "total_steps": 134
   },
   {
@@ -68,7 +74,10 @@
     "avg_heart_rate": 55.32,
     "resting_heart_rate": 54,
     "avg_stress_score": 2.49,
-    "movement_count": 512,
+    "movement_sample_minutes": 512,
+    "movement_level_mean": 1.165,
+    "movement_level_max": 6.281,
+    "movement_active_minutes": 190,
     "total_steps": 475
   },
   {
@@ -92,7 +101,10 @@
     "avg_heart_rate": 54.24,
     "resting_heart_rate": 51,
     "avg_stress_score": 4.66,
-    "movement_count": 841,
+    "movement_sample_minutes": 841,
+    "movement_level_mean": 0.72,
+    "movement_level_max": 5.916,
+    "movement_active_minutes": 205,
     "total_steps": 148
   },
   {
@@ -116,7 +128,10 @@
     "avg_heart_rate": 51.95,
     "resting_heart_rate": 51,
     "avg_stress_score": 2.4,
-    "movement_count": 532,
+    "movement_sample_minutes": 532,
+    "movement_level_mean": 0.841,
+    "movement_level_max": 7.1,
+    "movement_active_minutes": 110,
     "total_steps": 153
   },
   {
@@ -140,7 +155,10 @@
     "avg_heart_rate": 55.16,
     "resting_heart_rate": 51,
     "avg_stress_score": 8.33,
-    "movement_count": 473,
+    "movement_sample_minutes": 473,
+    "movement_level_mean": 1.351,
+    "movement_level_max": 6.195,
+    "movement_active_minutes": 165,
     "total_steps": 437
   },
   {
@@ -164,7 +182,10 @@
     "avg_heart_rate": 60.99,
     "resting_heart_rate": 52,
     "avg_stress_score": 23.5,
-    "movement_count": 671,
+    "movement_sample_minutes": 671,
+    "movement_level_mean": 0.808,
+    "movement_level_max": 5.739,
+    "movement_active_minutes": 205,
     "total_steps": 87
   },
   {
@@ -188,7 +209,10 @@
     "avg_heart_rate": 58.81,
     "resting_heart_rate": 57,
     "avg_stress_score": 11.12,
-    "movement_count": 493,
+    "movement_sample_minutes": 493,
+    "movement_level_mean": 0.693,
+    "movement_level_max": 6.579,
+    "movement_active_minutes": 74,
     "total_steps": 707
   },
   {
@@ -212,7 +236,10 @@
     "avg_heart_rate": 56.19,
     "resting_heart_rate": 56,
     "avg_stress_score": 6.27,
-    "movement_count": 610,
+    "movement_sample_minutes": 610,
+    "movement_level_mean": 0.84,
+    "movement_level_max": 5.816,
+    "movement_active_minutes": 150,
     "total_steps": 163
   },
   {
@@ -236,7 +263,10 @@
     "avg_heart_rate": 58.55,
     "resting_heart_rate": 54,
     "avg_stress_score": 9.99,
-    "movement_count": 697,
+    "movement_sample_minutes": 697,
+    "movement_level_mean": 0.96,
+    "movement_level_max": 5.518,
+    "movement_active_minutes": 247,
     "total_steps": 1175
   },
   {
@@ -260,7 +290,10 @@
     "avg_heart_rate": 56.47,
     "resting_heart_rate": 52,
     "avg_stress_score": 5.91,
-    "movement_count": 747,
+    "movement_sample_minutes": 747,
+    "movement_level_mean": 0.923,
+    "movement_level_max": 5.835,
+    "movement_active_minutes": 252,
     "total_steps": 125
   },
   {
@@ -284,7 +317,10 @@
     "avg_heart_rate": 56.09,
     "resting_heart_rate": 57,
     "avg_stress_score": 3.83,
-    "movement_count": 561,
+    "movement_sample_minutes": 561,
+    "movement_level_mean": 1.083,
+    "movement_level_max": 5.519,
+    "movement_active_minutes": 215,
     "total_steps": 179
   },
   {
@@ -308,7 +344,10 @@
     "avg_heart_rate": 57.74,
     "resting_heart_rate": 50,
     "avg_stress_score": 11.31,
-    "movement_count": 606,
+    "movement_sample_minutes": 606,
+    "movement_level_mean": 1.107,
+    "movement_level_max": 5.746,
+    "movement_active_minutes": 259,
     "total_steps": 195
   },
   {
@@ -332,7 +371,10 @@
     "avg_heart_rate": 54.48,
     "resting_heart_rate": 52,
     "avg_stress_score": 5.11,
-    "movement_count": 686,
+    "movement_sample_minutes": 686,
+    "movement_level_mean": 1.056,
+    "movement_level_max": 5.987,
+    "movement_active_minutes": 244,
     "total_steps": 196
   },
   {
@@ -356,7 +398,10 @@
     "avg_heart_rate": 59.89,
     "resting_heart_rate": 52,
     "avg_stress_score": 13.54,
-    "movement_count": 577,
+    "movement_sample_minutes": 577,
+    "movement_level_mean": 1.092,
+    "movement_level_max": 6.065,
+    "movement_active_minutes": 219,
     "total_steps": 399
   },
   {
@@ -380,7 +425,10 @@
     "avg_heart_rate": 52.88,
     "resting_heart_rate": 52,
     "avg_stress_score": 3.29,
-    "movement_count": 536,
+    "movement_sample_minutes": 536,
+    "movement_level_mean": 1.284,
+    "movement_level_max": 7.143,
+    "movement_active_minutes": 222,
     "total_steps": 356
   },
   {
@@ -404,7 +452,10 @@
     "avg_heart_rate": 51.16,
     "resting_heart_rate": 51,
     "avg_stress_score": 2.87,
-    "movement_count": 443,
+    "movement_sample_minutes": 443,
+    "movement_level_mean": 0.898,
+    "movement_level_max": 7.261,
+    "movement_active_minutes": 121,
     "total_steps": 73
   },
   {
@@ -428,7 +479,10 @@
     "avg_heart_rate": 54.53,
     "resting_heart_rate": 51,
     "avg_stress_score": 5.61,
-    "movement_count": 707,
+    "movement_sample_minutes": 707,
+    "movement_level_mean": 0.73,
+    "movement_level_max": 5.521,
+    "movement_active_minutes": 157,
     "total_steps": 33
   },
   {
@@ -452,7 +506,10 @@
     "avg_heart_rate": 59.63,
     "resting_heart_rate": 53,
     "avg_stress_score": 13.24,
-    "movement_count": 433,
+    "movement_sample_minutes": 433,
+    "movement_level_mean": 1.298,
+    "movement_level_max": 6.277,
+    "movement_active_minutes": 151,
     "total_steps": 270
   },
   {
@@ -476,7 +533,10 @@
     "avg_heart_rate": 54.73,
     "resting_heart_rate": 55,
     "avg_stress_score": 3.49,
-    "movement_count": 572,
+    "movement_sample_minutes": 572,
+    "movement_level_mean": 0.949,
+    "movement_level_max": 5.608,
+    "movement_active_minutes": 165,
     "total_steps": 115
   },
   {
@@ -500,7 +560,10 @@
     "avg_heart_rate": 53.18,
     "resting_heart_rate": 50,
     "avg_stress_score": 2.77,
-    "movement_count": 702,
+    "movement_sample_minutes": 702,
+    "movement_level_mean": 0.71,
+    "movement_level_max": 5.674,
+    "movement_active_minutes": 174,
     "total_steps": 69
   },
   {
@@ -524,7 +587,10 @@
     "avg_heart_rate": 55.56,
     "resting_heart_rate": 50,
     "avg_stress_score": 5.38,
-    "movement_count": 616,
+    "movement_sample_minutes": 616,
+    "movement_level_mean": 0.613,
+    "movement_level_max": 5.515,
+    "movement_active_minutes": 73,
     "total_steps": 908
   },
   {
@@ -548,7 +614,10 @@
     "avg_heart_rate": 54.86,
     "resting_heart_rate": 52,
     "avg_stress_score": 46.0,
-    "movement_count": 744,
+    "movement_sample_minutes": 744,
+    "movement_level_mean": 0.832,
+    "movement_level_max": 6.083,
+    "movement_active_minutes": 169,
     "total_steps": 536
   },
   {
@@ -572,7 +641,10 @@
     "avg_heart_rate": 56.98,
     "resting_heart_rate": 54,
     "avg_stress_score": 6.21,
-    "movement_count": 595,
+    "movement_sample_minutes": 595,
+    "movement_level_mean": 1.165,
+    "movement_level_max": 5.699,
+    "movement_active_minutes": 270,
     "total_steps": 892
   },
   {
@@ -596,7 +668,10 @@
     "avg_heart_rate": 53.2,
     "resting_heart_rate": 51,
     "avg_stress_score": 3.92,
-    "movement_count": 568,
+    "movement_sample_minutes": 568,
+    "movement_level_mean": 0.798,
+    "movement_level_max": 5.552,
+    "movement_active_minutes": 136,
     "total_steps": 13
   },
   {
@@ -620,7 +695,10 @@
     "avg_heart_rate": 55.74,
     "resting_heart_rate": 50,
     "avg_stress_score": 13.74,
-    "movement_count": 509,
+    "movement_sample_minutes": 509,
+    "movement_level_mean": 1.055,
+    "movement_level_max": 5.697,
+    "movement_active_minutes": 166,
     "total_steps": 1574
   },
   {
@@ -644,7 +722,10 @@
     "avg_heart_rate": 52.97,
     "resting_heart_rate": 51,
     "avg_stress_score": 4.39,
-    "movement_count": 657,
+    "movement_sample_minutes": 657,
+    "movement_level_mean": 0.914,
+    "movement_level_max": 6.023,
+    "movement_active_minutes": 138,
     "total_steps": 292
   },
   {
@@ -668,7 +749,10 @@
     "avg_heart_rate": 53.98,
     "resting_heart_rate": 49,
     "avg_stress_score": 8.74,
-    "movement_count": 619,
+    "movement_sample_minutes": 619,
+    "movement_level_mean": 1.053,
+    "movement_level_max": 5.515,
+    "movement_active_minutes": 231,
     "total_steps": 238
   },
   {
@@ -692,7 +776,10 @@
     "avg_heart_rate": 57.64,
     "resting_heart_rate": 51,
     "avg_stress_score": 12.47,
-    "movement_count": 646,
+    "movement_sample_minutes": 646,
+    "movement_level_mean": 1.062,
+    "movement_level_max": 6.164,
+    "movement_active_minutes": 188,
     "total_steps": 273
   },
   {
@@ -716,7 +803,10 @@
     "avg_heart_rate": 62.92,
     "resting_heart_rate": 59,
     "avg_stress_score": 19.06,
-    "movement_count": 563,
+    "movement_sample_minutes": 563,
+    "movement_level_mean": 0.958,
+    "movement_level_max": 5.846,
+    "movement_active_minutes": 154,
     "total_steps": 269
   },
   {
@@ -740,7 +830,10 @@
     "avg_heart_rate": 58.69,
     "resting_heart_rate": 58,
     "avg_stress_score": 16.25,
-    "movement_count": 646,
+    "movement_sample_minutes": 646,
+    "movement_level_mean": 0.527,
+    "movement_level_max": 5.522,
+    "movement_active_minutes": 144,
     "total_steps": 126
   },
   {
@@ -764,7 +857,10 @@
     "avg_heart_rate": 58.69,
     "resting_heart_rate": 56,
     "avg_stress_score": 3.93,
-    "movement_count": 678,
+    "movement_sample_minutes": 678,
+    "movement_level_mean": 0.831,
+    "movement_level_max": 5.52,
+    "movement_active_minutes": 170,
     "total_steps": 52
   },
   {
@@ -788,7 +884,10 @@
     "avg_heart_rate": 57.36,
     "resting_heart_rate": 52,
     "avg_stress_score": 3.87,
-    "movement_count": 609,
+    "movement_sample_minutes": 609,
+    "movement_level_mean": 0.769,
+    "movement_level_max": 7.42,
+    "movement_active_minutes": 105,
     "total_steps": 521
   },
   {
@@ -812,7 +911,10 @@
     "avg_heart_rate": 66.44,
     "resting_heart_rate": 54,
     "avg_stress_score": 25.79,
-    "movement_count": 890,
+    "movement_sample_minutes": 890,
+    "movement_level_mean": 0.583,
+    "movement_level_max": 5.524,
+    "movement_active_minutes": 118,
     "total_steps": 121
   },
   {
@@ -836,7 +938,10 @@
     "avg_heart_rate": 56.03,
     "resting_heart_rate": 52,
     "avg_stress_score": 7.12,
-    "movement_count": 526,
+    "movement_sample_minutes": 526,
+    "movement_level_mean": 1.184,
+    "movement_level_max": 5.744,
+    "movement_active_minutes": 213,
     "total_steps": 279
   },
   {
@@ -860,7 +965,10 @@
     "avg_heart_rate": 54.31,
     "resting_heart_rate": 51,
     "avg_stress_score": 3.6,
-    "movement_count": 787,
+    "movement_sample_minutes": 787,
+    "movement_level_mean": 0.601,
+    "movement_level_max": 5.515,
+    "movement_active_minutes": 146,
     "total_steps": 86
   },
   {
@@ -884,7 +992,10 @@
     "avg_heart_rate": 53.73,
     "resting_heart_rate": 51,
     "avg_stress_score": 3.99,
-    "movement_count": 565,
+    "movement_sample_minutes": 565,
+    "movement_level_mean": 1.117,
+    "movement_level_max": 5.681,
+    "movement_active_minutes": 255,
     "total_steps": 47
   },
   {
@@ -908,7 +1019,10 @@
     "avg_heart_rate": 56.93,
     "resting_heart_rate": 53,
     "avg_stress_score": 10.28,
-    "movement_count": 655,
+    "movement_sample_minutes": 655,
+    "movement_level_mean": 1.126,
+    "movement_level_max": 5.981,
+    "movement_active_minutes": 250,
     "total_steps": 412
   },
   {
@@ -932,7 +1046,10 @@
     "avg_heart_rate": 54.19,
     "resting_heart_rate": 52,
     "avg_stress_score": 8.01,
-    "movement_count": 487,
+    "movement_sample_minutes": 487,
+    "movement_level_mean": 1.306,
+    "movement_level_max": 5.85,
+    "movement_active_minutes": 205,
     "total_steps": 63
   },
   {
@@ -956,7 +1073,10 @@
     "avg_heart_rate": 56.05,
     "resting_heart_rate": 56,
     "avg_stress_score": 5.23,
-    "movement_count": 645,
+    "movement_sample_minutes": 645,
+    "movement_level_mean": 1.056,
+    "movement_level_max": 5.694,
+    "movement_active_minutes": 274,
     "total_steps": 123
   },
   {
@@ -980,7 +1100,10 @@
     "avg_heart_rate": 53.0,
     "resting_heart_rate": 50,
     "avg_stress_score": 2.68,
-    "movement_count": 616,
+    "movement_sample_minutes": 616,
+    "movement_level_mean": 0.943,
+    "movement_level_max": 5.57,
+    "movement_active_minutes": 186,
     "total_steps": 217
   },
   {
@@ -1004,7 +1127,10 @@
     "avg_heart_rate": 73.57,
     "resting_heart_rate": 68,
     "avg_stress_score": 24.63,
-    "movement_count": 668,
+    "movement_sample_minutes": 668,
+    "movement_level_mean": 0.784,
+    "movement_level_max": 5.827,
+    "movement_active_minutes": 148,
     "total_steps": 35
   },
   {
@@ -1028,7 +1154,10 @@
     "avg_heart_rate": 71.88,
     "resting_heart_rate": 52,
     "avg_stress_score": 18.06,
-    "movement_count": 662,
+    "movement_sample_minutes": 662,
+    "movement_level_mean": 0.807,
+    "movement_level_max": 5.812,
+    "movement_active_minutes": 155,
     "total_steps": 276
   },
   {
@@ -1052,7 +1181,10 @@
     "avg_heart_rate": 69.53,
     "resting_heart_rate": 68,
     "avg_stress_score": 18.53,
-    "movement_count": 847,
+    "movement_sample_minutes": 847,
+    "movement_level_mean": 0.6,
+    "movement_level_max": 5.629,
+    "movement_active_minutes": 163,
     "total_steps": 9
   },
   {
@@ -1076,7 +1208,10 @@
     "avg_heart_rate": 70.05,
     "resting_heart_rate": 62,
     "avg_stress_score": 15.61,
-    "movement_count": 566,
+    "movement_sample_minutes": 566,
+    "movement_level_mean": 1.177,
+    "movement_level_max": 5.955,
+    "movement_active_minutes": 203,
     "total_steps": 311
   },
   {
@@ -1100,7 +1235,10 @@
     "avg_heart_rate": 85.15,
     "resting_heart_rate": 72,
     "avg_stress_score": 64.62,
-    "movement_count": 489,
+    "movement_sample_minutes": 489,
+    "movement_level_mean": 1.639,
+    "movement_level_max": 6.59,
+    "movement_active_minutes": 352,
     "total_steps": 2404
   }
 ]

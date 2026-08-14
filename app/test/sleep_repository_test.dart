@@ -49,6 +49,30 @@ void main() {
       // score_message 有長度上限（SleepScoreCard 是固定高度卡片，
       // 超過約 10 字會換行撐破版面）。Python 端也有同樣的檢查。
       expect(session.display.scoreMessage.length, lessThanOrEqualTo(10));
+
+      // ── Garmin 動作資料（2026-08-12 修正後新增）─────────────────
+      // 這一段是在鎖住那次修正：舊的 movement_count 其實是「取樣分鐘數」，
+      // 跟身體動不動無關（與睡眠時長 r=+0.929、與夜間清醒 r=−0.138）。
+      // 現在真訊號來自 activityLevel。若有人不小心改回只數筆數，
+      // levelMean / activeMinutes 會消失，這個測試就會擋下來。
+      final movement = session.metrics.garminMovement;
+
+      expect(movement.sampleMinutes, isNotNull,
+          reason: '取樣分鐘數應該一定有值（有睡眠記錄的夜晚就會有 movement 取樣）');
+      expect(movement.levelMean, isNotNull,
+          reason: 'activityLevel 平均是真正的動作訊號，不可以再被丟掉');
+      expect(movement.activeMinutes, isNotNull,
+          reason: '超過門檻的分鐘數是真正的動作訊號，不可以再被丟掉');
+
+      // activityLevel 實測範圍 0.00–7.64。超出這個範圍代表上游解析錯了
+      // （例如把別的欄位當成 activityLevel 讀進來）。
+      expect(movement.levelMean!, inInclusiveRange(0, 10));
+      expect(movement.levelMax!, inInclusiveRange(0, 10));
+
+      // 活躍分鐘是取樣分鐘的子集合，不可能比它大。
+      expect(movement.activeMinutes!,
+          lessThanOrEqualTo(movement.sampleMinutes!),
+          reason: '超過門檻的分鐘數不可能多於總取樣分鐘數');
     });
   });
 }

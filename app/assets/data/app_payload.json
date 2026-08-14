@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-12T02:04:17+08:00",
+  "generated_at": "2026-08-15T03:34:11+08:00",
   "session_id": "20260809_001",
   "status": {
     "pet_mood": "anxious",
@@ -11,7 +11,12 @@
   },
   "metrics": {
     "motion_count": null,
-    "garmin_movement_samples": 489,
+    "garmin_movement": {
+      "sample_minutes": 489,
+      "level_mean": 1.639,
+      "level_max": 6.59,
+      "active_minutes": 352
+    },
     "sleep_duration_minutes": 321,
     "ambient_noise_db": null,
     "sleep_start_time": "2026-08-09T01:44:00+08:00",
@@ -241,7 +246,7 @@
     "garmin"
   ],
   "notes": {
-    "tapo": "攝影機資料不可用：sleep_report.json 的錄影時段全在白天（15:00–15:59），研判為測試錄影而非整晚睡眠",
+    "tapo": "攝影機資料不可用：sleep_report.json 的錄影時段全在白天（17:00–17:59），研判為測試錄影而非整晚睡眠",
     "mapping": "pet_mood / energy_level 的映射為預設值，尚待 PM 核可（mapping_version=1）"
   },
   "disclaimer": "睡眠分數由 Garmin 手錶資料經文獻加權規則計算，不構成醫療診斷。夢境內容若有生成，為 AI 依睡眠數據想像的創作，非使用者實際夢境的紀錄。",

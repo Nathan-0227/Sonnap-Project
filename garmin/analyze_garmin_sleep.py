@@ -18,6 +18,24 @@ OUTPUT_JSON = DATA_DIR / "garmin_sleep_summary.json"
 # 避免把相隔很多天的 start / end 誤配成同一段（例如資料缺漏時）。
 MAX_SLEEP_HOURS = 16
 
+# ═══════════════════════════════════════════════════════════════════
+# 動作幅度門檻（2026-08-12 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# Garmin 的 sleepMovement 每分鐘給一筆 activityLevel（連續值，實測範圍 0.00–7.64）。
+# 這個常數是「多大算有明顯動作」的切點，用來算 movement_active_minutes。
+#
+# ⚠️ 為什麼要把門檻寫成常數而不是直接寫 `if level > 1.0`：
+#    因為這個數字**不是文獻推導出來的**，是我們自己看資料分布訂的
+#    （實測 69.3% 的取樣落在 0–1，超過 1 的約佔 30%）。
+#    把它獨立成常數並寫進輸出檔，是為了讓「這是人為選的切點」這件事
+#    對之後看資料的人可見，而不是藏在程式碼裡看起來像客觀事實。
+#
+# ⚠️ 正因為沒有文獻依據，這個指標**只供呈現與 AI 敘事，絕對不進評分**。
+#    本專案每一項計分都有引文（見 Research-Background/Garmin手錶分數.md），
+#    不為了多一個好看的數字而破例。
+MOVEMENT_ACTIVE_THRESHOLD = 1.0
+
 
 def parse_iso(ts):
     """
@@ -128,7 +146,13 @@ def main():
         "light_sec": 0,
         "rem_sec": 0,
         "awake_sec": 0,
-        "movement_count": 0,
+        # 【動作，2026-08-12 修正】見檔案底部 MOVEMENT_ACTIVE_THRESHOLD 的說明。
+        # 原本只有一個 movement_count，而它其實是取樣筆數（＝取樣分鐘數），
+        # 跟身體動不動無關。已改名並補上真正用到 activityLevel 數值的三個欄位。
+        "movement_sample_minutes": 0,
+        "movement_level_sum": 0.0,
+        "movement_level_max": 0.0,
+        "movement_active_minutes": 0,
         "steps_total": 0,
         "heart_rate_count": 0,
         "heart_rate_sum": 0,
@@ -188,7 +212,19 @@ def main():
                 row["awake_sec"] += int(n)
 
         elif metric == "movement":
-            row["movement_count"] += 1
+            # ⚠️ 2026-08-12 之前這裡只有 `row["movement_count"] += 1`——只數筆數、
+            #    完全不看 value，等於把 Garmin 給的動作幅度丟掉。
+            #    實測證據（46 晚）：舊的 movement_count 與「錄製跨距分鐘數」
+            #    43/48 天誤差正好是 0，且與睡眠時長的相關係數 r = +0.929、
+            #    與夜間清醒 r = −0.138。它測的是時鐘，不是身體。
+            row["movement_sample_minutes"] += 1
+            level = safe_number(value)
+            if level is not None:
+                row["movement_level_sum"] += level
+                if level > row["movement_level_max"]:
+                    row["movement_level_max"] = level
+                if level > MOVEMENT_ACTIVE_THRESHOLD:
+                    row["movement_active_minutes"] += 1
 
         # 每次睡眠階段轉換（深→淺、淺→REM…）都會有一筆 sleep_segment_start，
         # 用來算「當晚睡眠被切成幾段」，見 M 節（片段化）
@@ -267,7 +303,30 @@ def main():
             "light_minutes": light_min,
             "rem_minutes": rem_min,
             "awake_minutes": awake_min,
-            "movement_count": row["movement_count"],
+            # ── 動作相關四欄（2026-08-12 改版）──────────────────────
+            # movement_sample_minutes：取樣了幾分鐘。這就是舊的 movement_count，
+            #   只是換了誠實的名字。保留它是因為它能反映「手錶戴了多久」，
+            #   對判斷資料完整性有用——但它**不是**動作指標。
+            "movement_sample_minutes": row["movement_sample_minutes"],
+            # movement_level_mean：整夜 activityLevel 的平均。
+            #   ⚠️ 分母要用取樣筆數，不是「那晚有幾分鐘」——沒戴錶的分鐘
+            #      根本沒有資料列，拿時長當分母會把平均值稀釋掉。
+            #   ⚠️ 沒有任何取樣時輸出 None 而不是 0。這是本專案一貫的作法：
+            #      「沒量到」和「量到是 0」意義完全不同，混在一起後續就分不出來了。
+            "movement_level_mean": (
+                round(row["movement_level_sum"] / row["movement_sample_minutes"], 3)
+                if row["movement_sample_minutes"] else None
+            ),
+            "movement_level_max": (
+                round(row["movement_level_max"], 3)
+                if row["movement_sample_minutes"] else None
+            ),
+            "movement_active_minutes": (
+                row["movement_active_minutes"] if row["movement_sample_minutes"] else None
+            ),
+            # 把門檻本身也寫進輸出，讓 movement_active_minutes 可稽核——
+            # 之後若有人調整門檻，舊資料仍看得出當時是用哪個值算的。
+            "movement_active_threshold": MOVEMENT_ACTIVE_THRESHOLD,
             "steps_total": row["steps_total"],
             "avg_heart_rate": avg_hr,
             "min_heart_rate": row["heart_rate_min"],

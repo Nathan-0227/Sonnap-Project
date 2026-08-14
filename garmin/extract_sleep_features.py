@@ -164,10 +164,36 @@ def extract_features(row, age, band):
             → 註：awake_ratio 與 waso_minutes 是同一份資料的兩種表示法。
               評分採用 waso_minutes（絕對分鐘），因為文獻的 WASO 門檻是以分鐘定義的。
 
-    【3】V2 預留（目前未計分）
-        avg_heart_rate、resting_heart_rate、avg_stress_score、movement_count、total_steps
-            → 文獻 (Kerkering et al., 2022) 要求以「個人 baseline + 趨勢」判讀，
-              而非固定門檻，需累積 14–28 晚資料後才能實作，故 V1 僅保留不計分。
+    【3】生理與行為指標
+        avg_heart_rate、resting_heart_rate、avg_stress_score、total_steps
+
+        ⚠️ 這一段的說明在 2026-08-12 修正過。原本寫「V2 預留（目前未計分）」，
+           那是 Tier3 上線（2026-07-31）之前的舊敘述，**已經不正確**。
+
+        現況要分兩層講，混在一起就會誤解：
+
+        (a) 【這個檔案輸出的這幾欄】確實沒有任何程式讀取。
+            evaluate_sleep_quality.py 雖然讀 features.csv，但它只用
+            時長/效率/WASO/深睡/REM 五項算 Tier1/2 基礎分數。
+
+        (b) 【同樣的數值】**有進計分**，只是走另一條路：
+            apply_recovery_modifier.py 讀的是 garmin_sleep_summary.csv
+            （analyze 的輸出，不是這個檔），拿來算 Tier3 修正值——
+            靜止心率 ±2、睡眠期間平均心率 ±2、壓力 ±4、步數 0~+2，
+            合計上限 ±12。文獻依據見 Research-Background/Garmin手錶分數.md F–I 節。
+
+        所以這幾欄留在這裡是**冗餘**而非「預留」。保留它們是為了讓
+        features.csv 單獨拿出去分析時資訊完整，不是因為之後要拿來計分。
+
+    【4】動作指標（2026-08-12 新增，永不計分）
+        movement_sample_minutes、movement_level_mean / max、movement_active_minutes
+            → 舊的 movement_count 已證明是「取樣分鐘數」而非動作量：46 晚實測
+              與睡眠時長相關 r = +0.929、與夜間清醒 r = −0.138，且 43/48 天
+              等於錄製跨距分鐘數（誤差 0）。它測的是時鐘不是身體。
+            → 真訊號是 Garmin sleepMovement 的 activityLevel（0–7.64 連續值），
+              原本被 `+= 1` 丟掉，現已改為保留平均、峰值與超過門檻的分鐘數。
+            → 與【3】不同，這幾欄**不是**「等文獻到位就計分」，而是**永不計分**：
+              active 的門檻是人為選的，不像心率／壓力那樣有 baseline 方法學支持。
     ────────────────────────────────────────────────────────────
     """
     start = parse_iso(row.get("sleep_start_time"))
@@ -213,7 +239,18 @@ def extract_features(row, age, band):
         "avg_heart_rate": to_float(row.get("avg_heart_rate")),
         "resting_heart_rate": to_int(row.get("resting_heart_rate")),
         "avg_stress_score": to_float(row.get("avg_stress_score")),
-        "movement_count": to_int(row.get("movement_count")) or 0,
+        # ── 動作相關（2026-08-12 改版）────────────────────────────
+        # ⚠️ 這四欄一律**不進評分**。movement_active_* 的門檻是我們自己訂的、
+        #    沒有文獻依據，只供 App 呈現與 AI 敘事。
+        #
+        # ⚠️ 注意這裡沒有用 `or 0`。上游 analyze 端在「沒戴錶」的夜晚
+        #    刻意輸出 None，這裡若寫 `or 0` 就會把 None 轉成 0，
+        #    等於謊稱「那晚完全沒動」——那是資料，不是事實。
+        #    （對照上面 total_steps 用了 `or 0`：步數的 0 確實代表沒走，語意不同。）
+        "movement_sample_minutes": to_int(row.get("movement_sample_minutes")) or 0,
+        "movement_level_mean": to_float(row.get("movement_level_mean")),
+        "movement_level_max": to_float(row.get("movement_level_max")),
+        "movement_active_minutes": to_int(row.get("movement_active_minutes")),
         "total_steps": to_int(row.get("steps_total")) or 0,
     }
 

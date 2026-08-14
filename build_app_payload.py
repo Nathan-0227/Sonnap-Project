@@ -416,11 +416,33 @@ def build_payload(target_date=None):
         },
         "metrics": {
             # ⚠️ README 定義 motion_count 是「翻身次數，由影像組提供」。
-            #    Garmin 的 movement_count 是我們自訂的翻動取樣筆數，語意不同，
-            #    CLAUDE.md 明訂「不該默默對映」。留 null 會讓這個缺口對 PM 可見；
-            #    硬塞則會永久掩蓋它。真值另外放在下一個欄位，資訊不會遺失。
+            #    Garmin 給不出這個東西（原因見下方 garmin_movement 的說明），
+            #    CLAUDE.md 明訂「不該默默對映」。留 null 讓這個缺口對 PM 可見；
+            #    硬塞則會永久掩蓋它。
+            #
+            #    TAPO 的 large_turn_count 才是語意相符的來源，但目前只有 5 晚
+            #    且尚未接入（資料在 tapo/sleep_reports/）。接入後這裡才會有值。
             "motion_count": None,
-            "garmin_movement_samples": features.get("movement_count"),
+            # Garmin 的動作資料。**刻意包成巢狀而不是攤平**：攤平會變成四個
+            # garmin_movement_* 長欄位跟 motion_count 並排，讀的人容易誤以為
+            # 兩者可以互相比較。包起來才講清楚「這是獨立的一組，不是替代品」。
+            #
+            # ⚠️ 2026-08-12 前這裡是 `garmin_movement_samples: movement_count`，
+            #    而那個值已被四條證據證明只是「取樣分鐘數」：與睡眠時長
+            #    r = +0.929、與夜間清醒 r = −0.138、43/48 天等於錄製跨距分鐘數、
+            #    取樣間隔 99.98% 恆為 60 秒。它測的是時鐘，不是身體。
+            #    真訊號是 activityLevel，原本被 `+= 1` 丟掉，現已保留。
+            #
+            # ⚠️ 用 .get() 而非 [] 是刻意的：features 可能是空 dict（見上方
+            #    by_date_features.get(night_iso, {})），而且舊的 features.json
+            #    還沒有這些新欄位。.get 會回 None——這正好是我們要的語意
+            #    「這個值我們沒有」，而不是讓 pipeline 崩掉。
+            "garmin_movement": {
+                "sample_minutes": features.get("movement_sample_minutes"),
+                "level_mean": features.get("movement_level_mean"),
+                "level_max": features.get("movement_level_max"),
+                "active_minutes": features.get("movement_active_minutes"),
+            },
             "sleep_duration_minutes": features.get("total_sleep_minutes"),
             # ⚠️ Garmin 手錶沒有環境音量這個數據；TAPO 的分貝是 np.random 產生的。
             #    兩個來源都給不出真值，所以留 null。
