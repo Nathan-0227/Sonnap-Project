@@ -9,17 +9,35 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 - Elvira：影像工程 (Python/OpenCV)
 - 陳泰銘：AI 與數據處理
 
-🚀 專案進度
- 攝影機影像串流測試
- UI 原型設計 (Figma)
- 翻身偵測演算法開發
- AI 夢境生成 API 串接
- 系統整合與 Demo 測試
- 
-🔗 相關資源
-Figma 網址： [(https://www.figma.com/files/team/1633021850224699912/recents-and-sharing?fuid=1633021848674802056)]
+## 🚀 專案進度（2026-08-15）
 
-開發環境： Python 3.x, Flutter/React Native
+| | 項目 | 狀態 |
+|---|---|---|
+| ✅ | 攝影機影像串流測試 | 5 晚真實整晚資料 |
+| ✅ | UI 原型設計 (Figma) | 五個分頁已實作 |
+| ✅ | 翻身偵測演算法開發 | 見 [`tapo/README.md`](tapo/README.md) |
+| ✅ | 睡眠品質評分 | 46 晚實測，文獻加權 |
+| ✅ | AI 夢境生成 API 串接 | 46 晚全數生成（改用 Claude API） |
+| 🟡 | 系統整合與 Demo 測試 | 資料鏈路已打通；**五個分頁只有 Home 接了真資料** |
+
+**目前最大的缺口**：整個系統假設只有一個使用者，而且資料不會自己更新。
+完整盤點與優先順序見 **[`PROJECT_STATUS.md`](PROJECT_STATUS.md)**。
+
+## 📖 文件在哪裡
+
+| 想知道什麼 | 看這裡 |
+|---|---|
+| **整體現況、待決策事項、下一步** | [`PROJECT_STATUS.md`](PROJECT_STATUS.md) |
+| Garmin 資料 pipeline 怎麼跑 | [`garmin/README.md`](garmin/README.md) |
+| AI 睡眠顧問的設計與驗證機制 | [`ai/README.md`](ai/README.md) |
+| Flutter App 結構、哪頁是真資料 | [`app/README.md`](app/README.md) |
+| 攝影機模組、資料陷阱、已知問題 | [`tapo/README.md`](tapo/README.md) |
+| 評分權重的文獻依據 | [`Research-Background/Garmin手錶分數.md`](Research-Background/Garmin手錶分數.md) |
+| 社交功能的文獻依據 | [`Research-Background/社交功能設計.md`](Research-Background/社交功能設計.md) |
+
+🔗 Figma： [(https://www.figma.com/files/team/1633021850224699912/recents-and-sharing?fuid=1633021848674802056)]
+
+開發環境： Python 3.13、Flutter 3.44.9 / Dart 3.12.2
 
 ## ⚙️ 系統架構 (Data Contract)
 我們使用 JSON 格式進行模組間的數據溝通：
@@ -45,16 +63,32 @@ Figma 網址： [(https://www.figma.com/files/team/1633021850224699912/recents-a
 
 ```
 
-欄位說明 (開發者指南)
-pet_mood (String)：寵物心情，支援狀態包括：happy, tired, bored, anxious。
+### 欄位說明（開發者指南）
 
-current_activity (String)：當前動畫狀態，支援狀態包括：sleeping, dreaming, waking_up。
+- **`pet_mood`** (String)：寵物心情，支援 `happy` / `tired` / `bored` / `anxious`。
+- **`current_activity`** (String)：動畫狀態，支援 `sleeping` / `dreaming` / `waking_up`。
+- **`motion_count`** (Integer)：翻身次數，由影像組提供之偵測數據。
+- **`dream_summary`** (String)：AI 生成的夢境描述文字。
+- **`energy_level`** (Integer)：0–100，用於影響寵物動畫的活躍度。
 
-motion_count (Integer)：翻身次數，由影像組提供之偵測數據。
+### ⚠️ 實作與這份契約的三個差異（2026-08-15）
 
-dream_summary (String)：由 Gemini API 生成的夢境描述文字。
+上面那份 JSON 是團隊最初議定的格式，**實際 payload 有三處不同**，
+都是刻意的、也都寫進了 `PROJECT_STATUS.md` 給 PM 決策：
 
-energy_level (Integer)：數值範圍 0-100，用於影響寵物動畫的活躍度。
+| 欄位 | 實際值 | 為什麼 |
+|---|---|---|
+| `motion_count` | **`null`** | Garmin 給不出「翻身次數」。TAPO 才是語意相符的來源，但目前只有 5 晚且尚未接入。**刻意不用 Garmin 的動作資料硬填**——語意不同，硬塞會永久掩蓋這個缺口 |
+| `ambient_noise_db` | **`null`** | Garmin 沒有這個感測器。TAPO 新版雖然真的收音，但算出來的是未校準的相對值不是聲壓級（詳見 [`tapo/README.md`](tapo/README.md)） |
+| `current_activity` | **`null`** | 需要「此刻」的狀態，但目前是隔日批次產出，給不出來 |
+
+> **UI 遇到 `null` 應顯示「—」或隱藏該欄，不要顯示 0。**
+> 「沒量到」和「量到是 0」是兩件事。
+
+**另外**：`dream_summary` 最初規劃用 Gemini，**實際採用 Claude API**
+（用標準庫 `urllib.request` 直接呼叫，不裝 SDK，所以沒有增加任何相依）。
+實際 payload 還擴充了 `scoring` / `streak` / `history` 三個區塊——
+沿用原有的頂層結構往下加，沒有另開一套。設計理由見 [`ai/README.md`](ai/README.md)。
 
 
 
