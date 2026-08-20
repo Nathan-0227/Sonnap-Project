@@ -246,9 +246,9 @@ def compute_streak(quality_rows, latest_date):
         "streak_days": streak,
         "completed_days": completed,
         "definition": (
-            "streak_days = 到最新一晚為止連續有睡眠記錄的夜數；"
-            "completed_days = 最近 7 個日曆日內評級為 Good 或 Normal 的晚數。"
-            "手錶未配戴的夜晚不算在內，所以數字偏小反映的是配戴率而非睡眠品質。"
+            "streak_days = The number of consecutive nights with sleep records up to the latest night;"
+            "completed_days = the number of nights rated Good or Normal within the last 7 calendar days."
+            "Nights when the watch was not worn are not included, so the lower number reflects the wearing rate rather than sleep quality."
         ),
     }
 

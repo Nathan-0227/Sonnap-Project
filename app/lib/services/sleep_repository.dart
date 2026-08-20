@@ -30,14 +30,34 @@ class AssetSleepRepository implements SleepRepository {
   const AssetSleepRepository();
 
   @override
-  Future<SleepSession> load() async {
-    final raw = await rootBundle.loadString(assetPath);
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('app_payload.json 的根節點不是物件');
-    }
-    return SleepSession.fromJson(decoded);
+Future<SleepSession> load() async {
+  final raw = await rootBundle.loadString(assetPath);
+
+  print('========== SLEEP JSON LOADED ==========');
+  print(raw);
+
+  final decoded = jsonDecode(raw);
+
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException(
+      'app_payload.json 的根節點不是物件',
+    );
   }
+
+  final session = SleepSession.fromJson(decoded);
+
+  print('========== PARSED DATA ==========');
+  print('Session ID: ${session.sessionId}');
+  print('History count: ${session.history.length}');
+
+  for (final entry in session.history) {
+    print(
+      '${entry.date} -> ${entry.sleepDurationHours}',
+    );
+  }
+
+  return session;
+}
 }
 
 // ── 之後要接 HTTP 時在這裡加 ApiSleepRepository ──────────────────
