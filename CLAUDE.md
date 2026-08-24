@@ -233,12 +233,27 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 → 教訓：`summary` 與 `features` 的有效性標準不同，任何讀 `summary` 的新程式
 都得自己做有效性檢查。
 
-### ⚠️ 專案裡其實有**三套**睡眠評分，不是兩套
+### ⚠️ 睡眠評分有**四條會執行的路徑**，而「Garmin+TAPO 整合」已經寫好了
 
-`PROJECT_STATUS.md` 2.4 只列了 Garmin `final_score` 與 TAPO `sleep_quality_score`。
-第三套是 **`itegration/if_integrate.py` 的 `calculate_garmin_score()`**，
-用 `stress > 20`、`hours > 11`、`deep < 0.1` 這類寫死門檻，**沒有文獻依據**，
-而且現在用的壓力定義已與正式評分器不同。需與 PM 對齊，不在這一輪範圍。
+⚠️ **我在這一輪裡把這件事講錯過一次，記下來當教訓**：先說「第三套是
+`if_integrate.py` 的 `calculate_garmin_score()`，用 `stress > 20` 等寫死門檻」——
+逐行追呼叫路徑後才發現，**那條是死碼**（只在 `final_score` 欄位不存在時才走，
+而它一定存在），真正會跑的是另外兩條。這正是 8.2 定下的紀律
+（先讀實際呼叫路徑再下結論），而我對自己的專案犯了同型的錯。
+
+| 分數 | 位置 | 會不會跑 |
+|---|---|---|
+| `final_score` | `garmin/apply_recovery_modifier.py` | ✅ 正式 |
+| `sleep_quality_score` | `tapo/tapo_detector.py` | ✅ 寫進 MySQL，**但整合時被忽略** |
+| `camera_score` | `if_integrate.py:257` | ✅ 會跑，從原始計數重算，取代上一列 |
+| `integrated_score` | `if_integrate.py:214` | ✅ `0.6×garmin + 0.4×camera` |
+| `calculate_garmin_score_from_features` | `if_integrate.py:225` | ❌ 死碼 |
+
+**「把 Garmin 和 TAPO 合起來」這件事不需要從頭做——它已經在 `if_integrate.py` 裡了。**
+方向是對的，問題全在輸入端：合併用的 `report_date` 不可信（3.4）、
+重疊樣本只有 3 晚、`snore_count` 來自死碼、60/40 權重無依據、
+`camera_score` 內部重複計分。**完整的五項與建議修復順序見
+`PROJECT_STATUS.md` 3.8。第一項不修，後面四項都沒有意義。**
 
 ### 產品化地基（`db.py` + `behavior/`）
 

@@ -98,23 +98,27 @@ Garmin 也有一個 `movement_count`，但那是**我們自訂的翻動取樣筆
 
 **要決策的**：這個欄位要保留、移除，還是等到真的接上麥克風再說？
 
-### 2.4 ⚠️ 睡眠分數其實有**三套**，要顯示哪一個
+### 2.4 ⚠️ 睡眠分數有**四條實際會執行的路徑**，不是兩套
 
-> **2026-08-25 更正**：這一節原本寫「兩套」，漏了 `itegration/if_integrate.py`
-> 裡面那一套。三套並存且互不知道對方存在。
+> **2026-08-25 更正兩次**：這一節原本寫「兩套」，漏了 `itegration/if_integrate.py`。
+> 第一次改寫時我說那是「第三套評分」，**那個說法也不精確**——逐行追過呼叫路徑
+> 之後，那支程式裡真正會執行的是另外兩條，而我點名的那一條反而是死碼。
+> 這正是本專案 8.2 定下的紀律：**先讀實際呼叫路徑，再下結論**。
 
-| | Garmin `final_score` | TAPO `sleep_quality_score` | **`if_integrate.py`**（新發現） |
+| 分數 | 位置 | 依據 | 會不會執行 |
 |---|---|---|---|
-| 位置 | `garmin/apply_recovery_modifier.py` | `tapo/tapo_detector.py` | `itegration/if_integrate.py:220-255` |
-| 依據 | 文獻加權（Hirshkowitz/Hertenstein/Ohayon 等）+ 個人化修正 | 翻身次數扣分算術 | **寫死門檻，零文獻**：`stress > 20`、`hours > 11`、`deep < 0.1` |
-| 範圍 | 0–100 | 有地板值，跑不到低分 | 0–100（`np.clip`） |
-| 穩定性 | 確定性——同樣輸入必得同樣結果 | **部分由亂數驅動**（見 3.2） | 確定性 |
+| `final_score` | `garmin/apply_recovery_modifier.py` | 文獻加權（Hirshkowitz/Ohayon 等）+ 個人化修正 | ✅ 正式 |
+| `sleep_quality_score` | `tapo/tapo_detector.py` | 翻身次數扣分算術；有地板值，跑不到低分 | ✅ 寫進 MySQL，**但整合時被忽略** |
+| **`camera_score`** | `itegration/if_integrate.py:257` | `large_turn>20`／`events>50`／`snore>10`，**零文獻** | ✅ **會執行**，取代上一列 |
+| **`integrated_score`** | `itegration/if_integrate.py:214` | `0.6×final_score + 0.4×camera_score` | ✅ 會執行，**權重無依據** |
+| `calculate_garmin_score_from_features` | `itegration/if_integrate.py:225` | `stress>20`／`hours>11`／`deep<0.1` | ❌ **死碼**——只在 `final_score` 欄位不存在時才走，而它一定存在 |
 
-第三套還有一個新產生的問題：它讀的 `avg_stress_score` 在 2026-08-25 之後
-**已經不是正式評分器使用的壓力定義**（見 6.8）。欄位刻意保留未刪就是為了
-不讓這支程式壞掉，但兩邊的語意已經分岔。
+**注意第二列與第三列的關係**：TAPO 自己算好的 `sleep_quality_score` 有寫進資料庫，
+但 `if_integrate.py` **不用它**，而是從原始計數（`total_events` / `large_turn_count` /
+`snore_count`）重算一個 `camera_score`。等於影像側有兩套分數，整合採用的是後寫的那套。
 
-**要決策的**：App 顯示哪一個？還是合併？三套都留著嗎？這不該由任何一方自己決定。
+**要決策的**：App 顯示哪一個？整合的 60/40 從哪裡來？TAPO 自己那套還要不要留？
+這不該由任何一方自己決定。整合路徑本身的問題見 3.8。
 
 ### 2.5 `status.current_activity` 的即時狀態來源
 
@@ -257,6 +261,48 @@ AUDIO_SNOOZE_THRESHOLD  = 1500     ← 更達不到
 
 已在根目錄 `.gitignore` 加上 `turn_*.mp4`（遞迴套用到所有子資料夾）。
 目前沒有影片被提交過。
+
+### 3.8 ⚠️ 「Garmin + TAPO 整合」已經寫好了，但地基有五個問題（2026-08-25）
+
+`itegration/if_integrate.py` 就是這件事的實作。核心是一行：
+
+```python
+df['integrated_score'] = (garmin_score * 0.6 + camera_score * 0.4).round()
+```
+
+**這個方向是對的，問題全部出在輸入端與參數。逐項列出，每一項都可獨立處理：**
+
+**① 合併的鍵不可信（最嚴重）。** `pd.merge(camera_df, garmin_df, on='date', how='inner')`
+用日期對齊，但 TAPO 側的 `report_date` 是**報告產生時間**而非那一夜（見 3.4，
+實例：標記 08-04 的報告，內容其實是 08-03 那一夜）。**日期錯了，
+就是把 A 晚的攝影機資料配上 B 晚的手錶資料**，而 `how='inner'` 會安靜地
+把配不上的丟掉，不會有任何錯誤訊息。
+→ **這一項不修，後面四項都沒有意義。** 日期必須從影片檔名取。
+
+**② 可用樣本只有 3 晚。** Garmin 46 晚、TAPO 5 晚，重疊只有 08-02／08-04／08-06。
+`how='inner'` 之後就是 3 列。**3 個樣本不足以驗證任何權重。**
+
+**③ `camera_score` 的輸入有一項是空的。** 它用 `snore_count > 10` 扣分，
+但打鼾偵測整段是死碼（見 3.7：門檻寫 200／1500，而 `20·log₁₀(RMS)`
+理論最大值只有 90.3），`sound_type` 永遠是 `"quiet"`。
+舊版本更糟——分貝值直接由 `np.random` 產生（見 3.2）。
+
+**④ 60/40 的權重沒有依據。** 沒有註解、沒有引用、沒有用資料校準過。
+本專案 Tier1/2 的每一個權重都有文獻（`Garmin手錶分數.md` 附錄有對照表），
+這裡是唯一的例外。
+
+**⑤ `camera_score` 內部有重複計分**（8.3 紅線 1 的實例）：
+`total_events` 與 `large_turn_count` 都來自同一個動作偵測器，
+大翻身本身也被計進總事件數。**同一個訊號扣了兩次分。**
+
+**另外還有一個會讓報告自相矛盾的小問題**：`if_integrate.py` 的 `SCORE_GRADES`
+是五級（優秀/良好/普通/需改善/待加強，切點 85/70/55/40），而正式評分器是四級
+（Good/Normal/Poor/Bad，切點 80/65/50）。**同一個 0–100 的數字會被兩套標準
+講成不同的等級**。
+
+**建議的修復順序**：① → ② → ⑤ → ③ → ④。前兩項是資料正確性，
+沒有它們後面都是空談；④ 放最後，因為只有累積足夠的重疊夜數之後，
+才有辦法用資料談權重（在那之前任何數字都是猜的，那就該誠實標成暫定值）。
 
 ---
 
