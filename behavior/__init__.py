@@ -13,7 +13,11 @@ behavior/ — Tier A：行為介入層
 遊戲化完全建立在 Tier A（行為）上，而 Tier A 的資料來源是手機，
 跟評分器根本不在同一條路徑上。
 
-機械化驗收：
-    grep -r "evaluate_sleep_quality\|apply_recovery_modifier" behavior/
+機械化驗收（**只比對 import 行**）：
+
+    grep -rnE "^[[:space:]]*(import|from)[[:space:]]+.*(evaluate_sleep_quality|apply_recovery_modifier|garmin)" behavior/
     # 必須零結果
+
+⚠️ 不要寫成單純搜關鍵字。那樣會抓到這段說明本身——一個永遠「失敗」的檢查
+   比沒有檢查更糟，因為大家很快就會學會忽略它。（這個坑是實際踩過才發現的。）
 """

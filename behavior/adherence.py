@@ -21,10 +21,8 @@ behavior/adherence.py — 就寢達成度（Tier A）
 
 以前這條紅線只能靠紀律守住；在新架構下它是**結構上成立**的——
 behavior/ 底下不會出現 garmin/evaluate_sleep_quality.py 或
-apply_recovery_modifier.py 的任何引用。機械化驗收：
-
-    grep -r "evaluate_sleep_quality\|apply_recovery_modifier" behavior/
-    # 必須零結果
+apply_recovery_modifier.py 的任何引用。機械化驗收見 behavior/__init__.py
+（要比對 import 行，不能單純搜關鍵字——否則會抓到說明文字本身）。
 
 （Health Connect 的資料要算分數，那是 wearable/ 的事，不在這裡。）
 
