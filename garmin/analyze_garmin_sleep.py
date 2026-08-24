@@ -127,6 +127,70 @@ def session_date_for(ts_dt, sessions):
     return None
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 【2026-08-25 新增】入睡前的清醒時段（給 Tier3 壓力修正值用）
+# ═══════════════════════════════════════════════════════════════════
+# 中間沒戴錶時，「上一次起床」會落在好幾天前，清醒時段被拉長成數十小時。
+# 那種窗格混了好幾天的讀數，不能代表「當日壓力」，寧可整晚不給值。
+#
+# ⚠️ 這個常數是防呆，不是計分門檻——實測 46 晚的清醒時段最長 19.0 小時，
+#    所以 20 到 30 之間任何值都會得到完全相同的結果。它只用來排除
+#    「中間缺了整天」的情況，不參與任何分數計算。
+MAX_AWAKE_HOURS = 24
+
+
+def build_awake_windows(sessions):
+    """
+    每一晚「入睡前的那個清醒時段」＝ 上一次起床 → 這一次入睡。
+
+    回傳 [(window_start, window_end, session_date), ...]。
+
+    為什麼要有這個：`avg_stress_score` 是把「落在睡眠區間內的讀數」歸起床日、
+    其餘照日曆日歸類，結果列 D 的壓力主體其實是**起床之後**那一天，
+    而 Garmin手錶分數.md G 節引的 Yap (2020) 講的是「**當日**壓力影響當夜睡眠」
+    ——方向相反。這個窗格把「那一覺之前的整個清醒時段」單獨切出來，
+    讓 Tier3 能用構念正確的數值。
+
+    ⚠️ 窗格的兩端都由資料自己界定（前一晚的 wake_time、這一晚的 sleep_start_time），
+       **沒有任何人為選定的時間長度**。這是刻意的：本專案每個門檻都要有依據，
+       而最好的做法是根本不需要門檻。
+    """
+    windows = []
+    # sessions 已依 start 排序（build_sleep_sessions 的最後一行）
+    for i in range(1, len(sessions)):
+        prev_start, prev_wake, _ = sessions[i - 1]
+        this_sleep, this_wake, sdate = sessions[i]
+
+        # ⚠️ 排除「退化區間」（入睡時間 == 起床時間）。實測 2026-06-02 就是這種
+        #    ——CLAUDE.md 已記錄該列 sleep_start == wake == 00:00:00 為異常資料。
+        #    兩端都要檢查，理由不同：
+        #      這一晚退化 → 不知道真正何時入睡，窗格的「終點」是假的
+        #      前一晚退化 → 不知道真正何時起床，窗格的「起點」是假的
+        #    ⚠️ 這裡必須自己擋掉，不能倚賴 extract_sleep_features.py 的過濾——
+        #       apply_recovery_modifier 讀的是 summary 而不是過濾後的 features，
+        #       所以假值會直接進入 baseline 的歷史清單汙染後續夜晚。
+        #       （實測：不擋的話 06-02 會多產生一個窗格，使壓力修正的生效夜數
+        #        由 14 變成 15——baseline 提早一晚湊滿 14 筆。）
+        if prev_wake <= prev_start or this_wake <= this_sleep:
+            continue
+        if this_sleep <= prev_wake:
+            continue                        # 資料異常（區間重疊），跳過
+        if (this_sleep - prev_wake).total_seconds() / 3600 > MAX_AWAKE_HOURS:
+            continue                        # 中間有沒戴錶的日子，窗格不可信
+        windows.append((prev_wake, this_sleep, sdate))
+    return windows
+
+
+def awake_window_date_for(ts_dt, windows):
+    """時間點落在哪個「入睡前清醒時段」內；不在任何窗格內回傳 None。"""
+    if ts_dt is None:
+        return None
+    for start, end, sdate in windows:
+        if start <= ts_dt < end:
+            return sdate
+    return None
+
+
 def main():
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -135,6 +199,15 @@ def main():
 
     # 先建立睡眠區間，之後用來判斷每筆記錄該歸到哪一「晚」
     sessions = build_sleep_sessions(records)
+
+    # 【2026-08-25】每晚「入睡前的清醒時段」，只給壓力欄位用（見 build_awake_windows）
+    awake_windows = build_awake_windows(sessions)
+
+    # 入睡前清醒時段的壓力累加器。**刻意獨立於 summary 之外**：
+    # 同一筆壓力讀數會同時被算進兩個地方——既照原本的規則進 avg_stress_score，
+    # 也可能進這裡的 presleep_stress_score。兩者歸屬的日期常常不同
+    # （例如 8/6 傍晚的讀數，前者歸 8/6、後者歸 8/7），所以不能共用同一列。
+    presleep_stress = defaultdict(lambda: {"count": 0, "sum": 0.0})
 
     summary = defaultdict(lambda: {
         "date": "",
@@ -260,6 +333,14 @@ def main():
                 row["stress_count"] += 1
                 row["stress_sum"] += stress
 
+                # 【2026-08-25】同一筆讀數另外歸進「入睡前清醒時段」。
+                # 這裡用 awake_window_date_for 而不是上面算好的 date——
+                # 兩者是不同的歸屬規則，同一筆讀數常常落在不同的日期上。
+                pre_date = awake_window_date_for(ts_dt, awake_windows)
+                if pre_date is not None:
+                    presleep_stress[pre_date]["count"] += 1
+                    presleep_stress[pre_date]["sum"] += stress
+
         elif metric == "resting_heart_rate":
             rhr = safe_number(value)
             if rhr is not None:
@@ -277,6 +358,14 @@ def main():
         avg_stress = None
         if row["stress_count"] > 0:
             avg_stress = round(row["stress_sum"] / row["stress_count"], 2)
+
+        # 【2026-08-25】入睡前那個清醒時段的平均壓力（Tier3 用這個，不用上面那個）。
+        # 沒有窗格（前一晚沒戴錶、或這是第一晚）時是 None 而不是 0——
+        # 「沒量到」與「壓力為 0」語意完全不同，本專案一貫在意這個區別。
+        presleep = presleep_stress.get(date)
+        presleep_avg = None
+        if presleep and presleep["count"] > 0:
+            presleep_avg = round(presleep["sum"] / presleep["count"], 2)
 
         # 秒 -> 分鐘（四捨五入到整數分鐘，跟 Garmin App 顯示一致）
         deep_min = round(row["deep_sec"] / 60)
@@ -332,6 +421,14 @@ def main():
             "min_heart_rate": row["heart_rate_min"],
             "max_heart_rate": row["heart_rate_max"],
             "avg_stress_score": avg_stress,
+            # ⚠️ 兩個壓力欄位語意不同，不要混用：
+            #   avg_stress_score      = 舊欄位。睡眠期間 + 該日曆日白天的混合值，
+            #                           主體是「起床之後」那一天（91% 的讀數不在睡眠期間）。
+            #                           保留是為了不破壞既有下游與歷史對照。
+            #   presleep_stress_score = 上一次起床 → 這一次入睡 的整個清醒時段。
+            #                           這才是 G 節與 Yap (2020) 講的「當日壓力」，
+            #                           Tier3 的壓力修正值改用這個。
+            "presleep_stress_score": presleep_avg,
             "resting_heart_rate": row["resting_heart_rate"],
             "awake_count": row["awake_count"] if has_sleep_session else None,
             "sleep_segment_count": row["sleep_segment_count"] if has_sleep_session else None,

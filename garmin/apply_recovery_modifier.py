@@ -73,6 +73,14 @@ Cold start（冷啟動）處理
    （步數中位數僅 185 步；心率讀數分布佐證：12:00 僅 45 筆、17:00 回到 734 筆）。
    已加入 ACTIVITY_MIN_BASELINE_STEPS 門檻自動偵測並停用此項，詳見該常數說明。
    對於整天配戴的使用者，此項仍正常運作。
+   ⚠️【2026-08-24 修正】原本讀「同一列」的 steps_total，但那是**睡醒之後**才發生的
+   活動量——summary 的每一列混了兩個時段：睡眠歸「起床日」（對齊 Garmin
+   calendarDate），而步數的時間戳寫在該日 15:00、照自己的日曆日歸類。
+   H 節文獻要的是相反方向（「日間活動對夜間睡眠的促進效果」，Kredlow 2015 的
+   統合分析是前瞻設計），所以改讀「前一個日曆日」的步數（見 prev_day_steps()）。
+   對現有 46 晚的**數值零影響**（此項已被上述門檻停用），僅 2026-06-11 那一晚的
+   modifier_note 由「資料無效」改為「冷啟動」——序列位移一天，滿 14 筆的時間點
+   也晚一晚，那是正確的結果而非副作用。此項若日後啟用才會有數值差異。
 
 3. 【2026-07-30 修正】心率與壓力的偏離換算，原本用「相對 baseline 的百分比」，
    但實測發現壓力分數（avg_stress_score）在 baseline 很小（例如 3-7 分）的夜晚，
@@ -564,7 +572,7 @@ def compute_sri(window_days, asleep_epochs, recorded_days):
 def build_modifier_note(rhr_available, avg_hr_available, stress_available,
                         activity_available, sri_available,
                         awake_available, segment_available,
-                        activity_data_invalid=False):
+                        activity_data_invalid=False, stress_window_missing=False):
     """
     組出一句人看得懂的提示文字，說明「這一晚哪些修正項沒有生效、以及為什麼」。
     目的是讓 App／報告端可以誠實顯示「這個分數還沒有加上哪些修正」，
@@ -578,13 +586,18 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
          「無法計算」而非「暫不修正」——它本來就不會修正分數。
       3. 活動量資料無效（手錶沒整天戴）→ 再戴幾晚也不會改善，
          必須改變配戴習慣才行，講成「累積中」會誤導使用者。
+      4.【2026-08-25 新增】壓力缺「入睡前清醒時段」→ 前一晚沒戴錶，
+         所以量不到那一段。這跟第 1 種同樣不是使用者做錯什麼，但原因不同：
+         冷啟動是「總量還不夠」，這個是「這一晚剛好缺前一晚」，
+         下一晚只要前後都有戴就會恢復。
     """
     missing = []
     if not rhr_available:
         missing.append("靜止心率")
     if not avg_hr_available:
         missing.append("睡眠期間平均心率")
-    if not stress_available:
+    # 壓力跟活動量同理：只有在「不是因為缺窗格」時，才歸類為冷啟動
+    if not stress_available and not stress_window_missing:
         missing.append("壓力")
     # 活動量只有在「不是因為資料無效」時，才歸類為冷啟動
     if not activity_available and not activity_data_invalid:
@@ -609,7 +622,32 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
             f"活動量修正未啟用：每日步數基準低於 {ACTIVITY_MIN_BASELINE_STEPS:.0f} 步，"
             "研判手錶未於白天持續配戴，此數據無法反映真實活動量"
         )
+    if stress_window_missing:
+        notes.append(
+            "壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料"
+            "（前一晚未配戴，無法界定該時段的起點）"
+        )
     return "；".join(notes)
+
+
+def prev_day_steps(row_date, steps_by_date):
+    """
+    取「上床前那個白天」的步數——也就是 row_date 的前一個日曆日。
+
+    見 compute_modifiers() 迴圈內的完整說明。回傳 None 的情況有兩種，
+    兩種都代表「這一晚沒有可用的睡前活動量」，交給下游的 None 處理邏輯：
+      1. 前一天沒戴錶（那一列根本不存在）
+      2. 前一天有列但 steps_total 是空的
+
+    ⚠️ 不要「往前找到最近一個有資料的日子」來補洞。那會把三天前的活動量
+       當成昨天的用，而 H 節文獻講的是「當日活動 → 當晚睡眠」的鄰接關係，
+       隔了幾天就不是同一回事了。寧可誠實地回 None。
+    """
+    try:
+        prev = datetime.fromisoformat(row_date).date() - timedelta(days=1)
+    except (TypeError, ValueError):
+        return None
+    return steps_by_date.get(prev.isoformat())
 
 
 def compute_modifiers(summary_rows):
@@ -634,6 +672,18 @@ def compute_modifiers(summary_rows):
     # 所以在進迴圈前先把時間軸建好一次，迴圈裡只取用不同的日期窗格。
     asleep_epochs, recorded_days = build_sleep_timeline(summary_rows)
 
+    # ═══════════════════════════════════════════════════════════════
+    # 【2026-08-24 修正】活動量要用「上床前那個白天」的步數
+    # ═══════════════════════════════════════════════════════════════
+    # 這張查表是為了讓迴圈能取到「前一個日曆日」那一列的步數。詳細理由見
+    # 迴圈內 steps 那一行的說明，這裡只講為什麼需要一張額外的表：
+    # summary_rows 是逐列處理的，而我們要的值在「上一列」——但不能直接用
+    # 上一列，因為中間可能有沒戴錶的日子而使日期不連續。必須用日期查。
+    steps_by_date = {
+        r.get("date", ""): to_float(r.get("steps_total"))
+        for r in summary_rows
+    }
+
     modifiers_by_date = {}
 
     for row in summary_rows:
@@ -641,8 +691,44 @@ def compute_modifiers(summary_rows):
         # 讀出「今晚」的原始數值（可能是 None，代表那晚沒量到）
         rhr = to_float(row.get("resting_heart_rate"))
         avg_hr = to_float(row.get("avg_heart_rate"))
-        stress = to_float(row.get("avg_stress_score"))
-        steps = to_float(row.get("steps_total"))
+        # ⚠️【2026-08-25 修正】壓力改讀 presleep_stress_score（上一次起床 → 這次入睡
+        #    的整個清醒時段），不再用 avg_stress_score。
+        #
+        #    原因：avg_stress_score 的 11,439 筆讀數裡只有 8.6% 落在睡眠期間，
+        #    91.4% 是白天——而那個「白天」主體是**起床之後**那一天。
+        #    G 節引的 Yap (2020) 講的是「當日壓力 → 當夜睡眠」，方向相反。
+        #
+        #    實例（2026-07-12，入睡 02:39、起床 15:29）：
+        #      舊值 25.8（基準 5.5）→ 扣滿 −4.0，但那 25.8 整段發生在起床之後
+        #      新值  3.3（基準 5.4）→ 入睡前那個清醒時段其實低於個人常態
+        #    同一批原始讀數，只因時窗不同而差了將近 8 倍。
+        #
+        #    ⚠️ avg_stress_score 欄位仍然保留在 summary 裡（未刪除），
+        #       但**不再參與任何計分**。要看歷史對照時才用它。
+        stress = to_float(row.get("presleep_stress_score"))
+        # ⚠️【2026-08-24 修正】活動量讀「前一個日曆日」的步數，不是這一列自己的。
+        #
+        # 原因是 summary 的每一列混了兩個不同時段的資料：
+        #   列 D 的「睡眠」＝ D-1 晚上上床、D 早上起床（歸起床日，對齊 Garmin calendarDate）
+        #   列 D 的「步數」＝ D 白天（garmin_connect_fetch.py 把時間戳寫在 D 的 15:00，
+        #                            不落在睡眠區間內，所以照自己的日曆日歸類）
+        # → 也就是說，列 D 的步數發生在列 D 那一覺**睡完之後**。
+        #
+        # 但 H 節文獻要的是相反的方向。Garmin手錶分數.md 第 122 行寫的是
+        # 「白天身體活動量……用以反映**日間活動對夜間睡眠**的潛在促進效果」，
+        # 第 126 行「將白天活動量視為對**夜間**睡眠的漸進式加分來源」，
+        # 引用的 Kredlow (2015) 統合分析也是「運動 → 之後的睡眠」這個前瞻方向。
+        # 用睡醒之後才發生的步數去加分給睡前那一覺，因果方向是反的。
+        #
+        # 所以列 D 這一覺（上床於 D-1 晚上）該配的是 **D-1 白天**的步數。
+        #
+        # ⚠️ 為什麼要用日期查而不是直接取前一列：46 晚裡有 28 個日曆日沒戴錶，
+        #    列與列之間的日期不連續，「上一列」很可能是好幾天前。
+        #
+        # ⚠️ 本次修改對現有 46 晚的分數**沒有任何影響**，因為
+        #    ACTIVITY_MIN_BASELINE_STEPS 已把整項停用（步數中位數僅 185）。
+        #    這正好是這次修改的回歸測試：分數若有變動，就代表理解有誤。
+        steps = prev_day_steps(row_date, steps_by_date)
         awake_count = to_float(row.get("awake_count"))
         segment_count = to_float(row.get("sleep_segment_count"))
 
@@ -743,6 +829,9 @@ def compute_modifiers(summary_rows):
                 sri_value is not None,
                 awake_baseline is not None, segment_baseline is not None,
                 activity_data_invalid,
+                # 這一晚有沒有「入睡前清醒時段」可用（前一晚有戴錶才有）。
+                # 與冷啟動分開，兩者要採取的行動不同——見 build_modifier_note。
+                stress is None,
             ),
         }
 
@@ -754,6 +843,9 @@ def compute_modifiers(summary_rows):
         rhr_history.append(rhr)
         avg_hr_history.append(avg_hr)
         stress_history.append(stress)
+        # ⚠️ 這裡 append 的是「已經位移過」的 steps（前一天的值）。這是對的，
+        #    不是漏改：baseline 必須跟被比較的值取自同一個序列，否則就變成
+        #    拿「睡前活動量」去比「全部白天活動量」的基準，兩者定義不同。
         steps_history.append(steps)
         awake_count_history.append(awake_count)
         segment_count_history.append(segment_count)
