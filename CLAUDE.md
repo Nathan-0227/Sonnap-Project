@@ -233,27 +233,35 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 → 教訓：`summary` 與 `features` 的有效性標準不同，任何讀 `summary` 的新程式
 都得自己做有效性檢查。
 
-### ⚠️ 睡眠評分有**四條會執行的路徑**，而「Garmin+TAPO 整合」已經寫好了
+### ⚠️ 評分路徑盤點：**我在這一輪連續寫錯兩次**，過程比結論更值得記
 
-⚠️ **我在這一輪裡把這件事講錯過一次，記下來當教訓**：先說「第三套是
-`if_integrate.py` 的 `calculate_garmin_score()`，用 `stress > 20` 等寫死門檻」——
-逐行追呼叫路徑後才發現，**那條是死碼**（只在 `final_score` 欄位不存在時才走，
-而它一定存在），真正會跑的是另外兩條。這正是 8.2 定下的紀律
-（先讀實際呼叫路徑再下結論），而我對自己的專案犯了同型的錯。
+- 第一版：「兩套」——漏了 `if_integrate.py`
+- 第二版：「第三套是 `calculate_garmin_score_from_features`，用 `stress > 20`」
+  ——**那是死碼**
+- 第三版：「`camera_score` 會從原始計數重算，取代 TAPO 自己的分數」
+  ——**也是死碼**，SQL 早就寫了 `sleep_quality_score as camera_score`
 
-| 分數 | 位置 | 會不會跑 |
-|---|---|---|
-| `final_score` | `garmin/apply_recovery_modifier.py` | ✅ 正式 |
-| `sleep_quality_score` | `tapo/tapo_detector.py` | ✅ 寫進 MySQL，**但整合時被忽略** |
-| `camera_score` | `if_integrate.py:257` | ✅ 會跑，從原始計數重算，取代上一列 |
-| `integrated_score` | `if_integrate.py:214` | ✅ `0.6×garmin + 0.4×camera` |
-| `calculate_garmin_score_from_features` | `if_integrate.py:225` | ❌ 死碼 |
+**兩次錯誤同一個原因**：看到 `df['x'] = self.calculate_x(df)` 就假設它會執行，
+沒往上看那個 `if 'x' in df.columns` 是否已經成立。**這正是 8.2 的紀律
+（先讀實際呼叫路徑再下結論），而我對自己的專案連續兩次沒做到。**
 
-**「把 Garmin 和 TAPO 合起來」這件事不需要從頭做——它已經在 `if_integrate.py` 裡了。**
-方向是對的，問題全在輸入端：合併用的 `report_date` 不可信（3.4）、
-重疊樣本只有 3 晚、`snore_count` 來自死碼、60/40 權重無依據、
-`camera_score` 內部重複計分。**完整的五項與建議修復順序見
-`PROJECT_STATUS.md` 3.8。第一項不修，後面四項都沒有意義。**
+正確答案（兩套 + 一個組合 + 兩段死碼）：
+
+| 分數 | 狀態 |
+|---|---|
+| `final_score`（`garmin/`） | ✅ 文獻加權 |
+| `sleep_quality_score`（`tapo/tapo_detector.py:326`） | ✅ 扣分制 |
+| `integrated_score`（`if_integrate.py:214`） | ✅ `0.6×garmin + 0.4×tapo`，**權重無依據** |
+| `calculate_camera_score()` / `calculate_garmin_score_from_features()` | ❌ 都是死碼 |
+
+⚠️ **`itegration/if_integrate.py` 與 `tapo/if_integrate.py` 是逐位元組相同的
+重複檔**（各 518 行）。`tapo/` 五支 detector 那個問題的重演，要決定留哪一份。
+
+**「把 Garmin 和 TAPO 合起來」不需要從頭做——它已經寫好了。但
+`PROJECT_STATUS.md` 3.10 主張根本不該做加權平均**：攝影機的價值是提供
+手錶量不到的「上床時刻」（→ 臥床時間 → 解掉 6.3 的效率限制 + 解鎖入睡潛伏期），
+那條路**一個新參數都不用訂**；而加權平均要 justify 60/40，還是拿有引文的分數
+去平均沒引文的分數。整合路徑的五個問題見 3.8，臥床時間見 3.9。
 
 ### 產品化地基（`db.py` + `behavior/`）
 
