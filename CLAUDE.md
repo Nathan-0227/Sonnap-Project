@@ -9,7 +9,19 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：目前狀態與下一步（2026-08-11．新對話請先讀這段）
+## 🔖 交接區：目前狀態與下一步（2026-08-25 更新．新對話請先讀這段）
+
+> **最新一輪的成果與待辦在「📌 2026-08-26 這一輪」那一節**，本節底下的
+> git 狀態已更新，但「下一步」那張表講的是 2026-08-12 完成的 Part A–E，
+> 屬於歷史記錄。目前真正的路線圖是
+> `C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
+> （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
+>
+> ✅ **那份路線圖的後端部分已於 2026-08-26 全部完成**（多使用者持久化、
+> Health Connect adapter、行為介入迴圈、46 晚遷移、驗收測試）。
+> **剩下的全部在手機端**：Android 的 UsageStats（取得 `lights_out_at`
+> 與睡前 App 分布）、Accessibility 阻斷、Health Connect 串接。
+> 後端的端點與資料表都已就緒且有測試，手機端接上去就能跑 D2。
 
 這段是「現在在哪、接下來做什麼」。底下的其他章節是**累積的歷史記錄**，
 裡面有些標題（例如「Next Development Goal」）寫的是當時的下一步，**現在已經過期**，
@@ -25,23 +37,54 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-08-15 更新）
+### git 狀態（2026-08-26 更新）
 
-**目前直接在 `main` 上工作**，本地有 4 個 commit 尚未 push：
+**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出），
+**尚未 push、尚未開 PR**。`origin/main` 已於 08-25 合併進來（影像組 8/17 的工作）。
 
-```
-d443762 fix(ai): 夢境意象重複率 70% → 17%，並統一數字格式（PROMPT_VERSION v3）
-71e18b7 chore(tapo): 移除四個舊版 motion_detector，保留 tapo_detector.py
-103893c fix(garmin): movement_count 其實是取樣分鐘數，改用 activityLevel 算真實動作
-2d22565 chore: 刪除 app/ 底下的 TAPO 程式複本
-```
+> ⚠️ 前一版這裡寫的「4 個 commit 直接打在 main 上、尚未 push」**已經過期**——
+> 那四個 commit 後來已推上去，`main` 與 `origin/main` 同步中。不必再補救。
 
-⚠️ **這違反團隊規範**（不可直接動 main）。之所以會這樣，是因為 PR #10 合併後
-本地留在 main 就接著改下去了。下次動工前應該先 `git checkout -b feature/xxx`。
-要補救的話：從這四個 commit 切一個分支出去，把 main reset 回 `f1eafca`，再開 PR。
+### ⚠️ 環境（2026-08-26 補記）
+
+專案有 `.venv`，但**相依套件從來沒有裝過**——所以在此之前
+`main.py` 其實跑不起來（`ModuleNotFoundError: fastapi`）。
+已裝 `fastapi` / `uvicorn` / `httpx`。其餘（`garminconnect`、`pandas`、
+`opencv-python`…）仍未安裝，需要時再 `pip install -r requirements.txt`。
+
+⚠️ **`garminconnect` 沒裝不影響 pipeline**——只有 `--fetch`（重抓資料）
+那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
+
+分支盤點（2026-08-25 實測）：
+
+| 遠端分支 | 作者 | 領先 main | 最後更新 | 狀態 |
+|---|---|---|---|---|
+| `origin/flutter` | Jeremy | **0** | 2026-07-10 | 已全數合併，可刪 |
+| `origin/feature/garmin-sleep-scoring` | 我 | **0** | 2026-08-11 | 已合併，可刪 |
+| `origin/feature/project-setup` | 我 | **0** | 2026-08-12 | 已合併，可刪 |
+| `origin/feature/opencv-motion-garmin` | 影像組 | **12** | 2026-06-11 | ⚠️ 見下方 |
+
+⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
+另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
+`garmin_importer.py` 救回來。唯一有價值的是 `sleep_records.sql`——那正是
+`PROJECT_STATUS.md` 3.5 說「不存在」的 TAPO 建表 SQL。
+
+**但它也不完整、不該直接撿來用**：`tapo_detector.py:200` 寫入的欄位與它逐欄相同，
+但 `sleep_anylzer.py:50` 與 `import mysql.py:57` 都 SELECT 了 `created_at`，
+而那份 `CREATE TABLE` **沒有這一欄**。拿它建表，寫得進去但分析程式會
+`Unknown column`。→ 應請影像組跑一次 `SHOW CREATE TABLE sleep_records` 給出現行結構。
+
+那份 dump 順帶用**我們自己的資料**驗證了三件已知的事（可直接引用進報告）：
+5 筆紀錄的 `report_date` 全是 dump 產生當天（證實 3.4「report_date 不可信」）；
+其中 4 筆分數**全是 50**，但事件數從 183 到 1225、翻身從 8 到 344——
+**四個完全不同的夜晚彼此無法區分**，正是 8.3 紅線 3「分數不得有人為地板」；
+timeline 第一筆是 16:48，且 `motion_intensity: 2073600` = 1920×1080，整畫面誤判。
 
 已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）。
 `main` 也含隊友的 Flutter app（`app/`）與 TAPO（`tapo/`）。
+
+> 💡 `gh` CLI 已於 2026-08-25 安裝（v2.98.0），但**尚未 `gh auth login`**，
+> 所以還看不到 PR 列表。要用的話請先在終端機登入一次。
 
 ### 已完成
 
@@ -63,11 +106,278 @@ d443762 fix(ai): 夢境意象重複率 70% → 17%，並統一數字格式（PRO
 | Part D | **資料交接層**：`build_app_payload.py` + `main.py` 接真資料 | ✅ 已完成（2026-08-12） |
 | Part E | **Flutter 資料層**：4 個 model + `services/` + HomeScreen | ✅ 已完成（2026-08-12） |
 
+⚠️ **要動評分邏輯或新增遊戲化功能（挑戰／獎勵／寵物成長／貨幣）之前，
+先讀下一節「🚧 設計紅線與待補迴圈」**——那五條紅線是拿外部同類專案對照後定的，
+其中第 4、5 條防的是我們還沒踩但下一步最可能踩的坑。
+
 > 完整計劃在 `C:\Users\user\.claude\plans\plan-app-graceful-pie.md`。
 > **那份檔案已於 2026-08-15 整個改寫成「產品化路線圖」**，不再是 TAPO 接入計劃——
 > 因為使用者確認了目標是「別人能實際裝來用的產品，時間一學期以上」，
 > 在那個標準下重新盤點的結論是：**技術難的部分幾乎都做完了，缺的是產品的部分**。
 > 兩個最根本的缺口：**整個系統假設世界上只有一個使用者**、**資料不會自己更新**。
+
+---
+
+## 🚧 設計紅線與待補迴圈（2026-08-17 定．動評分或遊戲化之前必讀）
+
+來源：拿 GitHub 上同類型開源專案 **NightBloom**（`shev0k/sleep_tracker`，MIT，
+4 stars／34 commits／停更於 2024-11）逐行對照的結論。
+**完整證據與行號在 [PROJECT_STATUS.md](PROJECT_STATUS.md) 第八節**，這裡只留規則。
+
+分寸先講清楚：對方是小型學生專案，**「它有問題」不能反過來證明我們是對的**。
+留這一節是因為它的每個問題剛好對應到我們刻意做過的取捨，可以當成回歸測試用的反例。
+
+### ❌ 五條紅線（要動評分或加遊戲化功能時逐條檢查）
+
+| # | 紅線 | 對方踩到的實例 |
+|---|---|---|
+| 1 | **同一個訊號不得以多個名義重複計分** | 它的 `movementScore` / `remSleepScore` / `lightSleepScore` 全是加速度 magnitude 的不同切法 → **70% 的分數只反映單一訊號** |
+| 2 | **每一項計分都必須有文獻門檻** | 它的 `1.5 / 2.5 / 60 / 20 / 50` 五個門檻零引用，且未扣重力（靜止時 magnitude 本來就是 1.0 g） |
+| 3 | **分數不得有人為地板** | 它所有子分數只有 100/75/50 三檔，總分被壓在 [50,100]，糟糕的夜晚彼此無法區分 |
+| 4 | **⚠️ 遊戲化層只讀，不得回寫評分層** | 見下方展開 |
+| 5 | **獎勵必須與「品質」耦合，不能只與「有資料」耦合** | 見下方展開 |
+
+**紅線 4 展開**：挑戰、獎勵、寵物成長、貨幣等模組**只能讀**
+`final_score` / `final_quality` / `sri`，**不得參與**
+`garmin/evaluate_sleep_quality.py` 與 `garmin/apply_recovery_modifier.py` 的任何計算。
+最容易破功的說法是「為了讓挑戰有感，完成挑戰的夜晚加 5 分」——**那一步就毀了
+「每項計分都有引文」這個本專案最難複製的資產**。要獎勵就在遊戲層獎勵。
+
+**紅線 5 展開（我們還沒踩，但下一步最可能踩）**：
+對方的遊戲貨幣是把所有夜晚的分數無條件累加，配合地板 50 →
+**睡得再差也照領 50 點**，成長速度只跟「有沒有睡」有關。它的遊戲化在激勵層面是失效的。
+我們目前沒問題（`pet_mood` 直接由 `final_quality` 決定，Bad 的夜晚真的會顯示
+`tired`/`anxious`）。但 `PROJECT_STATUS.md` 第五節列的「任務系統／寵物成長／
+Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第一個要驗的就是
+「差的夜晚拿到的回饋明顯少於好的夜晚」**。
+
+### ✅ 該補的：行為介入迴圈（我們缺一整層）
+
+兩邊的缺口剛好互補：**它是「假量測 + 真迴圈」，我們是「真量測 + 無迴圈」。**
+目前使用者看完分數與夢境日記就結束了，**沒有可以「做」的事**。
+
+要補的話，**標的用 SRI**。這不是抄它，是從我們自己的資料長出來的：
+
+- SRI 已經在 `apply_recovery_modifier.py` 算好並輸出，但**刻意不計分、只呈現**
+  → 目前實質上是一筆沒人使用的死資料
+- 挑戰標的必須是**行為**（幾點上床），不能是**生理結果**（深睡幾分鐘）。
+  使用者控制得了前者，控制不了後者
+- ⚠️ **拿 SRI 當挑戰目標不違反「不計分」的決定**——當初不計分的理由是
+  「不同計算方法算出的 SRI 差異大到不能對照外部常模」（Czeisler 2026），
+  而「這 7 天你的上床時間有沒有收斂」是**個人內比較**，不受該問題影響。
+  但**它仍然不准進 `total_modifier`**，兩件事不要混淆
+- 有 46 晚實測資料，可先驗證挑戰難度再上線
+
+建議形式：「連續 7 天上床時間落在 ±30 分鐘內」→ 寵物解鎖某個狀態。
+
+### 📋 方法論：評估外部專案先讀碼，不要採信 README
+
+對方 README 寫「整合加速度計、陀螺儀、Fitbit、Apple Watch」，
+但 `grep -ri "accelerom\|sensor\|fitbit\|health" lib/` **零結果**、
+`pubspec.yaml` 沒有任何感測套件、「睡眠資料」頁的時數是寫死字串。
+**它的睡眠量測整個是假的**，README 描述的是路線圖不是現況。
+
+→ 日後評估任何外部專案／函式庫，**先看相依套件清單與實際呼叫路徑，再看 README**。
+（我們自己也犯過同型的錯：`ADVICE_LANG` 曾經寫在文件上卻沒有實作，後來把
+`.env.example` 改成誠實說明。）
+
+---
+
+## 📌 2026-08-26 這一輪（多使用者迴圈打通）
+
+**驗收可重跑**：`python tests/test_api.py`、`python tests/test_healthconnect_adapter.py`
+（兩支都是獨立腳本，不需要 pytest；`test_api.py` 全程用暫存資料庫，不碰 `data/sonnap.db`）。
+
+### 新增了什麼
+
+```
+main.py            POST /users /nightly /wearable  PATCH+DELETE /users/{id}
+                   GET /home /insights /challenges     ← 舊端點行為完全不變
+wearable/          Health Connect → **既有評分器**（一個門檻都沒改）
+behavior/          challenges.py（挑戰引擎）+ pet_state.py（行為驅動的寵物狀態）
+migrate_garmin_to_db.py   46 晚 → wearable_nightly，與 CSV 逐列相符、可重複執行
+tests/             兩支驗收腳本
+```
+
+⚠️ **CORS 原本只開 `allow_methods=["GET"]`**——所以**結構上就不可能寫入**，
+App 上傳一定被瀏覽器擋掉，而且錯誤只出現在瀏覽器 console。已補 POST/PATCH/DELETE/OPTIONS。
+
+⚠️ **`db.py` 加了欄位遷移機制**。`CREATE TABLE IF NOT EXISTS` 對**已存在**的表
+什麼都不做——連新加的欄位也不補。只改 SCHEMA 的話，全新環境正常、
+已跑過 `--init` 的開發機則會 `no such column`。見 `COLUMN_MIGRATIONS`。
+
+### ⚠️ 三個值得記住的發現
+
+**1. 臥床時間（3.9）對有穿戴裝置的同學其實拿得到。**
+Health Connect 的 `SleepSessionRecord` 以「**上床**」為 session 起點，
+所以 TIB、入睡潛伏期、臨床睡眠效率全部算得出來——攝影機原本要解的問題，
+標準層直接就給了。**但刻意不拿它計分**：Garmin 的效率分母是「起床 − 入睡」，
+臨床定義是「起床 − 上床」，後者一定較低；兩種數字餵進同一組門檻
+（`EFFICIENCY_GOOD = 85`），L1 同學會被**系統性地扣分**，
+而那個差異來自裝置不是來自睡眠。→ 另存 `clinical_efficiency` 供報告用。
+
+**2. 挑戰難度校準：一個門檻真的達不到，另一個是被假象騙的。**
+- `作息收斂` ±30 分鐘 → **0/36 = 0%**（離散度中位數 103 分鐘）。改為 **±60**（22%）
+- `連續 5 晚` → 第一次跑出 0%，**一度誤判成挑戰設計壞了**。
+  ⚠️ 查下去發現有一部分是**手錶配戴率造成的假象**：46 晚散在 74 個日曆日、
+  只有 1 段連續 ≥5 天，而「缺資料就中斷」讓斷點吃掉了大部分連續。
+  **那個限制在 Tier A 不存在（手機天天都在）**，校準時要先把斷點拿掉。
+  去掉後量到「準時率要 55–60% 才連得到 5 晚」，改為 **連續 3 晚**
+- ⚠️ 校準樣本 **n=1** 且那個人特別不規律（就寢標準差 84 分鐘），是暫定值
+
+**3. `target_bedtime` 的預設值 23:30 會讓夜貓子第一天就放棄。**
+「準時放下手機」的達成率**完全由使用者自己設的目標決定**：同一批資料，
+23:30 → 2%、02:30 → 43%、03:00 → 59%。→ 註冊流程要問「你現在通常幾點睡」
+並據此建議，不能給所有人同一個預設值。（App 端的事，已交接給 Jeremy。）
+
+### 兩層如何合併
+
+`main.py` 的 `resolve_mood()`：**有行為資料時行為優先，生理只做 `anxious` 覆寫**。
+理由同「挑戰標的必須是行為不是生理結果」——使用者準時放下手機卻因感冒睡不好
+而看到難過的寵物，就是**因為自己控制不了的事被懲罰**，回饋迴圈一斷機制就失效。
+
+⚠️ **沒有行為資料時完全走舊路徑的規則**（直接 import
+`build_app_payload.map_pet_mood`，不重寫）。已實測：研究者那 46 晚
+走新 API 與走舊 asset 給出**逐字相同**的心情與理由。
+
+### 兩個分工決定
+
+1. **音訊門檻 bug（3.7）交給影像組修，我不動 `tapo_detector.py`。**
+   交接要點在 `PROJECT_STATUS.md` 3.7 末段——**根因是單位錯亂不是靈敏度**
+   （8/17 那次註解寫「Lowered for more sensitive detection」，代表根因當時
+   沒被辨識出來），`db` 天花板是 **90.3**，**驗收要跑真的有聲音的錄音**。
+2. **重複的 `if_integrate.py` 留 `itegration/` 那一份**，`tapo/` 那份已刪
+   （刪前驗證過全專案零 `import`）。
+
+## 📌 2026-08-25 這一輪（量測時窗修正 + 產品化地基）
+
+分支 `feature/behavior-loop`，4 個 commit。完整計劃在
+`C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`。
+
+### ⚠️ 壓力與活動量的量測時窗**都差了一天**（重要，已修）
+
+根因是同一件事：**`garmin_sleep_summary.csv` 的每一列混了兩個時段的資料。**
+
+```
+列 D 的「睡眠」＝ D-1 晚上上床、D 早上起床   （歸起床日，對齊 Garmin calendarDate）
+列 D 的「步數/壓力」＝ D 白天               （時間戳不在睡眠區間內，照自己的日曆日歸類）
+                                            ↑ 發生在那一覺「之後」
+```
+
+分流的那一行是 `analyze_garmin_sleep.py:185`：
+`date = session_date_for(ts_dt, sessions) or get_date(timestamp)`。
+
+**壓力（±4，Tier3 額度最大的一項）**——實測 11439 筆讀數裡**只有 8.6% 落在
+睡眠期間，91.4% 是白天**，而 G 節寫的構念是「睡眠期間的生理壓力負荷」。
+更麻煩的是本資料集平均就寢 02:34，所以列 D 的傍晚讀數（19:00–23:00，配戴高峰）
+其實屬於**下一晚**的睡前時段——單一欄位橫跨了兩個不同夜晚。
+
+已新增 `presleep_stress_score`（`build_awake_windows()`），定義是
+**「上一次起床 → 這一次入睡」的整個清醒時段**。⚠️ **窗格兩端都由資料自己界定，
+不含任何人為選定的時間長度**——這是刻意的：本專案每個門檻都要有依據，
+而最好的做法是根本不需要門檻。（一度考慮過「睡前 3 小時」，但那個 3 需要引文，
+而且量到的其實是 pre-sleep arousal 這個**中介變項**，不是 G 節要的「當日壓力」。）
+
+**活動量**——改讀前一個日曆日的 `steps_total`。H 節引的 Kredlow (2015) 檢驗的是
+「日間活動 → 其後睡眠」的前瞻方向。此項已因 baseline < 1000 步而停用，
+**數值零影響**，只有 06-11 的 `modifier_note` 由「資料無效」改成「冷啟動」
+（序列位移一天，滿 14 筆的時間點也晚一晚，是正確結果不是副作用）。
+
+**實測影響（46 晚）：**
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 壓力修正生效 | 34/46 晚 | **14/46 晚** |
+| 飽和率 | 24% | **14%** |
+| 改變分級 | — | 3 晚 |
+| **Tier1/2 基礎分數** | — | **46 晚完全未變** |
+
+生效夜數下降是因為需要**連續兩晚都有記錄**——與 SRI 受同一結構限制，
+兩者可用夜數同為 28。這不是永久限制：**配戴率改善它就自己補起來**，
+而舊定義的構念錯誤再收集 200 晚也還是錯的。
+
+單晚差異可達整個 ±4：**2026-07-12**（02:39 入睡、15:29 起床）舊值 25.8
+（基準 5.5）扣滿 −4.0，但那 25.8 **整段發生在起床之後**；新值 3.3（基準 5.4），
+入睡前的清醒時段其實**低於**個人常態。同一批原始讀數，差了 7.8 倍。
+
+⚠️ **`avg_stress_score` 保留未刪**，但不再參與計分。理由不是「歷史對照」
+（那是錯的說法），是 **`itegration/if_integrate.py:250` 仍在讀它**。
+
+### ⚠️ 順手抓到：06-02 那筆異常列會汙染 baseline
+
+第一次跑出來壓力生效 15/46 而不是預測的 14/46。差一晚查下去是 **2026-06-02**
+（`sleep_start == wake == 00:00:00`，本檔案早已記錄的異常列）。
+
+**關鍵：`extract_sleep_features.py` 會濾掉它，但 `apply_recovery_modifier`
+讀的是 `summary` 而不是過濾後的 features**，所以假值會直接進 `stress_history`
+汙染 baseline，讓它提早一晚湊滿 14 筆。已在 `build_awake_windows` 自己擋掉
+退化區間（兩端都檢查），**不倚賴下游過濾**。
+
+→ 教訓：`summary` 與 `features` 的有效性標準不同，任何讀 `summary` 的新程式
+都得自己做有效性檢查。
+
+### ⚠️ 評分路徑盤點：**我在這一輪連續寫錯兩次**，過程比結論更值得記
+
+- 第一版：「兩套」——漏了 `if_integrate.py`
+- 第二版：「第三套是 `calculate_garmin_score_from_features`，用 `stress > 20`」
+  ——**那是死碼**
+- 第三版：「`camera_score` 會從原始計數重算，取代 TAPO 自己的分數」
+  ——**也是死碼**，SQL 早就寫了 `sleep_quality_score as camera_score`
+
+**兩次錯誤同一個原因**：看到 `df['x'] = self.calculate_x(df)` 就假設它會執行，
+沒往上看那個 `if 'x' in df.columns` 是否已經成立。**這正是 8.2 的紀律
+（先讀實際呼叫路徑再下結論），而我對自己的專案連續兩次沒做到。**
+
+正確答案（兩套 + 一個組合 + 兩段死碼）：
+
+| 分數 | 狀態 |
+|---|---|
+| `final_score`（`garmin/`） | ✅ 文獻加權 |
+| `sleep_quality_score`（`tapo/tapo_detector.py:326`） | ✅ 扣分制 |
+| `integrated_score`（`itegration/if_integrate.py:214`） | ✅ `0.6×garmin + 0.4×tapo`，**權重無依據** |
+| `calculate_camera_score()` / `calculate_garmin_score_from_features()` | ❌ 都是死碼 |
+
+✅ **重複檔已於 2026-08-26 刪掉一份**：`itegration/if_integrate.py` 與
+`tapo/if_integrate.py` 曾逐位元組相同（各 518 行），已依決定**保留
+`itegration/` 那一份**。刪除前驗證過全專案零 `import`（兩者都是獨立腳本），
+所以不影響任何呼叫路徑。⚠️ `itegration` 是 `integration` 的拼字錯誤，
+改名是另一件事，目前刻意不動（`requirements.txt:28` 的註解也指向這個名字）。
+
+**「把 Garmin 和 TAPO 合起來」不需要從頭做——它已經寫好了。但
+`PROJECT_STATUS.md` 3.10 主張根本不該做加權平均**：攝影機的價值是提供
+手錶量不到的「上床時刻」（→ 臥床時間 → 解掉 6.3 的效率限制 + 解鎖入睡潛伏期），
+那條路**一個新參數都不用訂**；而加權平均要 justify 60/40，還是拿有引文的分數
+去平均沒引文的分數。整合路徑的五個問題見 3.8，臥床時間見 3.9。
+
+### 產品化地基（`db.py` + `behavior/`）
+
+D2 確認要「找同學裝 APK 實際用一到兩週」之後，**多使用者不再是待決策事項**。
+`db.py` 用標準庫 `sqlite3`（`requirements.txt` 不多任何一行），七張表，
+暱稱制免註冊。`behavior/` 是 Tier A 行為層。
+
+⚠️ **架構紅線（8.7）在新架構下是結構上成立的，不需要靠紀律守住**：
+遊戲化建立在 Tier A（手機行為）上，與評分器不在同一條路徑。驗收指令見
+`behavior/__init__.py`——**要比對 import 行，不能單純搜關鍵字**，
+否則會抓到規則自己的說明文字（實際踩過）。
+
+### ⚠️ 兩個「安靜失效」的坑（都已修，都有實測）
+
+1. **`.gitignore` 寫 `data/` 會遞迴匹配 `garmin/data/` 與 `ai/data/`**
+   （那裡有 11 個檔已進版控）。已追蹤的檔案不受影響，所以不會立刻壞掉，
+   但**新增的檔案會被靜默擋掉、沒有任何錯誤訊息**。要寫 `/data/`。
+   已用 `git check-ignore -v` 實測確認。
+2. **`db.py` 的 `update_user` 檢查順序反了**——當**所有**欄位都打錯時，
+   `updates` 是空的而提早 `return False`，未知欄位的檢查永遠走不到。
+   先擋未知、再處理空更新。
+
+### `garmin_sleep_summary.csv` 的現行欄位（取代 2026-07-12 那份清單）
+
+`date`、`sleep_start_time`、`wake_time`、`total_sleep_minutes`、
+`deep/light/rem/awake_minutes`、**`movement_sample_minutes`**（原 `movement_count`）、
+`movement_level_mean/max`、`movement_active_minutes`、`steps_total`、
+`avg/min/max_heart_rate`、`avg_stress_score`（不再計分）、
+**`presleep_stress_score`**（Tier3 用這個）、`resting_heart_rate`、
+`awake_count`、`sleep_segment_count`。
 
 ---
 
@@ -563,6 +873,9 @@ evaluate 讀到三週前的 features 檔，完全沒有錯誤訊息）。
    總上限 ±12。輸出欄位：`rhr_modifier`、`avg_hr_modifier`、`stress_modifier`、
    `activity_modifier`、`awake_modifier`、`segment_modifier`、`total_modifier`、
    `sri`（呈現用）、`sri_valid_pairs`、`modifier_note`、`final_score`、`final_quality`。
+
+   > ⚠️ **上表是 2026-08-10 的歷史記錄。壓力與活動量兩列已於 2026-08-25 改動**
+   > （量測時窗差了一天），最新狀態見本檔案「📌 2026-08-25 這一輪」。
 
 6. 待辦（尚未動工）：
    - 中強度活動分鐘數（需接 `get_intensity_minutes`）——但在配戴習慣改變前，

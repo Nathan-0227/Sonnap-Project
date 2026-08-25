@@ -1,123 +1,93 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-15T04:34:52+08:00",
-  "session_id": "20260809_001",
+  "generated_at": "2026-08-26T03:34:11+08:00",
+  "session_id": "20260823_001",
   "status": {
     "pet_mood": "anxious",
     "current_activity": null,
-    "energy_level": 46,
+    "energy_level": 76,
     "mood_reason": "stress_modifier=-4.0 ≤ -3.0"
   },
   "metrics": {
     "motion_count": null,
     "garmin_movement": {
-      "sample_minutes": 489,
-      "level_mean": 1.639,
-      "level_max": 6.59,
-      "active_minutes": 352
+      "sample_minutes": 444,
+      "level_mean": 0.474,
+      "level_max": 5.708,
+      "active_minutes": 61
     },
-    "sleep_duration_minutes": 321,
+    "sleep_duration_minutes": 384,
     "ambient_noise_db": null,
-    "sleep_start_time": "2026-08-09T01:44:00+08:00",
-    "wake_time": "2026-08-09T07:53:00+08:00",
-    "deep_minutes": 59,
-    "rem_minutes": 29,
-    "waso_minutes": 48,
-    "sleep_efficiency": 86.99,
-    "avg_heart_rate": 85.15,
-    "resting_heart_rate": 72
+    "sleep_start_time": "2026-08-22T22:32:00+08:00",
+    "wake_time": "2026-08-23T04:56:00+08:00",
+    "deep_minutes": 258,
+    "rem_minutes": 0,
+    "waso_minutes": 0,
+    "sleep_efficiency": 100.0,
+    "avg_heart_rate": 79.06,
+    "resting_heart_rate": 69
   },
   "ai_content": {
-    "advice": "昨晚只睡了5.3小時，夜裡清醒也長達48分鐘。今晚可以檢查一下房間的光線和溫度，睡前也先避開咖啡因。",
-    "dream_summary": "我夢見自己走在一座有點晃的橋上，木板隨著腳步輕輕搖，我停下來聞了聞風的味道，再繼續往前走。走過去之後回頭看，其實橋也沒那麼可怕，就靠在橋頭打了個哈欠，決定在那裡趴一下。",
-    "trend_note": "最近幾晚的心率和壓力分數都比先前一個月高，睡眠分數則比較低。",
-    "is_ai_generated": true,
-    "content_type": "fiction+advice",
-    "source": "llm",
-    "model": "claude-sonnet-5"
+    "advice": "睡眠品質良好，請維持目前的作息。",
+    "dream_summary": null,
+    "trend_note": null,
+    "is_ai_generated": false,
+    "content_type": "advice",
+    "source": "rule_based",
+    "model": null
   },
   "scoring": {
-    "final_score": 45.8,
-    "final_quality": "Bad",
-    "base_score": 52.9,
-    "total_modifier": -7.15,
+    "final_score": 76.5,
+    "final_quality": "Normal",
+    "base_score": 82.2,
+    "total_modifier": -5.75,
     "sri": null,
     "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
-    "recommendation": "睡眠品質低於平均，建議調整作息。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "睡眠品質良好，請維持目前的作息。"
   },
   "display": {
     "lang": "en",
-    "score_color": "#FF4F63",
-    "score_message": "Tough one.",
-    "mood_description": "Your buddy is worn out.",
-    "header_message": "Let's take it easy tonight.",
-    "pet_message": "I could use\na longer\nnap today...",
+    "score_color": "#FFC83D",
+    "score_message": "Not bad.",
+    "mood_description": "Your buddy is a little restless.",
+    "header_message": "Let's get a good night's sleep!",
+    "pet_message": "Let's rest\na little\nearlier tonight.",
     "streak_encouragement": "Let's build a streak!"
   },
   "streak": {
-    "streak_days": 1,
-    "completed_days": 2,
+    "streak_days": 3,
+    "completed_days": 3,
     "definition": "streak_days = 到最新一晚為止連續有睡眠記錄的夜數；completed_days = 最近 7 個日曆日內評級為 Good 或 Normal 的晚數。手錶未配戴的夜晚不算在內，所以數字偏小反映的是配戴率而非睡眠品質。"
   },
   "history": [
     {
-      "date": "2026-06-15",
-      "final_score": 88.9,
-      "final_quality": "Good",
-      "sleep_duration_hours": 5.38
-    },
-    {
-      "date": "2026-06-17",
-      "final_score": 78.7,
-      "final_quality": "Normal",
-      "sleep_duration_hours": 9.12
-    },
-    {
-      "date": "2026-06-18",
-      "final_score": 78.2,
-      "final_quality": "Normal",
-      "sleep_duration_hours": 5.2
-    },
-    {
-      "date": "2026-06-21",
-      "final_score": 97.6,
-      "final_quality": "Good",
-      "sleep_duration_hours": 6.53
-    },
-    {
-      "date": "2026-06-22",
-      "final_score": 86.0,
-      "final_quality": "Good",
-      "sleep_duration_hours": 9.67
-    },
-    {
       "date": "2026-06-23",
-      "final_score": 87.6,
+      "final_score": 88.8,
       "final_quality": "Good",
       "sleep_duration_hours": 9.18
     },
     {
       "date": "2026-06-24",
-      "final_score": 71.0,
+      "final_score": 74.5,
       "final_quality": "Normal",
       "sleep_duration_hours": 10.28
     },
     {
       "date": "2026-06-26",
-      "final_score": 94.0,
+      "final_score": 94.3,
       "final_quality": "Good",
       "sleep_duration_hours": 7.78
     },
     {
       "date": "2026-06-27",
-      "final_score": 64.8,
-      "final_quality": "Poor",
+      "final_score": 65.3,
+      "final_quality": "Normal",
       "sleep_duration_hours": 11.47
     },
     {
       "date": "2026-06-28",
-      "final_score": 91.5,
+      "final_score": 95.3,
       "final_quality": "Good",
       "sleep_duration_hours": 6.47
     },
@@ -129,19 +99,19 @@
     },
     {
       "date": "2026-07-01",
-      "final_score": 98.8,
+      "final_score": 100.0,
       "final_quality": "Good",
       "sleep_duration_hours": 8.28
     },
     {
       "date": "2026-07-02",
-      "final_score": 98.0,
+      "final_score": 99.3,
       "final_quality": "Good",
       "sleep_duration_hours": 8.75
     },
     {
       "date": "2026-07-06",
-      "final_score": 88.2,
+      "final_score": 92.2,
       "final_quality": "Good",
       "sleep_duration_hours": 7.3
     },
@@ -153,31 +123,31 @@
     },
     {
       "date": "2026-07-09",
-      "final_score": 66.3,
+      "final_score": 65.5,
       "final_quality": "Normal",
       "sleep_duration_hours": 9.02
     },
     {
       "date": "2026-07-11",
-      "final_score": 88.6,
+      "final_score": 88.0,
       "final_quality": "Good",
       "sleep_duration_hours": 9.08
     },
     {
       "date": "2026-07-12",
-      "final_score": 49.7,
-      "final_quality": "Bad",
+      "final_score": 54.6,
+      "final_quality": "Poor",
       "sleep_duration_hours": 12.75
     },
     {
       "date": "2026-07-17",
-      "final_score": 97.2,
+      "final_score": 96.9,
       "final_quality": "Good",
       "sleep_duration_hours": 6.73
     },
     {
       "date": "2026-07-19",
-      "final_score": 67.6,
+      "final_score": 66.4,
       "final_quality": "Normal",
       "sleep_duration_hours": 11.03
     },
@@ -189,57 +159,87 @@
     },
     {
       "date": "2026-07-21",
-      "final_score": 82.6,
+      "final_score": 84.5,
       "final_quality": "Good",
       "sleep_duration_hours": 8.45
     },
     {
       "date": "2026-07-23",
-      "final_score": 89.8,
+      "final_score": 90.1,
       "final_quality": "Good",
       "sleep_duration_hours": 6.02
     },
     {
       "date": "2026-07-25",
-      "final_score": 73.8,
+      "final_score": 73.0,
       "final_quality": "Normal",
       "sleep_duration_hours": 7.95
     },
     {
       "date": "2026-07-27",
-      "final_score": 100.0,
+      "final_score": 99.5,
       "final_quality": "Good",
       "sleep_duration_hours": 8.05
     },
     {
       "date": "2026-08-02",
-      "final_score": 89.1,
+      "final_score": 93.1,
       "final_quality": "Good",
       "sleep_duration_hours": 9.13
     },
     {
       "date": "2026-08-04",
-      "final_score": 92.1,
+      "final_score": 96.1,
       "final_quality": "Good",
       "sleep_duration_hours": 8.88
     },
     {
       "date": "2026-08-06",
-      "final_score": 49.2,
-      "final_quality": "Bad",
+      "final_score": 53.2,
+      "final_quality": "Poor",
       "sleep_duration_hours": 12.12
     },
     {
       "date": "2026-08-07",
-      "final_score": 78.4,
+      "final_score": 76.9,
       "final_quality": "Normal",
       "sleep_duration_hours": 7.08
     },
     {
       "date": "2026-08-09",
-      "final_score": 45.8,
+      "final_score": 49.8,
       "final_quality": "Bad",
       "sleep_duration_hours": 5.35
+    },
+    {
+      "date": "2026-08-17",
+      "final_score": 64.7,
+      "final_quality": "Poor",
+      "sleep_duration_hours": 5.78
+    },
+    {
+      "date": "2026-08-18",
+      "final_score": 90.5,
+      "final_quality": "Good",
+      "sleep_duration_hours": 7.03
+    },
+    {
+      "date": "2026-08-21",
+      "final_score": 49.6,
+      "final_quality": "Bad",
+      "sleep_duration_hours": 10.65
+    },
+    {
+      "date": "2026-08-22",
+      "final_score": 79.2,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 9.37
+    },
+    {
+      "date": "2026-08-23",
+      "final_score": 76.5,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 6.4
     }
   ],
   "data_sources": [
@@ -250,5 +250,5 @@
     "mapping": "pet_mood / energy_level 的映射為預設值，尚待 PM 核可（mapping_version=1）"
   },
   "disclaimer": "睡眠分數由 Garmin 手錶資料經文獻加權規則計算，不構成醫療診斷。夢境內容若有生成，為 AI 依睡眠數據想像的創作，非使用者實際夢境的紀錄。",
-  "timestamp": "2026-08-09T07:53:00+08:00"
+  "timestamp": "2026-08-23T04:56:00+08:00"
 }

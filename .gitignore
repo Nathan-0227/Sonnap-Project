@@ -24,3 +24,18 @@ turn_*.mp4
 
 # 重抓 Garmin 資料前的本機備份，純屬保險，不需要共用
 garmin/data/_backup_*/
+
+# ⚠️ SQLite 資料庫：裡面是**受測者的個資**（就寢時間、手機 App 使用紀錄、
+#    睡眠生理數值），絕對不能進版控。這跟 garmin/.env 是同一個等級的東西。
+#    schema 定義在 db.py，任何人 clone 下來跑 `python db.py --init` 就能重建，
+#    所以不進版控也不會有人少了東西。
+*.db
+*.sqlite
+*.sqlite3
+
+# ⚠️ 開頭那個斜線是關鍵，只鎖根目錄的 data/。
+#    寫成 `data/` 會遞迴匹配 garmin/data/ 與 ai/data/——那兩個目錄有 11 個檔
+#    已進版控。已追蹤的檔案不受 gitignore 影響，所以不會立刻壞掉，
+#    但**之後新增的檔案會被靜默擋掉、且沒有任何錯誤訊息**。
+#    已用 `git check-ignore -v garmin/data/x.csv` 實測確認過這個行為。
+/data/
