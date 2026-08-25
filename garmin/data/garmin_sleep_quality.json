@@ -596,5 +596,70 @@
     "rem_score": 3.4,
     "rem_measured": true,
     "recommendation": "睡眠品質低於平均，建議調整作息。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+  },
+  {
+    "date": "2026-08-17",
+    "score": 68.8,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 17.8,
+    "efficiency_score": 25.0,
+    "waso_score": 15.0,
+    "deep_score": 2.6,
+    "rem_score": 8.4,
+    "rem_measured": true,
+    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+  },
+  {
+    "date": "2026-08-18",
+    "score": 97.9,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 30.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 9.3,
+    "rem_score": 8.6,
+    "rem_measured": true,
+    "recommendation": "睡眠品質良好，請維持目前的作息。"
+  },
+  {
+    "date": "2026-08-21",
+    "score": 59.4,
+    "quality": "Poor",
+    "age_band": "young_adult",
+    "duration_score": 13.5,
+    "efficiency_score": 25.0,
+    "waso_score": 15.0,
+    "deep_score": 0.0,
+    "rem_score": null,
+    "rem_measured": false,
+    "recommendation": "睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+  },
+  {
+    "date": "2026-08-22",
+    "score": 87.7,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 26.3,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 3.0,
+    "rem_score": 8.3,
+    "rem_measured": true,
+    "recommendation": "睡眠品質良好，請維持目前的作息。"
+  },
+  {
+    "date": "2026-08-23",
+    "score": 82.2,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 24.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 0.0,
+    "rem_score": null,
+    "rem_measured": false,
+    "recommendation": "睡眠品質良好，請維持目前的作息。"
   }
 ]
