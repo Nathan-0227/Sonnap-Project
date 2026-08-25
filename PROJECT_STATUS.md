@@ -115,21 +115,25 @@ Garmin 也有一個 `movement_count`，但那是**我們自訂的翻動取樣筆
 |---|---|---|---|
 | `final_score` | `garmin/apply_recovery_modifier.py` | 文獻加權（Hirshkowitz/Ohayon 等）+ 個人化修正 | ✅ 正式 |
 | `sleep_quality_score` | `tapo/tapo_detector.py:326` | `large_turns×2.0 + micro×0.1 + snore×0.4`，扣分制 | ✅ 寫進 MySQL |
-| `integrated_score` | `if_integrate.py:214` | `0.6×final_score + 0.4×sleep_quality_score` | ✅ **權重無依據** |
-| `calculate_camera_score()` | `if_integrate.py:257` | `large_turn>20`／`events>50`／`snore>10` | ❌ 死碼——SQL 已 alias（`:130`） |
-| `calculate_garmin_score_from_features()` | `if_integrate.py:225` | `stress>20`／`hours>11`／`deep<0.1` | ❌ 死碼——`final_score` 一定存在 |
+| `integrated_score` | `itegration/if_integrate.py:214` | `0.6×final_score + 0.4×sleep_quality_score` | ✅ **權重無依據** |
+| `calculate_camera_score()` | `itegration/if_integrate.py:257` | `large_turn>20`／`events>50`／`snore>10` | ❌ 死碼——SQL 已 alias（`:130`） |
+| `calculate_garmin_score_from_features()` | `itegration/if_integrate.py:225` | `stress>20`／`hours>11`／`deep<0.1` | ❌ 死碼——`final_score` 一定存在 |
 
-⚠️ **`itegration/if_integrate.py` 與 `tapo/if_integrate.py` 是逐位元組相同的重複檔**
-（各 518 行，`diff` 零輸出）。這是 `tapo/` 五支 detector 那個問題的重演，
-需要決定留哪一份、刪哪一份。
+✅ **重複檔已於 2026-08-26 處理完畢**：`itegration/if_integrate.py` 與
+`tapo/if_integrate.py` 曾是逐位元組相同的重複檔（各 518 行，`diff` 零輸出），
+使用者決定**保留 `itegration/` 那一份**，`tapo/if_integrate.py` 已刪除。
+刪除前已驗證**全專案沒有任何程式 `import` 它們**（兩者都是獨立執行的腳本），
+所以這次刪除不影響任何呼叫路徑。這是 `tapo/` 五支 detector 那件事的重演。
+
+> ⚠️ 資料夾名稱 `itegration` 是 `integration` 的拼字錯誤。改名是獨立決定，
+> 目前刻意不動——`requirements.txt:28` 的註解也指向這個名字，要改就一起改。
 
 **⚠️ TAPO 分數的尺度有問題**：`large_turns × 2.0` 代表**只要 50 次大翻身就歸零**。
 實測 08-06 那份報告有 7428 個事件，舊 dump 有 344 次翻身——它幾乎每晚都撞到 0
 （`PROJECT_STATUS.md` 3.4 記錄的「全是 0」）。這與舊資料「全是 50」是**同一個病的
 兩種症狀**：以前有人為地板，現在撞天花板，兩種情況下不同的夜晚**都無法區分**（紅線 3）。
 
-**要決策的**：App 顯示哪一個？整合的 60/40 從哪裡來？兩份重複的 `if_integrate.py`
-留哪一份？整合路徑本身的問題見 3.8。
+**要決策的**：App 顯示哪一個？整合的 60/40 從哪裡來？整合路徑本身的問題見 3.8。
 
 ### 2.5 `status.current_activity` 的即時狀態來源
 
@@ -285,6 +289,18 @@ AUDIO_SNOOZE_THRESHOLD  = 1500     ← 更達不到
 (b) 保留 dB，把門檻改成 `46.0` 與 `63.5`。
 ⚠️ 兩種修法都只解決「門檻不可達」，**不會讓這個數字變成聲壓級**——
 上一段關於「不能寫成環境音 X 分貝」的限制依然成立。
+
+**👤 分工（2026-08-26 決定）：這個 bug 交由影像組修，我不動 `tapo_detector.py`。**
+理由跟 3.3（五支 detector 留哪一支）一致——那是他們的檔案，而且他們手上有
+實際的收音環境可以驗證門檻。**交接時要一起講清楚的三件事**（缺一就會再修錯一次）：
+
+1. 根因是**單位錯亂**，不是「靈敏度不夠」——8/17 那次註解寫
+   「Lowered for more sensitive detection」，代表根因當時沒有被辨識出來
+2. `db` 的天花板是 **90.3**，任何 ≥90.3 的門檻都是死碼（這是 int16 給的
+   數學上限，跟房間多吵無關）
+3. 修好之後**驗收方式**：跑一段真的有講話／打鼾的錄音，確認
+   `sound_type` 出現過非 `"quiet"` 的值。**光看程式碼改了不算修好**——
+   前一次就是改了但沒驗證
 
 ### 3.5 次要問題
 
@@ -686,7 +702,7 @@ Assistants / Settings 仍是寫死或罐頭內容）。
 | **最高** | **開全隊會議定架構**：要不要做多使用者？帳號怎麼來？資料存哪？<br>Garmin 帳密要每個使用者交出來，這是隱私問題不是技術問題 | **PM／全隊** |
 | 高 | 抓取加排程與增量；App 改成打 API 而非讀打包檔 | 我 |
 | 高 | 決定 TAPO 五支程式留哪一支（3.3）；修時段邏輯（3.1） | 影像組 |
-| 高 | 修音訊分類的門檻 bug（見 3.7） | 影像組 |
+| 高 | 修音訊分類的門檻 bug（見 3.7）。**08-26 已確認由影像組負責**，<br>交接要點與驗收方式見 3.7 末段 | 影像組 |
 | 中 | Insights 頁接上 `history` 資料（後端已備好，零改動） | 前端 |
 | 中 | 移除明碼帳密、改讀環境變數（3.5） | 影像組 |
 | 中 | TAPO 接進 payload + 三晚交叉驗證 | 我 |

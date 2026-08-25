@@ -166,6 +166,16 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 
 ---
 
+## 📌 2026-08-26（兩個分工決定．內容很短）
+
+1. **音訊門檻 bug（3.7）交給影像組修，我不動 `tapo_detector.py`。**
+   交接時要一起講的三件事寫在 `PROJECT_STATUS.md` 3.7 末段——重點是
+   **根因是單位錯亂不是靈敏度**（8/17 那次的註解寫「Lowered for more
+   sensitive detection」，代表根因當時沒被辨識出來），`db` 的天花板是
+   **90.3**，以及**驗收要跑真的有聲音的錄音**（上次改了但沒驗證）。
+2. **重複的 `if_integrate.py` 留 `itegration/` 那一份**，`tapo/` 那份已刪。
+   刪前驗證過全專案零 `import`。
+
 ## 📌 2026-08-25 這一輪（量測時窗修正 + 產品化地基）
 
 分支 `feature/behavior-loop`，4 個 commit。完整計劃在
@@ -251,11 +261,14 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 |---|---|
 | `final_score`（`garmin/`） | ✅ 文獻加權 |
 | `sleep_quality_score`（`tapo/tapo_detector.py:326`） | ✅ 扣分制 |
-| `integrated_score`（`if_integrate.py:214`） | ✅ `0.6×garmin + 0.4×tapo`，**權重無依據** |
+| `integrated_score`（`itegration/if_integrate.py:214`） | ✅ `0.6×garmin + 0.4×tapo`，**權重無依據** |
 | `calculate_camera_score()` / `calculate_garmin_score_from_features()` | ❌ 都是死碼 |
 
-⚠️ **`itegration/if_integrate.py` 與 `tapo/if_integrate.py` 是逐位元組相同的
-重複檔**（各 518 行）。`tapo/` 五支 detector 那個問題的重演，要決定留哪一份。
+✅ **重複檔已於 2026-08-26 刪掉一份**：`itegration/if_integrate.py` 與
+`tapo/if_integrate.py` 曾逐位元組相同（各 518 行），已依決定**保留
+`itegration/` 那一份**。刪除前驗證過全專案零 `import`（兩者都是獨立腳本），
+所以不影響任何呼叫路徑。⚠️ `itegration` 是 `integration` 的拼字錯誤，
+改名是另一件事，目前刻意不動（`requirements.txt:28` 的註解也指向這個名字）。
 
 **「把 Garmin 和 TAPO 合起來」不需要從頭做——它已經寫好了。但
 `PROJECT_STATUS.md` 3.10 主張根本不該做加權平均**：攝影機的價值是提供
