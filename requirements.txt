@@ -19,6 +19,12 @@ garminconnect
 fastapi
 uvicorn          # 跑 FastAPI 需要，程式碼裡不會 import 但沒有它起不來
                  # 執行：uvicorn main:app --reload
+httpx            # 只有 tests/test_api.py 需要（FastAPI 的 TestClient 用它）
+                 # 執行：python tests/test_api.py
+#
+# 註：持久化層（db.py）用標準庫的 sqlite3，**不需要任何額外套件**。
+#     這延續本專案既有的取捨——AI 功能也是用標準庫 urllib.request
+#     直接打 API 而不裝 SDK，理由完全相同。
 
 # --- TAPO 攝影機動作偵測（tapo/tapo_detector.py）---
 opencv-python           # import cv2

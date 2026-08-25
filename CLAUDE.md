@@ -11,11 +11,17 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ## 🔖 交接區：目前狀態與下一步（2026-08-25 更新．新對話請先讀這段）
 
-> **最新一輪的成果與待辦在「📌 2026-08-25 這一輪」那一節**，本節底下的
+> **最新一輪的成果與待辦在「📌 2026-08-26 這一輪」那一節**，本節底下的
 > git 狀態已更新，但「下一步」那張表講的是 2026-08-12 完成的 Part A–E，
 > 屬於歷史記錄。目前真正的路線圖是
 > `C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 > （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
+>
+> ✅ **那份路線圖的後端部分已於 2026-08-26 全部完成**（多使用者持久化、
+> Health Connect adapter、行為介入迴圈、46 晚遷移、驗收測試）。
+> **剩下的全部在手機端**：Android 的 UsageStats（取得 `lights_out_at`
+> 與睡前 App 分布）、Accessibility 阻斷、Health Connect 串接。
+> 後端的端點與資料表都已就緒且有測試，手機端接上去就能跑 D2。
 
 這段是「現在在哪、接下來做什麼」。底下的其他章節是**累積的歷史記錄**，
 裡面有些標題（例如「Next Development Goal」）寫的是當時的下一步，**現在已經過期**，
@@ -31,12 +37,23 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-08-25 更新）
+### git 狀態（2026-08-26 更新）
 
-**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出）。
+**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出），
+**尚未 push、尚未開 PR**。`origin/main` 已於 08-25 合併進來（影像組 8/17 的工作）。
 
 > ⚠️ 前一版這裡寫的「4 個 commit 直接打在 main 上、尚未 push」**已經過期**——
 > 那四個 commit 後來已推上去，`main` 與 `origin/main` 同步中。不必再補救。
+
+### ⚠️ 環境（2026-08-26 補記）
+
+專案有 `.venv`，但**相依套件從來沒有裝過**——所以在此之前
+`main.py` 其實跑不起來（`ModuleNotFoundError: fastapi`）。
+已裝 `fastapi` / `uvicorn` / `httpx`。其餘（`garminconnect`、`pandas`、
+`opencv-python`…）仍未安裝，需要時再 `pip install -r requirements.txt`。
+
+⚠️ **`garminconnect` 沒裝不影響 pipeline**——只有 `--fetch`（重抓資料）
+那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
 
 分支盤點（2026-08-25 實測）：
 
@@ -166,15 +183,71 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 
 ---
 
-## 📌 2026-08-26（兩個分工決定．內容很短）
+## 📌 2026-08-26 這一輪（多使用者迴圈打通）
+
+**驗收可重跑**：`python tests/test_api.py`、`python tests/test_healthconnect_adapter.py`
+（兩支都是獨立腳本，不需要 pytest；`test_api.py` 全程用暫存資料庫，不碰 `data/sonnap.db`）。
+
+### 新增了什麼
+
+```
+main.py            POST /users /nightly /wearable  PATCH+DELETE /users/{id}
+                   GET /home /insights /challenges     ← 舊端點行為完全不變
+wearable/          Health Connect → **既有評分器**（一個門檻都沒改）
+behavior/          challenges.py（挑戰引擎）+ pet_state.py（行為驅動的寵物狀態）
+migrate_garmin_to_db.py   46 晚 → wearable_nightly，與 CSV 逐列相符、可重複執行
+tests/             兩支驗收腳本
+```
+
+⚠️ **CORS 原本只開 `allow_methods=["GET"]`**——所以**結構上就不可能寫入**，
+App 上傳一定被瀏覽器擋掉，而且錯誤只出現在瀏覽器 console。已補 POST/PATCH/DELETE/OPTIONS。
+
+⚠️ **`db.py` 加了欄位遷移機制**。`CREATE TABLE IF NOT EXISTS` 對**已存在**的表
+什麼都不做——連新加的欄位也不補。只改 SCHEMA 的話，全新環境正常、
+已跑過 `--init` 的開發機則會 `no such column`。見 `COLUMN_MIGRATIONS`。
+
+### ⚠️ 三個值得記住的發現
+
+**1. 臥床時間（3.9）對有穿戴裝置的同學其實拿得到。**
+Health Connect 的 `SleepSessionRecord` 以「**上床**」為 session 起點，
+所以 TIB、入睡潛伏期、臨床睡眠效率全部算得出來——攝影機原本要解的問題，
+標準層直接就給了。**但刻意不拿它計分**：Garmin 的效率分母是「起床 − 入睡」，
+臨床定義是「起床 − 上床」，後者一定較低；兩種數字餵進同一組門檻
+（`EFFICIENCY_GOOD = 85`），L1 同學會被**系統性地扣分**，
+而那個差異來自裝置不是來自睡眠。→ 另存 `clinical_efficiency` 供報告用。
+
+**2. 挑戰難度校準：一個門檻真的達不到，另一個是被假象騙的。**
+- `作息收斂` ±30 分鐘 → **0/36 = 0%**（離散度中位數 103 分鐘）。改為 **±60**（22%）
+- `連續 5 晚` → 第一次跑出 0%，**一度誤判成挑戰設計壞了**。
+  ⚠️ 查下去發現有一部分是**手錶配戴率造成的假象**：46 晚散在 74 個日曆日、
+  只有 1 段連續 ≥5 天，而「缺資料就中斷」讓斷點吃掉了大部分連續。
+  **那個限制在 Tier A 不存在（手機天天都在）**，校準時要先把斷點拿掉。
+  去掉後量到「準時率要 55–60% 才連得到 5 晚」，改為 **連續 3 晚**
+- ⚠️ 校準樣本 **n=1** 且那個人特別不規律（就寢標準差 84 分鐘），是暫定值
+
+**3. `target_bedtime` 的預設值 23:30 會讓夜貓子第一天就放棄。**
+「準時放下手機」的達成率**完全由使用者自己設的目標決定**：同一批資料，
+23:30 → 2%、02:30 → 43%、03:00 → 59%。→ 註冊流程要問「你現在通常幾點睡」
+並據此建議，不能給所有人同一個預設值。（App 端的事，已交接給 Jeremy。）
+
+### 兩層如何合併
+
+`main.py` 的 `resolve_mood()`：**有行為資料時行為優先，生理只做 `anxious` 覆寫**。
+理由同「挑戰標的必須是行為不是生理結果」——使用者準時放下手機卻因感冒睡不好
+而看到難過的寵物，就是**因為自己控制不了的事被懲罰**，回饋迴圈一斷機制就失效。
+
+⚠️ **沒有行為資料時完全走舊路徑的規則**（直接 import
+`build_app_payload.map_pet_mood`，不重寫）。已實測：研究者那 46 晚
+走新 API 與走舊 asset 給出**逐字相同**的心情與理由。
+
+### 兩個分工決定
 
 1. **音訊門檻 bug（3.7）交給影像組修，我不動 `tapo_detector.py`。**
-   交接時要一起講的三件事寫在 `PROJECT_STATUS.md` 3.7 末段——重點是
-   **根因是單位錯亂不是靈敏度**（8/17 那次的註解寫「Lowered for more
-   sensitive detection」，代表根因當時沒被辨識出來），`db` 的天花板是
-   **90.3**，以及**驗收要跑真的有聲音的錄音**（上次改了但沒驗證）。
-2. **重複的 `if_integrate.py` 留 `itegration/` 那一份**，`tapo/` 那份已刪。
-   刪前驗證過全專案零 `import`。
+   交接要點在 `PROJECT_STATUS.md` 3.7 末段——**根因是單位錯亂不是靈敏度**
+   （8/17 那次註解寫「Lowered for more sensitive detection」，代表根因當時
+   沒被辨識出來），`db` 天花板是 **90.3**，**驗收要跑真的有聲音的錄音**。
+2. **重複的 `if_integrate.py` 留 `itegration/` 那一份**，`tapo/` 那份已刪
+   （刪前驗證過全專案零 `import`）。
 
 ## 📌 2026-08-25 這一輪（量測時窗修正 + 產品化地基）
 
