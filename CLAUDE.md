@@ -9,7 +9,7 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：目前狀態與下一步（2026-08-25 更新．新對話請先讀這段）
+## 🔖 交接區：目前狀態與下一步（2026-08-26 更新．新對話請先讀這段）
 
 > **最新一輪的成果與待辦在「📌 2026-08-26 這一輪」那一節**，本節底下的
 > git 狀態已更新，但「下一步」那張表講的是 2026-08-12 完成的 Part A–E，
@@ -27,6 +27,58 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 裡面有些標題（例如「Next Development Goal」）寫的是當時的下一步，**現在已經過期**，
 不要照著做。以這段為準。
 
+### ⏭️ 下次接手的三件事（2026-08-26 留．按這個順序）
+
+**① Tier3 的 baseline 會過期 —— 等使用者決定，程式一行都沒改**
+
+`MAX_BASELINE_NIGHTS = 28`（`garmin/apply_recovery_modifier.py:181`）
+**數的是「晚」不是「天」**。配戴稀疏時 28 晚會橫跨兩三個月：
+
+| 訊號 | 算 2026-08-17 時，baseline 實際往回跨了 |
+|---|---|
+| 靜止心率 | **60 天**（9 週） |
+| 睡眠期間平均心率 | 32 天 |
+| 入睡前壓力 | **79 天**（11 週） |
+
+程式第 396 行的註解寫「捨棄太久以前的資料」，但它**按筆數捨棄不按時間**。
+對照：`SRI_WINDOW_DAYS`（:265）明寫「用日曆天而非有資料的晚數」——
+這個區別程式裡別處有處理，Tier3 的 baseline 沒有。
+
+後果：新 5 晚（08-17~08-23）的 `total_modifier` 平均 **−7.09**，
+而舊 46 晚是 **−0.33**，三個訊號幾乎全部打滿負值。
+基於個人 baseline 的修正值長期本來就該趨近於零，
+所以那**不是「這幾晚睡得特別差」**，是 baseline 不能代表現在的自己。
+
+⚠️ 但**訊號本身也真的位移了，而且從 08-02 就開始**（不是重抓造成的）：
+靜止心率 07-11~07-27 穩定在 50–56、08-02 起跳到 62–77；
+步數中位數 150 → 3624（**手錶開始整天配戴**）；入睡前壓力 4.9 → 32.8。
+
+三個選項的實測影響（已算好，不必重算）：
+
+| 選項 | 影響 |
+|---|---|
+| **(a) 不改，只在 `modifier_note` 標註 baseline 跨了幾天** | 分數一律不變。⚠️ 配戴率已大幅改善（新時期 6/9 天步數 >1000），再四週這個問題會自己消失 |
+| (b) 加「28 個日曆天」上限 | 讓程式做到它註解說的事。代價：靜止心率 38→**28** 晚、壓力 35→**16** 晚會回到冷啟動 |
+| (c) 什麼都不動 | 只寫進文件 |
+
+**② 新 5 晚沒有 AI 夢境**
+
+`python garmin/run_pipeline.py --ai` —— ⚠️ **會真的打 Claude API**（`ai/.env` 已有金鑰）。
+目前 `app_payload.json` 最新那晚 `is_ai_generated=false`，退回規則式文字。
+⚠️ 跑之前先看 8/15 記錄的「深睡類調色盤只對應 2 個家族」那個未解問題
+（`MOTIF_FAMILIES` 拆成一對一，約 6 行），否則新 5 晚很可能又寫出「棉被與雪」。
+
+**③ TAPO 的 `sonnap` 資料庫不在這台機器上**
+
+已實測確認：本機 MySQL 9.5 有在跑（port 3306），但**資料目錄裡只有系統內建的
+五個資料庫，沒有 `sonnap`**，也沒有任何 `sleep_records` 檔案；
+17 個 binlog 全是 198–221 bytes（只有啟動/關閉事件）→ **這個 server 從沒被寫過東西**。
+→ 資料在影像組的電腦上，只能跟他們要。不必再花時間找。
+
+✅ 但那條「請影像組跑 `SHOW CREATE TABLE sleep_records`」的待辦**可以劃掉了**——
+他們 08-26 推上來的 `tapo/sleep_records.sql` 第 38 行有 `created_at`，
+先前記錄的「建表後 `sleep_anylzer.py` 會 `Unknown column`」在新檔裡不存在。
+
 ### 工作位置（重要）
 
 **唯一該用的位置：`C:\Users\user\Projects\Sonnap-Project`**（真正的 git clone）
@@ -39,21 +91,53 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ### git 狀態（2026-08-26 更新）
 
-**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出），
-**尚未 push、尚未開 PR**。`origin/main` 已於 08-25 合併進來（影像組 8/17 的工作）。
+**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出）。
+
+**已推上 `origin/feature/behavior-loop`**（`796b8c1..153f417`，12 個 commit）。
+`origin/main` 兩次都合併進來了：08-25 那次是影像組 8/17 的工作，
+08-26 那次是他們當天推的三個 commit（`tapo/` 而已，零衝突）。
+
+⏳ **PR 尚未開** —— 卡在 `gh` 沒登入。要開的話：
+1. 使用者自己跑一次 `gh auth login`（互動式，我不能代跑），或
+2. 直接開網頁 `https://github.com/Nathan-0227/Sonnap-Project/compare/main...feature/behavior-loop`
 
 > ⚠️ 前一版這裡寫的「4 個 commit 直接打在 main 上、尚未 push」**已經過期**——
 > 那四個 commit 後來已推上去，`main` 與 `origin/main` 同步中。不必再補救。
+>
+> ⚠️ 也不要相信「尚未 push」這種敘述——**先跑 `git ls-remote --heads origin`**。
+> 這個分支在 08-25 就已經推過一次（停在 `796b8c1`），而文件上寫著「尚未 push」，
+> 我因此對使用者講錯過一次。**遠端狀態要問 git，不要問文件。**
 
 ### ⚠️ 環境（2026-08-26 補記）
 
 專案有 `.venv`，但**相依套件從來沒有裝過**——所以在此之前
 `main.py` 其實跑不起來（`ModuleNotFoundError: fastapi`）。
-已裝 `fastapi` / `uvicorn` / `httpx`。其餘（`garminconnect`、`pandas`、
-`opencv-python`…）仍未安裝，需要時再 `pip install -r requirements.txt`。
 
-⚠️ **`garminconnect` 沒裝不影響 pipeline**——只有 `--fetch`（重抓資料）
+已裝：`fastapi`、`uvicorn`、`httpx`（測試用）、`garminconnect`（`--fetch` 需要）、
+`mysql-connector-python`（查 TAPO 時裝的）。
+仍未裝：`pandas`、`matplotlib`、`seaborn`、`opencv-python`、`numpy`
+——只有 `itegration/` 與 `tapo/` 那幾支需要，要用時再
+`pip install -r requirements.txt`。
+
+⚠️ **`garminconnect` 沒裝不影響 pipeline 的後四步**——只有 `--fetch`（重抓資料）
 那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
+
+### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
+
+`garmin_connect_fetch.py:778` 用 `open(args.output, "w")`，
+所以 **`--days N` 會把整個 `garmin_standard_data.json` 換掉**，只留最近 N 天。
+`--days 7` 這種用法會**弄丟前面所有歷史**，而且不會有任何警告。
+
+正確用法是給完整區間：
+
+```bash
+python garmin/garmin_connect_fetch.py --start-date 2026-05-28 --end-date <今天>
+python garmin/run_pipeline.py          # 再跑後四步
+```
+
+抓之前先備份 `garmin_standard_data.json` 與 `garmin_sleep_quality_final.csv`，
+抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
+46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
 
 分支盤點（2026-08-25 實測）：
 
