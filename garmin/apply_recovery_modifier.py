@@ -334,12 +334,12 @@ GRADE_THRESHOLDS = [
 def parse_args():
     """定義命令列參數；全部有預設值，直接 `python apply_recovery_modifier.py` 就能跑。"""
     parser = argparse.ArgumentParser(
-        description="套用 Tier 3 生理修正訊號（心率/壓力/活動量），輸出最終分數。"
+        description="Apply Tier 3 physiological modifiers (heart rate / stress / activity) and emit final scores."
     )
-    parser.add_argument("--quality", default=DEFAULT_QUALITY_CSV, help="Tier1/2 基礎分數 CSV。")
-    parser.add_argument("--summary", default=DEFAULT_SUMMARY_CSV, help="每晚心率/壓力/步數 CSV。")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="輸出的最終分數 CSV。")
-    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="輸出的最終分數 JSON。")
+    parser.add_argument("--quality", default=DEFAULT_QUALITY_CSV, help="Tier1/2 base score CSV.")
+    parser.add_argument("--summary", default=DEFAULT_SUMMARY_CSV, help="Per-night heart rate / stress / steps CSV.")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="Output final score CSV.")
+    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="Output final score JSON.")
     return parser.parse_args()
 
 
@@ -593,41 +593,41 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
     """
     missing = []
     if not rhr_available:
-        missing.append("靜止心率")
+        missing.append("resting heart rate")
     if not avg_hr_available:
-        missing.append("睡眠期間平均心率")
+        missing.append("sleep-period average heart rate")
     # 壓力跟活動量同理：只有在「不是因為缺窗格」時，才歸類為冷啟動
     if not stress_available and not stress_window_missing:
-        missing.append("壓力")
+        missing.append("stress")
     # 活動量只有在「不是因為資料無效」時，才歸類為冷啟動
     if not activity_available and not activity_data_invalid:
-        missing.append("活動量")
+        missing.append("activity")
     if not awake_available:
-        missing.append("夜間醒來次數")
+        missing.append("night-time awakenings")
     if not segment_available:
-        missing.append("睡眠段數")
+        missing.append("sleep segments")
 
     notes = []
     if missing:
         notes.append(
-            f"個人化基準累積中（{'/'.join(missing)}未滿 {MIN_BASELINE_NIGHTS} 晚歷史資料），此項暫不修正"
+            f"Building personal baseline ({'/'.join(missing)} below {MIN_BASELINE_NIGHTS} nights of history); this modifier is paused."
         )
     if not sri_available:
         notes.append(
-            f"作息規律指數（SRI）尚無法計算：需 {SRI_WINDOW_DAYS} 天內至少 "
-            f"{SRI_MIN_VALID_PAIRS} 組相鄰夜資料"
+            f"Sleep Regularity Index (SRI) not computable: needs at least "
+            f"{SRI_MIN_VALID_PAIRS} adjacent-night pairs within {SRI_WINDOW_DAYS} days."
         )
     if activity_data_invalid:
         notes.append(
-            f"活動量修正未啟用：每日步數基準低於 {ACTIVITY_MIN_BASELINE_STEPS:.0f} 步，"
-            "研判手錶未於白天持續配戴，此數據無法反映真實活動量"
+            f"Activity modifier disabled: daily step baseline is below {ACTIVITY_MIN_BASELINE_STEPS:.0f} steps, "
+            "indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity."
         )
     if stress_window_missing:
         notes.append(
-            "壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料"
-            "（前一晚未配戴，無法界定該時段的起點）"
+            "Stress modifier not applied: this night has no pre-sleep wake-window data "
+            "(the previous night was not recorded, so the start of that window cannot be determined)."
         )
-    return "；".join(notes)
+    return " ".join(notes)
 
 
 def prev_day_steps(row_date, steps_by_date):
@@ -860,7 +860,7 @@ def main():
     with open(args.quality, "r", encoding="utf-8-sig", newline="") as f:
         quality_rows = list(csv.DictReader(f))
     if not quality_rows:
-        raise SystemExit(f"{args.quality} 沒有資料，請先執行 evaluate_sleep_quality.py。")
+        raise SystemExit(f"{args.quality} has no rows. Run evaluate_sleep_quality.py first.")
 
     # 讀原始心率/壓力/步數資料，並依日期算出每晚的 Tier3 修正值
     summary_rows = load_summary(args.summary)
@@ -927,20 +927,20 @@ def main():
     sri_values = [r["sri"] for r in results if r["sri"] is not None]
 
     print("Recovery modifier (Tier 3) applied.")
-    print(f"- 輸入: {args.quality}（{len(quality_rows)} 晚基礎分數）+ {args.summary}")
-    print(f"- 輸出: {args.output} / {args.output_json}")
-    print(f"- 有套用非零修正值的夜晚: {nights_with_modifier} / {len(results)}")
-    print(f"- 平均修正值: {avg_modifier}")
-    print(f"- 因修正值改變分級的夜晚: {changed_grade}")
+    print(f"- Input: {args.quality} ({len(quality_rows)} nights of base scores) + {args.summary}")
+    print(f"- Output: {args.output} / {args.output_json}")
+    print(f"- Nights with a non-zero modifier: {nights_with_modifier} / {len(results)}")
+    print(f"- Mean modifier: {avg_modifier}")
+    print(f"- Nights whose grade changed due to the modifier: {changed_grade}")
     if sri_values:
         print(
-            f"- SRI（呈現用，不計分）: {len(sri_values)} / {len(results)} 晚可計算，"
-            f"範圍 {min(sri_values):.1f}–{max(sri_values):.1f}"
+            f"- SRI (display only, not scored): computable for {len(sri_values)} / {len(results)} nights, "
+            f"range {min(sri_values):.1f}–{max(sri_values):.1f}"
         )
     else:
         print(
-            f"- SRI（呈現用，不計分）: 尚無法計算"
-            f"（需 {SRI_WINDOW_DAYS} 天內至少 {SRI_MIN_VALID_PAIRS} 組相鄰夜資料）"
+            f"- SRI (display only, not scored): not yet computable"
+            f" (needs {SRI_MIN_VALID_PAIRS} adjacent-night pairs within {SRI_WINDOW_DAYS} days)"
         )
 
 

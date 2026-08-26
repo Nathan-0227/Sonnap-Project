@@ -64,22 +64,22 @@ ROOT_DIR = SCRIPT_DIR.parent
 STEPS = [
     (
         "analyze_garmin_sleep.py",
-        "把原始事件流整理成「每晚一列」的彙整表",
+        "Fold the raw event stream into a one-row-per-night summary",
         "garmin_sleep_summary.csv",
     ),
     (
         "extract_sleep_features.py",
-        "挑出有效夜晚、算出評分要用的特徵（時長/效率/比例…）",
+        "Select valid nights and compute scoring features (duration / efficiency / ratios)",
         "garmin_sleep_features.csv",
     ),
     (
         "evaluate_sleep_quality.py",
-        "Tier1/2 基礎分數（時長30/效率25/WASO25/深睡10/REM10）",
+        "Tier1/2 base score (duration 30 / efficiency 25 / WASO 25 / deep 10 / REM 10)",
         "garmin_sleep_quality.csv",
     ),
     (
         "apply_recovery_modifier.py",
-        "Tier3 生理修正值（心率/壓力/活動量/片段化）+ SRI 呈現",
+        "Tier3 physiological modifiers (HR / stress / activity / fragmentation) + SRI display",
         "garmin_sleep_quality_final.csv",
     ),
 ]
@@ -90,7 +90,7 @@ STEPS = [
 # （同樣的理由，ai/ 也是獨立資料夾而不是塞進 garmin/。）
 PAYLOAD_STEP = (
     ROOT_DIR / "build_app_payload.py",
-    "組出 App 用的單一 payload（Flutter asset 與 main.py 共用同一份檔）",
+    "Build the single payload the App reads (shared by the Flutter asset and main.py)",
     ROOT_DIR / "app" / "assets" / "data" / "app_payload.json",
 )
 
@@ -104,38 +104,38 @@ PAYLOAD_STEP = (
 # 位置在 payload 之前：這樣當晚生成的建議可以直接被 payload 收進去。
 AI_STEP = (
     ROOT_DIR / "ai" / "generate_advice.py",
-    "產生 AI 睡眠建議與寵物夢境日記（需要 ai/.env 裡的 ANTHROPIC_API_KEY）",
+    "Generate AI sleep advice and pet dream diaries (needs ANTHROPIC_API_KEY in ai/.env)",
     ROOT_DIR / "ai" / "data" / "ai_advice.json",
 )
 
 # 步驟 1 單獨定義，因為它預設不執行（要連 Garmin 伺服器）
 FETCH_STEP = (
     "garmin_connect_fetch.py",
-    "連 Garmin Connect API 抓原始資料（需要 .env 裡的帳密）",
+    "Fetch raw data from the Garmin Connect API (needs credentials in .env)",
     "garmin_standard_data.json",
 )
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="依序執行 Garmin 睡眠資料 pipeline，任一步失敗即中止。"
+        description="Run the Garmin sleep pipeline in order; stop as soon as a step fails."
     )
     parser.add_argument(
         "--fetch",
         action="store_true",
-        help="包含步驟 1（從 Garmin API 重新抓資料）。預設不執行。",
+        help="Include step 1 (re-fetch from the Garmin API). Off by default.",
     )
     parser.add_argument(
         "--days",
         type=int,
         default=None,
-        help="搭配 --fetch 使用，指定要抓最近幾天（傳給 garmin_connect_fetch.py）。",
+        help="Use with --fetch to set how many recent days to pull (passed to garmin_connect_fetch.py).",
     )
     parser.add_argument(
         "--ai",
         action="store_true",
-        help="產生 AI 睡眠建議（需要 ANTHROPIC_API_KEY）。預設不執行；"
-             "這一步失敗不會中止 pipeline。",
+        help="Generate AI sleep advice (needs ANTHROPIC_API_KEY). Off by default; "
+             "failure in this step does not stop the pipeline.",
     )
     return parser.parse_args()
 
@@ -159,11 +159,11 @@ def run_step(index, total, script, description, output, extra_args=None,
     # 所以步驟 5（在專案根目錄）不需要為它另寫一套邏輯。
     script_path = SCRIPT_DIR / script
     if not script_path.exists():
-        print(f"\n✗ 找不到 {script}，pipeline 中止。")
+        print(f"\n\u2717 Not found: {script_path}")
         return False
 
     print(f"\n{'=' * 70}")
-    print(f"[步驟 {index}/{total}] {script_path.name}")
+    print(f"[Step {index}/{total}] {script_path.name}")
     print(f"          {description}")
     print(f"{'=' * 70}")
 
@@ -179,21 +179,21 @@ def run_step(index, total, script, description, output, extra_args=None,
 
     if result.returncode != 0:
         if allow_failure:
-            print(f"\n⚠ 步驟 {index} 失敗（exit code {result.returncode}），"
-                  "但這一步允許失敗，pipeline 繼續。")
+            print(f"\n\u26a0 Step {index} failed (exit code {result.returncode}), "
+                  "but this step is allowed to fail, so the pipeline continues.")
             return True
-        print(f"\n✗ 步驟 {index} 失敗（exit code {result.returncode}），pipeline 中止。")
-        print("  後續步驟不會執行——這是刻意的：讓失敗停在這裡，")
-        print("  避免後面的步驟拿到不完整或過期的資料，算出看似正常實則錯誤的結果。")
+        print(f"\n\u2717 Step {index} failed (exit code {result.returncode}); pipeline aborted.")
+        print("  Later steps will not run. This is deliberate: stopping here prevents")
+        print("  later steps from reading incomplete or stale data and producing")
         return False
 
     # 確認產出檔真的有生出來（腳本可能 exit 0 但因為某些分支沒寫檔）
     out_path = DATA_DIR / output
     shown = out_path.relative_to(ROOT_DIR).as_posix()
     if out_path.exists():
-        print(f"\n✓ 步驟 {index} 完成（{elapsed:.1f} 秒）→ {shown}")
+        print(f"\n\u2713 Step {index} done ({elapsed:.1f}s) -> {shown}")
     else:
-        print(f"\n⚠ 步驟 {index} 回報成功，但找不到預期產出 {shown}，請檢查。")
+        print(f"\n\u26a0 Step {index} reported success but expected output {shown} is missing; please check.")
     return True
 
 
@@ -209,9 +209,9 @@ def main():
         steps.insert(0, FETCH_STEP)
 
     total = len(steps)
-    print(f"Garmin pipeline：共 {total} 個步驟")
+    print(f"Garmin pipeline: {total} step(s)")
     if not args.fetch:
-        print("（未加 --fetch，跳過抓取步驟，直接用現有的 data/garmin_standard_data.json 重算）")
+        print("(no --fetch: skipping the fetch step and recomputing from the existing data/garmin_standard_data.json)")
 
     started = time.time()
     for i, (script, description, output) in enumerate(steps, start=1):
@@ -228,9 +228,9 @@ def main():
 
     elapsed = time.time() - started
     print(f"\n{'=' * 70}")
-    print(f"✓ Pipeline 全部完成（總耗時 {elapsed:.1f} 秒）")
-    print(f"  評分結果：garmin/data/garmin_sleep_quality_final.csv / .json")
-    print(f"  App 資料：app/assets/data/app_payload.json")
+    print(f"\u2713 Pipeline complete (total {elapsed:.1f}s)")
+    print("  Scores:   garmin/data/garmin_sleep_quality_final.csv / .json")
+    print("  App data: app/assets/data/app_payload.json")
     print(f"{'=' * 70}")
 
 

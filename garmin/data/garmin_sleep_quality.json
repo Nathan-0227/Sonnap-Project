@@ -10,7 +10,7 @@
     "deep_score": 3.4,
     "rem_score": 4.9,
     "rem_measured": true,
-    "recommendation": "睡眠品質不佳，建議正視睡眠問題。睡眠時間不足（3.48 小時），建議提早就寢，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.48 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-05-30",
@@ -23,7 +23,7 @@
     "deep_score": 8.3,
     "rem_score": 6.5,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-05-31",
@@ -36,7 +36,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-01",
@@ -49,7 +49,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-03",
@@ -62,7 +62,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-04",
@@ -75,7 +75,7 @@
     "deep_score": 10.0,
     "rem_score": 9.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-05",
@@ -88,7 +88,7 @@
     "deep_score": 2.9,
     "rem_score": 7.8,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-06",
@@ -101,7 +101,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-07",
@@ -114,7 +114,7 @@
     "deep_score": 7.0,
     "rem_score": 4.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-08",
@@ -127,7 +127,7 @@
     "deep_score": 6.7,
     "rem_score": 8.2,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-09",
@@ -140,7 +140,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-10",
@@ -153,7 +153,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-11",
@@ -166,7 +166,7 @@
     "deep_score": 7.7,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-12",
@@ -179,7 +179,7 @@
     "deep_score": 8.3,
     "rem_score": 9.1,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-13",
@@ -192,7 +192,7 @@
     "deep_score": 10.0,
     "rem_score": 7.5,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-14",
@@ -205,7 +205,7 @@
     "deep_score": 3.3,
     "rem_score": 6.9,
     "rem_measured": true,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-15",
@@ -218,7 +218,7 @@
     "deep_score": 10.0,
     "rem_score": 9.3,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-17",
@@ -231,7 +231,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-06-18",
@@ -244,7 +244,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-21",
@@ -257,7 +257,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-22",
@@ -270,7 +270,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-23",
@@ -283,7 +283,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-24",
@@ -296,7 +296,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-26",
@@ -309,7 +309,7 @@
     "deep_score": 10.0,
     "rem_score": 5.7,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-27",
@@ -322,7 +322,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-28",
@@ -335,7 +335,7 @@
     "deep_score": 10.0,
     "rem_score": 8.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-30",
@@ -348,7 +348,7 @@
     "deep_score": 10.0,
     "rem_score": 9.9,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-01",
@@ -361,7 +361,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-02",
@@ -374,7 +374,7 @@
     "deep_score": 10.0,
     "rem_score": 9.8,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-06",
@@ -387,7 +387,7 @@
     "deep_score": 6.2,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-07",
@@ -400,7 +400,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-09",
@@ -413,7 +413,7 @@
     "deep_score": 0.0,
     "rem_score": 0.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質尚可，仍有改善空間。REM 睡眠比例偏離同齡常模，建議維持規律作息並減少睡前壓力。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
     "date": "2026-07-11",
@@ -426,7 +426,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-12",
@@ -439,7 +439,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-07-17",
@@ -452,7 +452,7 @@
     "deep_score": 8.3,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-19",
@@ -465,7 +465,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-07-20",
@@ -478,7 +478,7 @@
     "deep_score": 10.0,
     "rem_score": 9.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-21",
@@ -491,7 +491,7 @@
     "deep_score": 5.8,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-23",
@@ -504,7 +504,7 @@
     "deep_score": 10.0,
     "rem_score": 9.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-25",
@@ -517,7 +517,7 @@
     "deep_score": 10.0,
     "rem_score": 10.0,
     "rem_measured": true,
-    "recommendation": "睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-07-27",
@@ -530,7 +530,7 @@
     "deep_score": 10.0,
     "rem_score": 7.9,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-02",
@@ -543,7 +543,7 @@
     "deep_score": 9.1,
     "rem_score": 8.3,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-04",
@@ -556,7 +556,7 @@
     "deep_score": 9.6,
     "rem_score": 9.5,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-06",
@@ -569,7 +569,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-08-07",
@@ -582,7 +582,7 @@
     "deep_score": 6.8,
     "rem_score": 9.3,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-09",
@@ -595,7 +595,7 @@
     "deep_score": 10.0,
     "rem_score": 3.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質低於平均，建議調整作息。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-08-17",
@@ -608,7 +608,7 @@
     "deep_score": 2.6,
     "rem_score": 8.4,
     "rem_measured": true,
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-08-18",
@@ -621,7 +621,7 @@
     "deep_score": 9.3,
     "rem_score": 8.6,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-21",
@@ -634,7 +634,7 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-08-22",
@@ -647,7 +647,7 @@
     "deep_score": 3.0,
     "rem_score": 8.3,
     "rem_measured": true,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-23",
@@ -660,6 +660,6 @@
     "deep_score": 0.0,
     "rem_score": null,
     "rem_measured": false,
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   }
 ]

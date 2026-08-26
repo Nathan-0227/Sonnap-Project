@@ -1,52 +1,52 @@
 ﻿date,score,quality,age_band,duration_score,efficiency_score,waso_score,deep_score,rem_score,rem_measured,recommendation
-2026-05-29,27.3,Bad,young_adult,0.0,17.0,2.0,3.4,4.9,True,睡眠品質不佳，建議正視睡眠問題。睡眠時間不足（3.48 小時），建議提早就寢，目標 7.0–9.0 小時。
-2026-05-30,81.7,Good,young_adult,17.0,25.0,25.0,8.3,6.5,True,睡眠品質良好，請維持目前的作息。
-2026-05-31,93.8,Good,young_adult,23.8,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-01,67.6,Normal,young_adult,10.8,25.0,25.0,0.0,,False,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-06-03,98.5,Good,young_adult,28.5,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-04,87.2,Good,young_adult,17.8,25.0,25.0,10.0,9.4,True,睡眠品質良好，請維持目前的作息。
-2026-06-05,88.5,Good,young_adult,27.8,25.0,25.0,2.9,7.8,True,睡眠品質良好，請維持目前的作息。
-2026-06-06,92.2,Good,young_adult,22.2,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-07,81.0,Good,young_adult,30.0,25.0,15.0,7.0,4.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-08,90.6,Good,young_adult,25.7,25.0,25.0,6.7,8.2,True,睡眠品質良好，請維持目前的作息。
-2026-06-09,75.2,Normal,young_adult,17.7,25.0,25.0,0.0,,False,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-06-10,100.0,Good,young_adult,30.0,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-11,97.7,Good,young_adult,30.0,25.0,25.0,7.7,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-12,95.4,Good,young_adult,28.0,25.0,25.0,8.3,9.1,True,睡眠品質良好，請維持目前的作息。
-2026-06-13,97.5,Good,young_adult,30.0,25.0,25.0,10.0,7.5,True,睡眠品質良好，請維持目前的作息。
-2026-06-14,69.0,Normal,young_adult,24.2,25.0,9.5,3.3,6.9,True,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-06-15,83.1,Good,young_adult,13.8,25.0,25.0,10.0,9.3,True,睡眠品質良好，請維持目前的作息。
-2026-06-17,78.8,Normal,young_adult,28.8,25.0,5.0,10.0,10.0,True,睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。
-2026-06-18,82.0,Good,young_adult,12.0,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-21,95.3,Good,young_adult,25.3,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-06-22,81.4,Good,young_adult,23.3,25.0,25.0,0.0,,False,睡眠品質良好，請維持目前的作息。
-2026-06-23,86.9,Good,young_adult,28.2,25.0,25.0,0.0,,False,睡眠品質良好，請維持目前的作息。
-2026-06-24,74.7,Normal,young_adult,17.2,25.0,25.0,0.0,,False,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-06-26,95.7,Good,young_adult,30.0,25.0,25.0,10.0,5.7,True,睡眠品質良好，請維持目前的作息。
-2026-06-27,61.4,Poor,young_adult,5.3,25.0,25.0,0.0,,False,睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-06-28,93.1,Good,young_adult,24.7,25.0,25.0,10.0,8.4,True,睡眠品質良好，請維持目前的作息。
-2026-06-30,99.9,Good,young_adult,30.0,25.0,25.0,10.0,9.9,True,睡眠品質良好，請維持目前的作息。
-2026-07-01,100.0,Good,young_adult,30.0,25.0,25.0,10.0,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-07-02,99.8,Good,young_adult,30.0,25.0,25.0,10.0,9.8,True,睡眠品質良好，請維持目前的作息。
-2026-07-06,96.2,Good,young_adult,30.0,25.0,25.0,6.2,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-07-07,88.9,Good,young_adult,30.0,25.0,25.0,0.0,,False,睡眠品質良好，請維持目前的作息。
-2026-07-09,69.8,Normal,young_adult,29.8,25.0,15.0,0.0,0.0,True,睡眠品質尚可，仍有改善空間。REM 睡眠比例偏離同齡常模，建議維持規律作息並減少睡前壓力。
-2026-07-11,88.0,Good,young_adult,29.2,25.0,25.0,0.0,,False,睡眠品質良好，請維持目前的作息。
-2026-07-12,55.6,Poor,young_adult,0.0,25.0,25.0,0.0,,False,睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。
-2026-07-17,95.6,Good,young_adult,27.3,25.0,25.0,8.3,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-07-19,66.3,Normal,young_adult,9.7,25.0,25.0,0.0,,False,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-07-20,80.9,Good,young_adult,28.5,25.0,8.0,10.0,9.4,True,睡眠品質良好，請維持目前的作息。
-2026-07-21,85.8,Good,young_adult,30.0,25.0,15.0,5.8,10.0,True,睡眠品質良好，請維持目前的作息。
-2026-07-23,89.6,Good,young_adult,20.2,25.0,25.0,10.0,9.4,True,睡眠品質良好，請維持目前的作息。
-2026-07-25,76.0,Normal,young_adult,30.0,25.0,1.0,10.0,10.0,True,睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。
-2026-07-27,97.9,Good,young_adult,30.0,25.0,25.0,10.0,7.9,True,睡眠品質良好，請維持目前的作息。
-2026-08-02,96.1,Good,young_adult,28.7,25.0,25.0,9.1,8.3,True,睡眠品質良好，請維持目前的作息。
-2026-08-04,99.1,Good,young_adult,30.0,25.0,25.0,9.6,9.5,True,睡眠品質良好，請維持目前的作息。
-2026-08-06,55.6,Poor,young_adult,0.0,25.0,25.0,0.0,,False,睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。
-2026-08-07,86.1,Good,young_adult,30.0,25.0,15.0,6.8,9.3,True,睡眠品質良好，請維持目前的作息。
-2026-08-09,52.9,Poor,young_adult,13.5,25.0,1.0,10.0,3.4,True,睡眠品質低於平均，建議調整作息。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。
-2026-08-17,68.8,Normal,young_adult,17.8,25.0,15.0,2.6,8.4,True,睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-08-18,97.9,Good,young_adult,30.0,25.0,25.0,9.3,8.6,True,睡眠品質良好，請維持目前的作息。
-2026-08-21,59.4,Poor,young_adult,13.5,25.0,15.0,0.0,,False,睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。
-2026-08-22,87.7,Good,young_adult,26.3,25.0,25.0,3.0,8.3,True,睡眠品質良好，請維持目前的作息。
-2026-08-23,82.2,Good,young_adult,24.0,25.0,25.0,0.0,,False,睡眠品質良好，請維持目前的作息。
+2026-05-29,27.3,Bad,young_adult,0.0,17.0,2.0,3.4,4.9,True,Sleep quality was poor; this is worth addressing. Sleep was short (3.48 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-05-30,81.7,Good,young_adult,17.0,25.0,25.0,8.3,6.5,True,Sleep quality was good. Keep your current routine. 
+2026-05-31,93.8,Good,young_adult,23.8,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-01,67.6,Normal,young_adult,10.8,25.0,25.0,0.0,,False,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-06-03,98.5,Good,young_adult,28.5,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-04,87.2,Good,young_adult,17.8,25.0,25.0,10.0,9.4,True,Sleep quality was good. Keep your current routine. 
+2026-06-05,88.5,Good,young_adult,27.8,25.0,25.0,2.9,7.8,True,Sleep quality was good. Keep your current routine. 
+2026-06-06,92.2,Good,young_adult,22.2,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-07,81.0,Good,young_adult,30.0,25.0,15.0,7.0,4.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-08,90.6,Good,young_adult,25.7,25.0,25.0,6.7,8.2,True,Sleep quality was good. Keep your current routine. 
+2026-06-09,75.2,Normal,young_adult,17.7,25.0,25.0,0.0,,False,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-06-10,100.0,Good,young_adult,30.0,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-11,97.7,Good,young_adult,30.0,25.0,25.0,7.7,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-12,95.4,Good,young_adult,28.0,25.0,25.0,8.3,9.1,True,Sleep quality was good. Keep your current routine. 
+2026-06-13,97.5,Good,young_adult,30.0,25.0,25.0,10.0,7.5,True,Sleep quality was good. Keep your current routine. 
+2026-06-14,69.0,Normal,young_adult,24.2,25.0,9.5,3.3,6.9,True,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-06-15,83.1,Good,young_adult,13.8,25.0,25.0,10.0,9.3,True,Sleep quality was good. Keep your current routine. 
+2026-06-17,78.8,Normal,young_adult,28.8,25.0,5.0,10.0,10.0,True,"Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
+2026-06-18,82.0,Good,young_adult,12.0,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-21,95.3,Good,young_adult,25.3,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-06-22,81.4,Good,young_adult,23.3,25.0,25.0,0.0,,False,Sleep quality was good. Keep your current routine. 
+2026-06-23,86.9,Good,young_adult,28.2,25.0,25.0,0.0,,False,Sleep quality was good. Keep your current routine. 
+2026-06-24,74.7,Normal,young_adult,17.2,25.0,25.0,0.0,,False,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-06-26,95.7,Good,young_adult,30.0,25.0,25.0,10.0,5.7,True,Sleep quality was good. Keep your current routine. 
+2026-06-27,61.4,Poor,young_adult,5.3,25.0,25.0,0.0,,False,Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.
+2026-06-28,93.1,Good,young_adult,24.7,25.0,25.0,10.0,8.4,True,Sleep quality was good. Keep your current routine. 
+2026-06-30,99.9,Good,young_adult,30.0,25.0,25.0,10.0,9.9,True,Sleep quality was good. Keep your current routine. 
+2026-07-01,100.0,Good,young_adult,30.0,25.0,25.0,10.0,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-07-02,99.8,Good,young_adult,30.0,25.0,25.0,10.0,9.8,True,Sleep quality was good. Keep your current routine. 
+2026-07-06,96.2,Good,young_adult,30.0,25.0,25.0,6.2,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-07-07,88.9,Good,young_adult,30.0,25.0,25.0,0.0,,False,Sleep quality was good. Keep your current routine. 
+2026-07-09,69.8,Normal,young_adult,29.8,25.0,15.0,0.0,0.0,True,"Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+2026-07-11,88.0,Good,young_adult,29.2,25.0,25.0,0.0,,False,Sleep quality was good. Keep your current routine. 
+2026-07-12,55.6,Poor,young_adult,0.0,25.0,25.0,0.0,,False,Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h.
+2026-07-17,95.6,Good,young_adult,27.3,25.0,25.0,8.3,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-07-19,66.3,Normal,young_adult,9.7,25.0,25.0,0.0,,False,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-07-20,80.9,Good,young_adult,28.5,25.0,8.0,10.0,9.4,True,Sleep quality was good. Keep your current routine. 
+2026-07-21,85.8,Good,young_adult,30.0,25.0,15.0,5.8,10.0,True,Sleep quality was good. Keep your current routine. 
+2026-07-23,89.6,Good,young_adult,20.2,25.0,25.0,10.0,9.4,True,Sleep quality was good. Keep your current routine. 
+2026-07-25,76.0,Normal,young_adult,30.0,25.0,1.0,10.0,10.0,True,"Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
+2026-07-27,97.9,Good,young_adult,30.0,25.0,25.0,10.0,7.9,True,Sleep quality was good. Keep your current routine. 
+2026-08-02,96.1,Good,young_adult,28.7,25.0,25.0,9.1,8.3,True,Sleep quality was good. Keep your current routine. 
+2026-08-04,99.1,Good,young_adult,30.0,25.0,25.0,9.6,9.5,True,Sleep quality was good. Keep your current routine. 
+2026-08-06,55.6,Poor,young_adult,0.0,25.0,25.0,0.0,,False,Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h.
+2026-08-07,86.1,Good,young_adult,30.0,25.0,15.0,6.8,9.3,True,Sleep quality was good. Keep your current routine. 
+2026-08-09,52.9,Poor,young_adult,13.5,25.0,1.0,10.0,3.4,True,"Sleep quality was below average; consider adjusting your routine. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
+2026-08-17,68.8,Normal,young_adult,17.8,25.0,15.0,2.6,8.4,True,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-08-18,97.9,Good,young_adult,30.0,25.0,25.0,9.3,8.6,True,Sleep quality was good. Keep your current routine. 
+2026-08-21,59.4,Poor,young_adult,13.5,25.0,15.0,0.0,,False,Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.
+2026-08-22,87.7,Good,young_adult,26.3,25.0,25.0,3.0,8.3,True,Sleep quality was good. Keep your current routine. 
+2026-08-23,82.2,Good,young_adult,24.0,25.0,25.0,0.0,,False,Sleep quality was good. Keep your current routine. 

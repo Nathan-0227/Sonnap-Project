@@ -109,9 +109,9 @@ def _load_scorer():
     path = ROOT / "garmin" / "evaluate_sleep_quality.py"
     if not path.exists():
         raise FileNotFoundError(
-            f"找不到評分器 {path}。"
-            "wearable/ 必須重用 garmin/evaluate_sleep_quality.py 的計分邏輯，"
-            "不可以另寫一套（見 wearable/__init__.py 的說明）。"
+            f"Scorer not found: {path}. wearable/ must reuse the scoring logic in "
+            "garmin/evaluate_sleep_quality.py and must not implement its own "
+            "(see wearable/__init__.py)."
         )
     spec = importlib.util.spec_from_file_location("evaluate_sleep_quality", path)
     module = importlib.util.module_from_spec(spec)
@@ -272,20 +272,20 @@ def parse_session(session):
     end = parse_time(session.get("endTime"))
     if start is None or end is None:
         raise HealthConnectError(
-            "session 缺少可解析的 startTime / endTime。"
-            "時間格式須為 ISO8601（例如 2026-08-25T23:10:00+08:00）。"
+            "Session is missing a parsable startTime / endTime. Times must be ISO8601 "
+            "(for example 2026-08-25T23:10:00+08:00)."
         )
     if end <= start:
         raise HealthConnectError(
-            f"session 的 endTime（{session.get('endTime')}）"
-            f"不晚於 startTime（{session.get('startTime')}），無法計算。"
+            f"Session endTime ({session.get('endTime')}) "
+            f"is not later than startTime ({session.get('startTime')}); cannot compute."
         )
 
     raw_stages = session.get("stages") or []
     if not raw_stages:
         raise HealthConnectError(
-            "session 沒有 stages。沒有睡眠分期就算不出深睡／REM／WASO，"
-            "無法套用 Tier1/2 評分。"
+            "Session has no stages. Without sleep staging, deep / REM / WASO cannot be "
+            "derived, so Tier1/2 scoring cannot be applied."
         )
 
     # 解析每一段，順便丟掉時間無效的段落
@@ -303,7 +303,9 @@ def parse_session(session):
         segments.append((s_start, s_end, kind))
 
     if not segments:
-        raise HealthConnectError("session 的 stages 全部無效（時間或分期代碼有問題）。")
+        raise HealthConnectError(
+            "All stages in the session are invalid (bad times or stage codes)."
+        )
 
     # ⚠️ 一定要自己排序，不要相信上游的順序。Health Connect 本身不保證
     #    stages 是排好的，而底下「第一個睡眠分期 / 最後一個睡眠分期」
@@ -313,7 +315,8 @@ def parse_session(session):
     sleep_segments = [seg for seg in segments if seg[2] in SLEEP_STAGES]
     if not sleep_segments:
         raise HealthConnectError(
-            "session 裡沒有任何睡眠分期（全是清醒或未知），研判並非一次睡眠。"
+            "The session contains no sleep stages at all (only awake or unknown), "
+            "so it is judged not to be a sleep session."
         )
 
     # ── Garmin 相容的睡眠區間：第一個睡眠分期 → 最後一個睡眠分期 ──
@@ -440,13 +443,13 @@ def to_features(session, date=None, age_band="young_adult"):
 #
 # 這沿用 apply_recovery_modifier.py 對「資料無效 vs 冷啟動」的既有處理原則。
 HC_MODIFIER_NOTE = (
-    "Tier3 修正值為 0。兩個原因："
-    "(1) 壓力分數是 Garmin 專有指標，Health Connect 沒有這個欄位，"
-    "此來源**永遠不會有**壓力修正值；"
-    "(2) 其餘各項（靜止心率、睡眠期間平均心率、醒來次數、睡眠段數）"
-    "需要 14–28 晚的個人 baseline，目前處於冷啟動，"
-    "**持續配戴即會啟動**。"
-    "SRI 需要 28 天窗格內 ≥10 組相鄰配對，同樣尚未達到。"
+    "Tier3 modifier is 0, for two reasons: (1) the stress score is a Garmin-proprietary "
+    "metric that Health Connect does not expose, so this source will never carry a stress "
+    "modifier; (2) the remaining signals (resting heart rate, sleep-period average heart "
+    "rate, awakenings, sleep segments) need a 14-28 night personal baseline and are still "
+    "cold-starting — keep wearing the device and they will come online. "
+    "SRI likewise needs ≥10 adjacent-night pairs within a 28-day window, "
+    "which has not been reached yet."
 )
 
 

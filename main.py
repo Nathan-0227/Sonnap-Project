@@ -102,8 +102,8 @@ async def get_sleep_data():
         raise HTTPException(
             status_code=503,
             detail=(
-                "尚未產生資料檔 app/assets/data/app_payload.json。"
-                "請先執行：python garmin/run_pipeline.py"
+                "Data file app/assets/data/app_payload.json has not been generated yet. "
+                "Run this first: python garmin/run_pipeline.py"
             ),
         )
 
@@ -115,7 +115,7 @@ async def get_sleep_data():
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"app_payload.json 格式損毀：{exc}。請重新執行 pipeline 產生。",
+            detail=f"app_payload.json is malformed: {exc}. Re-run the pipeline to regenerate it.",
         ) from exc
 
 
@@ -141,12 +141,12 @@ async def health():
 
 class CreateUserRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=40,
-                              description="暱稱。不收 email、不收密碼。")
-    target_bedtime: str = Field("23:30", description='目標就寢時間 "HH:MM"')
-    age_band: str = Field("young_adult", description="分齡評分用")
-    study_cohort: str = Field("L0", description="L0 手機 / L1 有穿戴 / L2 研究者")
+                              description="Nickname. No email, no password.")
+    target_bedtime: str = Field("23:30", description='Target bedtime, "HH:MM".')
+    age_band: str = Field("young_adult", description="Age band used for scoring.")
+    study_cohort: str = Field("L0", description="L0 phone only / L1 wearable / L2 researcher")
     wearable_brand: Optional[str] = Field(
-        None, description="⚠️ 跨品牌生理指標不可比較，所以一定要記錄來源")
+        None, description="Cross-brand physiological metrics are not comparable, so the source must always be recorded.")
 
 
 class UpdateUserRequest(BaseModel):
@@ -163,8 +163,8 @@ class NightlyRequest(BaseModel):
     lights_out_at: str = Field(
         ...,
         description=(
-            "手機最後一次互動的時間（ISO8601）。"
-            "⚠️ 這是 proxy，不是入睡時間——有人放下手機後還會躺半小時。"
+            "Timestamp of the last phone interaction (ISO8601). "
+            "This is a proxy, not sleep onset - people often lie down for another half hour."
         ),
     )
     # ⚠️ 一般不要傳。留這個欄位是給「補填歷史資料」用的——當晚的目標
@@ -179,11 +179,11 @@ class WearableRequest(BaseModel):
     user_id: str
     session: Dict[str, Any] = Field(
         ...,
-        description="Health Connect SleepSessionRecord，格式見 "
-                    "wearable/healthconnect_adapter.py 的 parse_session()",
+        description="Health Connect SleepSessionRecord; see "
+                    "wearable/healthconnect_adapter.py parse_session() for the format.",
     )
     device_brand: Optional[str] = None
-    date: Optional[str] = Field(None, description="起床日；不給就從 session 推")
+    date: Optional[str] = Field(None, description="Wake date; inferred from the session when omitted.")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -202,7 +202,7 @@ def require_user(user_id: str) -> dict:
     if user is None:
         raise HTTPException(
             status_code=404,
-            detail=f"找不到使用者 {user_id}。請先 POST /users 建立。",
+            detail=f"User {user_id} not found. POST /users to create one first.",
         )
     return user
 
@@ -249,7 +249,7 @@ def resolve_mood(behavior_row: Optional[dict], wearable_row: Optional[dict]):
 
     if not has_behavior:
         if wearable_row is None:
-            return None, "no_data: 這一晚沒有任何記錄", "none"
+            return None, "no_data: no records for this night", "none"
         mood, reason = map_pet_mood(wearable_row)
         return mood, reason, "wearable"
 
@@ -262,7 +262,7 @@ def resolve_mood(behavior_row: Optional[dict], wearable_row: Optional[dict]):
     if wearable_row is not None:
         physio_mood, physio_reason = map_pet_mood(wearable_row)
         if physio_mood == "anxious":
-            return "anxious", f"{physio_reason}（生理覆寫；行為面：{reason}）", "wearable_override"
+            return "anxious", f"{physio_reason} (physiological override; behaviour: {reason})", "wearable_override"
 
     return mood, reason, driver
 
@@ -285,7 +285,7 @@ async def create_user(req: CreateUserRequest):
     except (ValueError, IndexError):
         raise HTTPException(
             status_code=422,
-            detail=f'target_bedtime 格式錯誤：{req.target_bedtime!r}，應為 "HH:MM"',
+            detail=f'target_bedtime is malformed: {req.target_bedtime!r}; expected "HH:MM".',
         )
 
     db.init_db()   # 第一次呼叫就把表建好，省掉「忘了跑 db.py --init」這個坑
@@ -318,7 +318,7 @@ async def update_user(user_id: str, req: UpdateUserRequest):
 
     fields = {k: v for k, v in req.model_dump().items() if v is not None}
     if not fields:
-        raise HTTPException(status_code=422, detail="沒有任何要更新的欄位。")
+        raise HTTPException(status_code=422, detail="No fields to update.")
 
     if "target_bedtime" in fields:
         try:
@@ -326,8 +326,8 @@ async def update_user(user_id: str, req: UpdateUserRequest):
         except (ValueError, IndexError):
             raise HTTPException(
                 status_code=422,
-                detail=f'target_bedtime 格式錯誤：{fields["target_bedtime"]!r}，'
-                       f'應為 "HH:MM"',
+                detail=f'target_bedtime is malformed: {fields["target_bedtime"]!r}; '
+                       f'expected "HH:MM".',
             )
 
     try:
@@ -373,14 +373,14 @@ async def post_nightly(req: NightlyRequest):
     except (ValueError, IndexError) as exc:
         raise HTTPException(
             status_code=422,
-            detail=f"無法解析 lights_out_at / target_bedtime：{exc}",
+            detail=f"Could not parse lights_out_at / target_bedtime: {exc}",
         ) from exc
 
     if night["date"] is None:
         raise HTTPException(
             status_code=422,
-            detail="lights_out_at 不可為空——沒測到與準時是兩件事，"
-                   "沒測到的夜晚不要上傳。",
+            detail="lights_out_at must not be empty - not-measured and on-time are different things; "
+                   "do not upload nights that were not measured.",
         )
 
     db.upsert_nightly_behavior(
@@ -444,8 +444,8 @@ async def post_wearable(req: WearableRequest):
 
 @app.get("/home")
 async def get_home(
-    user_id: str = Query(..., description="使用者 ID"),
-    date: Optional[str] = Query(None, description="指定某一晚；預設最新一晚"),
+    user_id: str = Query(..., description="User ID"),
+    date: Optional[str] = Query(None, description="A specific night; defaults to the latest."),
 ):
     """
     某使用者的今日主頁資料。
@@ -522,8 +522,8 @@ async def get_home(
             "late_nights": late_nights,
             "recorded_nights": recorded,
             "lights_out_note": (
-                "lights_out_at 是「手機最後一次互動」的替代測量（proxy），"
-                "不是入睡時間。"
+                "lights_out_at is a proxy for the last phone interaction, "
+                "not the moment of sleep onset."
             ),
         },
         # ── Tier B：有穿戴裝置的人才有 ──
@@ -558,9 +558,9 @@ async def get_home(
             "streak_days": streak_days,
             "as_of": streak_as_of.isoformat() if streak_as_of else None,
             "definition": (
-                "連續達成的夜數（在目標就寢時間前放下手機）。"
-                "缺資料的夜晚會中斷連續紀錄——把缺資料當成跳過，"
-                "只在表現好的日子開 App 的人就能靠選擇性記錄累積連續紀錄。"
+                "Consecutive nights with lights out before the target bedtime. "
+                "A night with no data breaks the streak - treating missing data as skipped "
+                "would let people build streaks by only opening the app on good days."
             ),
         },
         # ⚠️ AI 夢境／建議目前只為研究者本人批次生成（ai/data/ai_advice.json），
@@ -570,13 +570,13 @@ async def get_home(
         "data_sources": data_sources,
         "notes": {
             "tier_b_comparability": (
-                "睡眠分期演算法各品牌不互通，Tier B 的數值只能做個人內比較，"
-                "不可跨使用者排名。跨使用者的比較只能用 behavior 區塊。"
+                "Sleep staging algorithms differ across brands, so Tier B values support "
+                "within-person comparison only, never cross-user ranking. Use the behaviour block instead."
             ),
-            "ai": "AI 夢境與建議尚未支援多使用者，此路徑固定為 null。",
+            "ai": "AI dreams and advice do not support multiple users yet; this path is always null.",
         },
         "disclaimer": (
-            "睡眠分數由穿戴裝置資料經文獻加權規則計算，不構成醫療診斷。"
+            "Sleep scores are computed from wearable data using literature-weighted rules and do not constitute a medical diagnosis."
         ),
     }
 
@@ -653,8 +653,8 @@ async def get_insights(
         },
         "notes": {
             "tier_b_comparability": (
-                "wearable.history 的數值只能做個人內趨勢，"
-                "不可與其他使用者比較（各品牌分期演算法不互通）。"
+                "Values in wearable.history support within-person trends only; "
+                "they must not be compared across users (staging algorithms differ by brand)."
             ),
         },
     }
@@ -663,7 +663,7 @@ async def get_insights(
 @app.get("/challenges")
 async def get_challenges(
     user_id: str = Query(...),
-    as_of: Optional[str] = Query(None, description="以哪一天為基準；預設最新記錄日"),
+    as_of: Optional[str] = Query(None, description="Reference day; defaults to the latest recorded day."),
 ):
     """
     挑戰清單與進度。
@@ -682,14 +682,14 @@ async def get_challenges(
             date_cls.fromisoformat(as_of)
         except ValueError:
             raise HTTPException(
-                status_code=422, detail=f"as_of 格式錯誤：{as_of!r}，應為 YYYY-MM-DD"
+                status_code=422, detail=f"as_of is malformed: {as_of!r}; expected YYYY-MM-DD"
             )
 
     defs = db.get_challenges()
     if not defs:
         raise HTTPException(
             status_code=503,
-            detail="挑戰定義尚未載入。請執行：python db.py --seed",
+            detail="Challenge definitions are not loaded. Run: python db.py --seed",
         )
 
     # ⚠️ 取的夜數要涵蓋最長的窗格，否則長窗格的挑戰會少看到資料
@@ -704,12 +704,12 @@ async def get_challenges(
         "challenges": results,
         "notes": {
             "targets_are_behavioral": (
-                "所有挑戰的標的都是行為（幾點放下手機），"
-                "不是生理結果（深睡幾分鐘）——後者使用者控制不了。"
+                "Every challenge targets a behaviour (when you put the phone down), "
+                "not a physiological outcome (minutes of deep sleep) - users cannot control the latter."
             ),
             "calibration": (
-                "難度門檻以研究者的 46 晚校準過，但樣本 n=1，"
-                "D2 取得真實資料後應重新校準。"
+                "Difficulty thresholds were calibrated on the researcher's 46 nights, but n=1; "
+                "recalibrate once D2 provides real data."
             ),
         },
     }

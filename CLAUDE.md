@@ -49,24 +49,21 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 
 ### ⏭️ 下次接手的三件事（2026-08-26 留．按這個順序）
 
-> 🔴 **先看這個：Jeremy 被卡住了，卡點在我們這邊，而且只差兩行。**
-> 他的 `second-flutter-integration`（2026-08-21）commit 訊息寫
-> 「Update **insight and sleep report** section but still need the backend
-> data for **sleep time and wake up time**」。
+> ✅ **Jeremy 那個卡點已於 2026-08-26 修好**（分支 `feature/history-sleep-times`）。
+> `build_app_payload.py` 的 `history` 每晚現在帶 `sleep_start_time` 與 `wake_time`，
+> 與 `metrics` 同一個來源（features），最新一晚兩邊逐字相同。
+> 30/30 晚都有值，分數欄位逐欄未變。
 >
-> Insights 頁讀的是 `history`，而 **`history` 每一筆只帶了四欄**：
-> `date`／`final_score`／`final_quality`／`sleep_duration_hours`。
-> （`metrics` 那一層有 `sleep_start_time`／`wake_time`，但那只有**最新一晚**，
-> 報表要的是**每一晚**。）
+> ⚠️ **`GET /insights` 的 `history` 還是沒有這兩欄**——`wearable_nightly`
+> （21 欄）連欄位都不存在（`migrate_garmin_to_db.py:319` 讀得到 `sleep_start_time`，
+> 但只拿來模擬 `lights_out_at`，沒寫進表）。Jeremy 目前走舊的 asset 路徑、
+> 不受影響，但**他一接新 API 就會再卡一次**。要補是三處：
+> `db.py` 的 SCHEMA + `COLUMN_MIGRATIONS`（兩邊都要改）、migrate 的寫入、
+> `main.py` 的 `/home` 與 `/insights`。
 >
-> → 修法在 `build_app_payload.py:392-399`，`by_date_features` 裡**已經有**
-> `sleep_start_time` 與 `wake_time`，把它們加進 history 那個 dict 就好。
-> 那段程式的註解自己還寫著「先帶著，之後接的時候不用再改後端」。
->
-> ⚠️ **不是 `GET /home` 的問題**——他的分支連 `db.py` 都沒有（見下方分支盤點），
-> 他根本不在 API 路徑上。（`GET /home` 的 `metrics` 確實也缺這兩欄、
-> `wearable_nightly` 21 欄連欄位都不存在——那是**另一個真的缺口**，
-> 但不是他現在卡的那個。）
+> ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你
+> 「睡著」（生理），後者是「放下手機」（行為），後者一定較早。
+> （理由已寫在 `migrate_garmin_to_db.py:24-27`。）
 
 
 **① Tier3 的 baseline 會過期 —— 等使用者決定，程式一行都沒改**
@@ -197,9 +194,9 @@ python garmin/run_pipeline.py          # 再跑後四步
 **已經不在遠端了**（08-25 記「可刪」，之後真的被刪了）。
 上面兩個 `behavior-loop` 分支仍待清，**刪之前先問過**。
 
-### ⚠️ Jeremy 的 `second-flutter-integration` 卡在一個真的缺口（優先處理）
+### Jeremy 的 `second-flutter-integration` 該怎麼合
 
-他卡住的具體缺口見上方「下次接手」開頭那段（`history` 少兩欄）。
+✅ 他卡的那個缺口（`history` 少兩欄）已於 2026-08-26 修好，見上方「下次接手」開頭。
 這裡只講**分支本身該怎麼處理**。
 
 ⚠️ **不要把他的分支直接合進 `main`。** 實測狀態：
@@ -220,14 +217,15 @@ nights with sleep records" vs "Number of consecutive nights with recorded sleep"
 
 建議的順序（不是先合他的）：
 
-1. 先在 `main` 上把 `history` 那兩欄補上（`build_app_payload.py:392-399`）
-2. 重跑 `python build_app_payload.py` 重新生成 `app_payload.json`
+1. ~~先在 `main` 上把 `history` 那兩欄補上~~ ✅ **已完成**
+2. ~~重跑 `python build_app_payload.py`~~ ✅ **已完成**
 3. 請他把 `main` merge 進他的分支（不是反過來），衝突檔直接取 main 的版本
 4. 他確認 Flutter 那邊讀得到新欄位之後再開 PR
 
-⚠️ 另外跟他確認一件事：**他把 `streak.definition` 改成英文是有意的嗎？**
-本專案輸出一律正體中文（AI 夢境也是）。若 UI 要走英文，那是產品決定，
-要先對齊，不能只改這一個字串。
+✅ **他把 `streak.definition` 改成英文這件事已經不是問題了**——
+2026-08-26 使用者決定全系統輸出改英文（見「輸出語言」那節），
+他那個改動方向是對的。但他是**手改生成檔**，還是會被蓋掉，
+要提醒他改 `build_app_payload.py` 而不是 `app_payload.json`。
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
@@ -390,7 +388,30 @@ python garmin/run_pipeline.py          # 再跑後四步
 
 ## 🤖 兩個模組的既定決策（不要改回去）
 
-### AI 夢境（`ai/`，`PROMPT_VERSION` = v3）
+### 🌐 輸出語言：**英文**（2026-08-26 使用者決定）
+
+全系統的**輸出字串**一律英文——payload 欄位、API 訊息、評分建議、挑戰文案、
+AI 夢境、console 輸出。**程式碼註解與 docstring 維持中文**：那是給團隊讀的
+說明不是輸出，翻掉會讓專案最有價值的決策記錄變難讀。
+
+⚠️ **換語言時最危險的不是翻譯，是驗證層會安靜地失效。**
+`ai/generate_advice.py` 有四個機制與語言綁死，換掉任何一個而不改對應物，
+**不會報錯，只會不再擋任何東西**：
+
+| 機制 | 中文版 | 英文版 | 不改的後果 |
+|---|---|---|---|
+| 語言洩漏 | `SIMPLIFIED_CHARS` | `CJK_LEAK_PATTERN` | 模型漂回中文不會被擋 |
+| 拼字數值 | `CHINESE_NUMERAL_PATTERN` | `SPELLED_NUMERAL_PATTERN` | "ten point three hours" 混進 App |
+| 意象去重 | `MOTIF_FAMILIES` 中文關鍵字 | 照英文調色盤重挑 **+ 比對前 `.lower()`** | 去重完全失效 |
+| 長度上下限 | 20–150／30–250／5–100 | **×3** → 60–450／90–750／15–300 | **整批被長度檢查擋掉** |
+
+長度倍率的依據是實測：舊中文 46 晚的字元中位數是 48／85／31，
+英文寫同樣內容是 131／280／80，約 **2.7–3.3 倍**。
+
+⚠️ 意象去重的關鍵字**不能逐詞翻譯**——「闔上」翻成 `closed` 會誤判到
+"I closed my eyes"。要照著英文調色盤實際會寫出的措辭重挑。
+
+### AI 夢境（`ai/`，`PROMPT_VERSION` = v4）
 
 | 決策 | 理由 |
 |---|---|
@@ -398,14 +419,19 @@ python garmin/run_pipeline.py          # 再跑後四步
 | 「日記中間幾頁空白」意象**只在 `rem_unmeasured` 為真時**才放進 system prompt | 那不是修辭，是把「手錶沒測到 REM」誠實寫進敘事的機制。用在有資料的夜晚等於對使用者謊稱 |
 | few-shot 依當晚條件拆兩版 | 原本範例二同時是「Bad」又是「REM 未測得」，模型在 Bad 的夜晚就整段照抄 |
 | `validate()` 保留 `MISSING_RECORD_MOTIFS` 關鍵字擋 | **這層真的救到了**：前三層修好後模型第 1 次仍寫出「沒看清」，重試才過 |
-| `SIMPLIFIED_CHARS` **刻意不含 于／后／里** | 正體中文本來就會用（皇后、公里），誤判的代價是整晚退回規則式文字 |
-| 國字數字規則**必須有「點」才擋** | 「十分安穩」是「非常安穩」不是「十分鐘」。出問題的 4 晚全是小數 |
+| 拼字數值規則**必須有 `point` 才擋** | 沿用中文版「必須有『點』」的收窄判準。英文更容易誤判（number words 是常用字），"give it one more try"／"half an hour earlier" 都必須放行 |
+| `BANNED_WORDS` 用**完整單詞**比對（`\b...\b`） | 英文才需要這層：`treat` 會命中 `retreat`、`ill` 命中 `still`。中文沒有這個問題 |
 | `recent_motifs()` 的呼叫**必須放在主迴圈內** | `entries` 每跑完一晚才更新，放外面等於這個功能沒作用 |
-| `ADVICE_LANG` **沒有實作** | 輸出固定正體中文（prompt 本身就是中文寫的）。改那個變數不會換語言 |
+| `ADVICE_LANG` **仍然沒有實作** | 輸出固定英文（prompt 本身就是英文寫的）。改那個變數不會換語言 |
 
 > ⚠️ **驗證規則寫寬很省事，但誤判的代價是整晚退回規則式文字。**
 > 這類錯誤已經踩過三次（「沒看清」無條件擋、`SIMPLIFIED_CHARS` 的于／后／里、
 > 國字數字）。加新規則前先問：**它會不會誤傷正常說法？**
+
+> 📊 **v4 全量實測（51 晚，2026-08-26）**：51/51 由 LLM 生成、**0 晚 fallback**，
+> 中文洩漏 0 晚、夢境含數字 0 晚，意象最集中的家族 **19.6%**。
+> ⚠️ 中文版留下的未解問題「棉被與雪佔 37%」在英文版沒有重現，但**根因沒有修**——
+> `MOTIF_FAMILIES` 與調色盤選項仍然不是一對一（深睡類 6 個選項只對應 2–3 個家族）。
 
 ### 行為層 × 評分層怎麼合併（`main.py` 的 `resolve_mood()`）
 

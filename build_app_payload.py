@@ -116,9 +116,12 @@ ANXIOUS_HR_THRESHOLD = -3.0      # rhr_modifier + avg_hr_modifier 低於此值
 # App 目前的 UI 是英文（"Great job!"、"Sweet dreams are waiting for us!"），
 # 所以這裡產生的短字串也用英文，才不會在英文介面裡蹦出中文。
 #
-# ⚠️ 但 scoring.recommendation 維持中文原文不翻譯——它是規則式評分層的
-#    產物、是事實來源，翻譯等於引入第二個版本。語言不一致的問題已寫進
-#    PROJECT_STATUS 待團隊決定 i18n 方案（app 已經有 intl 套件）。
+# ⚠️ 2026-08-26 起**全系統輸出一律英文**（使用者決定）。原本這裡註明
+#    scoring.recommendation「維持中文不翻譯」，那個例外已經取消——
+#    evaluate_sleep_quality.py 的規則式文字本身已改成英文，所以它仍然是
+#    「原文照搬、不在這裡翻譯」，只是原文現在就是英文。
+#
+#    這裡指的是**輸出字串**；程式碼註解仍維持中文（那是給團隊讀的，不是輸出）。
 DISPLAY_STRINGS = {
     "Good": {
         "score_message": "Great job!",
@@ -158,8 +161,8 @@ for _quality, _strings in DISPLAY_STRINGS.items():
     if len(_message) > MAX_SCORE_MESSAGE_CHARS:
         raise ValueError(
             f"DISPLAY_STRINGS[{_quality!r}]['score_message'] = {_message!r} "
-            f"長度 {len(_message)} 超過 {MAX_SCORE_MESSAGE_CHARS}，"
-            "會撐破 SleepScoreCard 的固定高度版面"
+            f"is {len(_message)} chars, over the {MAX_SCORE_MESSAGE_CHARS} limit; "
+            "it will overflow SleepScoreCard's fixed-height layout."
         )
 
 # 分數環的顏色，跟著等級走（Flutter 端只做字串→Color 的查表，不做判斷）
@@ -246,9 +249,10 @@ def compute_streak(quality_rows, latest_date):
         "streak_days": streak,
         "completed_days": completed,
         "definition": (
-            "streak_days = 到最新一晚為止連續有睡眠記錄的夜數；"
-            "completed_days = 最近 7 個日曆日內評級為 Good 或 Normal 的晚數。"
-            "手錶未配戴的夜晚不算在內，所以數字偏小反映的是配戴率而非睡眠品質。"
+            "streak_days = consecutive nights with a sleep record, counting back "
+            "from the latest night. completed_days = nights rated Good or Normal "
+            "within the last 7 calendar days. Nights when the watch was not worn "
+            "are excluded, so a low number reflects wear rate, not sleep quality."
         ),
     }
 
@@ -273,23 +277,24 @@ def load_tapo_report():
     """
     path = next((p for p in TAPO_REPORT_CANDIDATES if p.exists()), None)
     if path is None:
-        return None, "攝影機資料不可用：找不到 sleep_report.json"
+        return None, "Camera data unavailable: sleep_report.json not found."
 
     try:
         data = json.load(path.open(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
-        return None, f"攝影機資料不可用：{path.name} 讀取失敗（{exc}）"
+        return None, f"Camera data unavailable: could not read {path.name} ({exc})."
 
     timeline = data.get("timeline") or []
     if not timeline:
-        return None, "攝影機資料不可用：timeline 為空"
+        return None, "Camera data unavailable: timeline is empty."
 
     # 檢查一：時段。整段錄影都落在白天 → 是測試不是睡眠
     hours = {int(ev["time"].split(":")[0]) for ev in timeline if ev.get("time")}
     if hours and all(6 <= h < 20 for h in hours):
         return None, (
-            f"攝影機資料不可用：{path.name} 的錄影時段全在白天"
-            f"（{min(hours):02d}:00–{max(hours):02d}:59），研判為測試錄影而非整晚睡眠"
+            f"Camera data unavailable: all footage in {path.name} falls during "
+            f"daytime hours ({min(hours):02d}:00–{max(hours):02d}:59); "
+            "judged to be a test recording rather than a full night's sleep."
         )
 
     # 檢查二：翻身頻率。人一整晚翻身約 10–40 次，每小時超過 30 次不合生理
@@ -298,9 +303,10 @@ def load_tapo_report():
     span_hours = max(len(hours), 1)
     if large_turns / span_hours > 30:
         return None, (
-            f"攝影機資料不可用：{path.name} 偵測到每小時約 "
-            f"{large_turns / span_hours:.0f} 次大翻身，超出生理合理範圍，"
-            "研判動作偵測捕捉到的是整個畫面的變化而非人體翻身"
+            f"Camera data unavailable: {path.name} reports roughly "
+            f"{large_turns / span_hours:.0f} large turns per hour, outside the "
+            "physiologically plausible range; the motion detector is judged to be "
+            "picking up whole-frame changes rather than body movement."
         )
 
     # 通過門檻：只取視覺類欄位，聲音類一律丟棄
@@ -308,7 +314,8 @@ def load_tapo_report():
         "report_date": data.get("report_date"),
         "large_turn_count": large_turns,
         "total_events": summary.get("total_events"),
-    }, "攝影機資料已納入（僅視覺類欄位；分貝與打鼾為模擬值，一律不採用）"
+    }, ("Camera data included (visual fields only; decibel and snore counts are "
+        "simulated values and are never used).")
 
 
 def load_ai_advice(target_date, fallback_recommendation):
@@ -352,8 +359,8 @@ def build_payload(target_date=None):
 
     if not quality_rows:
         sys.exit(
-            "✗ 找不到 garmin/data/garmin_sleep_quality_final.json。\n"
-            "  請先執行：python garmin/run_pipeline.py"
+            "✗ garmin/data/garmin_sleep_quality_final.json not found.\n"
+            "  Run this first: python garmin/run_pipeline.py"
         )
 
     by_date_quality = index_by_date(quality_rows)
@@ -362,7 +369,7 @@ def build_payload(target_date=None):
     # 挑出目標夜晚
     if target_date:
         if target_date not in by_date_quality:
-            sys.exit(f"✗ 找不到 {target_date} 的評分資料。")
+            sys.exit(f"✗ No scoring data found for {target_date}.")
         night_iso = target_date
     else:
         night_iso = quality_rows[-1]["date"]
@@ -385,8 +392,17 @@ def build_payload(target_date=None):
 
     streak = compute_streak(quality_rows, night_date)
 
-    # history：最近 N 晚，給 Insights 頁之後接圖表用。
-    # 現在還沒接 ReportScreen，但先帶著，之後接的時候不用再改後端。
+    # history：最近 N 晚，給 Insights 頁接圖表用。
+    #
+    # ⚠️ sleep_start_time / wake_time 是 2026-08-26 補上的，補的原因值得記：
+    #    這段原本的註解寫「先帶著，之後接的時候不用再改後端」，但真的要接的時候
+    #    還是得改——因為當初只想到「畫分數趨勢圖」，沒想到報表要畫的是「每晚幾點
+    #    睡、幾點醒」。metrics 那一層雖然有這兩個欄位，但**只有最新一晚**，
+    #    而報表要的是每一晚。（Jeremy 的 second-flutter-integration 卡在這裡。）
+    #
+    #    值是 ISO8601 (+08:00) 字串，與 metrics 同一個來源（features），
+    #    所以兩邊逐字相同，不會有「首頁跟報表對不上」的問題。
+    #    沒戴錶的夜晚 features 裡沒有該日，.get() 會回 None——前端要能處理 null。
     history = []
     for row in quality_rows[-HISTORY_NIGHTS:]:
         feat = by_date_features.get(row["date"], {})
@@ -396,6 +412,8 @@ def build_payload(target_date=None):
                 "final_score": row.get("final_score"),
                 "final_quality": row.get("final_quality"),
                 "sleep_duration_hours": feat.get("sleep_duration_hours"),
+                "sleep_start_time": feat.get("sleep_start_time"),
+                "wake_time": feat.get("wake_time"),
             }
         )
 
@@ -484,13 +502,16 @@ def build_payload(target_date=None):
         "notes": {
             "tapo": tapo_note,
             "mapping": (
-                "pet_mood / energy_level 的映射為預設值，尚待 PM 核可"
-                f"（mapping_version={MAPPING_VERSION}）"
+                "The pet_mood / energy_level mapping is a default value, "
+                "still pending PM approval."
+                f" (mapping_version={MAPPING_VERSION})"
             ),
         },
         "disclaimer": (
-            "睡眠分數由 Garmin 手錶資料經文獻加權規則計算，不構成醫療診斷。"
-            "夢境內容若有生成，為 AI 依睡眠數據想像的創作，非使用者實際夢境的紀錄。"
+            "Sleep scores are computed from Garmin watch data using "
+            "literature-weighted rules and do not constitute a medical diagnosis. "
+            "Any dream content, where generated, is an AI creation imagined from "
+            "sleep data, not a record of the user’s actual dreams."
         ),
         "timestamp": features.get("wake_time"),
     }
@@ -513,18 +534,18 @@ def _report_pending_ai(payload):
     }
     pending = len({row["date"] for row in quality_rows} - done)
     if pending:
-        print(f"  尚有 {pending} 晚未生成 AI 建議"
-              f"（執行 python garmin/run_pipeline.py --ai 產生）")
+        print(f"  {pending} night(s) still have no AI advice"
+              f"  (run: python garmin/run_pipeline.py --ai)")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="把 Garmin / AI / TAPO 的產出組成 App 用的單一 payload。"
+        description="Combine the Garmin / AI / TAPO outputs into the single payload the App reads.",
     )
     parser.add_argument(
         "--date",
         default=None,
-        help="指定要組哪一晚（YYYY-MM-DD）。預設用最新一晚。",
+        help="Which night to build (YYYY-MM-DD). Defaults to the latest night.",
     )
     args = parser.parse_args()
 
@@ -540,17 +561,17 @@ def main():
     tmp_path.replace(OUTPUT_PATH)
 
     rel = OUTPUT_PATH.relative_to(ROOT).as_posix()
-    print(f"✓ 已產生 {rel}")
+    print(f"✓ Wrote {rel}")
     _report_pending_ai(payload)
-    print(f"  夜晚：{payload['session_id'][:8]}  "
-          f"分數：{payload['scoring']['final_score']} "
-          f"（{payload['scoring']['final_quality']}）")
-    print(f"  寵物心情：{payload['status']['pet_mood']}"
-          f"（{payload['status']['mood_reason']}）  "
-          f"活力：{payload['status']['energy_level']}")
-    print(f"  連續記錄：{payload['streak']['streak_days']} 晚  "
-          f"本週達標：{payload['streak']['completed_days']}/7")
-    print(f"  資料來源：{', '.join(payload['data_sources'])}")
+    print(f"  Night: {payload['session_id'][:8]}  "
+          f"Score: {payload['scoring']['final_score']} "
+          f"({payload['scoring']['final_quality']})")
+    print(f"  Pet mood: {payload['status']['pet_mood']}"
+          f" ({payload['status']['mood_reason']})  "
+          f"Energy: {payload['status']['energy_level']}")
+    print(f"  Streak: {payload['streak']['streak_days']} night(s)  "
+          f"This week: {payload['streak']['completed_days']}/7")
+    print(f"  Sources: {', '.join(payload['data_sources'])}")
     print(f"  {payload['notes']['tapo']}")
 
 
