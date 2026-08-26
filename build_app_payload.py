@@ -385,8 +385,17 @@ def build_payload(target_date=None):
 
     streak = compute_streak(quality_rows, night_date)
 
-    # history：最近 N 晚，給 Insights 頁之後接圖表用。
-    # 現在還沒接 ReportScreen，但先帶著，之後接的時候不用再改後端。
+    # history：最近 N 晚，給 Insights 頁接圖表用。
+    #
+    # ⚠️ sleep_start_time / wake_time 是 2026-08-26 補上的，補的原因值得記：
+    #    這段原本的註解寫「先帶著，之後接的時候不用再改後端」，但真的要接的時候
+    #    還是得改——因為當初只想到「畫分數趨勢圖」，沒想到報表要畫的是「每晚幾點
+    #    睡、幾點醒」。metrics 那一層雖然有這兩個欄位，但**只有最新一晚**，
+    #    而報表要的是每一晚。（Jeremy 的 second-flutter-integration 卡在這裡。）
+    #
+    #    值是 ISO8601 (+08:00) 字串，與 metrics 同一個來源（features），
+    #    所以兩邊逐字相同，不會有「首頁跟報表對不上」的問題。
+    #    沒戴錶的夜晚 features 裡沒有該日，.get() 會回 None——前端要能處理 null。
     history = []
     for row in quality_rows[-HISTORY_NIGHTS:]:
         feat = by_date_features.get(row["date"], {})
@@ -396,6 +405,8 @@ def build_payload(target_date=None):
                 "final_score": row.get("final_score"),
                 "final_quality": row.get("final_quality"),
                 "sleep_duration_hours": feat.get("sleep_duration_hours"),
+                "sleep_start_time": feat.get("sleep_start_time"),
+                "wake_time": feat.get("wake_time"),
             }
         )
 
