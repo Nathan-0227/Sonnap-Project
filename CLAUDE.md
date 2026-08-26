@@ -49,6 +49,15 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 
 ### ⏭️ 下次接手的三件事（2026-08-26 留．按這個順序）
 
+> 🔴 **先看這個：Jeremy 被卡住了，而且卡點在我們這邊。**
+> 他的 `second-flutter-integration`（2026-08-21）commit 訊息寫
+> 「still need the backend data for **sleep time and wake up time**」。
+> 實測確認他是對的：`GET /home` 的 `metrics` 沒有這兩個欄位，
+> `wearable_nightly`（21 欄）**連欄位都不存在**（舊路徑的
+> `app_payload.json` 則有）。要補的三處與一個坑在「git 狀態」那節。
+> → **這件比下面三件都急**，因為它在擋別人的進度。
+
+
 **① Tier3 的 baseline 會過期 —— 等使用者決定，程式一行都沒改**
 
 `MAX_BASELINE_NIGHTS = 28`（`garmin/apply_recovery_modifier.py:181`）
@@ -118,13 +127,6 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 `origin/main` 也兩次合併進本分支：08-25 那次是影像組 8/17 的工作，
 08-26 那次是他們當天推的三個 commit（只動 `tapo/`，零衝突）。
 
-⚠️ **遠端有兩個分支該清掉，但先問過再刪**：
-
-| 分支 | 狀態 |
-|---|---|
-| `feature/behavior-loop-feat(backend)-多使用者-API、…` | PR #11 用的那個。名字裡有 commit message，**已完全合併進 main** |
-| `feature/behavior-loop` | 合併後被刪過，又被我的第二次推送建回來 |
-
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
 > 1. 文件上寫「尚未 push」，但這個分支 08-25 就推過一次（停在 `796b8c1`），
@@ -169,14 +171,52 @@ python garmin/run_pipeline.py          # 再跑後四步
 抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
 46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
 
-分支盤點（2026-08-25 實測）：
+分支盤點（2026-08-26 用 `git ls-remote --heads origin` 實測）：
 
 | 遠端分支 | 作者 | 領先 main | 最後更新 | 狀態 |
 |---|---|---|---|---|
-| `origin/flutter` | Jeremy | **0** | 2026-07-10 | 已全數合併，可刪 |
-| `origin/feature/garmin-sleep-scoring` | 我 | **0** | 2026-08-11 | 已合併，可刪 |
-| `origin/feature/project-setup` | 我 | **0** | 2026-08-12 | 已合併，可刪 |
-| `origin/feature/opencv-motion-garmin` | 影像組 | **12** | 2026-06-11 | ⚠️ 見下方 |
+| `main` | — | — | 2026-08-26 | `e382b83`（PR #11 合併點） |
+| **`second-flutter-integration`** | **Jeremy** | **1** | **2026-08-21** | ⚠️ **見下方，這是目前最該處理的** |
+| `feature/behavior-loop` | 我 | 2 | 2026-08-26 | 合併後被刪過，又被第二次推送建回來 |
+| `feature/behavior-loop-feat(backend)-多使用者-…` | 我 | 0 | 2026-08-26 | PR #11 用的那個，名字裡有 commit message。**已完全合併** |
+| `flutter` | Jeremy | 0 | 2026-07-10 | 已全數合併，可刪 |
+| `feature/opencv-motion-garmin` | 影像組 | 12 | 2026-06-11 | ⚠️ 見再下方 |
+
+⚠️ 前一版表上的 `feature/garmin-sleep-scoring` 與 `feature/project-setup`
+**已經不在遠端了**（08-25 記「可刪」，之後真的被刪了）。
+上面兩個 `behavior-loop` 分支仍待清，**刪之前先問過**。
+
+### ⚠️ Jeremy 的 `second-flutter-integration` 卡在一個真的缺口（優先處理）
+
+他 2026-08-21 的 commit 訊息直接寫著：
+
+> "Update insight and sleep report section but **still need the backend data
+> for sleep time and wake up time**"
+
+那一個 commit 動了 `UsageStatsService.kt`（**新增 98 行**）與
+`report_screen.dart`（+2440 行）——也就是說**交接區說「剩下的全部在手機端」
+那兩件事，他都已經動工了**，而且是在 08-25／08-26 那兩輪之前。
+
+**他卡的是真的缺口，不是誤會。已實測確認：**
+
+| 路徑 | 有沒有 `sleep_start_time` / `wake_time` |
+|---|---|
+| 舊路徑 `app_payload.json` 的 `metrics` | ✅ **有**（ISO8601 +08:00） |
+| 新路徑 `GET /home` 的 `metrics` | ❌ **沒有** |
+| `db.py` 的 `wearable_nightly`（21 欄） | ❌ **連欄位都不存在** |
+| `GET /insights` 的 `history` | ❌ 只有 `date`／`final_score`／`final_quality`／`sleep_duration_hours` |
+
+根因：`migrate_garmin_to_db.py` 讀得到 `sleep_start_time`
+（`:319` 用它模擬 `lights_out_at`），但**只拿來模擬、沒有寫進資料表**。
+
+→ 要補的話是三處：`db.py` 的 SCHEMA + `COLUMN_MIGRATIONS`（⚠️ 兩邊都要改，
+理由見「現有程式碼結構」那節）、`migrate_garmin_to_db.py` 的寫入、
+`main.py` 的 `/home` metrics。
+
+⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——
+`migrate_garmin_to_db.py:24-27` 已經寫明那是構念代換：
+`sleep_start_time` 是手錶偵測到你**睡著**（生理），
+`lights_out_at` 是**放下手機**（行為），後者一定較早。
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
