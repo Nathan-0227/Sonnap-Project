@@ -17,8 +17,9 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 > `C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 > （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
 >
-> ✅ **那份路線圖的後端部分已於 2026-08-26 全部完成**（多使用者持久化、
-> Health Connect adapter、行為介入迴圈、46 晚遷移、驗收測試）。
+> ✅ **那份路線圖的後端部分已於 2026-08-26 全部完成並合併進 `main`**
+> （PR #11：多使用者持久化、Health Connect adapter、行為介入迴圈、
+> 51 晚遷移、驗收測試）。
 > **剩下的全部在手機端**：Android 的 UsageStats（取得 `lights_out_at`
 > 與睡前 App 分布）、Accessibility 阻斷、Health Connect 串接。
 > 後端的端點與資料表都已就緒且有測試，手機端接上去就能跑 D2。
@@ -91,22 +92,32 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ### git 狀態（2026-08-26 更新）
 
-**目前在 `feature/behavior-loop` 分支上**（從 `main` 的 `ab7e1e7` 切出）。
+✅ **這一輪的工作已經全部進 `main`** —— PR #11 於 2026-08-26 由使用者合併
+（`origin/main` = `e382b83`）。`db.py`、`main.py`、`behavior/`、`wearable/`、
+`tests/`、`migrate_garmin_to_db.py`、`PROPOSAL_GAP.md`、51 晚的資料全都在裡面。
 
-**已推上 `origin/feature/behavior-loop`**（`796b8c1..153f417`，12 個 commit）。
-`origin/main` 兩次都合併進來了：08-25 那次是影像組 8/17 的工作，
-08-26 那次是他們當天推的三個 commit（`tapo/` 而已，零衝突）。
+`origin/main` 也兩次合併進本分支：08-25 那次是影像組 8/17 的工作，
+08-26 那次是他們當天推的三個 commit（只動 `tapo/`，零衝突）。
 
-⏳ **PR 尚未開** —— 卡在 `gh` 沒登入。要開的話：
-1. 使用者自己跑一次 `gh auth login`（互動式，我不能代跑），或
-2. 直接開網頁 `https://github.com/Nathan-0227/Sonnap-Project/compare/main...feature/behavior-loop`
+⚠️ **遠端有兩個分支該清掉，但先問過再刪**：
 
-> ⚠️ 前一版這裡寫的「4 個 commit 直接打在 main 上、尚未 push」**已經過期**——
-> 那四個 commit 後來已推上去，`main` 與 `origin/main` 同步中。不必再補救。
+| 分支 | 狀態 |
+|---|---|
+| `feature/behavior-loop-feat(backend)-多使用者-API、…` | PR #11 用的那個。名字裡有 commit message，**已完全合併進 main** |
+| `feature/behavior-loop` | 合併後被刪過，又被我的第二次推送建回來 |
+
+> ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
-> ⚠️ 也不要相信「尚未 push」這種敘述——**先跑 `git ls-remote --heads origin`**。
-> 這個分支在 08-25 就已經推過一次（停在 `796b8c1`），而文件上寫著「尚未 push」，
-> 我因此對使用者講錯過一次。**遠端狀態要問 git，不要問文件。**
+> 1. 文件上寫「尚未 push」，但這個分支 08-25 就推過一次（停在 `796b8c1`），
+>    我照文件講，對使用者講錯了。
+> 2. 我寫「PR 尚未開」的**同時**，使用者正在網頁上合併 PR #11——
+>    那份筆記一 commit 就是過期的。
+>
+> → 動手前先跑 **`git ls-remote --heads origin`** 與
+>   **`git fetch && git log --oneline origin/main -1`**，不要相信任何文件上的敘述
+>   （包括這一段）。
+>
+> ⚠️ 更早的一版還寫過「4 個 commit 直接打在 main 上、尚未 push」，那也早就過期了。
 
 ### ⚠️ 環境（2026-08-26 補記）
 
