@@ -49,13 +49,24 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 
 ### ⏭️ 下次接手的三件事（2026-08-26 留．按這個順序）
 
-> 🔴 **先看這個：Jeremy 被卡住了，而且卡點在我們這邊。**
+> 🔴 **先看這個：Jeremy 被卡住了，卡點在我們這邊，而且只差兩行。**
 > 他的 `second-flutter-integration`（2026-08-21）commit 訊息寫
-> 「still need the backend data for **sleep time and wake up time**」。
-> 實測確認他是對的：`GET /home` 的 `metrics` 沒有這兩個欄位，
-> `wearable_nightly`（21 欄）**連欄位都不存在**（舊路徑的
-> `app_payload.json` 則有）。要補的三處與一個坑在「git 狀態」那節。
-> → **這件比下面三件都急**，因為它在擋別人的進度。
+> 「Update **insight and sleep report** section but still need the backend
+> data for **sleep time and wake up time**」。
+>
+> Insights 頁讀的是 `history`，而 **`history` 每一筆只帶了四欄**：
+> `date`／`final_score`／`final_quality`／`sleep_duration_hours`。
+> （`metrics` 那一層有 `sleep_start_time`／`wake_time`，但那只有**最新一晚**，
+> 報表要的是**每一晚**。）
+>
+> → 修法在 `build_app_payload.py:392-399`，`by_date_features` 裡**已經有**
+> `sleep_start_time` 與 `wake_time`，把它們加進 history 那個 dict 就好。
+> 那段程式的註解自己還寫著「先帶著，之後接的時候不用再改後端」。
+>
+> ⚠️ **不是 `GET /home` 的問題**——他的分支連 `db.py` 都沒有（見下方分支盤點），
+> 他根本不在 API 路徑上。（`GET /home` 的 `metrics` 確實也缺這兩欄、
+> `wearable_nightly` 21 欄連欄位都不存在——那是**另一個真的缺口**，
+> 但不是他現在卡的那個。）
 
 
 **① Tier3 的 baseline 會過期 —— 等使用者決定，程式一行都沒改**
@@ -176,7 +187,7 @@ python garmin/run_pipeline.py          # 再跑後四步
 | 遠端分支 | 作者 | 領先 main | 最後更新 | 狀態 |
 |---|---|---|---|---|
 | `main` | — | — | 2026-08-26 | `e382b83`（PR #11 合併點） |
-| **`second-flutter-integration`** | **Jeremy** | **1** | **2026-08-21** | ⚠️ **見下方，這是目前最該處理的** |
+| **`second-flutter-integration`** | **Jeremy** | **1**（但**落後 21**） | **2026-08-21** | ⚠️ **見下方，不能直接合** |
 | `feature/behavior-loop` | 我 | 2 | 2026-08-26 | 合併後被刪過，又被第二次推送建回來 |
 | `feature/behavior-loop-feat(backend)-多使用者-…` | 我 | 0 | 2026-08-26 | PR #11 用的那個，名字裡有 commit message。**已完全合併** |
 | `flutter` | Jeremy | 0 | 2026-07-10 | 已全數合併，可刪 |
@@ -188,35 +199,35 @@ python garmin/run_pipeline.py          # 再跑後四步
 
 ### ⚠️ Jeremy 的 `second-flutter-integration` 卡在一個真的缺口（優先處理）
 
-他 2026-08-21 的 commit 訊息直接寫著：
+他卡住的具體缺口見上方「下次接手」開頭那段（`history` 少兩欄）。
+這裡只講**分支本身該怎麼處理**。
 
-> "Update insight and sleep report section but **still need the backend data
-> for sleep time and wake up time**"
+⚠️ **不要把他的分支直接合進 `main`。** 實測狀態：
 
-那一個 commit 動了 `UsageStatsService.kt`（**新增 98 行**）與
-`report_screen.dart`（+2440 行）——也就是說**交接區說「剩下的全部在手機端」
-那兩件事，他都已經動工了**，而且是在 08-25／08-26 那兩輪之前。
-
-**他卡的是真的缺口，不是誤會。已實測確認：**
-
-| 路徑 | 有沒有 `sleep_start_time` / `wake_time` |
+| | |
 |---|---|
-| 舊路徑 `app_payload.json` 的 `metrics` | ✅ **有**（ISO8601 +08:00） |
-| 新路徑 `GET /home` 的 `metrics` | ❌ **沒有** |
-| `db.py` 的 `wearable_nightly`（21 欄） | ❌ **連欄位都不存在** |
-| `GET /insights` 的 `history` | ❌ 只有 `date`／`final_score`／`final_quality`／`sleep_duration_hours` |
+| 分岐點 | `e0aa188`，**從來沒有 merge 過 main** |
+| 領先 main | 1 個 commit |
+| **落後 main** | **21 個 commit** |
+| PR #11 的後端 | `db.py`、`behavior/`、`wearable/`、`tests/` **全部不存在** |
+| 合併衝突 | 1 個檔：`app/assets/data/app_payload.json` |
 
-根因：`migrate_garmin_to_db.py` 讀得到 `sleep_start_time`
-（`:319` 用它模擬 `lights_out_at`），但**只拿來模擬、沒有寫進資料表**。
+那個衝突檔是**生成檔**，衝突原因是他**手改了它**（把 `streak.definition`
+翻成英文）。而且他手改的那串跟他同一個 commit 改的
+`build_app_payload.py` **兩個英文版本不一致**（"The number of consecutive
+nights with sleep records" vs "Number of consecutive nights with recorded sleep"）
+→ **只要有人跑一次 `python build_app_payload.py`，他的手改就會被蓋掉。**
 
-→ 要補的話是三處：`db.py` 的 SCHEMA + `COLUMN_MIGRATIONS`（⚠️ 兩邊都要改，
-理由見「現有程式碼結構」那節）、`migrate_garmin_to_db.py` 的寫入、
-`main.py` 的 `/home` metrics。
+建議的順序（不是先合他的）：
 
-⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——
-`migrate_garmin_to_db.py:24-27` 已經寫明那是構念代換：
-`sleep_start_time` 是手錶偵測到你**睡著**（生理），
-`lights_out_at` 是**放下手機**（行為），後者一定較早。
+1. 先在 `main` 上把 `history` 那兩欄補上（`build_app_payload.py:392-399`）
+2. 重跑 `python build_app_payload.py` 重新生成 `app_payload.json`
+3. 請他把 `main` merge 進他的分支（不是反過來），衝突檔直接取 main 的版本
+4. 他確認 Flutter 那邊讀得到新欄位之後再開 PR
+
+⚠️ 另外跟他確認一件事：**他把 `streak.definition` 改成英文是有意的嗎？**
+本專案輸出一律正體中文（AI 夢境也是）。若 UI 要走英文，那是產品決定，
+要先對齊，不能只改這一個字串。
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
