@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-26T17:58:01+08:00",
+  "generated_at": "2026-08-26T18:37:29+08:00",
   "session_id": "20260823_001",
   "status": {
     "pet_mood": "anxious",
@@ -29,7 +29,7 @@
     "resting_heart_rate": 69
   },
   "ai_content": {
-    "advice": "睡眠品質良好，請維持目前的作息。",
+    "advice": "Sleep quality was good. Keep your current routine. ",
     "dream_summary": null,
     "trend_note": null,
     "is_ai_generated": false,
@@ -43,8 +43,8 @@
     "base_score": 82.2,
     "total_modifier": -5.75,
     "sri": null,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   "display": {
     "lang": "en",
@@ -58,7 +58,7 @@
   "streak": {
     "streak_days": 3,
     "completed_days": 3,
-    "definition": "streak_days = 到最新一晚為止連續有睡眠記錄的夜數；completed_days = 最近 7 個日曆日內評級為 Good 或 Normal 的晚數。手錶未配戴的夜晚不算在內，所以數字偏小反映的是配戴率而非睡眠品質。"
+    "definition": "streak_days = consecutive nights with a sleep record, counting back from the latest night. completed_days = nights rated Good or Normal within the last 7 calendar days. Nights when the watch was not worn are excluded, so a low number reflects wear rate, not sleep quality."
   },
   "history": [
     {
@@ -306,9 +306,9 @@
     "garmin"
   ],
   "notes": {
-    "tapo": "攝影機資料不可用：sleep_report.json 的錄影時段全在白天（17:00–17:59），研判為測試錄影而非整晚睡眠",
-    "mapping": "pet_mood / energy_level 的映射為預設值，尚待 PM 核可（mapping_version=1）"
+    "tapo": "Camera data unavailable: all footage in sleep_report.json falls during daytime hours (17:00–17:59); judged to be a test recording rather than a full night's sleep.",
+    "mapping": "The pet_mood / energy_level mapping is a default value, still pending PM approval. (mapping_version=1)"
   },
-  "disclaimer": "睡眠分數由 Garmin 手錶資料經文獻加權規則計算，不構成醫療診斷。夢境內容若有生成，為 AI 依睡眠數據想像的創作，非使用者實際夢境的紀錄。",
+  "disclaimer": "Sleep scores are computed from Garmin watch data using literature-weighted rules and do not constitute a medical diagnosis. Any dream content, where generated, is an AI creation imagined from sleep data, not a record of the user’s actual dreams.",
   "timestamp": "2026-08-23T04:56:00+08:00"
 }

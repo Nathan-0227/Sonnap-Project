@@ -45,17 +45,17 @@ DEFAULT_AGE = 22
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="從 Garmin 每日睡眠彙整抽取睡眠品質特徵。"
+        description="Extract sleep quality features from the Garmin daily sleep summary."
     )
     parser.add_argument(
         "--age",
         type=int,
         default=DEFAULT_AGE,
-        help=f"使用者年齡，用於決定年齡層參考區間（預設 {DEFAULT_AGE}）。",
+        help=f"User age, used to pick the age-band reference range (default {DEFAULT_AGE}).",
     )
-    parser.add_argument("--input", default=DEFAULT_INPUT_CSV, help="輸入的睡眠彙整 CSV。")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="輸出的特徵 CSV。")
-    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="輸出的特徵 JSON。")
+    parser.add_argument("--input", default=DEFAULT_INPUT_CSV, help="Input sleep summary CSV.")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="Output features CSV.")
+    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="Output features JSON.")
     return parser.parse_args()
 
 
@@ -131,14 +131,14 @@ def is_valid_night(row):
     total_sleep = to_int(row.get("total_sleep_minutes"))
 
     if start is None or wake is None:
-        return False, "缺少入睡或起床時間（可能手錶沒戴著睡）"
+        return False, "missing sleep-onset or wake time (the watch may not have been worn)"
 
     sleep_period_min = (wake - start).total_seconds() / 60.0
     if sleep_period_min <= 0:
-        return False, "睡眠區間 <= 0（入睡與起床時間相同或顛倒的異常資料）"
+        return False, "sleep interval <= 0 (onset and wake identical or reversed - bad row)"
 
     if not total_sleep or total_sleep <= 0:
-        return False, "總睡眠時間為 0"
+        return False, "total sleep time is 0"
 
     return True, ""
 
@@ -272,7 +272,7 @@ def main():
             skipped.append((row.get("date", "?"), reason))
 
     if not features:
-        raise SystemExit("沒有任何有效的睡眠夜晚，請先確認 garmin_sleep_summary.csv 內容。")
+        raise SystemExit("No valid sleep nights found. Check garmin_sleep_summary.csv first.")
 
     with open(args.output_json, "w", encoding="utf-8") as f:
         json.dump(features, f, ensure_ascii=False, indent=2)
@@ -283,13 +283,13 @@ def main():
         writer.writerows(features)
 
     print("Sleep feature extraction complete.")
-    print(f"- 使用者年齡: {args.age}（年齡層: {band}）")
-    print(f"- 輸入: {args.input}（{len(rows)} 天）")
-    print(f"- 輸出: {args.output} / {args.output_json}")
-    print(f"- 有效睡眠夜晚: {len(features)} 天")
-    print(f"- 略過: {len(skipped)} 天")
+    print(f"- User age: {args.age}")
+    print(f"- Input: {args.input}")
+    print(f"- Output: {args.output} / {args.output_json}")
+    print(f"- Valid sleep nights: {len(features)}")
+    print(f"- Skipped: {len(skipped)}")
     for date, reason in skipped:
-        print(f"    [略過] {date}: {reason}")
+        print(f"    [skipped] {date}: {reason}")
 
 
 if __name__ == "__main__":

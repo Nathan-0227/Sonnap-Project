@@ -128,10 +128,10 @@ GRADE_THRESHOLDS = [
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="計算每晚睡眠品質分數（rule-based）。")
-    parser.add_argument("--input", default=DEFAULT_INPUT_CSV, help="輸入的特徵 CSV。")
-    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="輸出的評分 CSV。")
-    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="輸出的評分 JSON。")
+    parser = argparse.ArgumentParser(description="Compute a rule-based sleep quality score for each night.")
+    parser.add_argument("--input", default=DEFAULT_INPUT_CSV, help="Input features CSV.")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="Output scoring CSV.")
+    parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="Output scoring JSON.")
     return parser.parse_args()
 
 
@@ -233,13 +233,13 @@ def build_recommendation(grade, component_scores, band, feats):
 
     advice = []
     if grade == "Good":
-        advice.append("睡眠品質良好，請維持目前的作息。")
+        advice.append("Sleep quality was good. Keep your current routine. ")
     elif grade == "Normal":
-        advice.append("睡眠品質尚可，仍有改善空間。")
+        advice.append("Sleep quality was acceptable, with room to improve. ")
     elif grade == "Poor":
-        advice.append("睡眠品質低於平均，建議調整作息。")
+        advice.append("Sleep quality was below average; consider adjusting your routine. ")
     else:
-        advice.append("睡眠品質不佳，建議正視睡眠問題。")
+        advice.append("Sleep quality was poor; this is worth addressing. ")
 
     # Good 等級不再給「改進建議」：整晚已經判定良好，若還指出某指標
     # 「失分最多」並建議改動作息，會跟前面「請維持目前的作息」自相矛盾。
@@ -252,17 +252,17 @@ def build_recommendation(grade, component_scores, band, feats):
                 # 從 CSV 讀進來的是字串，需先轉成數字才能比較
                 hours = to_float(feats.get("sleep_duration_hours"))
                 if hours is not None and hours < low:
-                    advice.append(f"睡眠時間不足（{hours} 小時），建議提早就寢，目標 {low}–{high} 小時。")
+                    advice.append(f"Sleep was short ({hours} h). Try going to bed earlier; aim for {low}–{high} h.")
                 else:
-                    advice.append(f"睡眠時間偏長，建議維持規律作息，目標 {low}–{high} 小時。")
+                    advice.append(f"Sleep ran long. Keep a regular schedule; aim for {low}–{high} h.")
             elif worst == "efficiency":
-                advice.append("睡眠效率偏低，代表躺床時間中有不少時間並未真正睡著，建議避免在床上使用手機。")
+                advice.append("Sleep efficiency was low, meaning a fair amount of time in bed was spent awake. Avoid using your phone in bed.")
             elif worst == "waso":
-                advice.append("夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。")
+                advice.append("Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed.")
             elif worst == "deep":
-                advice.append("深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。")
+                advice.append("Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.")
             elif worst == "rem":
-                advice.append("REM 睡眠比例偏離同齡常模，建議維持規律作息並減少睡前壓力。")
+                advice.append("REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress.")
 
     return "".join(advice)
 
@@ -329,7 +329,7 @@ def main():
         rows = list(csv.DictReader(f))
 
     if not rows:
-        raise SystemExit(f"{args.input} 沒有資料，請先執行 extract_sleep_features.py。")
+        raise SystemExit(f"{args.input} has no rows. Run extract_sleep_features.py first.")
 
     results = [evaluate_night(row) for row in rows]
 
@@ -349,11 +349,11 @@ def main():
     avg_score = round(sum(r["score"] for r in results) / len(results), 1)
 
     print("Sleep quality evaluation complete.")
-    print(f"- 輸入: {args.input}（{len(rows)} 晚）")
-    print(f"- 輸出: {args.output} / {args.output_json}")
-    print(f"- 平均分數: {avg_score}")
-    print(f"- 分級分布: {distribution}")
-    print(f"- REM 未測得而排除計分的夜晚: {rem_missing} 晚")
+    print(f"- Input: {args.input} ({len(rows)} nights)")
+    print(f"- Output: {args.output} / {args.output_json}")
+    print(f"- Mean score: {avg_score}")
+    print(f"- Grade distribution: {distribution}")
+    print(f"- Nights excluded from REM scoring (not measured): {rem_missing}")
 
 
 if __name__ == "__main__":

@@ -219,7 +219,7 @@ def _progress_time(rows, challenge, as_of):
     measured = [r for r in scoped if night_achieved(r) is not None]
 
     if not measured:
-        return None, 0, 0, False, "今晚還沒有記錄。"
+        return None, 0, 0, False, "No record for tonight yet."
 
     latest = measured[-1]
     minutes = latest["adherence_minutes"]
@@ -227,11 +227,11 @@ def _progress_time(rows, challenge, as_of):
 
     if achieved:
         detail = (
-            f"提早 {abs(minutes):.0f} 分鐘放下手機。"
-            if minutes < 0 else "正好在目標時間放下手機。"
+            f"Put your phone down {abs(minutes):.0f} min early."
+            if minutes < 0 else "Put your phone down right on target."
         )
     else:
-        detail = f"比目標時間晚了 {minutes:.0f} 分鐘。"
+        detail = f"{minutes:.0f} min later than your target."
 
     return minutes, (1 if achieved else 0), len(measured), bool(achieved), detail
 
@@ -254,17 +254,17 @@ def _progress_streak(rows, challenge, as_of):
     #    後者代表 App 還沒收到任何東西。兩者給使用者的訊息完全不同，
     #    而且回 0 會讓進度條顯示 0%，看起來像「你表現很差」。
     if not measured:
-        return None, 0, 0, False, "還沒有任何記錄，今晚開始就能累積。"
+        return None, 0, 0, False, "No records yet — tonight can start the streak."
 
     target = challenge["target_value"]
     completed = streak >= target
 
     if streak == 0:
-        detail = "目前沒有連續紀錄，今晚就可以重新開始。"
+        detail = "No active streak; tonight can start a new one."
     elif completed:
-        detail = f"已連續 {streak} 晚達成。"
+        detail = f"{streak} night(s) in a row."
     else:
-        detail = f"已連續 {streak} 晚，再 {int(target - streak)} 晚就完成。"
+        detail = f"{streak} night(s) so far — {int(target - streak)} more to finish."
 
     return float(streak), streak, len(measured), completed, detail
 
@@ -290,19 +290,19 @@ def _progress_consistency(rows, challenge, as_of):
     need = _min_nights_for_window(challenge["window_days"])
     if spread is None or n < need:
         return None, 0, n, False, (
-            f"最近 {challenge['window_days']} 晚只有 {n} 晚有記錄，"
-            f"至少要 {need} 晚才算得出收斂程度。"
+            f"Only {n} of the last {challenge['window_days']} nights have records; "
+            f"at least {need} are needed to measure consistency."
         )
 
     target = challenge["target_value"]
     completed = spread <= target
 
     if completed:
-        detail = f"最近 {n} 晚的就寢時間都落在平均的 ±{spread:.0f} 分鐘內。"
+        detail = f"Bedtimes over the last {n} nights all fell within ±{spread:.0f} min of your average."
     else:
         detail = (
-            f"最近 {n} 晚的就寢時間最多偏離平均 {spread:.0f} 分鐘，"
-            f"目標是 {target:.0f} 分鐘內。"
+            f"Bedtimes over the last {n} nights varied by up to {spread:.0f} min from your average; "
+            f"the target is within {target:.0f} min."
         )
 
     return spread, n, n, completed, detail
@@ -372,8 +372,8 @@ def evaluate_challenge(challenge, rows, as_of=None):
         # 未知型別不要靜靜地回 0——那會讓「有人加了新型別卻忘了寫計算函式」
         # 看起來跟「這個人還沒開始做」一模一樣。
         raise ValueError(
-            f"未知的挑戰型別 {kind!r}（challenge_id={challenge['challenge_id']}）。"
-            f"支援的型別：{sorted(PROGRESS_FUNCS)}"
+            f"Unknown challenge kind {kind!r} (challenge_id={challenge['challenge_id']}). "
+            f"Supported kinds: {sorted(PROGRESS_FUNCS)}"
         )
 
     current, achieved_days, recorded, completed, detail = func(rows, challenge, as_of)

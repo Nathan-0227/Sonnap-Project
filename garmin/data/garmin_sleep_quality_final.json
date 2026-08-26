@@ -12,10 +12,10 @@
     "sri": null,
     "sri_valid_pairs": 0,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 27.3,
     "final_quality": "Bad",
-    "recommendation": "睡眠品質不佳，建議正視睡眠問題。睡眠時間不足（3.48 小時），建議提早就寢，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.48 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-05-30",
@@ -30,10 +30,10 @@
     "sri": null,
     "sri_valid_pairs": 1,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 81.7,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-05-31",
@@ -48,10 +48,10 @@
     "sri": null,
     "sri_valid_pairs": 2,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 93.8,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-01",
@@ -66,10 +66,10 @@
     "sri": null,
     "sri_valid_pairs": 3,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 67.6,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-03",
@@ -84,10 +84,10 @@
     "sri": null,
     "sri_valid_pairs": 3,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 98.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-04",
@@ -102,10 +102,10 @@
     "sri": null,
     "sri_valid_pairs": 4,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 87.2,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-05",
@@ -120,10 +120,10 @@
     "sri": null,
     "sri_valid_pairs": 5,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 88.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-06",
@@ -138,10 +138,10 @@
     "sri": null,
     "sri_valid_pairs": 6,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 92.2,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-07",
@@ -156,10 +156,10 @@
     "sri": null,
     "sri_valid_pairs": 7,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 81.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-08",
@@ -174,10 +174,10 @@
     "sri": null,
     "sri_valid_pairs": 8,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 90.6,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-09",
@@ -192,10 +192,10 @@
     "sri": null,
     "sri_valid_pairs": 9,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正；作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused. Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days.",
     "final_score": 75.2,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-10",
@@ -210,10 +210,10 @@
     "sri": 73.2,
     "sri_valid_pairs": 10,
     "total_modifier": 0,
-    "modifier_note": "個人化基準累積中（靜止心率/睡眠期間平均心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正",
+    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused.",
     "final_score": 100.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-11",
@@ -228,10 +228,10 @@
     "sri": 74.4,
     "sri_valid_pairs": 11,
     "total_modifier": -0.45,
-    "modifier_note": "個人化基準累積中（靜止心率/壓力/活動量/夜間醒來次數/睡眠段數未滿 14 晚歷史資料），此項暫不修正",
+    "modifier_note": "Building personal baseline (resting heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights of history); this modifier is paused.",
     "final_score": 97.2,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-12",
@@ -246,10 +246,10 @@
     "sri": 75.6,
     "sri_valid_pairs": 12,
     "total_modifier": 1.66,
-    "modifier_note": "個人化基準累積中（壓力未滿 14 晚歷史資料），此項暫不修正；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Building personal baseline (stress below 14 nights of history); this modifier is paused. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 97.1,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-13",
@@ -264,10 +264,10 @@
     "sri": 75.1,
     "sri_valid_pairs": 13,
     "total_modifier": -1.55,
-    "modifier_note": "個人化基準累積中（壓力未滿 14 晚歷史資料），此項暫不修正；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Building personal baseline (stress below 14 nights of history); this modifier is paused. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 96.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-14",
@@ -282,10 +282,10 @@
     "sri": 75.7,
     "sri_valid_pairs": 14,
     "total_modifier": 1.66,
-    "modifier_note": "個人化基準累積中（壓力未滿 14 晚歷史資料），此項暫不修正；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Building personal baseline (stress below 14 nights of history); this modifier is paused. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 70.7,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-15",
@@ -300,10 +300,10 @@
     "sri": 76.4,
     "sri_valid_pairs": 15,
     "total_modifier": 5.3,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 88.4,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-17",
@@ -318,10 +318,10 @@
     "sri": 76.4,
     "sri_valid_pairs": 15,
     "total_modifier": -0.33,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 78.5,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-06-18",
@@ -336,10 +336,10 @@
     "sri": 75.5,
     "sri_valid_pairs": 16,
     "total_modifier": -2.2,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 79.8,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-21",
@@ -354,10 +354,10 @@
     "sri": 75.5,
     "sri_valid_pairs": 16,
     "total_modifier": 1.23,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 96.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-22",
@@ -372,10 +372,10 @@
     "sri": 75.3,
     "sri_valid_pairs": 17,
     "total_modifier": 5.17,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 86.6,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-23",
@@ -390,10 +390,10 @@
     "sri": 76.1,
     "sri_valid_pairs": 18,
     "total_modifier": 1.92,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 88.8,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-24",
@@ -408,10 +408,10 @@
     "sri": 75.2,
     "sri_valid_pairs": 19,
     "total_modifier": -0.21,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 74.5,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-26",
@@ -426,10 +426,10 @@
     "sri": 76.7,
     "sri_valid_pairs": 18,
     "total_modifier": -1.44,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 94.3,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-27",
@@ -444,10 +444,10 @@
     "sri": 78.1,
     "sri_valid_pairs": 18,
     "total_modifier": 3.91,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 65.3,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-06-28",
@@ -462,10 +462,10 @@
     "sri": 79.2,
     "sri_valid_pairs": 18,
     "total_modifier": 2.16,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 95.3,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-06-30",
@@ -480,10 +480,10 @@
     "sri": 79.2,
     "sri_valid_pairs": 18,
     "total_modifier": 2.45,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 100.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-01",
@@ -498,10 +498,10 @@
     "sri": 78.7,
     "sri_valid_pairs": 18,
     "total_modifier": 0.38,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 100.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-02",
@@ -516,10 +516,10 @@
     "sri": 79.9,
     "sri_valid_pairs": 18,
     "total_modifier": -0.47,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 99.3,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-06",
@@ -534,10 +534,10 @@
     "sri": 79.9,
     "sri_valid_pairs": 14,
     "total_modifier": -4.05,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 92.2,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-07",
@@ -552,10 +552,10 @@
     "sri": 80.4,
     "sri_valid_pairs": 14,
     "total_modifier": -5.28,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 83.6,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-09",
@@ -570,10 +570,10 @@
     "sri": 79.2,
     "sri_valid_pairs": 12,
     "total_modifier": -4.28,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 65.5,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。REM 睡眠比例偏離同齡常模，建議維持規律作息並減少睡前壓力。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
     "date": "2026-07-11",
@@ -588,10 +588,10 @@
     "sri": 69.5,
     "sri_valid_pairs": 12,
     "total_modifier": -0.01,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 88.0,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-12",
@@ -606,10 +606,10 @@
     "sri": 63.4,
     "sri_valid_pairs": 12,
     "total_modifier": -1.0,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 54.6,
     "final_quality": "Poor",
-    "recommendation": "睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-07-17",
@@ -624,10 +624,10 @@
     "sri": 63.6,
     "sri_valid_pairs": 11,
     "total_modifier": 1.31,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 96.9,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-19",
@@ -642,10 +642,10 @@
     "sri": 62.8,
     "sri_valid_pairs": 10,
     "total_modifier": 0.11,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 66.4,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-07-20",
@@ -660,10 +660,10 @@
     "sri": 60.6,
     "sri_valid_pairs": 10,
     "total_modifier": 1.61,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 82.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-21",
@@ -678,10 +678,10 @@
     "sri": 63.6,
     "sri_valid_pairs": 10,
     "total_modifier": -1.32,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 84.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-23",
@@ -696,10 +696,10 @@
     "sri": 63.6,
     "sri_valid_pairs": 10,
     "total_modifier": 0.55,
-    "modifier_note": "活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 90.1,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-07-25",
@@ -714,10 +714,10 @@
     "sri": null,
     "sri_valid_pairs": 8,
     "total_modifier": -2.96,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 73.0,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質尚可，仍有改善空間。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-07-27",
@@ -732,10 +732,10 @@
     "sri": null,
     "sri_valid_pairs": 8,
     "total_modifier": 1.57,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 99.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-02",
@@ -750,10 +750,10 @@
     "sri": null,
     "sri_valid_pairs": 6,
     "total_modifier": -2.97,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 93.1,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-04",
@@ -768,10 +768,10 @@
     "sri": null,
     "sri_valid_pairs": 5,
     "total_modifier": -3.0,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 96.1,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-06",
@@ -786,10 +786,10 @@
     "sri": null,
     "sri_valid_pairs": 4,
     "total_modifier": -2.37,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 53.2,
     "final_quality": "Poor",
-    "recommendation": "睡眠品質低於平均，建議調整作息。睡眠時間偏長，建議維持規律作息，目標 7.0–9.0 小時。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
     "date": "2026-08-07",
@@ -804,10 +804,10 @@
     "sri": null,
     "sri_valid_pairs": 4,
     "total_modifier": -9.15,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 76.9,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-09",
@@ -822,10 +822,10 @@
     "sri": null,
     "sri_valid_pairs": 3,
     "total_modifier": -3.15,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 49.8,
     "final_quality": "Bad",
-    "recommendation": "睡眠品質低於平均，建議調整作息。夜間清醒時間偏長，建議檢查睡眠環境（光線、噪音、溫度），並避免睡前攝取咖啡因。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
     "date": "2026-08-17",
@@ -840,10 +840,10 @@
     "sri": null,
     "sri_valid_pairs": 1,
     "total_modifier": -4.09,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量；壓力修正未套用：這一晚缺少「入睡前清醒時段」的資料（前一晚未配戴，無法界定該時段的起點）",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",
     "final_score": 64.7,
     "final_quality": "Poor",
-    "recommendation": "睡眠品質尚可，仍有改善空間。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-08-18",
@@ -858,10 +858,10 @@
     "sri": null,
     "sri_valid_pairs": 2,
     "total_modifier": -7.41,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 90.5,
     "final_quality": "Good",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-21",
@@ -876,10 +876,10 @@
     "sri": null,
     "sri_valid_pairs": 3,
     "total_modifier": -9.75,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 49.6,
     "final_quality": "Bad",
-    "recommendation": "睡眠品質低於平均，建議調整作息。深層睡眠比例偏離常見範圍，規律運動與固定就寢時間有助於提升深層睡眠。"
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
     "date": "2026-08-22",
@@ -894,10 +894,10 @@
     "sri": null,
     "sri_valid_pairs": 4,
     "total_modifier": -8.45,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 79.2,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
     "date": "2026-08-23",
@@ -912,9 +912,9 @@
     "sri": null,
     "sri_valid_pairs": 5,
     "total_modifier": -5.75,
-    "modifier_note": "作息規律指數（SRI）尚無法計算：需 28 天內至少 10 組相鄰夜資料；活動量修正未啟用：每日步數基準低於 1000 步，研判手錶未於白天持續配戴，此數據無法反映真實活動量",
+    "modifier_note": "Sleep Regularity Index (SRI) not computable: needs at least 10 adjacent-night pairs within 28 days. Activity modifier disabled: daily step baseline is below 1000 steps, indicating the watch was not worn consistently during the day, so this figure cannot reflect real activity.",
     "final_score": 76.5,
     "final_quality": "Normal",
-    "recommendation": "睡眠品質良好，請維持目前的作息。"
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   }
 ]
