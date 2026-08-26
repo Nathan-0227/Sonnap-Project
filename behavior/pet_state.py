@@ -137,22 +137,22 @@ def mood_for_adherence(adherence_minutes):
     是同一個要求。
     """
     if adherence_minutes is None:
-        return None, "no_data: 昨晚沒有行為記錄"
+        return None, "no_data: no behaviour record for last night"
 
     if adherence_minutes <= 0:
         return MOOD_HAPPY, (
-            f"adherence_minutes={adherence_minutes:.0f} ≤ 0（準時或提早）"
+            f"adherence_minutes={adherence_minutes:.0f} ≤ 0 (on time or early)"
         )
 
     if adherence_minutes <= LATE_THRESHOLD_MINUTES:
         return MOOD_BORED, (
-            f"adherence_minutes={adherence_minutes:.0f}，"
-            f"在 0–{LATE_THRESHOLD_MINUTES} 分鐘的容忍範圍內"
+            f"adherence_minutes={adherence_minutes:.0f}, "
+            f"within the 0–{LATE_THRESHOLD_MINUTES} min tolerance window"
         )
 
     return MOOD_TIRED, (
         f"adherence_minutes={adherence_minutes:.0f} > "
-        f"{LATE_THRESHOLD_MINUTES}（判定為熬夜）"
+        f"{LATE_THRESHOLD_MINUTES} (counted as a late night)"
     )
 
 

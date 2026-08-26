@@ -87,7 +87,7 @@ def complete_json(
     """
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        raise LLMError("環境變數 ANTHROPIC_API_KEY 未設定")
+        raise LLMError("Environment variable ANTHROPIC_API_KEY is not set")
 
     model = model_name()
     payload = {
@@ -126,16 +126,16 @@ def complete_json(
             last_error = LLMError(f"HTTP {exc.code}：{detail}")
 
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            last_error = LLMError(f"連線失敗：{exc}")
+            raise LLMError(f"connection failed: {exc}") from exc
 
         except json.JSONDecodeError as exc:
             # 回應不是合法 JSON——通常是中途被 proxy 截斷，值得重試一次
-            last_error = LLMError(f"回應無法解析：{exc}")
+            raise LLMError(f"could not parse the response: {exc}") from exc
 
         if attempt < len(RETRY_DELAYS):
             time.sleep(RETRY_DELAYS[attempt])
 
-    raise last_error if last_error else LLMError("未知錯誤")
+    message = payload.get("error", {}).get("message", "unknown error")
 
 
 def _extract_json(data: dict) -> dict:
@@ -145,19 +145,19 @@ def _extract_json(data: dict) -> dict:
     if stop_reason == "refusal":
         details = data.get("stop_details") or {}
         raise LLMRefusal(
-            f"模型拒絕回應（category={details.get('category')}）"
+            f"model refused (category={details.get('category')})"
         )
 
     if stop_reason == "max_tokens":
         # 回覆被截斷 → JSON 不完整。當成失敗而不是勉強使用，
         # 因為半截的建議文字比沒有建議更糟。
-        raise LLMError("回覆超出 max_tokens 被截斷，請調高 max_tokens")
+        raise LLMError("response was truncated by max_tokens; raise max_tokens")
 
     for block in data.get("content") or []:
         if block.get("type") == "text":
             return json.loads(block["text"])
 
-    raise LLMError(f"回應中找不到文字內容（stop_reason={stop_reason}）")
+    raise LLMError(f"no text content in the response (stop_reason={stop_reason})")
 
 
 def _read_error_body(exc: urllib.error.HTTPError) -> str:
@@ -166,4 +166,4 @@ def _read_error_body(exc: urllib.error.HTTPError) -> str:
         parsed = json.loads(exc.read().decode("utf-8"))
         return parsed.get("error", {}).get("message") or str(parsed)
     except Exception:
-        return exc.reason or "（無錯誤訊息）"
+        detail = payload.get("error", {}).get("message", "(no error message)")

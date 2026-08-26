@@ -69,8 +69,8 @@ def load_nights():
 def _load(path: Path):
     if not path.exists():
         sys.exit(
-            f"✗ 找不到 {path.relative_to(ROOT).as_posix()}。\n"
-            "  請先執行：python garmin/run_pipeline.py"
+            f"\u2717 {path.relative_to(ROOT).as_posix()} not found.\n"
+            "  Run this first: python garmin/run_pipeline.py"
         )
     with path.open(encoding="utf-8") as f:
         return json.load(f)
@@ -85,23 +85,23 @@ def _judge_duration(hours, band):
     if hours is None:
         return None
     if hours < low:
-        return f"睡眠時長 {hours:.1f} 小時，低於建議的 {low:.0f}–{high:.0f} 小時"
+        return f"Sleep duration {hours:.1f} h, below the recommended {low:.0f}-{high:.0f} h"
     if hours > high:
-        return f"睡眠時長 {hours:.1f} 小時，高於建議的 {low:.0f}–{high:.0f} 小時"
-    return f"睡眠時長 {hours:.1f} 小時，落在建議的 {low:.0f}–{high:.0f} 小時內"
+        return f"Sleep duration {hours:.1f} h, above the recommended {low:.0f}-{high:.0f} h"
+    return f"Sleep duration {hours:.1f} h, within the recommended {low:.0f}-{high:.0f} h"
 
 
 def _judge_efficiency(value):
     if value is None:
         return None
     if value >= EFFICIENCY_GOOD:
-        verdict = f"良好（≥{EFFICIENCY_GOOD:.0f}%）"
+        verdict = f"good (>={EFFICIENCY_GOOD:.0f}%)"
     elif value >= EFFICIENCY_FAIR:
-        verdict = f"尚可（{EFFICIENCY_FAIR:.0f}–{EFFICIENCY_GOOD - 0.1:.0f}%）"
+        verdict = f"fair ({EFFICIENCY_FAIR:.0f}-{EFFICIENCY_GOOD - 0.1:.0f}%)"
     else:
-        verdict = f"偏低（<{EFFICIENCY_FAIR:.0f}%）"
+        verdict = f"low (<{EFFICIENCY_FAIR:.0f}%)"
     # 誠實標註：缺「上床時間」，分母是（起床 − 入睡），不是臨床真效率
-    return f"睡眠效率 {value:.1f}%，{verdict}（此為睡眠期間效率，不含入睡潛伏期）"
+    return f"Sleep efficiency {value:.1f}%, {verdict} (sleep-period efficiency; excludes sleep-onset latency)"
 
 
 def _judge_waso(minutes, band):
@@ -109,10 +109,10 @@ def _judge_waso(minutes, band):
         return None
     good, fair = WASO_THRESHOLD.get(band, WASO_THRESHOLD["young_adult"])
     if minutes <= good:
-        return f"夜間清醒 {minutes:.0f} 分鐘，在良好範圍（≤{good:.0f} 分鐘）"
+        return f"Time awake at night {minutes:.0f} min, in the good range (<={good:.0f} min)"
     if minutes <= fair:
-        return f"夜間清醒 {minutes:.0f} 分鐘，尚可（{good:.0f}–{fair:.0f} 分鐘）"
-    return f"夜間清醒 {minutes:.0f} 分鐘，偏長（>{fair:.0f} 分鐘）"
+        return f"Time awake at night {minutes:.0f} min, fair ({good:.0f}-{fair:.0f} min)"
+    return f"Time awake at night {minutes:.0f} min, long (>{fair:.0f} min)"
 
 
 def _judge_deep(ratio):
@@ -120,8 +120,8 @@ def _judge_deep(ratio):
         return None
     pct = ratio * 100
     low, high = DEEP_RANGE
-    inside = "落在" if low <= pct <= high else ("低於" if pct < low else "高於")
-    return f"深層睡眠佔 {pct:.1f}%，{inside} {low:.0f}–{high:.0f}% 參考區間"
+    inside = "within" if low <= pct <= high else ("below" if pct < low else "above")
+    return f"Deep sleep {pct:.1f}%, {inside} the {low:.0f}-{high:.0f}% reference range"
 
 
 def _judge_rem(ratio, minutes, band):
@@ -133,11 +133,11 @@ def _judge_rem(ratio, minutes, band):
     「你昨晚完全沒有做夢」——那是資料明確不支持的宣稱。
     """
     if minutes in (None, 0) or ratio in (None, 0):
-        return "REM：未測得（手錶偵測限制，不代表當晚沒有 REM 睡眠）"
+        return "REM: not measured (a watch detection limit; it does not mean there was no REM sleep)"
     pct = ratio * 100
     low, high = REM_RANGE.get(band, REM_RANGE["young_adult"])
-    inside = "落在" if low <= pct <= high else ("低於" if pct < low else "高於")
-    return f"REM 睡眠佔 {pct:.1f}%，{inside} {low:.0f}–{high:.0f}% 參考區間"
+    inside = "within" if low <= pct <= high else ("below" if pct < low else "above")
+    return f"REM sleep {pct:.1f}%, {inside} the {low:.0f}-{high:.0f}% reference range"
 
 
 def _tonight_facts(night):
@@ -152,7 +152,7 @@ def _tonight_facts(night):
     score = night.get("final_score")
     quality = night.get("final_quality")
     if score is not None:
-        lines.append(f"整體評級：{quality}（{score} 分）")
+        lines.append(f"Overall rating: {quality} ({score} points)")
     return [line for line in lines if line]
 
 
@@ -171,11 +171,11 @@ def _trend_line(label, recent, baseline, unit, digits=1):
     delta = recent - baseline
     if abs(delta) < 0.05:
         return None
-    direction = "上升" if delta > 0 else "下降"
+    direction = "up" if delta > 0 else "down"
     return (
-        f"{label}：近 {RECENT_WINDOW} 晚中位數 {recent:.{digits}f}{unit}，"
-        f"先前 {BASELINE_WINDOW} 晚為 {baseline:.{digits}f}{unit}"
-        f"（{direction} {abs(delta):.{digits}f}）"
+        f"{label}: median over the last {RECENT_WINDOW} nights {recent:.{digits}f}{unit}, "
+        f"versus {baseline:.{digits}f}{unit} over the {BASELINE_WINDOW} nights before that "
+        f"({direction} {abs(delta):.{digits}f})"
     )
 
 
@@ -186,33 +186,33 @@ def _trend_facts(nights, target_date):
     baseline = history[-(RECENT_WINDOW + BASELINE_WINDOW):-RECENT_WINDOW]
 
     if len(recent) < MIN_SAMPLES or len(baseline) < MIN_SAMPLES:
-        return ["（累積夜數不足，尚無法比較近期與先前的差異）"]
+        return ["(Not enough nights yet to compare recent values against earlier ones.)"]
 
     lines = [
         _trend_line(
-            "睡眠期間平均心率",
+            "Sleep-period average heart rate",
             _median_of(recent, "avg_heart_rate"),
             _median_of(baseline, "avg_heart_rate"),
             " bpm",
         ),
         _trend_line(
-            "靜止心率",
+            "Resting heart rate",
             _median_of(recent, "resting_heart_rate"),
             _median_of(baseline, "resting_heart_rate"),
             " bpm",
             digits=0,
         ),
         _trend_line(
-            "壓力分數",
+            "Stress score",
             _median_of(recent, "avg_stress_score"),
             _median_of(baseline, "avg_stress_score"),
-            " 分",
+            " points",
         ),
         _trend_line(
-            "睡眠分數",
+            "Sleep score",
             _median_of(recent, "final_score"),
             _median_of(baseline, "final_score"),
-            " 分",
+            " points",
         ),
     ]
     lines = [line for line in lines if line]
@@ -222,7 +222,7 @@ def _trend_facts(nights, target_date):
     if wear:
         lines.append(wear)
 
-    return lines or ["（近期各項數值與先前相比沒有明顯變化）"]
+    return lines or ["(No clear change in recent values compared with earlier ones.)"]
 
 
 def _wear_rate(recent, target_date):
@@ -236,8 +236,8 @@ def _wear_rate(recent, target_date):
     if rate >= 95:
         return None  # 天天有戴，不用特別講
     return (
-        f"配戴情形：最近 {span_days} 天裡有 {len(recent)} 晚記錄到睡眠"
-        f"（約 {rate:.0f}%）"
+        f"Wear: sleep was recorded on {len(recent)} of the last {span_days} nights "
+        f"(about {rate:.0f}%)"
     )
 
 
@@ -272,19 +272,19 @@ def build_profile(target_date, nights):
 def format_facts(profile):
     """把事實清單排版成要放進 prompt 的文字區塊。"""
     parts = [
-        f"【日期】{profile['date']}",
+        f"DATE: {profile['date']}",
         "",
-        "【當晚判讀】",
+        "TONIGHT:",
         *(f"- {line}" for line in profile["tonight"]),
         "",
-        "【近期趨勢】（規則式評分看不到這一層，因為它一次只看一晚）",
+        "RECENT TRENDS (the rule-based score cannot see this layer; it looks at one night at a time):",
         *(f"- {line}" for line in profile["trends"]),
         "",
-        "【規則式建議原文】（事實來源，你的建議不得與它矛盾）",
-        profile["recommendation"] or "（無）",
+        "RULE-BASED RECOMMENDATION, VERBATIM (this is the source of truth; your advice must not contradict it):",
+        profile["recommendation"] or "(none)",
     ]
     if profile["modifier_note"]:
-        parts += ["", "【資料狀態備註】", profile["modifier_note"]]
+        parts += ["", "DATA STATUS NOTE:", profile["modifier_note"]]
     if "tapo" not in profile["data_sources"]:
-        parts += ["", f"【攝影機資料】{profile['tapo_note']}"]
+        parts += ["", f"CAMERA DATA: {profile['tapo_note']}"]
     return "\n".join(parts)

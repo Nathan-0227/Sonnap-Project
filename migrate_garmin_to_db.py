@@ -86,8 +86,8 @@ def load(name):
     path = GARMIN_DATA / name
     if not path.exists():
         sys.exit(
-            f"✗ 找不到 {path}\n"
-            f"  請先執行：python garmin/run_pipeline.py"
+            f"\u2717 {path} not found\n"
+            f"  Run this first: python garmin/run_pipeline.py"
         )
     with path.open(encoding="utf-8") as f:
         return json.load(f)
@@ -116,10 +116,10 @@ def build_rows():
 
     if not (len(final) == len(base) == len(feats)):
         sys.exit(
-            f"✗ 三個檔案的夜數不一致："
-            f"quality_final={len(final)}、quality={len(base)}、features={len(feats)}。\n"
-            f"  很可能是只重跑了 pipeline 的一部分。\n"
-            f"  請完整執行：python garmin/run_pipeline.py"
+            f"\u2717 The three files disagree on night counts: "
+            f"quality_final={len(final)}, quality={len(base)}, features={len(feats)}.\n"
+            f"  Most likely only part of the pipeline was re-run.\n"
+            f"  Run the whole thing: python garmin/run_pipeline.py"
         )
 
     rows = []
@@ -128,7 +128,7 @@ def build_rows():
         f = by_feat.get(date)
         b = by_base.get(date)
         if f is None or b is None:
-            sys.exit(f"✗ {date} 在三個檔案裡對不齊，請重跑 pipeline。")
+            sys.exit(f"\u2717 {date} does not line up across the three files; re-run the pipeline.")
 
         rows.append((date, {
             "device_brand": RESEARCHER_DEVICE,
@@ -180,7 +180,7 @@ def ensure_user(db_path=None):
         return RESEARCHER_USER_ID, False
 
     db.create_user(
-        display_name="研究者（本人）",
+        display_name="Researcher (self)",
         target_bedtime="23:30",
         age_band=RESEARCHER_AGE_BAND,
         # L2 = 研究者本人：全部資料 + Tier3 + SRI + 攝影機
@@ -203,7 +203,7 @@ def verify(user_id, db_path=None):
     """
     csv_path = GARMIN_DATA / "garmin_sleep_quality_final.csv"
     if not csv_path.exists():
-        return False, f"找不到比對用的 {csv_path.name}"
+        return False, f"Comparison file {csv_path.name} not found"
 
     with csv_path.open(encoding="utf-8-sig", newline="") as f:
         expected = {r["date"]: r for r in csv.DictReader(f)}
@@ -214,25 +214,25 @@ def verify(user_id, db_path=None):
     problems = []
     if len(stored) != len(expected):
         problems.append(
-            f"列數不符：資料庫 {len(stored)} 列、CSV {len(expected)} 列"
+            f"Row count mismatch: database has {len(stored)}, CSV has {len(expected)}"
         )
 
     for date, exp in expected.items():
         got = stored.get(date)
         if got is None:
-            problems.append(f"{date} 不在資料庫裡")
+            problems.append(f"{date} is not in the database")
             continue
         # CSV 全是字串，轉成 float 再比。用 != 直接比字串會因為
         # "85.0" vs "85" 這種格式差異而誤報。
         exp_score = float(exp["final_score"])
         if abs((got["final_score"] or -1) - exp_score) > 1e-9:
             problems.append(
-                f"{date} final_score 不符：資料庫 {got['final_score']}、"
+                f"{date} final_score mismatch: database {got['final_score']}, "
                 f"CSV {exp_score}"
             )
         if got["final_quality"] != exp["final_quality"]:
             problems.append(
-                f"{date} final_quality 不符：資料庫 {got['final_quality']}、"
+                f"{date} final_quality mismatch: database {got['final_quality']}, "
                 f"CSV {exp['final_quality']}"
             )
 
@@ -318,12 +318,12 @@ def simulate_challenges(feats):
 
     starts = [f["sleep_start_time"] for f in feats if f.get("sleep_start_time")]
     if not starts:
-        print("features.json 裡沒有 sleep_start_time，無法模擬。")
+        print("features.json has no sleep_start_time; cannot simulate.")
         return
 
     ref = _simulate_rows(starts, "23:30")
-    print(f"\n模擬樣本：{len(ref)} 晚（{ref[0]['date']} ~ {ref[-1]['date']}）")
-    print("⚠️ 用「睡著時刻」代替「放下手機時刻」，是模擬不是量測。\n")
+    print(f"\nSimulation sample: {len(ref)} nights ({ref[0]['date']} ~ {ref[-1]['date']})")
+    print("\u26a0 Uses sleep-onset time as a stand-in for phone-down time: simulated, not measured.\n")
 
     by_kind = {c["kind"]: c for c in db.DEFAULT_CHALLENGES}
 
@@ -331,9 +331,9 @@ def simulate_challenges(feats):
     time_c = by_kind.get("time")
     streak_c = by_kind.get("streak")
 
-    print("【1】準時 / 連續　—— 難度**完全由使用者自己設的目標**決定")
-    print(f"{'目標':<9}{'準時率':>8}{'連續(原始)':>12}{'連續(去斷點)':>14}"
-          f"   ← 去斷點才是手機資料的樣子")
+    print("[1] On time / streak - difficulty is set entirely by the user's own target")
+    print(f"{'Target':<9}{'On-time':>10}{'Streak(raw)':>14}{'Streak(no gaps)':>18}"
+          f"   <- the no-gaps column is what phone data looks like")
     print("-" * 66)
     for target in SIM_TARGETS:
         raw = _simulate_rows(starts, target)
@@ -347,21 +347,21 @@ def simulate_challenges(feats):
               f"{(d_raw / e_raw if e_raw else 0):>11.0%}"
               f"{(d_flat / e_flat if e_flat else 0):>13.0%}")
 
-    print(f"\n  該使用者平均入睡 02:34。目標設在自己作息附近（02:00–03:00）時，"
-          f"\n  「{streak_c['title'] if streak_c else 'streak'}」的達成率是合理的梯度；"
-          f"設 23:30 則必然接近 0——"
-          f"\n  那不是挑戰壞了，是目標對這個人不切實際。")
-    print(f"\n  ⚠️ 產品意涵：新使用者若照預設值 23:30 開始用而實際兩三點睡，"
-          f"\n     **第一天就會看到 0% 然後放棄**。註冊流程要問「你現在通常幾點睡」，"
-          f"\n     據此建議目標，不要給所有人同一個預設值。")
+    print(f"\n  This user falls asleep at 02:34 on average. With a target near their own "
+          f"\n  rhythm (02:00-03:00) the streak challenge forms a sensible gradient; "
+          f"a 23:30 target is necessarily close to 0 - "
+          f"\n  that is not the challenge being broken, it is the target being unrealistic for this person.")
+    print(f"\n  \u26a0 Product implication: a new user who keeps the 23:30 default while "
+          f"\n     actually sleeping at 2-3am WILL SEE 0% ON DAY ONE AND QUIT. Registration "
+          f"\n     must ask when they usually sleep and suggest a target from that.")
 
     # ── consistency：與目標時間完全無關，只看就寢時間的離散度 ──
     cons_c = by_kind.get("consistency")
     if cons_c:
         rows = ref
         done, evaluable = _rate(cons_c, rows)
-        print(f"\n【2】{cons_c['title']}　—— 與目標時間**無關**，只看離散度")
-        print(f"  門檻 ±{cons_c['target_value']:.0f} 分鐘："
+        print(f"\n[2] {cons_c['title']} - independent of the target time; only spread matters")
+        print(f"  Threshold \u00b1{cons_c['target_value']:.0f} min: "
               f"{done}/{evaluable} = {done / evaluable if evaluable else 0:.0%}")
 
         # 各門檻的敏感度，讓看的人自己判斷這個門檻訂得對不對
@@ -375,27 +375,27 @@ def simulate_challenges(feats):
         if spreads:
             spreads.sort()
             mid = spreads[len(spreads) // 2]
-            print(f"  離散度中位數 {mid:.0f} 分鐘"
-                  f"（最小 {spreads[0]:.0f}、最大 {spreads[-1]:.0f}）")
-            print("  各門檻達成率：", end="")
+            print(f"  Median spread {mid:.0f} min"
+                  f" (min {spreads[0]:.0f}, max {spreads[-1]:.0f})")
+            print("  Attainment by threshold: ", end="")
             for th in (30, 45, 60, 90, 120):
                 n = sum(1 for s in spreads if s <= th)
                 print(f"  ±{th}→{n / len(spreads):.0%}", end="")
             print()
 
-    print(f"\n⚠️ 校準樣本 n=1，而且這個人特別不規律（就寢標準差 84 分鐘）。"
-          f"\n   這些門檻是暫定值，D2 收到真實資料之後要重跑一次。")
+    print(f"\n\u26a0 Calibration sample is n=1, and this person is unusually irregular "
+          f"(bedtime SD 84 min).\n   These thresholds are provisional; re-run once D2 supplies real data.")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="把研究者的 Garmin 資料灌進 wearable_nightly。"
+        description="Load the researcher's Garmin data into wearable_nightly."
     )
     parser.add_argument("--verify", action="store_true",
-                        help="只驗證資料庫內容與 CSV 相符，不寫入")
+                        help="Only verify that the database matches the CSV; do not write.")
     parser.add_argument("--simulate-challenges", action="store_true",
-                        help="用 46 晚模擬挑戰難度（不寫入資料庫）")
-    parser.add_argument("--db", default=None, help="指定資料庫路徑（測試用）")
+                        help="Simulate challenge difficulty over the 46 nights (no database writes).")
+    parser.add_argument("--db", default=None, help="Database path (for tests).")
     args = parser.parse_args()
 
     rows, feats = build_rows()
@@ -408,30 +408,30 @@ def main():
     # 跟預期不同的話代表 pipeline 是用別的年齡跑的。
     bands = {f.get("age_band") for f in feats}
     if bands != {RESEARCHER_AGE_BAND}:
-        print(f"⚠️ features.json 的 age_band 是 {bands}，"
-              f"與預期的 {RESEARCHER_AGE_BAND!r} 不同。"
-              f"分數是用前者算的，使用者資料將照實記錄。")
+        print(f"\u26a0 features.json age_band is {bands}, "
+              f"which differs from the expected {RESEARCHER_AGE_BAND!r}. "
+              f"Scores were computed with the former; the user record will reflect it as-is.")
 
     if not args.verify:
         db.init_db(args.db)
         user_id, created = ensure_user(args.db)
-        print(f"{'建立' if created else '沿用既有'}使用者 {user_id}")
+        print(f"{'Created' if created else 'Reusing existing'} user {user_id}")
 
         for date, metrics in rows:
             db.upsert_wearable_nightly(
                 user_id, date, source="garmin", metrics=metrics,
                 db_path=args.db,
             )
-        print(f"已寫入 {len(rows)} 晚到 wearable_nightly")
+        print(f"Wrote {len(rows)} nights into wearable_nightly")
     else:
         user_id = RESEARCHER_USER_ID
 
     ok, problems = verify(user_id, args.db)
     if ok:
-        print(f"✓ 驗證通過：{len(rows)} 晚的 final_score / final_quality "
-              f"與 garmin_sleep_quality_final.csv 逐列相符")
+        print(f"\u2713 Verified: final_score / final_quality for {len(rows)} nights "
+              f"match garmin_sleep_quality_final.csv row for row")
     else:
-        print("✗ 驗證失敗：")
+        print("\u2717 Verification failed:")
         for p in (problems if isinstance(problems, list) else [problems]):
             print(f"    {p}")
         sys.exit(1)

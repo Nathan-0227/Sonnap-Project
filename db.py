@@ -392,7 +392,7 @@ def apply_column_migrations(conn, verbose=False):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
         added += 1
         if verbose:
-            print(f"  + 新增欄位 {table}.{column} ({coltype})")
+            print(f"  + added column {table}.{column} ({coltype})")
     return added
 
 
@@ -534,7 +534,7 @@ def update_user(user_id, db_path=None, **fields):
     #    這正是本專案最在意的失敗模式（安靜地少做一件事、沒有錯誤訊息）。
     unknown = set(fields) - allowed
     if unknown:
-        raise ValueError(f"不允許更新的欄位：{sorted(unknown)}")
+        raise ValueError(f"Fields not allowed for update: {sorted(unknown)}")
 
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
@@ -678,7 +678,7 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
 
     unknown = set(metrics) - set(columns)
     if unknown:
-        raise ValueError(f"wearable_nightly 沒有這些欄位：{sorted(unknown)}")
+        raise ValueError(f"wearable_nightly has no such columns: {sorted(unknown)}")
 
     # 動態組 SQL。⚠️ 這裡用 f-string 拼字串是安全的，因為拼進去的
     #    **只有 columns 這個寫死在程式碼裡的清單**，沒有任何外部輸入。
@@ -753,14 +753,14 @@ DEFAULT_CHALLENGES = [
     {
         "challenge_id": "on_time_tonight",
         "kind": "time",
-        "title": "準時放下手機",
-        "description": "今晚在目標就寢時間前放下手機。",
+        "title": "Lights out on time",
+        "description": "Put your phone down before your target bedtime tonight.",
         "target_value": 0.0,        # adherence_minutes <= 0
         "window_days": 1,
         "literature_ref": (
             "Kroese et al. (2014) Bedtime Procrastination, "
-            "Front Psychol 5:611 —— 睡眠拖延的定義即「未能在預定時間上床」，"
-            "所以標的直接對應該定義。"
+            "Front Psychol 5:611 — bedtime procrastination is defined as failing to "
+            "go to bed at the intended time, so this target maps directly onto that definition."
         ),
         # ── 實測（46 晚模擬）──────────────────────────────────────
         # 這一項的難度**完全由使用者自己設的目標決定**，不是挑戰設計的問題：
@@ -778,13 +778,13 @@ DEFAULT_CHALLENGES = [
     {
         "challenge_id": "streak_nights",
         "kind": "streak",
-        "title": "連續 3 晚達成",
-        "description": "連續 3 個晚上都在目標就寢時間前放下手機。",
+        "title": "Three nights in a row",
+        "description": "Put your phone down before your target bedtime three nights running.",
         "target_value": 3.0,
         "window_days": 14,
         "literature_ref": (
             "Johnson et al. (2016) Gamification for Health and Wellbeing —— "
-            "進度追蹤與連續達成可提升健康行為的參與度。"
+            "progress tracking and streaks increase engagement with health behaviours."
         ),
         # ── 實測：原本是「連續 5 晚」，改成 3 晚 ────────────────────
         # 把 46 晚重排成連續日曆日（去掉手錶配戴造成的斷點，因為 Tier A
@@ -807,14 +807,14 @@ DEFAULT_CHALLENGES = [
     {
         "challenge_id": "bedtime_consistency_7d",
         "kind": "consistency",
-        "title": "作息收斂",
-        "description": "最近 7 晚的就寢時間都落在自己平均值的 ±60 分鐘內。",
+        "title": "Steady bedtime",
+        "description": "Keep the last 7 bedtimes within ±60 minutes of your own average.",
         "target_value": 60.0,       # 允許的最大離散度（分鐘）
         "window_days": 7,
         "literature_ref": (
-            "Windred et al. (2024) —— 作息規律性預測死亡率優於睡眠時長。"
-            "⚠️ 這裡量的是**個人內**的就寢時間收斂度，不是 SRI，"
-            "也不拿去跟任何外部常模比較（理由見 PROJECT_STATUS.md 6.5）。"
+            "Windred et al. (2024) — sleep regularity predicts mortality better than sleep duration. "
+            "⚠ This measures WITHIN-PERSON bedtime consistency, not SRI, "
+            "and it is never compared against any external norm (see PROJECT_STATUS.md 6.5)."
         ),
         # ── 實測：原本是 ±30 分鐘，改成 ±60 ───────────────────────
         # 36 個可評估的 7 天窗格，離散度（最大偏離自己平均的分鐘數）分布：
@@ -991,32 +991,32 @@ def print_stats(db_path=None):
     """
     path = Path(db_path) if db_path else DB_PATH
     if not path.exists():
-        print(f"資料庫還不存在：{path}")
-        print("請先執行：python db.py --init")
+        print(f"Database does not exist yet: {path}")
+        print("Run this first: python db.py --init")
         return
 
     tables = ["users", "nightly_behavior", "app_usage_daily", "block_events",
               "wearable_nightly", "challenges", "challenge_progress"]
     conn = connect(db_path)
     try:
-        print(f"資料庫：{path}")
+        print(f"Database: {path}")
         for t in tables:
             try:
                 n = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             except sqlite3.OperationalError:
-                print(f"  {t:<20} ⚠️ 表不存在，請執行 python db.py --init")
+                print(f"  {t:<20} ⚠ table missing — run: python db.py --init")
                 continue
-            print(f"  {t:<20} {n} 列")
+            print(f"  {t:<20} {n} row(s)")
     finally:
         conn.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sonnap 持久化層的維護指令。")
-    parser.add_argument("--init", action="store_true", help="建表（可重複執行）")
-    parser.add_argument("--seed", action="store_true", help="灌入挑戰定義")
-    parser.add_argument("--stats", action="store_true", help="顯示各表列數")
-    parser.add_argument("--db", default=None, help="指定資料庫路徑（測試用）")
+    parser = argparse.ArgumentParser(description="Maintenance commands for the Sonnap persistence layer.")
+    parser.add_argument("--init", action="store_true", help="Create tables (idempotent).")
+    parser.add_argument("--seed", action="store_true", help="Seed the challenge definitions.")
+    parser.add_argument("--stats", action="store_true", help="Show row counts per table.")
+    parser.add_argument("--db", default=None, help="Database path (for tests).")
     args = parser.parse_args()
 
     if not (args.init or args.seed or args.stats):
@@ -1027,13 +1027,13 @@ def main():
         # verbose=True 讓「補了哪些欄位」顯示出來。遷移悄悄跑掉的話，
         # 之後查問題的人無從得知資料庫結構在什麼時候變過。
         added = init_db(args.db, verbose=True)
-        print(f"建表完成：{Path(args.db) if args.db else DB_PATH}")
+        print(f"Tables created: {Path(args.db) if args.db else DB_PATH}")
         if added:
-            print(f"（同時補上 {added} 個後來新增的欄位）")
+            print(f"  (also added {added} column(s) introduced later)")
 
     if args.seed:
         seed_challenges(args.db)
-        print(f"挑戰定義已灌入（{len(DEFAULT_CHALLENGES)} 項）")
+        print(f"Challenge definitions seeded ({len(DEFAULT_CHALLENGES)} items).")
 
     if args.stats:
         print_stats(args.db)
