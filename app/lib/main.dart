@@ -65,11 +65,13 @@ class _MainPageState extends State<MainPage> {
           selectedItemColor: const Color(0xFFFFD96A),
           unselectedItemColor: Colors.white70,
           type: BottomNavigationBarType.fixed,
+
           onTap: (index) {
             setState(() {
               currentIndex = index;
             });
           },
+
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_rounded),
