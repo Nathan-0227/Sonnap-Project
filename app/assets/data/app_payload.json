@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-26T18:37:29+08:00",
+  "generated_at": "2026-08-26T18:57:48+08:00",
   "session_id": "20260823_001",
   "status": {
     "pet_mood": "anxious",
@@ -29,13 +29,13 @@
     "resting_heart_rate": 69
   },
   "ai_content": {
-    "advice": "Sleep quality was good. Keep your current routine. ",
-    "dream_summary": null,
-    "trend_note": null,
-    "is_ai_generated": false,
-    "content_type": "advice",
-    "source": "rule_based",
-    "model": null
+    "advice": "Sleep quality was good tonight, but you slept only 6.4 hours. Keep your current routine, and try adding just a little more time in bed tonight.",
+    "dream_summary": "I dreamt I was lying on moss thick as a mattress, all four paws sinking in, smelling rain that had just stopped. The air was cool and heavy with green. I felt myself settle deeper with every breath, too comfortable to twitch an ear. A few pages in the middle of the diary are blank - I did not see that part.",
+    "trend_note": "Your heart rate, resting heart rate, and stress score have all been higher over the last seven nights compared to the month before, while your sleep score has dropped.",
+    "is_ai_generated": true,
+    "content_type": "fiction+advice",
+    "source": "llm",
+    "model": "claude-sonnet-5"
   },
   "scoring": {
     "final_score": 76.5,

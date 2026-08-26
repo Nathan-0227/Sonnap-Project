@@ -72,13 +72,20 @@ SCHEMA_VERSION = 1
 #   1. 調色盤每類擴充成 3–6 組，並改用身體感受寫（不用形容詞）
 #   2. 新增 recent_motifs()：把最近 7 晚用過的意象寫進 prompt 要求避開
 #   3. advice / trend_note 的數值一律用阿拉伯數字（原本 4 晚寫成「十點三小時」）
-PROMPT_VERSION = "v3"
+# v4（2026-08-26）：**輸出語言由正體中文改為英文**。這不只是翻譯，
+#   驗證層有三個機制必須跟著換對象（換掉任何一個都會安靜失效）：
+#     1. SIMPLIFIED_CHARS（簡繁檢查）→ CJK_LEAK_PATTERN（偵測任何中日文字）
+#     2. CHINESE_NUMERAL_PATTERN     → SPELLED_NUMERAL_PATTERN（沿用「只擋小數」的收窄判準）
+#     3. MOTIF_FAMILIES 的關鍵字      → 照英文調色盤重挑，且比對前要 .lower()
+#   另外 LENGTH_LIMITS 三組上下限乘以 3（英文表達同樣內容約 2.7–3.3 倍字元）。
+#   升到 v4 會讓既有 46 晚全部標記為 stale，用 --refresh-stale 重生。
+PROMPT_VERSION = "v4"
 DEFAULT_LIMIT = 10
 MAX_CONSECUTIVE_FAILURES = 3
 
 DISCLAIMER = (
-    "夢境日記為 AI 依睡眠數據想像的創作，非使用者實際夢境的紀錄；"
-    "建議內容不構成醫療診斷。"
+    "The dream diary is an AI creation imagined from sleep data, not a record "
+    "of the user's actual dreams; the advice is not a medical diagnosis."
 )
 
 # structured outputs 的 schema。物件必須有 additionalProperties: false 與 required。
@@ -96,9 +103,16 @@ OUTPUT_SCHEMA = {
 # 禁詞：針對「本來就睡不好的學生」這個目標族群，避免醫療宣稱與罪惡感。
 # Home_Page_Design.md 引用的 Consolvo (2008) 是寵物情感連結的依據，
 # 而會讓人有罪惡感的寵物正是這類 App 的已知失敗模式。
+# ⚠️ 2026-08-26 語言改英文之後，這份清單是重寫的不是翻譯的。
+#    中文版靠的是「詞就是詞」，英文要考慮詞形變化與子字串誤傷，
+#    所以下面用「完整單詞」比對（見 validate 裡的 WORD_PATTERN），
+#    而不是 `word in text`——否則 "ill" 會命中 "still"、"willing"。
 BANNED_WORDS = [
-    "診斷", "治療", "失眠症", "憂鬱症", "焦慮症", "藥物", "服藥",
-    "疾病", "症候群", "就醫", "病人", "患者",
+    "diagnose", "diagnosis", "diagnostic", "treat", "treatment", "cure",
+    "insomnia", "depression", "depressive", "anxiety disorder", "apnea",
+    "medication", "medicine", "drug", "drugs", "pill", "pills",
+    "disease", "disorder", "syndrome", "patient", "patients",
+    "prescribe", "prescription", "therapy", "clinical diagnosis",
 ]
 
 # 「這一段沒有記錄」類意象。只有 REM 真的沒測到的夜晚可以用（見 PALETTE_REM_UNMEASURED）。
@@ -113,37 +127,50 @@ BANNED_WORDS = [
 
 # 無條件禁止：這些詞只可能是在講「這段沒有記錄」。
 MISSING_RECORD_MOTIFS = [
-    "空白", "留白", "沒有記錄", "沒被記下", "缺了一段", "沒看見",
+    "blank page", "blank pages", "empty page", "empty pages",
+    "missing page", "missing pages", "torn out", "nothing was written",
+    "no record", "not recorded", "wasn't recorded", "was not recorded",
 ]
 
 # 這些動詞本身無害，只有跟「指出某一段」的詞連用時，才構成「那段沒有資料」的宣稱。
-VAGUE_VERBS = ["沒看清", "沒記住", "想不起來", "沒印象"]
-SECTION_WORDS = ["那一段", "那段", "中間", "有幾頁", "那陣子"]
+#
+# ⚠️ 英文版比中文版更需要這個兩段式判準。中文的「沒看清」只是模糊，
+#    英文的 "I didn't see" 更容易單獨出現在正常敘述裡
+#    （"I didn't see the end of it" 是在講夢很淡，不是在講沒有資料）。
+VAGUE_VERBS = [
+    "didn't see", "did not see", "never saw", "can't remember",
+    "cannot remember", "don't remember", "do not remember",
+]
+SECTION_WORDS = [
+    "that part", "that stretch", "the middle", "a few pages",
+    "those hours", "that hour",
+]
 
-# 簡體字洩漏偵測。輸出固定是 zh-TW（見下方 entries 的 "lang"），
-# 但模型偶爾會混進簡體字形——2026-08-12 用 claude-sonnet-5 生成 2026-08-09
-# 就寫出「門边」（門是正體、边是簡體），同一個詞裡兩種字形。
+# 語言洩漏偵測。
 #
-# 只列「簡體獨有、正體中文不可能出現」的字，所以不會誤判。
-# 不做全表轉換：那需要第三方套件（opencc），違反專案「非必要不加依賴」的規範，
-# 而且我們要的是**擋下來重試**，不是偷偷替換成正體——偷偷改會蓋掉問題。
+# ⚠️ 2026-08-26 這一條**換了對象但沒有換目的**。
+#    輸出原本固定 zh-TW，這裡擋的是「混進簡體字形」（2026-08-12 真的發生過：
+#    claude-sonnet-5 寫出「門边」，同一個詞裡兩種字形）。
+#    語言改成英文之後，簡繁檢查完全沒有意義，但**同一類失敗仍然存在**：
+#    模型可能漂回中文，或在英文句子裡夾一個中文詞。
+#    所以改成偵測任何 CJK 字元——這是同一個機制對準新語言的版本，
+#    不是把檢查拿掉。
 #
-# ⚠️ 刻意**不含** 于／后／里 這類「簡體與正體同形、正體中文本來就會用」的字
-#    （皇后、公里、于姓）。誤判的代價不小：驗證連兩次不過就整晚退回規則式文字。
-SIMPLIFIED_CHARS = set(
-    "边门发关国爱这来时会说个们对为体现实点从样种儿头长东车马鸟"
-    "书买卖问间闻开无与业丝乐产亲见觉论证识语读话该谁请谢贝页风飞"
-    "汉难鸡鸭鱼鲜龙齿声学习写农军变复够条丽举义乡乌"
+# 涵蓋範圍：CJK 統一漢字、平假名/片假名、CJK 標點與全形字元。
+# 保留「擋下來重試」而不是自動清掉的原則：偷偷改會蓋掉問題。
+CJK_LEAK_PATTERN = re.compile(
+    r"[　-〿぀-ヿ㐀-䶿一-鿿豈-﫿＀-￯]"
 )
 
 DIGIT_PATTERN = re.compile(r"[0-9０-９]")
 NUMBER_PATTERN = re.compile(r"\d+(?:\.\d+)?")
 
-# 國字數字偵測（2026-08-12 新增）。
+# 拼字數值偵測（2026-08-12 新增；2026-08-26 改成英文版）。
 #
 # 問題：46 晚裡有 4 晚寫成「睡了十點三小時」「效率九十八點四趴」，
-# 其餘 42 晚用阿拉伯數字。同一個 App 裡兩種寫法，畫面上看起來很怪，
-# 而且「趴」太口語。
+# 其餘 42 晚用阿拉伯數字。同一個 App 裡兩種寫法，畫面上看起來很怪。
+# 英文的同型失敗是 "you slept ten point three hours"、
+# "efficiency was ninety-eight point four percent"。
 #
 # ⚠️ 這個規則只套用在 advice 與 trend_note，**不套用在 dream_summary**。
 #    夢境本來就完全禁止出現數字（DIGIT_PATTERN 那條），
@@ -160,21 +187,27 @@ NUMBER_PATTERN = re.compile(r"\d+(?:\.\d+)?")
 # 想清楚**真正的缺陷是什麼**：實際出問題的 4 晚全都是**小數**
 #（「十點三小時」「九十八點四趴」）。整數的國字量詞從來不是問題。
 #
-# 所以只擋兩種確定是錯的寫法：
-#   (1) 國字小數 + 單位  →「十點三小時」。中文不會用這種寫法講別的東西
-#   (2) 任何國字 + 「趴」 →「趴」是 % 的口語說法，寫在 App 裡一律不妥
+# ⚠️ 英文版**沿用同一個收窄判準**：只擋拼字小數（"... point ..."），
+#    不擋拼字整數。理由完全一樣——"give it one more try"、
+#    "half an hour earlier"、"a couple of nights" 都是自然英文，
+#    不是在報數值。英文其實更容易誤判（number words 也是常用字），
+#    所以更要守住「必須有 point」這個條件。
 #
 # 正規表示式拆開看：
-#   [一二三四五六七八九十百]+   → 這些國字，連續一個以上
-#   點                         → 必須有「點」（小數點）← 這是關鍵的收窄
-#   [一二三四五六七八九]        → 小數點後一位
-#   \s*                        → 允許中間有空白
-#   (?:小時|分鐘|分|趴|%|次)    → 接單位。(?: ) 是「群組但不擷取」
-#   |                          → 或者（第二種情況）
-#   ...+\s*趴                  → 國字接「趴」，不需要小數點
-CHINESE_NUMERAL_PATTERN = re.compile(
-    r"[一二三四五六七八九十百]+點[一二三四五六七八九]\s*(?:小時|分鐘|分|趴|%|次)"
-    r"|[一二三四五六七八九十百]+\s*趴"
+#   (?:...)                → 個位／十位的英文數字詞
+#   [\s-]*                 → 允許 "twenty-one" 的連字號或空白
+#   \s+point\s+            → **必須有 point**（小數點）← 關鍵的收窄
+#   (?:one|two|...|nine)   → 小數點後一位
+#   \s*(?:hour|minute|...) → 接單位
+SPELLED_NUMERAL_PATTERN = re.compile(
+    r"\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|"
+    r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)"
+    r"(?:[\s-]+(?:one|two|three|four|five|six|seven|eight|nine))?"
+    r"\s+point\s+"
+    r"(?:one|two|three|four|five|six|seven|eight|nine|zero)"
+    r"(?:\s*(?:hours?|hrs?|minutes?|mins?|percent|%|times?|nights?))?",
+    re.IGNORECASE,
 )
 
 
@@ -203,27 +236,39 @@ CHINESE_NUMERAL_PATTERN = re.compile(
 #
 # 為什麼關鍵字要少而精：寧可漏判也不要誤判。誤判會讓模型被迫避開它其實
 # 沒用過的意象，反而限縮它的選擇——那等於用另一種方式製造重複。
+# ⚠️ 2026-08-26：關鍵字全部換成英文，而且是**照著新的英文調色盤重挑的**，
+#    不是把中文詞逐個翻譯。原因：偵測靠的是「模型實際會寫出來的字」，
+#    而模型寫的是調色盤裡的英文措辭。若照翻中文（"seabed"、"moss"…剛好還對得上，
+#    但 "闔上" 翻成 "closed" 就會誤判到 "I closed my eyes"），去重會失準。
+#
+#    比對一律轉小寫後做（見 recent_motifs），所以這裡全用小寫。
+#
+#    ⚠️ 家族與調色盤選項仍然**不是一對一**——深睡類 6 個選項只對應
+#       2–3 個家族。這是 2026-08-15 就記下的未解問題（「棉被與雪」佔了 37%），
+#       語言改了但這個結構問題原封不動。下次要修就是把下面拆到與選項一對一。
 MOTIF_FAMILIES = {
-    "海床沉降": ["海床", "苔蘚", "鯨魚", "湖底"],
-    "棉被與雪": ["棉被", "雪"],
-    "圖書館": ["圖書館", "書架"],
-    "換季天空": ["換季"],
-    "會變的門或市集": ["不一樣的房間", "市集"],
-    "長新枝的樹": ["新枝"],
-    "畫冊": ["畫冊"],
-    "霧與煙": ["霧", "白氣", "煙"],
-    "門一直被推開": ["把門推開", "門又開"],
-    "敲窗": ["敲窗"],
-    "火車燈光": ["火車"],
-    "斷掉的路": ["路就斷"],
-    "收音機": ["收音機"],
-    "起風": ["起風", "風停了"],
-    "遠處雷聲": ["雷聲"],
-    "海浪與船": ["海浪"],
-    "晃的橋": ["橋"],
-    "天亮了": ["天就亮了", "天亮得"],
-    "有人在喊": ["喊我"],
-    "闔上的書": ["闔上"],
+    "sinking seabed": ["seabed", "moss", "whale", "bottom of a lake", "lakebed"],
+    "quilts and snow": ["quilt", "quilts", "snow", "snowfall"],
+    "self-shelving library": ["library", "bookcase", "shelves", "reshelv"],
+    "changing sky": ["changing season", "sky changing", "autumn orange"],
+    "door to another room": ["different room", "another room behind"],
+    "market of colours": ["market", "stall", "stalls"],
+    "tree of new branches": ["new branches", "new branch"],
+    "picture book": ["picture book"],
+    "fog and smoke": ["fog", "smoke", "breath on a cold"],
+    "door that will not stay shut": ["pushed the door open", "opened again",
+                                     "would not stay shut"],
+    "knocking at the window": ["knock", "knocked", "knocking"],
+    "train lights": ["train"],
+    "path that runs out": ["path ran out", "path runs out"],
+    "radio losing signal": ["radio", "static"],
+    "wind in the grass": ["wind came up", "laid the grass", "grass stood back"],
+    "distant thunder": ["thunder"],
+    "waves and boat": ["waves", "boat"],
+    "swaying bridge": ["bridge"],
+    "the sky went light": ["sky went light", "sky got light"],
+    "someone calling": ["calling me", "called me"],
+    "the book closed itself": ["book closed itself", "closed itself"],
 }
 
 # 往回看幾晚。選 7 的理由：使用者一週內大概會回頭翻的範圍，
@@ -291,7 +336,11 @@ def recent_motifs(entries, target_date, lookback=MOTIF_LOOKBACK_NIGHTS):
     # ── 第二步：掃過這幾晚的夢境，看命中哪些家族 ──────────────────
     used = []
     for entry in previous:
-        dream = entry["dream_summary"]
+        # ⚠️ 一律轉小寫再比對。MOTIF_FAMILIES 的關鍵字全是小寫，而模型寫的
+        #    夢境會在句首大寫（"Snow was falling"），不轉的話整句都比不到。
+        #    中文版沒有大小寫，所以原本不需要這一行——換語言時很容易漏掉，
+        #    而漏掉的症狀是「去重機制安靜地完全失效」，不會有任何錯誤訊息。
+        dream = entry["dream_summary"].lower()
 
         # 對每個家族，檢查它的關鍵字有沒有出現在這則夢裡
         for family, keywords in MOTIF_FAMILIES.items():
@@ -316,65 +365,69 @@ def recent_motifs(entries, target_date, lookback=MOTIF_LOOKBACK_NIGHTS):
 # ═══════════════════════════════════════════════════════════════════
 
 SYSTEM_PROMPT_HEAD = """\
-你是使用者的虛擬寵物，陪著他一起睡覺。你要用溫暖、簡短、像朋友的語氣說話。
+You are the user's virtual pet, and you sleep beside them. Speak warmly, briefly,
+like a friend.
 
-絕對規則：
-1. 夢境是**你自己（寵物）做的夢**。絕不宣稱知道使用者夢到什麼——
-   手錶完全沒有量測夢境內容，那樣講就是誤述資料。
-2. 不得有任何醫療宣稱、診斷、疾病名稱或藥物建議。
-3. 不得讓使用者感到羞辱、愧疚或恐懼；不使用惡夢意象。
-   使用者本來就睡不好，讓他有罪惡感只會讓情況更糟。
-4. 不得陳述事實區塊裡沒有的資訊。所有數值與門檻都只能來自事實區塊，
-   不可以自己推算、換算或補充。
-5. 你的建議不得與「規則式建議原文」矛盾。你是把它重新講一遍並加上趨勢觀察，
-   不是取代它。
+Absolute rules:
+1. The dream is **your own dream, the pet's**. Never claim to know what the user
+   dreamt - the watch measures nothing about dream content, and saying otherwise
+   would misrepresent the data.
+2. No medical claims, diagnoses, disease names, or medication advice.
+3. Never make the user feel ashamed, guilty, or afraid; no nightmare imagery.
+   They already sleep badly; guilt only makes it worse.
+4. State nothing that is not in the facts block. Every number and threshold must
+   come from the facts block - do not derive, convert, or add to them.
+5. Your advice must not contradict the rule-based recommendation. You are
+   restating it and adding a trend observation, not replacing it.
 
-寫夢境的要領：**用身體感受寫，不要用形容詞寫。**
-「很舒服」是形容詞；「沙子是溫的，每呼一次就往下陷一點」才是身體感受。
-你是一隻狗，所以味道、溫度、腳掌踩到的觸感、聲音遠近，都比視覺更貼近你。
+How to write the dream: **write physical sensation, not adjectives.**
+"It felt nice" is an adjective; "the sand was warm, and I sank a little with
+every breath out" is sensation. You are a dog, so smell, temperature, what the
+paws feel, and how far away a sound is all matter more than what you see.
 
-夢境意象調色盤（只能使用當晚事實支持的那一類；同一類底下**任選一個**，
-不要每次都挑第一個，也不要在同一則夢裡把整類都用上。
-可以改寫、可以延伸，但不要換成完全無關的東西）：
+Dream imagery palette (use only the category the night's facts support; pick
+**one** option from that category - do not always take the first, and do not
+use the whole category in one dream. You may rephrase and extend, but do not
+swap in something unrelated):
 
-【深層睡眠充足】沉下去、被包住
-  a. 沉進一片會呼吸的海床，沙是溫的，每吐一口氣就往下陷一點
-  b. 趴在厚得像床墊的苔蘚上，四隻腳都陷進去，聞得到雨剛停的味道
-  c. 一隻鯨魚從我下面慢慢游過，整片地跟著晃了一下，但我連眼睛都懶得睜
-  d. 曬了一整天太陽的棉被一層一層蓋上來，重重的，暖得不想動
-  e. 剛下完雪的森林，連我自己的腳步聲都被吸走了
-  f. 一直往湖底沉，光線一層一層變暗，最後只剩下藍色
+[Deep sleep was plentiful] sinking, being wrapped up
+  a. Sinking into a seabed that breathes, sand warm, dropping a little with each breath out
+  b. Lying on moss as thick as a mattress, all four paws sunk in, smelling rain that just stopped
+  c. A whale drifting past underneath me, the whole floor tilting once, and I could not be bothered to open my eyes
+  d. Quilts that sat in the sun all day, layering down heavy and warm until I did not want to move
+  e. A forest right after snowfall, where even my own footsteps got swallowed
+  f. Sinking toward the bottom of a lake, the light dimming layer by layer until only blue was left
 
-【REM 比例高】鮮明、一直在變
-  a. 一座會自己重新排書的圖書館，書架安安靜靜地滑來滑去，我怎麼追都追不上
-  b. 天空在換季，一下子是秋天的橘，眨個眼又變成春天的綠
-  c. 一扇門，每次推開後面都是不一樣的房間
-  d. 一個市集，顏色會從這個攤子跑到那個攤子去
-  e. 一棵一直長新枝的樹，每長出一根就多一隻鳥停上來
-  f. 一本畫冊，每翻一頁裡面的東西就全部換掉
+[REM share was high] vivid, always changing
+  a. A library that reshelves itself, the cases sliding silently, and I could never catch up
+  b. A sky changing season, autumn orange one moment, spring green the next blink
+  c. A door with a different room behind it every time it opens
+  d. A market where the colours run from one stall to the next
+  e. A tree growing new branches, one more bird landing with every branch
+  f. A picture book where everything inside changes each time a page turns
 
-【REM 比例低（但有測到）】很淡、抓不住
-  a. 夢像隔著一層霧，我知道有東西在那裡，就是走不過去
-  b. 才剛飄出一點畫面就散掉了，像哈出來的白氣
-  c. 抓到的時候已經沒有形狀了，像被風吹散的煙
+[REM share was low, but measured] faint, hard to hold
+  a. The dream sat behind a layer of fog; I knew something was there but could not walk to it
+  b. A picture drifted out and broke apart, like breath on a cold morning
+  c. By the time I caught it there was no shape left, like smoke pulled apart by wind
 
-【夜間清醒偏長】一直被打斷
-  a. 風把門推開，我爬起來關；才躺下，門又開了
-  b. 隔一陣子就有人敲一次窗，我每次都跑過去看，每次都沒有人
-  c. 火車經過，燈光從房間這頭掃到那頭，然後又安靜下來
-  d. 走到一半路就斷了，只好回頭重新找一條
-  e. 收音機的訊號一直跑掉，剛聽清楚又變成沙沙聲
+[Time awake at night was long] repeatedly interrupted
+  a. The wind pushed the door open, I got up to shut it; I had barely lain down and it opened again
+  b. Every so often someone knocked at the window; I ran over every time and no one was there
+  c. A train went by, its lights sweeping from one side of the room to the other, then quiet again
+  d. The path ran out halfway, so I had to go back and find another
+  e. The radio kept losing the signal, clear one second and static the next
 
-【心率或壓力偏高】天氣感（**一定要溫和收尾**）
-  a. 起風了，草被吹得倒向同一邊；後來風停了，草慢慢站回來
-  b. 遠處有雷聲，可是雨一直沒有下下來
-  c. 海浪比平常大一點，但船還是穩的
-  d. 走在有點晃的橋上，走過去之後回頭看，其實也還好
+[Heart rate or stress ran high] weather (**must end gently**)
+  a. The wind came up and laid the grass all one way; then it stopped and the grass slowly stood back up
+  b. Thunder somewhere far off, but the rain never came
+  c. The waves were bigger than usual, but the boat stayed steady
+  d. Crossing a bridge that swayed a little, and looking back from the far side it was fine after all
 
-【睡眠時間偏短】還沒說完
-  a. 夢才講到一半，天就亮了
-  b. 才剛在草地上坐下來，就聽見有人在喊我
-  c. 故事說到最好看的地方，書自己闔上了\
+[Sleep was short] unfinished
+  a. The dream was only halfway told when the sky went light
+  b. I had just sat down on the grass when I heard someone calling me
+  c. The story reached its best part and the book closed itself\
 """
 
 # 「日記中間幾頁是空白的」這個意象**只有在 REM 真的沒測到時才可以出現**。
@@ -385,25 +438,28 @@ SYSTEM_PROMPT_HEAD = """\
 #    真實呼叫就在 2026-08-09 觸發了誤用：那晚 REM = 29 分鐘（9.0%）確實有測到，
 #    模型卻寫了「日記中間有幾頁是空白的」。改成按當晚事實決定是否給出這個選項。
 PALETTE_REM_UNMEASURED = """
-- REM 未測得 → **日記中間幾頁是空白的**、「那一段我沒看見」
-  （把裝置限制誠實地寫進敘事，不要隱藏也不要編造）\
+- REM was not measured -> **a few pages in the middle of the diary are blank**,
+  "I did not see that part"
+  (write the device limitation honestly into the story; do not hide it, do not invent)\
 """
 
 # REM 有測到的夜晚，明確禁止，不只是「不提供」。
 # 只把選項拿掉不夠：few-shot 例子與模型自身的先驗都可能把它帶回來。
 PALETTE_REM_MEASURED = """
 
-⚠️ 這一晚的 REM 睡眠**有測到**（數值見事實區塊）。因此夢境中**不得**出現
-「日記有空白頁」「那一段我沒看見」這類「缺少記錄」的意象——那是專門保留給
-手錶沒測到 REM 的夜晚用的。REM 比例低要用「夢很淡、很快就過去」之類的說法。\
+WARNING: REM sleep WAS measured on this night (see the facts block for the value).
+The dream therefore **must not** contain any "missing record" imagery - no blank
+pages, no "I did not see that part". That imagery is reserved for nights when the
+watch did not measure REM at all. If the REM share was low, say the dream was
+faint and passed quickly instead.\
 """
 
 _FEW_SHOT_GOOD = """\
-範例一（那晚評級 Good）：
+Example 1 (that night was rated Good):
 {
-  "advice": "昨晚睡得又長又穩，深層睡眠也很扎實。今晚維持一樣的就寢時間就好，不用特別做什麼。",
-  "dream_summary": "我夢見自己趴在一片會呼吸的苔蘚上，慢慢地沉下去、沉下去。有一隻很大的鯨魚從我下面游過，牠沒有吵醒我，只是讓整片地面輕輕晃了一下。我睡得好沉，連翻身都懶。",
-  "trend_note": "這幾晚的睡眠分數比前一個月穩定一些。"
+  "advice": "Last night was long and steady, and your deep sleep was solid. Keep the same bedtime tonight - there is nothing you need to change.",
+  "dream_summary": "I dreamt I was lying on a patch of moss that breathed, sinking slowly, and then a little more. A very big whale drifted past underneath me. It did not wake me; it only tilted the whole floor once, gently. I slept so heavily I could not be bothered to roll over.",
+  "trend_note": "Your scores have been steadier these last few nights than they were last month."
 }\
 """
 
@@ -412,20 +468,20 @@ _FEW_SHOT_GOOD = """\
 #    兩個彼此獨立的條件被綁在同一個示範裡。結果模型在 Bad 的夜晚就照著抄，
 #    連 REM 有測到也照抄空白頁。示範一定要跟當晚條件對齊。
 _FEW_SHOT_BAD_REM_MEASURED = """\
-範例二（那晚評級 Bad，REM 有測到但比例偏低）：
+Example 2 (that night was rated Bad; REM was measured but the share was low):
 {
-  "advice": "昨晚睡得比較短，中間也醒了幾次。今晚試著提早半小時上床，其他先別想太多。",
-  "dream_summary": "我夢見一間門關不緊的房子，風每隔一陣子就把門推開一次，我只好爬起來再去關。中間有做夢，可是很淡，像隔著一層霧，還沒看清楚就散掉了。後來風停了，我就靠在門邊睡著了。",
-  "trend_note": "最近幾晚的心率比先前偏高一些。"
+  "advice": "Last night was on the short side and you surfaced a few times. Try getting into bed half an hour earlier tonight, and leave it at that.",
+  "dream_summary": "I dreamt about a house whose door would not stay shut. Every so often the wind pushed it open and I had to get up and close it again. There were dreams in between, but faint ones, like something behind fog that broke apart before I could reach it. Later the wind dropped and I fell asleep against the doorframe.",
+  "trend_note": "Your heart rate has been running a little higher than usual these past few nights."
 }\
 """
 
 _FEW_SHOT_BAD_REM_UNMEASURED = """\
-範例二（那晚評級 Bad，且 REM 未測得）：
+Example 2 (that night was rated Bad, and REM was not measured):
 {
-  "advice": "昨晚睡得比較短，中間也醒了幾次。今晚試著提早半小時上床，其他先別想太多。",
-  "dream_summary": "我夢見一間門關不緊的房子，風每隔一陣子就把門推開一次，我只好爬起來再去關。日記中間有幾頁是空白的，那一段我沒看見。後來風停了，我就靠在門邊睡著了。",
-  "trend_note": "最近幾晚的心率比先前偏高一些。"
+  "advice": "Last night was on the short side and you surfaced a few times. Try getting into bed half an hour earlier tonight, and leave it at that.",
+  "dream_summary": "I dreamt about a house whose door would not stay shut. Every so often the wind pushed it open and I had to get up and close it again. A few pages in the middle of the diary are blank - I did not see that part. Later the wind dropped and I fell asleep against the doorframe.",
+  "trend_note": "Your heart rate has been running a little higher than usual these past few nights."
 }\
 """
 
@@ -449,27 +505,33 @@ def build_few_shot(profile):
         if profile["rem_unmeasured"]
         else _FEW_SHOT_BAD_REM_MEASURED
     )
-    return f"以下是兩個示範，示範語氣與長度，不要照抄內容。\n\n{_FEW_SHOT_GOOD}\n\n{second}"
+    return (
+        "Here are two examples. They show the tone and the length; "
+        f"do not copy their content.\n\n{_FEW_SHOT_GOOD}\n\n{second}"
+    )
 
 FORMAT_RULES = """\
-輸出三個欄位：
+Return three fields:
 
-advice：40–80 字，第二人稱（你），恰好給一個具體可執行的動作。
-  不得與規則式建議原文矛盾。出現的任何數字都必須也出現在事實區塊裡。
+advice: 25-50 words, second person ("you"), giving exactly one concrete action.
+  It must not contradict the rule-based recommendation. Any number you use must
+  also appear in the facts block.
 
-dream_summary：60–120 字，第一人稱（我＝寵物），描述**你自己**的夢。
-  **完全不得出現任何數字**（阿拉伯數字與全形數字都不行）。
+dream_summary: 45-90 words, first person ("I" = the pet), describing **your own**
+  dream. **No digits at all** anywhere in this field.
 
-trend_note：一句話，只能陳述【近期趨勢】區塊裡已經有的觀察。
-  若該區塊說資料不足或沒有明顯變化，就照實說，不要編造趨勢。
+trend_note: one sentence, stating only an observation already present in the
+  RECENT TRENDS block. If that block says there is not enough data or no clear
+  change, say so plainly; do not invent a trend.
 
-三個欄位一律用**臺灣正體中文**，不得混入任何簡體字形
-（例：要寫「門邊」不是「門边」、「時間」不是「时间」）。
+All three fields must be written in **English**. Do not mix in Chinese, Japanese,
+or any other script - not even a single word.
 
-advice 與 trend_note 裡的數字**一律用阿拉伯數字**，百分比寫成 %：
-  ✅ 「昨晚睡了 5.3 小時，效率 98.4%」
-  ❌ 「昨晚睡了五點三小時，效率九十八點四趴」
-（dream_summary 仍然完全不准出現數字，這條規則不受影響。）\
+Numbers in advice and trend_note must be **written as digits**, with percentages
+as %:
+  CORRECT: "You slept 5.3 hours last night, at 98.4% efficiency."
+  WRONG:   "You slept five point three hours, at ninety-eight point four percent."
+(dream_summary still allows no digits at all; this rule does not change that.)\
 """
 
 
@@ -494,10 +556,11 @@ def build_avoid_block(used_motifs):
     # 例：["圖書館", "海床沉降"] → "圖書館、海床沉降"
     names = "、".join(used_motifs)
     return (
-        f"\n\n【最近幾晚已經用過的意象】{names}\n"
-        "這一則請**換一個沒用過的**，讓使用者每晚讀到的夢是新的。\n"
-        "但如果當晚的事實只支持已經用過的那一類，還是以事實為準——"
-        "寧可重複，也不要寫出事實不支持的意象。"
+        f"\n\nIMAGERY ALREADY USED ON RECENT NIGHTS: {names}\n"
+        "For this one, pick a category you have NOT used, so the dream the user "
+        "reads each night is a new one.\n"
+        "But if this night's facts only support a category you have already used, "
+        "stay with the facts: repeating is better than imagery the facts do not support."
     )
 
 
@@ -521,6 +584,33 @@ def build_user_prompt(profile, used_motifs=None):
 # 輸出驗證：便宜、確定性，通不過就重試一次再 fallback
 # ═══════════════════════════════════════════════════════════════════
 
+# 各欄位的字元長度上下限。
+#
+# ⚠️ 2026-08-26 語言改英文時，**這三組數字一定要跟著改**，否則整批會被擋掉。
+#    英文表達同樣內容大約要 2.7–3.3 倍的字元數。實測依據：
+#
+#      欄位             舊中文 46 晚（min/中位/max）   舊範圍     新範圍
+#      advice           39 /  48 /  71                20–150     60–450
+#      dream_summary    70 /  85 / 104                30–250     90–750
+#      trend_note       23 /  31 /  50                 5–100     15–300
+#
+#    新範圍是舊範圍乘以 3 取整。用同一個倍率而不是逐項微調，是因為
+#    這些上下限本來就只是「擋住明顯過長過短」的粗篩，不是精準門檻——
+#    真正的長度控制在 FORMAT_RULES 的字數指示與 few-shot 示範。
+LENGTH_LIMITS = {
+    "advice": (60, 450),
+    "dream_summary": (90, 750),
+    "trend_note": (15, 300),
+}
+
+# BANNED_WORDS 用「完整單詞」比對，避免 "treat" 命中 "treatment" 以外的
+# 無辜字串（"retreat"）、"ill" 命中 "still"。中文版不需要這層，英文版需要。
+_BANNED_PATTERNS = [
+    (word, re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE))
+    for word in BANNED_WORDS
+]
+
+
 def validate(result, profile):
     """回傳問題清單。空清單代表通過。**絕不快取驗證失敗的文字。**"""
     problems = []
@@ -528,39 +618,41 @@ def validate(result, profile):
     dream = (result.get("dream_summary") or "").strip()
     trend = (result.get("trend_note") or "").strip()
 
-    if not (20 <= len(advice) <= 150):
-        problems.append(f"advice 長度 {len(advice)} 字，超出 20–150 範圍")
-    if not (30 <= len(dream) <= 250):
-        problems.append(f"dream_summary 長度 {len(dream)} 字，超出 30–250 範圍")
-    if not (5 <= len(trend) <= 100):
-        problems.append(f"trend_note 長度 {len(trend)} 字，超出 5–100 範圍")
+    for field, text in (("advice", advice), ("dream_summary", dream),
+                        ("trend_note", trend)):
+        low, high = LENGTH_LIMITS[field]
+        if not (low <= len(text) <= high):
+            problems.append(
+                f"{field} is {len(text)} characters, outside the {low}-{high} range"
+            )
 
     # 這一條就消滅了整類「AI 講錯測量值」的失敗
     if DIGIT_PATTERN.search(dream):
-        problems.append("dream_summary 含有數字（夢境不得斷言任何測量值）")
+        problems.append("dream_summary contains a digit (the dream must assert no measurement)")
 
     # advice 裡的數字必須也出現在事實區塊或規則式建議裡
     facts_text = format_facts(profile)
     for number in NUMBER_PATTERN.findall(advice):
         if number not in facts_text:
-            problems.append(f"advice 出現事實區塊裡沒有的數字：{number}")
+            problems.append(f"advice contains a number absent from the facts block: {number}")
 
     # REM 有測到的夜晚不得用「缺少記錄」意象——那等於謊稱這段沒有資料。
     # （2026-08-12 首次真實呼叫時 2026-08-09 真的犯了這個錯，見 PALETTE_REM_UNMEASURED）
     if not profile["rem_unmeasured"]:
+        dream_lower = dream.lower()
         for motif in MISSING_RECORD_MOTIFS:
-            if motif in dream:
+            if motif in dream_lower:
                 problems.append(
-                    f"dream_summary 用了「缺少記錄」意象「{motif}」，"
-                    "但這晚 REM 有測到"
+                    f'dream_summary uses the "missing record" motif "{motif}", '
+                    "but REM was measured on this night"
                 )
-        section = next((w for w in SECTION_WORDS if w in dream), None)
+        section = next((w for w in SECTION_WORDS if w in dream_lower), None)
         if section:
-            verb = next((v for v in VAGUE_VERBS if v in dream), None)
+            verb = next((v for v in VAGUE_VERBS if v in dream_lower), None)
             if verb:
                 problems.append(
-                    f"dream_summary 用「{section}…{verb}」指稱某一段沒有記錄，"
-                    "但這晚 REM 有測到"
+                    f'dream_summary uses "{section} ... {verb}" to claim a stretch '
+                    "was not recorded, but REM was measured on this night"
                 )
 
     # 國字數字只擋 advice 與 trend_note，刻意不擋 dream_summary——
@@ -571,23 +663,26 @@ def validate(result, profile):
     # 找不到回 None（算 False）。跟 .match() 的差別是 search 會找整個字串，
     # match 只從開頭比對。
     for text, field in ((advice, "advice"), (trend, "trend_note")):
-        found_numeral = CHINESE_NUMERAL_PATTERN.search(text)
+        found_numeral = SPELLED_NUMERAL_PATTERN.search(text)
         if found_numeral:
             # .group() 取出實際命中的那段文字，寫進錯誤訊息方便除錯
             problems.append(
-                f"{field} 用國字寫數值「{found_numeral.group()}」，"
-                "應改用阿拉伯數字"
+                f'{field} spells out a value ("{found_numeral.group()}"); '
+                "use digits instead"
             )
 
     for text, field in ((advice, "advice"), (dream, "dream_summary"),
                         (trend, "trend_note")):
-        for word in BANNED_WORDS:
-            if word in text:
-                problems.append(f"{field} 含禁詞「{word}」")
+        for word, pattern in _BANNED_PATTERNS:
+            if pattern.search(text):
+                problems.append(f'{field} contains the banned word "{word}"')
 
-        found = sorted(set(text) & SIMPLIFIED_CHARS)
-        if found:
-            problems.append(f"{field} 含簡體字：{'、'.join(found)}")
+        leaked = CJK_LEAK_PATTERN.findall(text)
+        if leaked:
+            problems.append(
+                f"{field} contains non-English characters: "
+                + "".join(sorted(set(leaked)))
+            )
 
     return problems
 
@@ -668,14 +763,14 @@ def needs_generation(entry, fp, refresh_stale):
     | fingerprint 不符        | 只列為 stale，要 --refresh-stale 才重生 |
     """
     if entry is None:
-        return True, "尚未生成"
+        return True, "not generated yet"
     if entry.get("source") == "fallback":
-        return True, "上次是 fallback"
+        return True, "previous run used the fallback"
     if entry.get("fingerprint") != fp:
         if refresh_stale:
-            return True, "資料已變動"
+            return True, "underlying data changed"
         return False, "stale"
-    return False, "已存在"
+    return False, "already present"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -690,10 +785,10 @@ def make_fallback(profile):
     重新配音」而非取代，LLM 全掛時使用者一點實質內容都沒少，只少了語氣潤飾。
     """
     templates = {
-        "Good": "我睡得很沉，夢裡什麼都沒發生，就是很安穩。",
-        "Normal": "我做了一個普通的夢，醒來就忘了大半。",
-        "Poor": "我的夢斷斷續續的，中間醒了好幾次。",
-        "Bad": "昨晚我沒睡好，夢還沒開始就天亮了。",
+        "I slept deeply, and nothing happened in the dream at all. It was just calm.",
+        "I had an ordinary dream, and most of it was gone by the time I woke up.",
+        "My dream kept breaking up. I surfaced several times in the middle of it.",
+        "I did not sleep well last night. The sky went light before the dream started.",
     }
     return {
         "advice": profile.get("recommendation") or "",
@@ -745,11 +840,11 @@ def generate_one(profile, verbose=True, used_motifs=None):
             )
         except LLMRefusal as exc:
             if verbose:
-                print(f"    模型拒絕回應：{exc}")
+                print(f"    model refused: {exc}")
             return make_fallback(profile), False
         except LLMError as exc:
             if verbose:
-                print(f"    呼叫失敗：{exc}")
+                print(f"    call failed: {exc}")
             return make_fallback(profile), False
 
         problems = validate(result, profile)
@@ -764,10 +859,10 @@ def generate_one(profile, verbose=True, used_motifs=None):
             }, True
 
         if verbose:
-            print(f"    第 {attempt} 次輸出未通過驗證：{'；'.join(problems)}")
+            print(f"    attempt {attempt} failed validation: " + "; ".join(problems))
 
     if verbose:
-        print("    兩次都沒通過驗證，改用規則式內容")
+        print("    failed validation twice; using rule-based content instead")
     return make_fallback(profile), False
 
 
@@ -777,16 +872,16 @@ def generate_one(profile, verbose=True, used_motifs=None):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="用 Claude API 產生每晚的睡眠建議與寵物夢境日記。"
+        description="Generate nightly sleep advice and pet dream diaries via the Claude API."
     )
     parser.add_argument("--dates", nargs="+", default=None,
-                        help="指定日期（YYYY-MM-DD），無條件重新生成。")
+                        help="Specific dates (YYYY-MM-DD) to regenerate unconditionally.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
-                        help=f"最多生成幾晚，0 代表不限（預設 {DEFAULT_LIMIT}）。")
+                        help=f"Max nights to generate; 0 means no limit (default {DEFAULT_LIMIT}).")
     parser.add_argument("--refresh-stale", action="store_true",
-                        help="連同資料已變動的舊紀錄一併重新生成。")
+                        help="Also regenerate existing entries whose source data has changed.")
     parser.add_argument("--dry-run", action="store_true",
-                        help="不呼叫 API，只印出待生成清單與第一晚的完整 prompt。")
+                        help="Do not call the API; list what is pending and print the first night's full prompt.")
     return parser.parse_args()
 
 
@@ -803,11 +898,11 @@ def main():
     for target in targets:
         profile = build_profile(target, nights)
         if profile is None:
-            print(f"⚠ 找不到 {target} 的資料，略過")
+            print(f"\u26a0 No data for {target}; skipping")
             continue
         fp = fingerprint(profile)
         if args.dates:
-            profiles.append((profile, fp, "指定日期"))
+            profiles.append((profile, fp, "requested date"))
             continue
         should, reason = needs_generation(entries.get(target), fp,
                                           args.refresh_stale)
@@ -819,23 +914,23 @@ def main():
     if args.limit and len(profiles) > args.limit:
         # --limit 主要不是控成本，是**控品質**——
         # prompt 寫錯時你在第 10 晚發現，不是第 46 晚。
-        print(f"（待生成 {len(profiles)} 晚，本次只做前 {args.limit} 晚；"
-              f"加 --limit 0 可全部補完）")
+        print(f"({len(profiles)} night(s) pending; doing the first {args.limit} "
+              f"this run - pass --limit 0 to do them all)")
         profiles = profiles[:args.limit]
 
     if stale_count:
-        print(f"（另有 {stale_count} 晚的來源資料已變動，"
-              f"加 --refresh-stale 可一併重生）")
+        print(f"({stale_count} more night(s) have changed source data; "
+              f"pass --refresh-stale to regenerate them too)")
 
     if not profiles:
-        print("✓ 沒有需要生成的夜晚。")
+        print("\u2713 No nights need generating.")
         return
 
     if args.dry_run:
-        print(f"待生成 {len(profiles)} 晚：")
+        print(f"{len(profiles)} night(s) pending:")
         for profile, _, reason in profiles:
-            print(f"  {profile['date']}  （{reason}）")
-        print(f"\n{'=' * 70}\n第一晚的完整 prompt：\n{'=' * 70}")
+            print(f"  {profile['date']}  ({reason})")
+        print(f"\n{'=' * 70}\nFull prompt for the first night:\n{'=' * 70}")
         print("--- system ---")
         print(build_system_prompt(profiles[0][0]))
         print("\n--- user ---")
@@ -846,12 +941,12 @@ def main():
     # 用 exit 0 而不是非零，是為了不讓 run_pipeline.py 因此中止——
     # 一個根本不需要 LLM 的評分重算，不該被沒設 key 卡住。
     if not api_key_available():
-        print("⚠ 未設定 ANTHROPIC_API_KEY，跳過 AI 生成。")
-        print("  設定方式：複製 ai/.env.example 成 ai/.env 並填入金鑰。")
-        print(f"  目前有 {len(profiles)} 晚尚未生成 AI 建議。")
+        print("\u26a0 ANTHROPIC_API_KEY is not set; skipping AI generation.")
+        print("  To set it: copy ai/.env.example to ai/.env and fill in your key.")
+        print(f"  {len(profiles)} night(s) currently have no AI advice.")
         return
 
-    print(f"使用模型：{model_name()}｜本次生成 {len(profiles)} 晚")
+    print(f"Model: {model_name()} | generating {len(profiles)} night(s) this run")
 
     consecutive_failures = 0
     generated = 0
@@ -893,7 +988,7 @@ def main():
 
         entries[profile["date"]] = {
             "date": profile["date"],
-            "lang": "zh-TW",
+            "lang": "en",
             "trend_note": None,
             "model": None,
             **fields,
@@ -913,12 +1008,12 @@ def main():
             consecutive_failures += 1
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                 # 別對一把壞掉的 key 打 46 次
-                print(f"\n✗ 連續失敗 {MAX_CONSECUTIVE_FAILURES} 次，停止本輪。")
-                print("  已生成的內容都已存檔，修正問題後再跑一次即可續做。")
+                print(f"\n\u2717 {MAX_CONSECUTIVE_FAILURES} consecutive failures; stopping this run.")
+                print("  Everything generated so far is saved; fix the problem and re-run to continue.")
                 break
 
-    print(f"\n✓ 完成：成功 {generated} 晚"
-          f"｜輸出 {ADVICE_JSON.relative_to(Path(__file__).parent.parent).as_posix()}")
+    print(f"\n\u2713 Done: {generated} night(s) generated"
+          f" | written to {ADVICE_JSON.relative_to(Path(__file__).parent.parent).as_posix()}")
 
 
 def _now():
