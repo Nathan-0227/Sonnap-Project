@@ -32,7 +32,50 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：現在在哪、下一步做什麼（2026-08-26 更新．新對話先讀這段）
+## 🔖 交接區：現在在哪、下一步做什麼（2026-08-28 更新．新對話先讀這段）
+
+> ⚠️ **這一輪是兩個 Claude Code session 同時在同一份 working copy 上工作**
+> （使用者開了不只一個視窗）。過程中發生過一次真的 race：一個 session
+> 正在存檔 `CLAUDE.md`，另一個同時 `git add -A` 把那次存檔也掃進了自己的
+> commit（`9646f2c`）——這次結果無害（內容本身正確），但下次可能不會這麼幸運。
+> **多開視窗同時改同一個 repo 時，commit 前先看 `git status` 裡有沒有
+> 自己沒改過的檔案**，那多半是另一個 session 剛寫的。
+
+### 🔴 還沒做完：`tapo 2.0/.env` 的密碼本身還沒換
+
+08-27 影像組用 GitHub 網頁「Add files via upload」誤傳了 `tapo 2.0/.env`
+（含 RTSP 攝影機帳密），公開 repo 曝露約 12+ 小時。已在分支
+`fix/untrack-tapo-env`（1 個 commit `6b41901`，**尚未 push**）把它從版控移除、
+換成只留鍵名的 `.env.example`，並在檔案裡寫明「網頁上傳會繞過本機
+`.gitignore`」這個根因。
+
+⚠️ **但這只解決「以後不再外流」，不解決「已經外流的那組密碼」。**
+從 git 拿掉檔案不會讓已經公開過的密碼失效——攻擊者只要在洩漏的 12 小時內
+複製過就永遠拿得到。**唯一真正解除暴露的動作是去 Tapo App 裡改攝影機的
+RTSP 密碼**，這件事只有影像組做得到，目前還沒人做。下次接手先確認這件事
+有沒有處理，沒有的話優先提醒他們。
+
+### ✅ demo 相關這一輪的三個進展
+
+1. **APK 已能自己建，且已裝進實體手機測過**（分支 `merge/jeremy-report-screen`，
+   已合併進 `main`，見下方「已完成」）。Flutter/Android 環境已從零建起，
+   細節與踩過的坑見 `DEVLOG.md` 2026-08-27 那則。
+   ⚠️ **手機上那份是修正前的舊版**（顯示 `anxious`）——下次要同步得重建重裝。
+2. **寵物動畫不再永遠播開心的狗**——跟著 `pet_mood` 走，四態各一個資產路徑，
+   資產還沒到位前退到濾鏡版的 `happy_dog.json`。分支 `feature/pet-mood-animation`
+   （3 個 commit：`8c52874` 動畫、`9646f2c` 見下、`6ba789d` DEVLOG，**尚未 push**）。
+3. **Tier3／SRI 不再跨戴錶者計算（`9646f2c`）**——這支手錶 2026-05-28~08-27
+   經手三個人，之前被當成同一個人處理，導致 08-02 之後 10 晚裡 9 晚被誤判
+   `anxious`（含兩個 90 分以上的 Good 夜晚）。已用 `WEARER_SEGMENTS` 分段，
+   細節見下方 ①。
+
+⚠️ **殘留但不影響現況的一個發現**：`wearer_a`（05-28~07-27）內部藏著
+07-13~07-15 三晚 `total_sleep_minutes=0` 但 `avg_heart_rate` 高達 88~95、
+步數上看 18551 的異常列——判斷是手錶當晚沒偵測到睡眠（同 06-02 那個已知
+問題的模式），不是第四個戴錶者。這三晚不在 51 晚計分名單裡，但
+`compute_modifiers()` 讀的是未過濾的 `summary`，這三筆的原始值仍會
+被併入 07-16 之後幾晚的 baseline 歷史——這正是 CLAUDE.md 已經記過的
+「summary 與 features 的有效性標準不同」那個坑的具體案例，**尚未修**。
 
 現行路線圖：`C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
@@ -138,14 +181,20 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-08-26 更新）
+### git 狀態（2026-08-28 更新）
 
-✅ **這一輪的工作已經全部進 `main`** —— PR #11 於 2026-08-26 由使用者合併
-（`origin/main` = `e382b83`）。`db.py`、`main.py`、`behavior/`、`wearable/`、
-`tests/`、`migrate_garmin_to_db.py`、`PROPOSAL_GAP.md`、51 晚的資料全都在裡面。
+✅ `origin/main` 現在是 `98c51b2`（PR #16：併入 Jeremy 的 Insights 頁 + 修
+`energy_level` 捨入誤差）。PR #11（多使用者後端）、PR #12~15（文件與英文化）
+都已經在裡面。
 
-`origin/main` 也兩次合併進本分支：08-25 那次是影像組 8/17 的工作，
-08-26 那次是他們當天推的三個 commit（只動 `tapo/`，零衝突）。
+**本地還有兩個分支尚未 push**，都是這一輪（08-28）做的：
+
+| 分支 | commit | 內容 | 狀態 |
+|---|---|---|---|
+| `feature/pet-mood-animation` | 3 個 | 寵物動畫四態化 + 戴錶者分段修正 + DEVLOG | 尚未 push |
+| `fix/untrack-tapo-env` | 1 個 | 移除誤傳的 `tapo 2.0/.env` | 尚未 push，⚠️ 密碼本身仍未換（見上方紅字） |
+
+兩者的分歧點都是 `main`（`98c51b2`），互不衝突，可以各自開 PR。
 
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
@@ -174,6 +223,12 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 ⚠️ **`garminconnect` 沒裝不影響 pipeline 的後四步**——只有 `--fetch`（重抓資料）
 那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
 
+**Flutter/Android 這一輪（08-27）也從零裝起**：Flutter 3.44.9（`C:\Users\user\flutter`）
++ Android SDK + Temurin JDK 17。踩過的坑（`compileSdk` 版本不對、機器上一度有
+兩份 Flutter SDK 互相污染、`local.properties` 反斜線跳脫、VS Code Gradle 外掛搶鎖）
+全部記在 `DEVLOG.md` 2026-08-27 那則，這裡不重複。**現在 `flutter build apk`
+與 `adb install` 都能跑**，已裝進實體 Android 手機驗證過。
+
 ### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
 
 `garmin_connect_fetch.py:778` 用 `open(args.output, "w")`，
@@ -191,53 +246,27 @@ python garmin/run_pipeline.py          # 再跑後四步
 抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
 46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
 
-分支盤點（2026-08-26 用 `git ls-remote --heads origin` 實測）：
+分支盤點（2026-08-28 用 `git ls-remote --heads origin` 實測，只剩 4 條遠端分支）：
 
-| 遠端分支 | 作者 | 領先 main | 最後更新 | 狀態 |
-|---|---|---|---|---|
-| `main` | — | — | 2026-08-26 | `e382b83`（PR #11 合併點） |
-| **`second-flutter-integration`** | **Jeremy** | **1**（但**落後 21**） | **2026-08-21** | ⚠️ **見下方，不能直接合** |
-| `feature/behavior-loop` | 我 | 2 | 2026-08-26 | 合併後被刪過，又被第二次推送建回來 |
-| `feature/behavior-loop-feat(backend)-多使用者-…` | 我 | 0 | 2026-08-26 | PR #11 用的那個，名字裡有 commit message。**已完全合併** |
-| `flutter` | Jeremy | 0 | 2026-07-10 | 已全數合併，可刪 |
-| `feature/opencv-motion-garmin` | 影像組 | 12 | 2026-06-11 | ⚠️ 見再下方 |
+| 遠端分支 | 作者 | 狀態 |
+|---|---|---|
+| `main` | — | `98c51b2`（PR #16 合併點） |
+| `second-flutter-integration` | Jeremy | ✅ **內容已於 PR #16 併入 main**（走的是新分支 `merge/jeremy-report-screen`，不是直接合這條）。這條本身沒人刪，**可以刪了** |
+| `flutter` | Jeremy | 已全數合併，可刪 |
+| `feature/opencv-motion-garmin` | 影像組 | 12 個 commit 從沒合併，整條不能合，見下方 |
 
-⚠️ 前一版表上的 `feature/garmin-sleep-scoring` 與 `feature/project-setup`
-**已經不在遠端了**（08-25 記「可刪」，之後真的被刪了）。
-上面兩個 `behavior-loop` 分支仍待清，**刪之前先問過**。
+✅ 之前記的 `feature/behavior-loop` 那兩條、`feature/garmin-sleep-scoring`、
+`feature/project-setup` 都已經不在遠端了。
+⚠️ 兩個本地新分支（`feature/pet-mood-animation`、`fix/untrack-tapo-env`，
+見上方「git 狀態」）**還沒推上去**，不會出現在這張表裡。
 
-### Jeremy 的 `second-flutter-integration` 該怎麼合
+### Jeremy 的 `second-flutter-integration` —— ✅ 已於 PR #16 併入，這節可歸檔
 
-✅ 他卡的那個缺口（`history` 少兩欄）已於 2026-08-26 修好，見上方「下次接手」開頭。
-這裡只講**分支本身該怎麼處理**。
-
-⚠️ **不要把他的分支直接合進 `main`。** 實測狀態：
-
-| | |
-|---|---|
-| 分岐點 | `e0aa188`，**從來沒有 merge 過 main** |
-| 領先 main | 1 個 commit |
-| **落後 main** | **21 個 commit** |
-| PR #11 的後端 | `db.py`、`behavior/`、`wearable/`、`tests/` **全部不存在** |
-| 合併衝突 | 1 個檔：`app/assets/data/app_payload.json` |
-
-那個衝突檔是**生成檔**，衝突原因是他**手改了它**（把 `streak.definition`
-翻成英文）。而且他手改的那串跟他同一個 commit 改的
-`build_app_payload.py` **兩個英文版本不一致**（"The number of consecutive
-nights with sleep records" vs "Number of consecutive nights with recorded sleep"）
-→ **只要有人跑一次 `python build_app_payload.py`，他的手改就會被蓋掉。**
-
-建議的順序（不是先合他的）：
-
-1. ~~先在 `main` 上把 `history` 那兩欄補上~~ ✅ **已完成**
-2. ~~重跑 `python build_app_payload.py`~~ ✅ **已完成**
-3. 請他把 `main` merge 進他的分支（不是反過來），衝突檔直接取 main 的版本
-4. 他確認 Flutter 那邊讀得到新欄位之後再開 PR
-
-✅ **他把 `streak.definition` 改成英文這件事已經不是問題了**——
-2026-08-26 使用者決定全系統輸出改英文（見「輸出語言」那節），
-他那個改動方向是對的。但他是**手改生成檔**，還是會被蓋掉，
-要提醒他改 `build_app_payload.py` 而不是 `app_payload.json`。
+沒有走「直接合他那條分支」的路（原本規劃的順序，21 個落後 commit、
+1 個生成檔衝突）。實際做法是另開分支 `merge/jeremy-report-screen`
+（從當時的 `main` 分出去）手動合併他的內容，衝突檔取 main 版本重新產生，
+2026-08-27 併入 main（PR #16）。`second-flutter-integration` 本身還留在遠端，
+內容已經沒用了，可以刪。
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
@@ -255,18 +284,22 @@ nights with sleep records" vs "Number of consecutive nights with recorded sleep"
 **四個完全不同的夜晚彼此無法區分**，正是 8.3 紅線 3「分數不得有人為地板」；
 timeline 第一筆是 16:48，且 `motion_intensity: 2073600` = 1920×1080，整畫面誤判。
 
-已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）。
+已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）、
+PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Jeremy 的 Insights 頁）。
 `main` 也含隊友的 Flutter app（`app/`）與 TAPO（`tapo/`）。
 
-> 💡 `gh` CLI 已於 2026-08-25 安裝（v2.98.0），但**尚未 `gh auth login`**，
-> 所以還看不到 PR 列表。要用的話請先在終端機登入一次。
+✅ `gh` CLI 已登入（帳號 `Nathan-0227`），可以直接用它開 PR、看 PR 列表。
 
 ### 已完成
 
-- Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 3 秒跑完
-- 46 晚實測資料（2026-05-28 ~ 08-10），每晚 0–100 分 + Good/Normal/Poor/Bad
-- Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12）+ SRI（呈現不計分）
+- Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 6 秒跑完
+- 51 晚實測資料（2026-05-28 ~ 08-25），每晚 0–100 分 + Good/Normal/Poor/Bad，
+  **跨 3 名戴錶者**（見上方 ①，報告不能寫成單一使用者）
+- Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
+  + SRI（呈現不計分）
 - 完整文獻依據：`Research-Background/Garmin手錶分數.md`
+- 後端多使用者 API、行為介入迴圈、Health Connect adapter（PR #11）
+- Flutter App 已能自己建置 APK 並裝進實體 Android 手機執行（見上方 ✅）
 
 ---
 
