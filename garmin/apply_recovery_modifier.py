@@ -181,6 +181,72 @@ MIN_BASELINE_NIGHTS = 14
 MAX_BASELINE_NIGHTS = 28
 
 # ═══════════════════════════════════════════════════════════════════
+# 【2026-08-28】戴錶者分段 —— 這支手錶不只一個人戴過
+# ═══════════════════════════════════════════════════════════════════
+# Tier3 的每一項都是「今晚的你 vs 過去的你」，SRI 也是「你自己的作息
+# 有多規律」。兩者都是**個人內比較**，跨人計算沒有意義——
+# 拿 A 的靜止心率當 B 的基準，得到的不是「B 今晚恢復得好不好」，
+# 而是「B 的心臟跟 A 不一樣」。
+#
+# 這件事在 2026-08-28 才發現。在此之前 51 晚被當成同一個人處理，
+# 後果是 08-02 之後 10 晚裡有 9 晚被判定為 anxious（前 41 晚只有 4.9%），
+# 其中包括 93.1 分與 90.5 分的兩個 Good 夜晚——**焦慮狀態與睡眠品質脫鉤**。
+#
+# ── 分界怎麼定的 ────────────────────────────────────────────────
+# 使用者不記得交接日期，所以用生理訊號本身找。方法是對每個候選分界點
+# 算「左右中位數差 / MAD」，真正的換人會在多個獨立訊號上同時跳躍：
+#
+#   A → B 的分界    靜止心率跳躍 5.73~6.74、睡眠期間平均心率 4.13
+#                   逐週中位數 RHR 52 → 59 → 65 → 72，avgHR 56.0 → 73.6
+#   前 41 晚內部    三個訊號的最大跳躍都 ≤ 1.03  → **確定是同一個人**
+#   中段內部        最大跳躍 1.51~1.57（勉強過 1.5 門檻，且 RHR 散布
+#                   52~77 沒有乾淨階梯）→ **無法斷定是一人還是兩人**
+#
+# ⚠️ 中段標成 trusted=False 而不是給它一個名字：使用者只確定「中間有人
+#    戴過」，不確定幾個。與其猜，不如讓程式誠實說「這段來源不明」。
+#
+# ⚠️ 為什麼不倚賴 MIN_BASELINE_NIGHTS 順便擋掉：中段目前只有 10 個有效
+#    夜晚，確實不足 14 晚，Tier3 本來就算不出來。但那是**巧合**——
+#    哪天補了資料讓它超過 14 晚，門檻一過就會安靜地產生無效結果。
+#    來源不明就明確關掉，不要靠另一個機制的副作用。
+#
+# 格式：(起日, 迄日或 None 表示持續中, 代號, 是否確定為同一人)
+WEARER_SEGMENTS = [
+    ("2026-05-28", "2026-07-27", "wearer_a", True),
+    # 中段：使用者只確定「我之前有兩個人戴過」，訊號也分不出是一人還是兩人
+    ("2026-07-28", "2026-08-27", "unverified", False),
+    # 專題負責人本人，2026-08-28 起
+    ("2026-08-28", None, "wearer_c", True),
+]
+
+# 分段來源不明時，modifier_note 要說的話。刻意跟「冷啟動」講法不同：
+# 冷啟動是「再戴幾晚就會好」，這個是「這段資料不該拿來做個人化比較」。
+UNVERIFIED_SEGMENT_NOTE = (
+    "Personalized modifiers are disabled for this period: the watch is known to "
+    "have been worn by more than one person and the wearer cannot be identified "
+    "from the data. Tier 3 and SRI are within-person measures and are not "
+    "meaningful across wearers. Tier 1/2 base scores are unaffected."
+)
+
+
+def wearer_segment(date_str):
+    """
+    回傳該日期所屬的戴錶者分段 (代號, 是否確定為同一人, 起日, 迄日)。
+
+    起日一併回傳是給 SRI 用的：SRI 的窗格是「往回推 28 個日曆天」，
+    如果不夾在本段起日之後，換人後的頭四週會把前一個人的作息算進來。
+
+    落在所有分段之外的日期（例如比第一段還早）回傳 (None, False, None, None)——
+    無法歸屬就當成不可信，不要預設它屬於某個人。
+    """
+    if not date_str:
+        return None, False, None, None
+    for start, end, name, trusted in WEARER_SEGMENTS:
+        if date_str >= start and (end is None or date_str <= end):
+            return name, trusted, start, end
+    return None, False, None, None
+
+# ═══════════════════════════════════════════════════════════════════
 # 各修正項的分數上限（見 Garmin手錶分數.md 權重設定原則，Tier3 = ±10）
 # RHR ±2 + avg_HR ±2 + 壓力 ±4 + 活動量 0~+2 → 最大加總 +10、最小加總 -8，
 # 天然落在 ±10 以內，但 compute_modifiers() 仍會再做一次 clamp 保底，
@@ -686,8 +752,26 @@ def compute_modifiers(summary_rows):
 
     modifiers_by_date = {}
 
+    # 上一列屬於哪個戴錶者分段。換人時要把六條歷史清單全部清空，
+    # 否則下一個人的第一晚會拿前一個人的 baseline 來比。
+    # 因為 summary_rows 已由 load_summary() 依日期排序、而分段是連續的
+    # 日期區間，所以「換段就清空」等同於「只用本段的歷史」。
+    prev_segment = None
+
     for row in summary_rows:
         row_date = row.get("date", "")
+
+        segment_name, segment_trusted, segment_start, _ = wearer_segment(row_date)
+        if segment_name != prev_segment:
+            # 換人了（或第一次進迴圈）。清空所有跨人不可用的累積狀態。
+            rhr_history.clear()
+            avg_hr_history.clear()
+            stress_history.clear()
+            steps_history.clear()
+            awake_count_history.clear()
+            segment_count_history.clear()
+            prev_segment = segment_name
+
         # 讀出「今晚」的原始數值（可能是 None，代表那晚沒量到）
         rhr = to_float(row.get("resting_heart_rate"))
         avg_hr = to_float(row.get("avg_heart_rate"))
@@ -796,6 +880,14 @@ def compute_modifiers(summary_rows):
                 current_day - timedelta(days=offset)
                 for offset in range(SRI_WINDOW_DAYS - 1, -1, -1)
             ]
+            # ⚠️ 窗格不得跨過戴錶者分界。SRI 量的是「這個人的作息有多規律」，
+            #    把兩個人的上床時間混在一起算出來的不是規律性，是兩人作息的差異。
+            #    換人後的頭四週窗格會往回踩到前一個人，這裡把它夾在本段起日。
+            #    夾完後有效配對數會不足，compute_sri 自己會回 None——那是對的，
+            #    「還不知道你規律不規律」本來就該說不知道。
+            if segment_start:
+                seg_start_day = datetime.fromisoformat(segment_start).date()
+                window_days = [d for d in window_days if d >= seg_start_day]
             sri_value, valid_pairs = compute_sri(window_days, asleep_epochs, recorded_days)
 
         # 加總各修正項，None（該項未生效）不計入。
@@ -809,6 +901,36 @@ def compute_modifiers(summary_rows):
         )
         # 保底再夾一次總範圍，防止未來調整個別上限時，總和意外超出 ±12
         total = max(-TOTAL_MODIFIER_CAP, min(TOTAL_MODIFIER_CAP, total))
+
+        # ⚠️ 戴錶者不明的區段：Tier3 與 SRI 全部關掉。
+        #
+        # 這兩者都是個人內比較，跨人算出來的數字沒有意義——不是「不準」，
+        # 是「量的根本不是那件事」。所以不是把值調小，是整個不輸出。
+        #
+        # 刻意放在最後覆寫，而不是在上面提早 continue：這樣前面的計算流程
+        # 完全不用改，讀的人也看得出「原本會算出東西，是這裡刻意丟掉的」。
+        # Tier1/2 的 base_score 不在這個字典裡，不受影響——那是絕對門檻，
+        # 不依賴任何個人歷史，換誰戴都成立。
+        if not segment_trusted:
+            modifiers_by_date[row_date] = {
+                "rhr_modifier": None,
+                "avg_hr_modifier": None,
+                "stress_modifier": None,
+                "activity_modifier": None,
+                "awake_modifier": None,
+                "segment_modifier": None,
+                "sri": None,
+                "sri_valid_pairs": 0,
+                "total_modifier": 0.0,
+                "modifier_note": UNVERIFIED_SEGMENT_NOTE,
+            }
+            rhr_history.append(rhr)
+            avg_hr_history.append(avg_hr)
+            stress_history.append(stress)
+            steps_history.append(steps)
+            awake_count_history.append(awake_count)
+            segment_count_history.append(segment_count)
+            continue
 
         modifiers_by_date[row_date] = {
             # None 代表這項因冷啟動未生效；有值的話四捨五入到小數點後兩位方便閱讀
