@@ -339,16 +339,33 @@ python garmin/run_pipeline.py          # 再跑後四步
 `garmin_importer.py` 救回來。唯一有價值的是 `sleep_records.sql`——那正是
 `PROJECT_STATUS.md` 3.5 說「不存在」的 TAPO 建表 SQL。
 
-**但它也不完整、不該直接撿來用**：`tapo_detector.py:499` 寫入的欄位與它逐欄相同，
-但 `sleep_anylzer.py:50` 與 `import mysql.py:57` 都 SELECT 了 `created_at`，
-而那份 `CREATE TABLE` **沒有這一欄**。拿它建表，寫得進去但分析程式會
-`Unknown column`。→ 應請影像組跑一次 `SHOW CREATE TABLE sleep_records` 給出現行結構。
+⚠️ **那條分支上的 `sleep_records.sql`（根目錄）已經被取代，不要再引用它。**
+現行版本是 `tapo/sleep_records.sql`（commit `00c08b1`，244KB），有 `created_at`，
+所以先前記的「建表後 `sleep_anylzer.py` 會 `Unknown column`」在現行版**不存在**。
 
-那份 dump 順帶用**我們自己的資料**驗證了三件已知的事（可直接引用進報告）：
-5 筆紀錄的 `report_date` 全是 dump 產生當天（證實 3.4「report_date 不可信」）；
-其中 4 筆分數**全是 50**，但事件數從 183 到 1225、翻身從 8 到 344——
-**四個完全不同的夜晚彼此無法區分**，正是 8.3 紅線 3「分數不得有人為地板」；
-timeline 第一筆是 16:48，且 `motion_intensity: 2073600` = 1920×1080，整畫面誤判。
+⚠️ **舊 dump 那三項「可直接引用進報告」的觀察，有兩項在新資料裡已經不成立。**
+2026-08-28 重新清點現行檔（實測，不是推論）：
+
+| 舊記錄（來自舊 dump） | 現行檔實際情形 |
+|---|---|
+| 5 筆紀錄 | **15 筆** |
+| 4 筆分數全是 50 → 印證紅線 3「人為地板」 | `sleep_quality_score` 有 **14 個不同的值（11~97）**，**地板症狀不存在** |
+| `report_date` 全是 dump 產生當天 | 日期是分散的，但**可信度分三層**，見下 |
+
+用 `created_at` 對照 `report_date` 分層（這是判斷日期可不可信的唯一內部證據）：
+
+| 分層 | 筆數 | 判準 |
+|---|---|---|
+| 現場擷取（可信） | 9 | `created_at` 與 `report_date` 同日或差 ±1 天（跨午夜） |
+| 事後批次補的 | 5 | `created_at` **全部是 `2026-08-12 13:21:29`**，同一秒 → 日期是人工填的 |
+| 幾乎確定是錯的 | 1 | id 48 宣稱 `2026-06-11`，卻在 **08-18** 才建立（差 68 天） |
+
+與 Garmin 51 晚的重疊：**最寬鬆 10 晚、只算現場擷取的 5 晚**（08-17/18/21/22/23）。
+
+⚠️ 那筆 06-11 是**唯一**讓 TAPO 與 Garmin 六月資料產生重疊的紀錄。
+不做這個分層就直接 `merge`，會憑空多出一個橫跨兩個月的「共同樣本」。
+
+（`motion_intensity: 2073600` = 1920×1080 整畫面誤判這一項仍然成立。）
 
 已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）、
 PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Jeremy 的 Insights 頁）。
