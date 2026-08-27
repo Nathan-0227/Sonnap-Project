@@ -44,6 +44,7 @@ Flutter 只做渲染。理由跟 AI 那邊完全一樣：判斷邏輯集中在�
 
 import argparse
 import json
+import math
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -172,6 +173,30 @@ QUALITY_TO_COLOR = {
     "Poor": "#FF9518",
     "Bad": "#FF4F63",
 }
+
+
+def round_half_up(value):
+    """四捨五入到整數，`.5` 一律進位。value 為 None 時回傳 None。
+
+    ⚠️ **不要改回內建的 `round()`。** Python 的 `round()` 是「銀行家捨入」
+       （round-half-to-even）——`.5` 會進到最近的**偶數**，所以
+       `round(76.5) == 76` 而 `round(77.5) == 78`。
+       Dart 的 `.round()` 則是一律進位，`76.5.round() == 77`。
+
+       兩邊規則不同會讓同一晚在畫面上出現兩個數字：分數環讀
+       `scoring.final_score` 自己在 Dart 端 `.round()`（→77），
+       寵物能量讀這裡算好的 `status.energy_level`（→76）。
+       2026-08-23 那晚 final_score 正好是 76.5，是 51 晚裡第一次壓在 .5 上，
+       這個差異才浮出來（`app/test/sleep_repository_test.dart` 會擋下來）。
+
+       以 Dart 為準而不是反過來，理由是「.5 進位」符合一般人的預期，
+       而銀行家捨入是統計慣例、在這裡只會讓人覺得少了一分。
+    """
+    if value is None:
+        return None
+    # math.floor(x + 0.5) 就是 half-up。分數恆為 0–100 的正數，
+    # 不必處理負值時 half-up 與 half-away-from-zero 的分歧。
+    return math.floor(value + 0.5)
 
 
 def load_json(path: Path):
@@ -429,7 +454,7 @@ def build_payload(target_date=None):
             # current_activity 需要「此刻」的狀態，但本 pipeline 是隔日批次產出，
             # 給不出來。硬填一個值就是編造，所以留 null，App 端 fallback 到 idle 動畫。
             "current_activity": None,
-            "energy_level": round(final_score) if final_score is not None else None,
+            "energy_level": round_half_up(final_score),
             "mood_reason": mood_reason,
         },
         "metrics": {
