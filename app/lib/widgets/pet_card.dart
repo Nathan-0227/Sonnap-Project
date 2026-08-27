@@ -7,13 +7,54 @@ class PetCard extends StatelessWidget {
   final VoidCallback? onDiaryTap;
   final VoidCallback? onFlowerTap;
 
+  /// [animationPath] 讀不到時改播的資產。給 null 就直接退到靜態 icon。
+  final String? fallbackAnimationPath;
+
+  /// 套在 [fallbackAnimationPath] 上的濾鏡。用途見 pet_mood_animation.dart：
+  /// 心情專屬的動畫檔還沒到位時，靠它讓 tired／anxious 不要看起來跟 happy 一樣。
+  /// ⚠️ 只套在退路上，不套在 [animationPath]——美術給的檔要照原樣播。
+  final ColorFilter? fallbackFilter;
+
   const PetCard({
     super.key,
     required this.message,
     required this.animationPath,
+    this.fallbackAnimationPath,
+    this.fallbackFilter,
     this.onDiaryTap,
     this.onFlowerTap,
   });
+
+  /// 第二、三層退路。抽成方法是因為 errorBuilder 裡塞三層巢狀很難讀。
+  Widget _buildFallback() {
+    const double size = 190;
+
+    if (fallbackAnimationPath != null) {
+      final Widget animation = Lottie.asset(
+        fallbackAnimationPath!,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        // 第三層：連退路資產都讀不到才走這裡
+        errorBuilder: (context, error, stackTrace) => _buildIcon(),
+      );
+      return fallbackFilter == null
+          ? animation
+          : ColorFiltered(colorFilter: fallbackFilter!, child: animation);
+    }
+
+    return _buildIcon();
+  }
+
+  Widget _buildIcon() {
+    return const SizedBox(
+      width: 190,
+      height: 190,
+      child: Center(
+        child: Icon(Icons.pets_rounded, color: Colors.white54, size: 80),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,23 +158,19 @@ class PetCard extends StatelessWidget {
           Center(
             child: Padding(
               padding: const EdgeInsets.only(top: 65),
+              // 三層退路，由好到壞：
+              //   ① 該心情專屬的 Lottie 檔
+              //   ② 檔案不存在 → happy_dog.json + 該心情的濾鏡
+              //   ③ 連 happy_dog.json 都讀不到 → 靜態的爪印 icon
+              // ② 是目前的實際情況（美術只給了 happy_dog.json），
+              // 用意是不要出現「文字寫 Anxious、圖在搖尾巴」的矛盾畫面。
               child: Lottie.asset(
                 animationPath,
                 width: 190,
                 height: 190,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
-                  return const SizedBox(
-                    width: 190,
-                    height: 190,
-                    child: Center(
-                      child: Icon(
-                        Icons.pets_rounded,
-                        color: Colors.white54,
-                        size: 80,
-                      ),
-                    ),
-                  );
+                  return _buildFallback();
                 },
               ),
             ),

@@ -11,6 +11,144 @@
 
 ---
 
+## 📌 2026-08-27 Android 實機環境從零建起（第一次把 App 裝進實體手機）
+
+目標：使用者要用自己的手機測試。**結果達成**——`app-debug.apk` 已安裝並執行於
+SM S9260（Android 16 / API 36 / arm64），資料讀取正常。
+分支是 `merge/jeremy-report-screen`（main + Jeremy 的 Insights 頁）。
+
+起點：Flutter 3.44.9 已裝在 `C:\Users\user\flutter`（但不在 PATH），
+**Android SDK 完全不存在**，Java 只有 JRE 8 與 JRE 9（都是 JRE 不是 JDK，
+且 Gradle 9 最低要 Java 17）。選了「裝完整 Android Studio」而非只裝 cmdline-tools，
+是使用者的決定。
+
+### ⚠️ 坑 1：安裝精靈裝的是 API 37，但 Flutter 3.44.9 寫死 compileSdk = 36
+
+`FlutterExtension.kt:23` 是 `compileSdkVersion: Int = 36`（minSdk 24、targetSdk 36）。
+Android Studio 2026.1 的精靈只裝最新的 `platforms;android-37.0`，
+AGP 找不到 `android-36` 會直接失敗。
+
+補裝過程踩到兩件事，記下來免得重來：
+
+1. **`sdkmanager "platforms;android-36"` 會失敗**，訊息是
+   `Package platforms not found. / Package android-36 not found.`
+   ——`.bat` 經 cmd 轉發時把 `;` 當成參數分隔字元切開了。
+   新版工具已把 `sdkmanager` 標為 deprecated，改用同目錄的
+   **`android.exe sdk install platforms/android-36`**（用斜線、直接呼叫 exe）。
+2. 但它自己的下載器在這條網路上會 `java.io.IOException` 中斷。
+   最後是用 `curl -C -` 抓 `platform-36_r02.zip`（62.8MB）解壓到 `platforms/`，
+   **並手動補一份 `package.xml`**——沒有這個檔，SDK 管理器與 AGP 都不認得它。
+   範本取自 `android-37.0/package.xml`，數值照 `android-36/source.properties` 改：
+   API 36、extension-level 17、revision 2、layoutlib 15。
+   驗證方式：`flutter doctor` 回報 `Android SDK version 36.0.0`，
+   最終 APK 的 `aapt2 dump badging` 顯示 `compileSdkVersion='36'`。
+
+### ⚠️ 坑 2：機器上有兩份 Flutter SDK，版本混用會出無意義的錯
+
+| 路徑 | 版本 | Engine |
+|---|---|---|
+| `C:\Users\user\flutter` | **3.44.9 stable**（專案用這個） | `5a2a6a42cc` |
+| `C:\src\flutter` | **3.47-candidate**（未發布） | `5d53178869` |
+
+`C:\src\flutter` 在 2026-08-27 04:03:27 出現（本輪對話開始時實測還不存在）。
+它是官方 SDK 的完整解壓，git remote 指向 `flutter/flutter`，
+reflog 是從 `flutter.googlesource.com/mirrors/flutter` clone——
+那是 **Google 打包機器**的記錄（日期 08-19），不是本機操作。
+**放進來的是什麼程式，查不出來。** 不是 Android Studio 的 Flutter 外掛
+（沒裝），也不是 VS Code 的 Dart-Code（沒裝）。
+
+症狀長這樣，而且**完全不會指向真正的原因**：
+
+```
+/C:/src/flutter/packages/flutter/lib/src/gestures/binding.dart:329:15:
+Error: Method not found: 'HitTestResponse'.
+```
+
+機制：`C:\src\flutter` 的 pub（3.13.1）改寫了 `app/android/local.properties`
+的 `flutter.sdk` 與 `.dart_tool/package_config.json`（4 個項目指過去），
+於是變成**拿 3.44.9 的編譯器去編 3.47 的 framework 原始碼**——
+3.47 的 `binding.dart` 呼叫 `ui.HitTestResponse`，那個 API 在 3.44.9 的
+`dart:ui` 裡還不存在。
+
+修法：`flutter clean` → `local.properties` 指回 stable → 用 3.44.9 重跑 `pub get`。
+驗證看 `package_config.json` 的 `generatorVersion`（要是 **3.12.2** 不是 3.13.1）。
+
+⚠️ **這顆地雷還在。** `C:\src\flutter` 沒有刪，而 `local.properties`
+在建置後又被改回 `C:\src\flutter`。下次建置前先確認這個檔。
+
+### ⚠️ 坑 3：`local.properties` 的路徑不能用單反斜線
+
+`app/android/settings.gradle.kts` 是用 Java `Properties.load()` 讀它，
+所以 `\` 是跳脫字元。寫成 `C:\Users\user\flutter`，`\user` 的 `\u`
+會被當成 Unicode 跳脫開頭，直接丟 **`Malformed \uxxxx encoding`**。
+
+我用 `sed` 改的時候真的寫成單反斜線了；heredoc `<<'EOF'` 也保不住雙反斜線。
+**最後用正斜線**（`C:/Users/user/flutter`），Java 與 Gradle 在 Windows 上都接受，
+而且沒有任何跳脫問題。驗證方式是寫一支三行的 Java 實際 `Properties.load()` 印出來，
+不要用肉眼看。
+
+### ⚠️ 坑 4：VS Code 的「Gradle for Java」擴充套件會搶 Gradle 鎖
+
+一開始它報 `No connection to gradle server`，我判斷「跟 Flutter 無關、按 ✕ 就好」
+——**前半對，後半錯**。Temurin 17 一裝好，它就能啟動 Gradle 了，
+於是自己跑了一次 sync 並吃下 `app/android/.gradle/noVersion/buildLogic.lock`，
+我們的建置晚 57 秒進場就被擋掉：
+
+```
+Timeout waiting to lock build logic queue. Owner PID: 16856
+```
+
+用父程序追出來：`gradlew(41760) → daemon(16856) → kotlin compiler(33384)`，
+與我們那條 `flutter build(1668)` 是兩條獨立的建置。
+→ **Flutter 專案應把這個擴充套件設成 workspace 停用。**
+
+### 網路：大檔下載會斷，一律用 curl 續傳
+
+Android Studio 安裝檔（1.4GB）winget 斷在 136MB、curl 第一次斷在 693MB、
+第二次才完成；SDK 精靈的 platform-tools 與 emulator 也各失敗一次。
+`curl -L -C - --retry 20 --retry-all-errors --speed-limit 1024 --speed-time 30`
+這組參數能自己撐完（`--speed-time` 是關鍵：龜速 30 秒就重試，不會卡死不動）。
+**驗證完整性用 `Get-AuthenticodeSignature`**，簽章能過就代表每個 byte 都對。
+
+### 最終環境
+
+| 項目 | 值 |
+|---|---|
+| Android Studio | 2026.1（3.29GB，**未裝 Flutter 外掛**） |
+| Android SDK | `platforms/android-36`（手補）+ `android-37.0`、`build-tools 36.0.0`、`platform-tools 37.0.1` |
+| JDK | **Temurin 17**（`C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot`） |
+| Gradle / AGP / Kotlin | 9.1.0 / 9.0.1 / 2.3.20 |
+
+⚠️ Flutter 挑的是 Temurin 17，**不是** Android Studio 自帶的 JBR 25——
+這是好事，JDK 25 與 Gradle 9.1 的相容性沒有驗證過。
+
+⚠️ `flutter doctor` 會報 `Android license status unknown`，**可以無視**：
+新版 Android CLI 已廢掉 `--licenses`（直接回 "no longer needed"），
+是 Flutter 的檢查方式過時，授權檔 `licenses/android-sdk-license` 實際存在。
+
+### 裝進手機的方式與驗證
+
+用 `adb install -r` 直接裝（繞開 Gradle 與 `local.properties`，不受 SDK 衝突影響），
+再 `adb shell am start -n com.example.app/.MainActivity` 啟動。
+
+驗證三項，都通過：
+
+- `aapt2 dump badging`：`compileSdkVersion='36'`、`application-label:'Sonnap'`
+  （後者證實合併時把 Jeremy 的 `pubspec name` 改動移到 `AndroidManifest` 的
+  `android:label` 是對的）
+- APK 內含 `assets/flutter_assets/assets/data/app_payload.json`
+- logcat：`SLEEP JSON LOADED`、`session_id: 20260823_001`、`pet_mood: anxious`，
+  渲染後端 Impeller (Vulkan)，無 `FATAL` / `AndroidRuntime`
+
+### ⚠️ 方法論：關聯不是因果
+
+我看到「Android Studio 在跑」+「`local.properties` 被改」+「多出一個 release APK」，
+就對使用者斷言是 Android Studio 幹的。使用者截圖顯示
+**Languages & Frameworks 裡根本沒有 Flutter**（外掛沒裝，做不到這件事）才發現講錯。
+→ 歸咎前先確認那個嫌疑者**有沒有能力**做這件事，不要只看時間吻合。
+
+---
+
 ## 📌 2026-08-26（下午）輸出語言改英文
 
 使用者決定「輸出一律以英文為主」。範圍：**後端 + `ai/`，不含 Flutter**

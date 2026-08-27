@@ -26,7 +26,7 @@ def load_config():
         "min_motion_area": 50000,
         "audio_silence_threshold": 30,
         "audio_snooze_threshold": 40,
-        "tapo_url": "rtsp://imqs113:Monica113@10.22.221.253:554/stream1",
+        "tapo_url": "rtsp://imqs113:Monica113@10.204.162.253:554/stream1",
         "video_min_duration": 5,
         "video_extend_duration": 5,
         "video_max_duration": 30,

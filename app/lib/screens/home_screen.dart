@@ -5,6 +5,7 @@ import '../services/sleep_repository.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/header_card.dart';
 import '../widgets/pet_card.dart';
+import '../widgets/pet_mood_animation.dart';
 import '../widgets/pet_mood_card.dart';
 import '../widgets/sleep_score_card.dart';
 import '../widgets/sleep_streak_card.dart';
@@ -209,9 +210,14 @@ class _HomeScreenState extends State<HomeScreen> {
             iconBackgroundColor: const Color(0xFFFF7043),
           ),
 
+          // 動畫跟著 status.pet_mood 走，不再寫死 happy_dog.json。
+          // 心情專屬的檔還沒到位時，會退到 happy_dog + 該心情的濾鏡，
+          // 詳見 pet_mood_animation.dart 的說明。
           PetCard(
             message: display.petMessage,
-            animationPath: "assets/animations/happy_dog.json",
+            animationPath: petMoodVisual(mood).assetPath,
+            fallbackAnimationPath: kPetFallbackAnimation,
+            fallbackFilter: petMoodVisual(mood).fallbackFilter,
             onDiaryTap: () => _showDream(session),
             onFlowerTap: () => _showComingSoon("Pet activity"),
           ),
