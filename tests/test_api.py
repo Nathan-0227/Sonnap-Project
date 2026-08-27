@@ -189,6 +189,37 @@ ok("data_sources 兩層都有", set(h5["data_sources"]) == {"behavior", "health_
 
 print()
 print("=" * 78)
+print("【額外】sleep_start_time / wake_time 是「睡著」不是「上床」")
+print("=" * 78)
+# session 是 23:00 上床 → 07:30 離床，但第一段睡眠 23:20 才開始、
+# 最後一段睡眠 07:00 結束（07:00–07:30 是 AWAKE_IN_BED）。
+# 這兩欄必須拿 sleep_onset / final_wake，拿 session 起訖就是把
+# 「臥床」寫成「睡著」——那個值已經在 time_in_bed_min 裡了。
+check("metrics.sleep_start_time = 第一段睡眠的起點",
+      h5["metrics"]["sleep_start_time"], f"{D}T23:20:00+08:00")
+check("metrics.wake_time = 最後一段睡眠的終點",
+      h5["metrics"]["wake_time"], f"{E}T07:00:00+08:00")
+ok("不等於 session 起點（那是上床，不是睡著）",
+   h5["metrics"]["sleep_start_time"] != session["startTime"],
+   f'session={session["startTime"]} vs onset={h5["metrics"]["sleep_start_time"]}')
+ok("不等於 session 終點（那是離床，不是醒來）",
+   h5["metrics"]["wake_time"] != session["endTime"],
+   f'session={session["endTime"]} vs wake={h5["metrics"]["wake_time"]}')
+ok("也不等於 lights_out_at（行為層是第三個構念）",
+   h5["metrics"]["sleep_start_time"] != h5["behavior"]["lights_out_at"],
+   f'lights_out={h5["behavior"]["lights_out_at"]}')
+
+ins5 = client.get(f"/insights?user_id={u5}").json()
+hist5 = ins5["wearable"]["history"]
+ok("/insights 的 history 帶得出這兩欄",
+   all("sleep_start_time" in r and "wake_time" in r for r in hist5),
+   f"{len(hist5)} 晚")
+check("/insights 與 /home 同一個值",
+      (hist5[0]["sleep_start_time"], hist5[0]["wake_time"]),
+      (h5["metrics"]["sleep_start_time"], h5["metrics"]["wake_time"]))
+
+print()
+print("=" * 78)
 print("【額外】沒有行為資料時，心情要與舊路徑（build_app_payload）完全一致")
 print("=" * 78)
 u6 = client.post("/users", json={"display_name": "只有錶", "study_cohort": "L1"}).json()["user_id"]

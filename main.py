@@ -535,6 +535,10 @@ async def get_home(
             "rem_minutes": w_row["rem_min"],
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
+            # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。
+            #    上床時刻在 behavior.lights_out_at，那是另一個構念。
+            "sleep_start_time": w_row["sleep_start_time"],
+            "wake_time": w_row["wake_time"],
             # 只有 Health Connect 給得出來；Garmin 一律 null（見 3.9）
             "time_in_bed_minutes": w_row["time_in_bed_min"],
             "clinical_sleep_efficiency": w_row["clinical_efficiency"],
@@ -644,6 +648,10 @@ async def get_insights(
                         round(r["duration_min"] / 60.0, 2)
                         if r["duration_min"] is not None else None
                     ),
+                    # Insights 頁要畫「幾點睡→幾點醒」。與 asset 路徑
+                    # （build_app_payload.py 的 history）同一個來源，欄名也相同。
+                    "sleep_start_time": r["sleep_start_time"],
+                    "wake_time": r["wake_time"],
                     "sri": r["sri"],
                     "source": r["source"],
                     "device_brand": r["device_brand"],
