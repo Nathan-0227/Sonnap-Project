@@ -66,6 +66,40 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 RTSP 密碼**，這件事只有影像組做得到，目前還沒人做。下次接手先確認這件事
 有沒有處理，沒有的話優先提醒他們。
 
+### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
+
+⚠️ **全部尚未 push。** 領先幾個 commit 請直接問 git，不要問這裡：
+`git log --oneline origin/main..feature/pet-mood-animation`（方法論第 2 點）。
+
+| # | 做了什麼 | 實測 |
+|---|---|---|
+| 1 | `tapo 2.0/.env` 停止追蹤 + `.env.example`（分支 `fix/untrack-tapo-env`，**獨立**） | — |
+| 2 | `wearable_nightly` 補 `sleep_start_time` / `wake_time` | 51 晚有值，與 asset 路徑 30/30 逐字相同 |
+| 3 | baseline 窗格改日曆天（`MAX_BASELINE_DAYS`） | 17 晚位移，最大 1.60，**0 晚換等級** |
+| 4 | `MOTIF_FAMILIES` 一對一 + 關鍵字擋得住改寫 | 對不到家族 **10/51 → 1/51** |
+| 5 | 沒量到睡眠的夜晚不得進 baseline | 27 晚位移，最大 1.30，2 晚換等級 |
+| 6 | **新增 `tests/test_scoring_guards.py`** | 4 條，全部驗證過「bug 重現時會紅」 |
+| 7 | `PROJECT_STATUS.md` 對齊現況（51 晚、三名配戴者） | 見六、0 |
+| 8 | 3.9 攝影機上床時刻：樣本 3 晚 → 9 晚 | 成功 4 晚、兩種失敗各有解 |
+| 9 | **新增 `inspect_tapo_dump.py`** | 讓 3.9/3.10 的數字可重跑 |
+
+⚠️ **第 2 項的教訓**：文件寫「要補是三處」，實際是**五處**。多的兩處是
+`db.py` 的欄位白名單（會拋錯）與 `healthconnect_adapter.to_wearable_row`
+（**不會報錯**）。以後在 `wearable_nightly` 加欄位請照五處盤點。
+
+### ⏭️ 這一輪之後，還沒做的（都卡在別人身上）
+
+| 事情 | 卡在誰 |
+|---|---|
+| **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
+| TAPO timeline 時間戳壞掉（3 晚全是 `00:00:00`） | 影像組 |
+| `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 影像組。**改一行設定** |
+| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組 |
+| `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
+| push / 開 PR | 使用者（公開 repo 的對外動作） |
+| 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
+| 分支要不要拆（見下方 ⚠️ 並行） | 使用者 |
+
 ### ✅ demo 相關這一輪的三個進展
 
 1. **APK 已能自己建，且已裝進實體手機測過**（分支 `merge/jeremy-report-screen`，
