@@ -28,7 +28,18 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 `garmin/.env` 有**真實 Garmin 帳號密碼**。絕不提交、絕不在回覆中印出或引用其內容。
 
 ⚠️ `tapo/tapo_detector.py:29` 與 `tapo/sound test.py:7` 的 RTSP 帳密仍是**明碼寫死**
-（影像組負責，尚未改成環境變數）。同樣不要複製進回覆或 commit。
+（影像組負責，尚未改成環境變數）。`tapo 2.0/` 的兩支也各有 2–4 處命中。
+同樣不要複製進回覆或 commit。
+
+### ⚠️ GitHub 網頁「Add files via upload」會繞過本機 `.gitignore`
+
+`.gitignore:8` 早就有 `.env` 規則，但那條規則**只在 `git add` 時生效**。
+從網頁上傳檔案不經過本機 git，所以擋不住——`tapo 2.0/.env` 就是這樣進版控的
+（commit `b5d166a`，08-27）。這是目前**唯一已知能繞過既有防護的路徑**。
+
+→ 一律用 `git commit` 推檔案，不要用網頁上傳。
+→ 收到隊友「Add files via upload」的 commit 時，先跑
+  `git show --stat <commit>` 看有沒有 `.env`、金鑰、憑證。
 
 ---
 
@@ -97,12 +108,17 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 > 與 `metrics` 同一個來源（features），最新一晚兩邊逐字相同。
 > 30/30 晚都有值，分數欄位逐欄未變。
 >
-> ⚠️ **`GET /insights` 的 `history` 還是沒有這兩欄**——`wearable_nightly`
-> （21 欄）連欄位都不存在（`migrate_garmin_to_db.py:319` 讀得到 `sleep_start_time`，
-> 但只拿來模擬 `lights_out_at`，沒寫進表）。Jeremy 目前走舊的 asset 路徑、
-> 不受影響，但**他一接新 API 就會再卡一次**。要補是三處：
-> `db.py` 的 SCHEMA + `COLUMN_MIGRATIONS`（兩邊都要改）、migrate 的寫入、
-> `main.py` 的 `/home` 與 `/insights`。
+> ✅ **`GET /insights` 的 `history` 也補上了**（2026-08-28，commit `4aff730`）。
+> `/home` 的 `metrics` 一併補齊。51 晚全部有值，與 `app_payload.json` 的
+> history 30/30 逐字相同，分數欄位逐列未變。**Jeremy 現在接新 API 不會再卡。**
+>
+> ⚠️ **當時文件寫「要補是三處」，實際是五處。** 多出來的兩處是
+> `db.py` 的 `upsert_wearable_nightly` 欄位白名單、以及
+> `wearable/healthconnect_adapter.py` 的 `to_wearable_row`。
+> 前者會拋 `ValueError`，跑一次就發現；**後者不會報錯**——不補的話
+> 只有 Health Connect 來源的使用者缺值、Garmin 來源有值，
+> 那種「只在一種來源下缺資料」的 bug 最難查。
+> → 以後在 `wearable_nightly` 加欄位，請照**五處**盤點。
 >
 > ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你
 > 「睡著」（生理），後者是「放下手機」（行為），後者一定較早。
@@ -148,17 +164,50 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 ⚠️ **負責人本人的 baseline 從 2026-08-28 起算**，`MIN_BASELINE_NIGHTS = 14`，
 所以**前 14 晚 Tier3 是冷啟動、不產生修正值**（09-09 之前湊不滿）。
 
-⚠️ **殘留問題（獨立於上述，尚未處理）**：`MAX_BASELINE_NIGHTS = 28`
-（`apply_recovery_modifier.py:181`）**數的是「晚」不是「天」**，
-對照 `SRI_WINDOW_DAYS` 明寫「用日曆天而非有資料的晚數」。
-分段之後最嚴重的症狀消失了，但單一區段內配戴稀疏時，baseline 仍可能橫跨數月。
+✅ **那個殘留問題已修**（2026-08-28，commit `925e2b1`）。
+常數改名 `MAX_BASELINE_DAYS`，`rolling_baseline()` 改吃 `(日期, 值)` 並依
+日曆天夾窗，與 `SRI_WINDOW_DAYS` 一致。
 
-**② 新 5 晚沒有 AI 夢境**
+實測 51 晚：17 晚分數位移（最大 **1.60**、平均 0.129）、**0 晚品質等級改變**、
+最新一晚不變。**0 個項目「原本沒 baseline、改完才有」**——這一改只會更嚴不會更鬆。
+3 晚的 `stress_modifier` 改為停用（`presleep_stress_score` 要求前一晚也戴錶，
+是最稀疏的訊號，日曆天窗格最先咬到它）。
 
-`python garmin/run_pipeline.py --ai` —— ⚠️ **會真的打 Claude API**（`ai/.env` 已有金鑰）。
-目前 `app_payload.json` 最新那晚 `is_ai_generated=false`，退回規則式文字。
-⚠️ 跑之前先看 8/15 記錄的「深睡類調色盤只對應 2 個家族」那個未解問題
-（`MOTIF_FAMILIES` 拆成一對一，約 6 行），否則新 5 晚很可能又寫出「棉被與雪」。
+⚠️ 兩個門檻管的是不同的事，不要混為一談：
+`MAX_BASELINE_DAYS`（28）管「多舊的資料還算數」（日曆天），
+`MIN_BASELINE_NIGHTS`（14）管「要有幾晚才夠穩」（有效晚數）。
+配戴稀疏時兩者會同時咬到，那是正確行為——「最近 28 天只戴 9 晚」
+本來就不足以代表「現在的你」。
+
+**② AI 夢境 —— 這一條已經沒事了（2026-08-28 核對）**
+
+「新 5 晚沒有 AI 夢境」這句**早就過期**：`ai/data/ai_advice.json` 的 51 晚
+全部 `source=llm`，`app_payload.json` 最新那晚 `is_ai_generated=true`
+（model `claude-sonnet-5`）。不需要再跑 `--ai`。
+
+✅ 那個擋路的「`MOTIF_FAMILIES` 不是一對一」也已修（commit `d79cf97`），
+而且一併抓到**第二個更嚴重的缺陷**：
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 家族數 | 21 | 27（與調色盤選項一對一） |
+| **對不到任何家族的夜晚** | **10 / 51** | **1 / 51** |
+| 實際用到的家族 | 13 | 19 |
+| 最集中的家族 | 19.6% | **11.8%** |
+
+第二個缺陷是：**關鍵字抄了調色盤的逐字片語，但 prompt 明寫
+"You may rephrase and extend"**。模型照做，關鍵字就對不上，
+10 晚的去重完全失效。最直接的證據是 08-18 與 08-22 兩晚的夢幾乎逐句相同
+（"a sky that could not decide / settle on a season"），卻因為關鍵字寫的是
+`changing season` 而雙雙沒被擋下。
+
+→ 新增調色盤選項時，這裡要**同步新增一個家族**，而且關鍵字要取
+「該選項獨有、改寫後仍會留下」的字（`season` / `lake` / `cold morning`），
+不是那一整句。
+
+⚠️ **`PROMPT_VERSION` 沒有動**（仍是 v4）。升版會把 51 晚全部標記為 stale
+要求重生，那會實際呼叫 Claude API 花掉額度；既有夢境的內容不因這次修改
+而失效，改善的是**往後**生成時的去重精細度。
 
 **③ TAPO 的 `sonnap` 資料庫不在這台機器上**
 
