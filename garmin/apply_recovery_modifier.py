@@ -52,6 +52,11 @@ Cold start（冷啟動）處理
 還不具意義的雜訊資料誤導分數。baseline 只採用「當晚之前」的歷史資料（不含當晚本身），
 避免當晚資料影響自己的比較基準。
 
+⚠️ 那 14 晚必須落在 MAX_BASELINE_DAYS（28）個**日曆天**之內（2026-08-28 起）。
+   兩個門檻管不同的事：MAX_BASELINE_DAYS 管「多舊的資料還算數」，
+   MIN_BASELINE_NIGHTS 管「要有幾晚才夠穩」。配戴稀疏時兩者會同時咬到，
+   那是正確行為——「最近 28 天只戴 9 晚」本來就不足以代表「現在的你」。
+
 ═══════════════════════════════════════════════════════════════════
 ⚠️ 已知限制與設計變更記錄（誠實揭露）
 ═══════════════════════════════════════════════════════════════════
@@ -176,9 +181,20 @@ DEFAULT_OUTPUT_JSON = DATA_DIR / "garmin_sleep_quality_final.json"
 # 冷啟動保護：baseline 至少要有幾晚有效歷史資料，這項修正值才會啟動。
 # 14 這個數字對應 Kerkering/Quer 等文獻常用的「至少兩週」個人化基準門檻。
 MIN_BASELINE_NIGHTS = 14
-# baseline 最多往回看幾晚——避免一個月前的資料還一直影響「現在」的比較基準，
+# baseline 最多往回看幾天——避免一個月前的資料還一直影響「現在」的比較基準，
 # 讓 baseline 能跟著使用者近期的生活型態緩慢漂移，而不是永遠固定不變。
-MAX_BASELINE_NIGHTS = 28
+#
+# ⚠️【2026-08-28 修正】用「日曆天」而非「有資料的晚數」，與 SRI_WINDOW_DAYS 一致。
+#
+#    舊版寫成 MAX_BASELINE_NIGHTS，取的是 history[-28:]——**28 筆**而不是 28 天。
+#    配戴稀疏時這兩者差很多：51 晚裡有 28 個日曆日沒戴錶，所以「最近 28 筆」
+#    實際上可能橫跨兩三個月。那正好違背這個常數自己的目的——
+#    它存在的理由就是「不要讓一個月前的資料影響現在」。
+#
+#    ⚠️ 這不會讓 baseline 變得比較容易湊滿：MIN_BASELINE_NIGHTS = 14 仍然
+#       數「有效晚數」，只是現在那 14 晚必須落在最近 28 個日曆天之內。
+#       換句話說，這一改**只會讓門檻更嚴，不會更鬆**。
+MAX_BASELINE_DAYS = 28
 
 # ═══════════════════════════════════════════════════════════════════
 # 【2026-08-28】戴錶者分段 —— 這支手錶不只一個人戴過
@@ -447,9 +463,13 @@ def load_summary(path):
     return rows
 
 
-def rolling_baseline(history_values):
+def rolling_baseline(history, current_date):
     """
-    以「當晚之前」最多 MAX_BASELINE_NIGHTS 筆有效數值算中位數，當作個人化 baseline。
+    以「當晚之前、最近 MAX_BASELINE_DAYS 個日曆天內」的有效數值算中位數，
+    當作個人化 baseline。
+
+    `history` 是 [(日期字串, 數值或 None), ...]，由呼叫端逐晚累積。
+    帶著日期是必要的——只有數值的話無從判斷那筆是昨天還是三個月前的。
 
     為什麼用中位數不用平均數：平均數容易被單一天的極端值拉走
     （例如某晚壓力飆到 46 分，用平均會把整個 baseline 往上拖），
@@ -457,10 +477,30 @@ def rolling_baseline(history_values):
 
     有效歷史筆數不足 MIN_BASELINE_NIGHTS 時回傳 None，
     呼叫端看到 None 就知道「這項還不能修正，資料還不夠」。
+
+    ⚠️ 兩個門檻管的是不同的事，缺一不可：
+       MAX_BASELINE_DAYS 管「多舊的資料還算數」（日曆天），
+       MIN_BASELINE_NIGHTS 管「要有幾晚才夠穩」（有效晚數）。
     """
-    # 只保留有量到的值（None 是那晚沒資料，不該算進 baseline），
-    # 再取最後 MAX_BASELINE_NIGHTS 筆，捨棄太久以前的資料
-    valid = [v for v in history_values if v is not None][-MAX_BASELINE_NIGHTS:]
+    try:
+        cutoff = datetime.fromisoformat(current_date).date() - timedelta(days=MAX_BASELINE_DAYS)
+    except (TypeError, ValueError):
+        # 日期壞掉時退回「不夾窗」，讓下游的 MIN_BASELINE_NIGHTS 自己擋。
+        # 不直接回 None 是因為那會讓一列壞日期靜靜地關掉整項修正值。
+        cutoff = None
+
+    valid = []
+    for d, v in history:
+        if v is None:
+            continue          # 那晚沒量到，不該算進 baseline
+        if cutoff is not None:
+            try:
+                if datetime.fromisoformat(d).date() < cutoff:
+                    continue  # 太久以前，已經不代表「現在的你」
+            except (TypeError, ValueError):
+                continue
+        valid.append(v)
+
     if len(valid) < MIN_BASELINE_NIGHTS:
         return None
 
@@ -676,7 +716,14 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
     notes = []
     if missing:
         notes.append(
-            f"Building personal baseline ({'/'.join(missing)} below {MIN_BASELINE_NIGHTS} nights of history); this modifier is paused."
+            # ⚠️ 措辭要把「窗格」講出來。2026-08-28 baseline 改用日曆天之後，
+            #    有 14 晚以上總資料、卻因為最近 28 天配戴太稀疏而停用的情況
+            #    是存在的（07-12 / 07-20 / 07-21 就是）。只寫
+            #    "below 14 nights of history" 會讓那種使用者以為是系統壞了。
+            #    行動仍然是「繼續戴」——與 UNVERIFIED_SEGMENT_NOTE 不同，
+            #    那個是「這段不該做個人化比較」，戴再多也不會變。
+            f"Building personal baseline ({'/'.join(missing)} below {MIN_BASELINE_NIGHTS} "
+            f"nights within the last {MAX_BASELINE_DAYS} days); this modifier is paused."
         )
     if not sri_available:
         notes.append(
@@ -817,12 +864,12 @@ def compute_modifiers(summary_rows):
         segment_count = to_float(row.get("sleep_segment_count"))
 
         # 用「今晚之前」累積的歷史（此時還沒把今晚加進去）算各項 baseline
-        rhr_baseline = rolling_baseline(rhr_history)
-        avg_hr_baseline = rolling_baseline(avg_hr_history)
-        stress_baseline = rolling_baseline(stress_history)
-        steps_baseline = rolling_baseline(steps_history)
-        awake_baseline = rolling_baseline(awake_count_history)
-        segment_baseline = rolling_baseline(segment_count_history)
+        rhr_baseline = rolling_baseline(rhr_history, row_date)
+        avg_hr_baseline = rolling_baseline(avg_hr_history, row_date)
+        stress_baseline = rolling_baseline(stress_history, row_date)
+        steps_baseline = rolling_baseline(steps_history, row_date)
+        awake_baseline = rolling_baseline(awake_count_history, row_date)
+        segment_baseline = rolling_baseline(segment_count_history, row_date)
 
         # 靜止心率、睡眠期間平均心率、壓力：數值越低越好，用絕對差距換算
         # （見檔頭修正記錄第 3 點）；心率拆成 RHR 與 avg_HR 兩個子項各佔一半額度
@@ -924,12 +971,12 @@ def compute_modifiers(summary_rows):
                 "total_modifier": 0.0,
                 "modifier_note": UNVERIFIED_SEGMENT_NOTE,
             }
-            rhr_history.append(rhr)
-            avg_hr_history.append(avg_hr)
-            stress_history.append(stress)
-            steps_history.append(steps)
-            awake_count_history.append(awake_count)
-            segment_count_history.append(segment_count)
+            rhr_history.append((row_date, rhr))
+            avg_hr_history.append((row_date, avg_hr))
+            stress_history.append((row_date, stress))
+            steps_history.append((row_date, steps))
+            awake_count_history.append((row_date, awake_count))
+            segment_count_history.append((row_date, segment_count))
             continue
 
         modifiers_by_date[row_date] = {
@@ -962,15 +1009,15 @@ def compute_modifiers(summary_rows):
         # 否則今晚就會把自己算進自己的 baseline 裡，變成用自己評價自己。
         # （J 不在這裡累積，因為它用的是 build_sleep_timeline 建好的完整時間軸，
         #   由窗格範圍控制「看到哪些天」，不需要逐晚 append。）
-        rhr_history.append(rhr)
-        avg_hr_history.append(avg_hr)
-        stress_history.append(stress)
+        rhr_history.append((row_date, rhr))
+        avg_hr_history.append((row_date, avg_hr))
+        stress_history.append((row_date, stress))
         # ⚠️ 這裡 append 的是「已經位移過」的 steps（前一天的值）。這是對的，
         #    不是漏改：baseline 必須跟被比較的值取自同一個序列，否則就變成
         #    拿「睡前活動量」去比「全部白天活動量」的基準，兩者定義不同。
-        steps_history.append(steps)
-        awake_count_history.append(awake_count)
-        segment_count_history.append(segment_count)
+        steps_history.append((row_date, steps))
+        awake_count_history.append((row_date, awake_count))
+        segment_count_history.append((row_date, segment_count))
 
     return modifiers_by_date
 
