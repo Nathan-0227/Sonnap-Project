@@ -243,31 +243,78 @@ SPELLED_NUMERAL_PATTERN = re.compile(
 #
 #    比對一律轉小寫後做（見 recent_motifs），所以這裡全用小寫。
 #
-#    ⚠️ 家族與調色盤選項仍然**不是一對一**——深睡類 6 個選項只對應
-#       2–3 個家族。這是 2026-08-15 就記下的未解問題（「棉被與雪」佔了 37%），
-#       語言改了但這個結構問題原封不動。下次要修就是把下面拆到與選項一對一。
+#    ⚠️【2026-08-28 修正】家族現在與調色盤選項**一對一**（27 個家族對 27 個選項）。
+#
+#    修正前深睡類 6 個選項只對應 2 個家族、REM 低的 3 個選項只對應 1 個，
+#    而那正是「棉被與雪佔 37%」（2026-08-15 記錄）的機制：
+#
+#      去重是「最近 7 晚用過的家族，下次不要再用」。家族一合併，
+#      模型寫了 moss（歸在 sinking seabed）之後，seabed / whale / lakebed
+#      **三個沒用過的選項會一起被排除**，深睡類就只剩 quilts and snow
+#      那一個家族可選 → 它必然被反覆使用。
+#
+#    換句話說，合併家族不只是「去重不夠細」，它會**主動把模型逼向剩下那一個**。
+#    選項少的類別（REM 低只有 3 個）受害最嚴重。
+#
+#    → 拆家族時的規則：**一個調色盤選項一個家族**，關鍵字取該選項獨有的字眼。
+#      之後在調色盤新增選項，這裡就要同步新增一個家族，否則同樣的問題會回來。
+#
+#    ⚠️【2026-08-28 一併修正】關鍵字**不能抄調色盤的逐字片語**。
+#
+#    prompt 明寫 "You may rephrase and extend"，模型照做了，
+#    結果 51 晚裡有 10 晚對不到任何家族（去重對那些夜晚完全失效）。
+#    最直接的證據是 08-18 與 08-22 兩晚的夢幾乎逐句相同
+#    （"a sky that could not decide/settle on a season"），
+#    卻因為關鍵字寫的是 "changing season" 而雙雙漏掉。
+#
+#    → 關鍵字要取**該選項獨有、且改寫時會留下來的字**（"season"、"lake"、
+#      "cold morning"），不是調色盤上那一整句。挑的時候仍要逐個確認
+#      它不會命中別的選項——這跟 BANNED_WORDS 用完整單詞比對是同一種顧慮。
 MOTIF_FAMILIES = {
-    "sinking seabed": ["seabed", "moss", "whale", "bottom of a lake", "lakebed"],
-    "quilts and snow": ["quilt", "quilts", "snow", "snowfall"],
+    # ── [Deep sleep was plentiful] 六個選項 a–f，一項一個家族 ──
+    "breathing seabed": ["seabed"],
+    "moss as a mattress": ["moss"],
+    "whale underneath": ["whale"],
+    "sunned quilts": ["quilt", "quilts"],
+    "forest after snowfall": ["snowfall", "snow"],
+    # "lake" 只出現在這一個選項。原本只收 "bottom of a lake"，
+    # 漏掉 "lake bottom"（07-06）與 "through a lake"（07-12）。
+    "bottom of a lake": ["lake", "lakebed"],
+    # ── [REM share was high] 六個選項 ──
     "self-shelving library": ["library", "bookcase", "shelves", "reshelv"],
-    "changing sky": ["changing season", "sky changing", "autumn orange"],
+    # "season" 只出現在這一個選項，安全。逐字片語擋不住
+    # "could not decide on a season" 這種改寫（06-12/08-18/08-22 都漏掉）。
+    "changing sky": ["season", "sky changing", "autumn orange"],
     "door to another room": ["different room", "another room behind"],
     "market of colours": ["market", "stall", "stalls"],
     "tree of new branches": ["new branches", "new branch"],
     "picture book": ["picture book"],
-    "fog and smoke": ["fog", "smoke", "breath on a cold"],
+    # ── [REM share was low, but measured] 三個選項，原本全擠在一個家族 ──
+    "fog you cannot walk to": ["fog"],
+    # ⚠️ 不能只收 "breath"——深睡選項 a 是 "a seabed that breathes"。
+    # 收 "cold morning"：只出現在這一個選項，且擋得住
+    # "breath **fading** on a cold morning"（07-02/08-17 都漏掉）。
+    "breath on a cold morning": ["cold morning"],
+    "smoke pulled apart": ["smoke"],
+    # ── [Time awake at night was long] 五個選項 ──
     "door that will not stay shut": ["pushed the door open", "opened again",
                                      "would not stay shut"],
     "knocking at the window": ["knock", "knocked", "knocking"],
     "train lights": ["train"],
     "path that runs out": ["path ran out", "path runs out"],
     "radio losing signal": ["radio", "static"],
-    "wind in the grass": ["wind came up", "laid the grass", "grass stood back"],
+    # ── [Heart rate or stress ran high] 四個選項 ──
+    # 加 "stand back up"：模型寫 "grass slowly stand back up"（06-24），
+    # 不是調色盤上的 "grass stood back"。
+    "wind in the grass": ["wind came up", "laid the grass", "grass stood back",
+                          "stand back up"],
     "distant thunder": ["thunder"],
     "waves and boat": ["waves", "boat"],
     "swaying bridge": ["bridge"],
+    # ── [Sleep was short] 三個選項 ──
     "the sky went light": ["sky went light", "sky got light"],
-    "someone calling": ["calling me", "called me"],
+    # 加 "my name"：模型寫 "called my name"（06-18）而不是 "called me"。
+    "someone calling": ["calling me", "called me", "calling my name", "called my name"],
     "the book closed itself": ["book closed itself", "closed itself"],
 }
 
