@@ -743,6 +743,37 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
     return " ".join(notes)
 
 
+def has_measured_sleep(row):
+    """
+    這一列有沒有**真的量到睡眠**。回傳 True / False。
+
+    ⚠️ 這是「任何讀 summary 的程式都得自己做有效性檢查」那條紀律的落實。
+       `summary` 是 analyze_garmin_sleep.py 的原始輸出，**沒有濾過**；
+       濾掉無效夜晚的是下游的 extract_sleep_features.py。
+       compute_modifiers() 讀的是 summary，所以必須自己擋。
+
+    判準與 extract_sleep_features.is_valid_night() 一致。**刻意重寫一份而不是
+    import**：pipeline 五步是五個各自獨立的行程（run_pipeline.py 分別呼叫），
+    互相 import 會破壞那個結構。防止兩份判準漂移的方法是測試而不是耦合——
+    見 tests/test_scoring_validity.py，它拿真實資料驗證兩邊逐列判斷相同。
+    """
+    start = row.get("sleep_start_time") or ""
+    wake = row.get("wake_time") or ""
+    if not start or not wake:
+        return False                      # 手錶沒戴著睡
+    try:
+        start_dt = datetime.fromisoformat(start)
+        wake_dt = datetime.fromisoformat(wake)
+    except (TypeError, ValueError):
+        return False
+    if (wake_dt - start_dt).total_seconds() <= 0:
+        return False                      # 入睡 == 起床（06-02 那筆）或反轉
+    total = to_float(row.get("total_sleep_minutes"))
+    if total is None or total <= 0:
+        return False                      # 有時間區間但一分鐘睡眠都沒偵測到
+    return True
+
+
 def prev_day_steps(row_date, steps_by_date):
     """
     取「上床前那個白天」的步數——也就是 row_date 的前一個日曆日。
@@ -862,6 +893,34 @@ def compute_modifiers(summary_rows):
         steps = prev_day_steps(row_date, steps_by_date)
         awake_count = to_float(row.get("awake_count"))
         segment_count = to_float(row.get("sleep_segment_count"))
+
+        # ═══════════════════════════════════════════════════════════
+        # 【2026-08-28 修正】沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
+        # ═══════════════════════════════════════════════════════════
+        # summary 的 89 列裡有 38 列沒有量到睡眠（沒戴錶睡、或戴了但手錶
+        # 判定 total_sleep_minutes = 0）。這些列**仍然帶著 avg_heart_rate**，
+        # 而那一欄的定義是「**睡眠期間**平均心率」——沒偵測到睡眠時，
+        # 它量的是清醒時段，不是同一個東西。
+        #
+        # 數字本身就說得很清楚：wearer_a 真正睡眠夜的 avgHR 是 52–58，
+        # 而這些無效列上是 85 / 88 / 90 / 95。把它們併進 baseline，
+        # 等於拿白天心率當「你平常睡覺時的心率」，baseline 被推高，
+        # 之後每一個正常夜晚都會因為「比 baseline 低」而拿到不該有的加分。
+        #
+        # ⚠️ 分辨**構念層級**，不是整列丟掉：
+        #     排除 avg_hr / awake_count / segment_count / stress
+        #         —— 全部由睡眠期推導，沒有睡眠期就沒有這些量
+        #     保留 rhr（每日單一數字）與 steps（白天的量）
+        #         —— 這兩個不是從睡眠期算出來的，手錶沒測到睡眠不影響它們
+        #
+        # 設成 None 而不是 continue：rolling_baseline 本來就跳過 None，
+        # 效果相同，但這樣仍會為該日期產生一筆（不會被讀取的）modifier 項目，
+        # 迴圈的其他狀態機（換段偵測）也不會被跳過而錯亂。
+        if not has_measured_sleep(row):
+            avg_hr = None
+            awake_count = None
+            segment_count = None
+            stress = None
 
         # 用「今晚之前」累積的歷史（此時還沒把今晚加進去）算各項 baseline
         rhr_baseline = rolling_baseline(rhr_history, row_date)

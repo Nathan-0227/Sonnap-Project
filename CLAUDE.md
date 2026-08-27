@@ -80,13 +80,30 @@ RTSP 密碼**，這件事只有影像組做得到，目前還沒人做。下次�
    `anxious`（含兩個 90 分以上的 Good 夜晚）。已用 `WEARER_SEGMENTS` 分段，
    細節見下方 ①。
 
-⚠️ **殘留但不影響現況的一個發現**：`wearer_a`（05-28~07-27）內部藏著
-07-13~07-15 三晚 `total_sleep_minutes=0` 但 `avg_heart_rate` 高達 88~95、
-步數上看 18551 的異常列——判斷是手錶當晚沒偵測到睡眠（同 06-02 那個已知
-問題的模式），不是第四個戴錶者。這三晚不在 51 晚計分名單裡，但
-`compute_modifiers()` 讀的是未過濾的 `summary`，這三筆的原始值仍會
-被併入 07-16 之後幾晚的 baseline 歷史——這正是 CLAUDE.md 已經記過的
-「summary 與 features 的有效性標準不同」那個坑的具體案例，**尚未修**。
+✅ **那個發現已修**（2026-08-28，commit 見下）。而且實際規模比當初記的大得多：
+不是 07-13~07-15 三筆，是 **89 列 summary 裡有 38 列沒量到睡眠**，
+其中大部分都帶著 `avg_heart_rate` 值。
+
+關鍵在語意——那一欄的定義是「**睡眠期間**平均心率」。
+`total_sleep_minutes = 0` 時手錶根本沒偵測到睡眠，那個數字量的是清醒時段。
+數值本身就說明了：`wearer_a` 真正睡眠夜的 avgHR 是 52–58，
+這些無效列上是 **85 / 88 / 90 / 95**。
+
+`compute_modifiers()` 現在有自己的 `has_measured_sleep()`，
+並且**分辨構念層級而不是整列丟掉**：
+
+| 欄位 | 無效夜晚 | 理由 |
+|---|---|---|
+| `avg_heart_rate`、`awake_count`、`sleep_segment_count`、`presleep_stress_score` | ❌ 排除 | 全由睡眠期推導，沒有睡眠期就沒有這些量 |
+| `resting_heart_rate`（每日單一數字）、`steps_total`（白天的量） | ✅ 保留 | 不是從睡眠期算出來的 |
+
+**實測**：27 晚分數改變（26 晚是 `avg_hr_modifier`，正是預測的機制），
+最大位移 **1.30**、平均 0.165，品質等級改變 **2 晚**
+（06-18 Normal→Good、07-09 Normal→Poor）。
+方向：**下降 24 晚、上升 3 晚**——與假設一致（baseline 原本被白天心率推高，
+正常夜晚因此拿到不該有的加分）。同樣是單向的：0 項變寬鬆、2 項變停用。
+
+⚠️ `build_sleep_timeline()`（SRI）**本來就有**自己的檢查，不受影響。
 
 現行路線圖：`C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
@@ -598,8 +615,23 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 `numpy`——只有 `itegration/` 與 `tapo/` 需要，要用時再 `pip install -r requirements.txt`。
 ⚠️ `garminconnect` 只有 `--fetch` 那一步需要，pipeline 後四步不受影響。
 
-**驗收指令**：`python tests/test_api.py`、`python tests/test_healthconnect_adapter.py`
-（`test_api.py` 全程用暫存資料庫，不碰 `data/sonnap.db`）。
+**驗收指令**（三支，都是獨立腳本、不需要 pytest）：
+
+```bash
+python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
+python tests/test_healthconnect_adapter.py
+python tests/test_scoring_guards.py      # 2026-08-28 新增
+```
+
+⚠️ `test_scoring_guards.py` 守的是**四個壞掉時不會報錯的機制**，
+每一條都用「把 bug 重新引入、確認測試會紅」驗證過：
+
+1. `has_measured_sleep()` 與 `extract_sleep_features.is_valid_night()` 的判準
+   不得漂移（兩支刻意不互相 import，所以漂移沒有任何錯誤訊息）
+2. 沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
+   （含反向對照，確認那些欄位真的有被讀，否則第 2 條會假性通過）
+3. baseline 窗格是日曆天不是筆數
+4. `MOTIF_FAMILIES` 與夢境調色盤選項一對一，且沒有兩個家族共用關鍵字
 
 **資料通道走 bundled asset，不走 HTTP**（已定案）：
 
