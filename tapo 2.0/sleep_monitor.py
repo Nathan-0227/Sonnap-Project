@@ -331,6 +331,8 @@ def add_event_to_timeline(timeline, event_data, threshold_seconds=3):
 
 # ==================== 🔍 FFmpeg 檢查 ====================
 def check_ffmpeg():
+    # Update global FFMPEG_PATH
+    global FFMPEG_PATH
     # Try multiple paths
     paths_to_try = [
         FFMPEG_PATH,
@@ -347,8 +349,6 @@ def check_ffmpeg():
                                   check=True,
                                   timeout=5)
             print(f"✅ FFmpeg 已安裝: {path}")
-            # Update global FFMPEG_PATH
-            global FFMPEG_PATH
             FFMPEG_PATH = path
             return True
         except:
