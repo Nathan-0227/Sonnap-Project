@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/sleep_session.dart';
+import '../models/wall_clock.dart';
 import '../services/sleep_repository.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -858,7 +859,11 @@ print('========================');
   int? _timeToMinutes(String value) {
   // Handle ISO timestamp:
   // 2026-08-09T01:44:00+08:00
-  final parsed = DateTime.tryParse(value);
+  //
+  // ⚠️ 用 parseWallClock 不是 DateTime.tryParse。tryParse 會把帶偏移量的
+  //    字串轉成 UTC，`.hour` 讀出來會早 8 小時——圖表上每一晚的就寢時間
+  //    都會畫錯位置。理由與作法見 models/wall_clock.dart。
+  final parsed = parseWallClock(value);
 
   if (parsed != null) {
     return parsed.hour * 60 + parsed.minute;
