@@ -207,6 +207,16 @@ CREATE TABLE IF NOT EXISTS wearable_nightly (
     avg_hr         REAL,                      -- 睡眠期間平均心率
     resting_hr     REAL,                      -- 靜止心率（每日單一數字）
 
+    -- ── 入睡／起床時刻（兩種來源都有）──────────────────────────
+    -- ⚠️ sleep_start_time 是**手錶偵測到「睡著」的時刻（生理）**，
+    --    不是 nightly_behavior.lights_out_at（「放下手機」的行為時刻）。
+    --    後者一定較早，兩者不可互相代換，
+    --    完整理由見 migrate_garmin_to_db.py:24-27。
+    --
+    -- 存成 ISO8601 字串（+08:00），與 build_app_payload.py 的 history 同源。
+    sleep_start_time TEXT,
+    wake_time        TEXT,
+
     -- ── 臥床時間（只有 Health Connect 來源會有值）────────────────
     -- ⚠️ 這兩欄記錄的正是 PROJECT_STATUS.md 3.9 說「拿不到」的那個東西。
     --
@@ -357,6 +367,12 @@ COLUMN_MIGRATIONS = [
     ("wearable_nightly", "rhr_modifier", "REAL"),
     ("wearable_nightly", "avg_hr_modifier", "REAL"),
     ("wearable_nightly", "stress_modifier", "REAL"),
+    # 2026-08-28：Jeremy 的 Insights 頁要畫「幾點睡→幾點醒」，
+    #             asset 路徑（build_app_payload.py 的 history）早就有這兩欄，
+    #             但 API 路徑的 wearable_nightly 連欄位都不存在。
+    #             ⚠️ 是「睡著」不是「上床」，語意見 SCHEMA 裡的說明。
+    ("wearable_nightly", "sleep_start_time", "TEXT"),
+    ("wearable_nightly", "wake_time", "TEXT"),
 ]
 
 
@@ -665,6 +681,9 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     #    然後某天有人發現「怎麼深睡都是空的」再回頭查半天。
     columns = ["duration_min", "efficiency", "waso_min", "deep_min", "rem_min",
                "avg_hr", "resting_hr",
+               # 入睡／起床時刻（ISO8601）。⚠️ 是「睡著」不是「上床」，
+               # 上床時刻是 nightly_behavior.lights_out_at，不同構念。
+               "sleep_start_time", "wake_time",
                # 臥床時間：只有 Health Connect 給得出來（Garmin 一律 None）
                "time_in_bed_min", "clinical_efficiency",
                "base_score", "base_quality", "rem_measured",

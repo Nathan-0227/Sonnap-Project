@@ -11,6 +11,503 @@
 
 ---
 
+## 📌 2026-08-28（凌晨 02:00–03:00）九件收尾：憑證、Insights 欄位、baseline、意象去重、有效性、回歸測試、報告文件、攝影機上床時刻、清點腳本
+
+使用者睡前交代「繼續完成專案」，這一輪做的是**把已經診斷完、只差動手的項目清掉**，
+不開新戰線。四件事都有實測數字。
+
+### ⚠️ 這一輪是兩個 session 並行，而且真的踩到了
+
+另一個 session 同時在同一份 working copy 上跑。**我建了
+`feature/insights-sleep-times` 之後、commit 之前，對方把 HEAD 切回了
+`feature/pet-mood-animation`**，所以我那個 commit（`4aff730`）落在
+pet-mood-animation 上，而不是我自己建的那支分支——`feature/insights-sleep-times`
+到現在還停在 `main`，是空的。
+
+事後核對：`a4229d2`（對方）只動 `CLAUDE.md`，我的三個 commit 只含我自己的檔案，
+**沒有交叉、沒有遺失**。但這是運氣，不是機制。
+
+→ **並行時不要做分支手術。** 我發現之後就停手不再動分支結構，
+  留給使用者早上決定，因為在另一個 agent 會移動 HEAD 的情況下 rebase／
+  cherry-pick 正是最容易弄丟東西的操作。
+→ `git branch --show-current` 的結果**在你下一個指令之前就可能過期**。
+
+### ① `tapo 2.0/.env`：能做的做了，真正的止血做不到
+
+08-27 影像組用 GitHub 網頁上傳誤傳了含 RTSP 帳密與 `DB_PASSWORD` 的 `.env`，
+而這個 repo 是**公開的**（未認證打 `api.github.com/repos/...` 回 200，這是判定依據）。
+
+做了：`git rm --cached` + 產生 `.env.example`（機敏欄位佔位符、調校參數保留預設值，
+其他人 clone 下來仍跑得動）+ 把根因寫進 CLAUDE.md 的常設安全規範。
+
+**沒做，而且刻意不做：**
+
+- **不改寫已推送的公開歷史、不 force-push。** 那會改掉所有協作者的 commit hash，
+  是團隊決定不是一個人能單方面做的。
+- **remediation 步驟寫進 scratchpad，不 commit 進 repo。** 在公開倉庫裡放一份
+  「這裡外洩過密碼」的文件等於幫人指路。commit message 也刻意寫成中性的
+  「改附 .env.example」而不是「移除外洩憑證」。
+
+⚠️ **移除檔案不等於止血。** 密碼在公開網路上放過就是放過了，
+唯一有效的動作是去 Tapo App 改 RTSP 密碼、改 MySQL 密碼——只有影像組做得到。
+
+### ② `GET /insights` 的 `sleep_start_time` / `wake_time`：文件說三處，實際五處
+
+CLAUDE.md 寫「要補是三處」。照著做會漏掉兩處：
+
+| # | 位置 | 漏了會怎樣 |
+|---|---|---|
+| 3 | `db.py` 的 `upsert_wearable_nightly` 欄位白名單 | 拋 `ValueError`，跑一次就發現 |
+| 5 | `healthconnect_adapter.py` 的 `to_wearable_row` | **不會報錯**——只有 HC 來源缺值，Garmin 有值 |
+
+第 3 處是被白名單擋下來的，而那個白名單的註解正好寫著它存在的理由：
+「呼叫端打錯鍵名會立刻拋錯而不是被安靜忽略」。它兌現了。
+
+第 5 處才是危險的那個：不補的話，bug 只在「使用 Health Connect 的使用者」
+身上出現，而我們手上一晚 HC 真實資料都沒有 → 到 demo 當天才會發現。
+
+實測：51 晚全部有值、與 `app_payload.json` 的 history 30/30 逐字相同、
+分數欄位逐列未變。新增 7 項驗收，關鍵那條是
+**「不等於 session 起訖、也不等於 `lights_out_at`」**——
+三個構念（上床／睡著／放下手機）在這裡第一次被測試明確釘住。
+
+### ③ baseline 窗格：`MAX_BASELINE_NIGHTS` → `MAX_BASELINE_DAYS`
+
+舊寫法取 `history[-28:]`，是**28 筆**不是 28 天。51 晚裡有 28 個日曆日沒戴錶，
+所以「最近 28 筆」可能橫跨兩三個月——正好違背這個常數自己存在的理由。
+
+改法：histories 改存 `(日期, 值)`，依日曆天夾窗。
+
+| | |
+|---|---|
+| 分數改變 | 17 晚，最大位移 **1.60**、平均 0.129 |
+| 品質等級改變 | **0 晚** |
+| 最新一晚 | 不變（happy / 82.2 Good） |
+| 「原本沒 baseline、改完才有」 | **0**（驗證只會更嚴、不會更鬆） |
+| 改為停用 | 3 晚的 `stress_modifier` |
+
+那 3 晚全是 `presleep_stress_score`——它要求前一晚也戴錶，是最稀疏的訊號，
+所以日曆天窗格最先咬到它。方向正確。
+
+⚠️ 順帶修了 `modifier_note` 的措辭。原本寫 "below 14 nights of history"，
+但現在停用的原因是「最近 28 天內湊不到 14 晚」，**總量其實夠**。
+不改的話使用者會以為系統壞了。改成 "below 14 nights within the last 28 days"。
+行動仍是「繼續戴」，與 `UNVERIFIED_SEGMENT_NOTE`（「這段不該比較」，戴再多也沒用）
+是不同的兩件事。
+
+### ④ 意象去重：拆家族只是一半，另一半更嚴重
+
+原本要做的是「`MOTIF_FAMILIES` 拆成一對一」（8/15 記的未解問題）。做完之後
+拿既有 51 晚重新分類量測，**發現第二個沒人注意到的缺陷**。
+
+**先講第一個為什麼會造成 37% 集中**——這不是「去重不夠細」那麼溫和：
+
+> 去重的規則是「最近 7 晚用過的家族不要再用」。深睡類 6 個選項只對應 2 個家族，
+> 所以模型寫了 `moss` 之後，`seabed` / `whale` / `lakebed` 這三個**沒用過的
+> 選項會一起被排除**，深睡類就只剩 `quilts and snow` 可選。
+> **合併家族會主動把模型逼向剩下那一個。**
+
+**第二個缺陷：關鍵字抄了調色盤的逐字片語，但 prompt 明寫可以改寫。**
+
+`SYSTEM_PROMPT` 寫 "You may rephrase and extend"，模型照做了，
+關鍵字就對不上——51 晚裡有 **10 晚對不到任何家族**，去重對那些夜晚完全失效。
+
+最直接的證據：08-18 與 08-22 的夢幾乎逐句相同
+（"a sky that could not **decide** / **settle** on a season"），
+卻因為關鍵字寫的是 `changing season` 而**雙雙沒被擋下**。
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 家族數 | 21 | 27（與調色盤一對一） |
+| 對不到任何家族 | **10 / 51** | **1 / 51** |
+| 實際用到的家族 | 13 | 19 |
+| 最集中的家族 | 19.6% | **11.8%** |
+| 一晚命中 >2 個家族 | 0 | **0**（沒有製造誤判） |
+
+六個新關鍵字（`season` / `lake` / `cold morning` / `called my name` /
+`calling my name` / `stand back up`）的每一次命中都逐一核對過，全部正確。
+
+⚠️ `"breath"` 不能單獨收——深睡選項 a 是 "a seabed that **breathes**"。
+收 `"cold morning"`。這跟 `BANNED_WORDS` 改用完整單詞比對是同一種顧慮
+（方法論第 5 點：驗證規則寫寬很省事，誤判的代價比漏判大）。
+
+⚠️ **沒有動 `PROMPT_VERSION`**（仍 v4）。升版會把 51 晚標記為 stale 要求重生，
+那要花使用者的 API 額度。既有夢境不因這次修改而失效，
+改善的是**往後**生成時的去重精細度。這個決定留給使用者。
+
+### ⑤ 沒量到睡眠的夜晚不得進 baseline —— 規模比交接區記的大 12 倍
+
+交接區記為「尚未修」，說的是 07-13~07-15 三筆異常列。實際清點：
+**89 列 summary 裡有 38 列沒量到睡眠**。
+
+關鍵不是筆數，是語意。`avg_heart_rate` 的定義是「**睡眠期間**平均心率」，
+`total_sleep_minutes = 0` 時手錶根本沒偵測到睡眠，那個數字量的是清醒時段。
+數值本身就說得很清楚：
+
+| | avgHR |
+|---|---|
+| `wearer_a` 真正的睡眠夜 | 52–58 |
+| 那些無效列 | **85 / 88 / 90 / 95** |
+
+把它們併進 baseline，等於拿白天心率當「你平常睡覺時的心率」，baseline 被推高，
+之後每個正常夜晚都因為「比 baseline 低」而拿到不該有的加分。
+
+**修法上做的一個判斷：分辨構念層級，不是整列丟掉。**
+
+  排除 `avg_heart_rate`／`awake_count`／`sleep_segment_count`／`presleep_stress_score`
+       —— 全部由睡眠期推導，沒有睡眠期就沒有這些量
+  保留 `resting_heart_rate`（每日單一數字）與 `steps_total`（白天的量）
+       —— 不是從睡眠期算出來的，手錶沒測到睡眠不影響它們的有效性
+
+實測 27 晚改變（26 晚是 `avg_hr_modifier`，正是預測的機制），最大位移 1.30、
+平均 0.165，品質等級改變 2 晚。方向 **下降 24 晚、上升 3 晚**，與假設一致。
+單向性同前：0 項變寬鬆、2 項變停用。
+
+⚠️ `wearer_a` 整段中位數只被推高 0.58 bpm，但 baseline 是 28 天滾動窗，
+07-13~07-15 那三筆 88–95 落在窗內時局部推力大得多——這就是個別夜晚
+位移到 1.30 分而整段中位數只差 0.58 的原因。**看整段統計會低估局部效應。**
+
+### ⑥ `tests/test_scoring_guards.py` —— 而且驗證過它會失敗
+
+今晚改了三處評分／去重邏輯，一個自動防護都沒有。新增四條，
+共同點是**守的都是壞掉時不會報錯的機制**：
+
+1. `has_measured_sleep()` 與 `extract_sleep_features.is_valid_night()` 判準不得漂移
+2. 無效夜晚的睡眠衍生量不得進 baseline
+3. baseline 窗格是日曆天不是筆數
+4. `MOTIF_FAMILIES` 與調色盤一對一，且沒有兩個家族共用關鍵字
+
+第 1 條的處境值得記：兩支腳本**刻意不互相 import**（pipeline 五步是五個
+獨立行程），所以判準漂移不會有任何錯誤訊息。解法是用測試防漂移
+而不是用耦合——**測試的需求不應該回過頭改變被測程式的架構**。
+
+第 2 條需要一個**反向對照**才成立：光測「拿掉無效列的值，結果不變」，
+在「compute_modifiers 根本沒讀這些欄位」時也會通過。所以同時測
+「拿掉**有效**夜晚的 avg_hr，結果必須改變」。
+
+⚠️ **測試沒被驗證過會失敗，就不算防護。** 三條各自把 bug 重新引入一次
+（閘門改成永遠回 True、baseline 換回 `history[-28:]`、家族合併回去），
+確認測試真的會紅，才算數。
+
+### ⑦ `PROJECT_STATUS.md` 對齊現況 —— 它會直接變成報告內容
+
+整份還停在 46 晚，而且**完全沒提到那支錶有三個配戴者**。
+照它寫報告會寫出「51 晚單一使用者實測」這個事實錯誤。
+
+新增「六、0」把界線講清楚：Tier1/2 不受影響（分數站得住），
+但「長期追蹤同一人的趨勢」不能講——最長的單人資料是 `wearer_a` 的 41 晚。
+而且**負責人本人目前 0 個計分夜晚**，`MIN_BASELINE_NIGHTS = 14`，
+所以 demo 當天他自己的資料只會有 Tier1/2。
+
+⚠️ **改數字時做的區分，比改數字本身重要：**
+
+| 類型 | 例子 | 處理 |
+|---|---|---|
+| 描述**現況** | 狀態表「46 晚實測」、配戴率、心情分布 | ✅ 更新 |
+| **歷史量測記錄** | 「修正前後 46 晚逐位元組相同」「壓力修正 34/46 → 14/46」 | ❌ 一律不動 |
+
+後者是當時真的量到的數字，改成 51 就是竄改實驗記錄。
+整批 find/replace 在這種文件上是錯的做法。
+
+### ⚠️ 順手推翻了自己文件上的三件事：TAPO 那份 dump
+
+CLAUDE.md 寫著那份 dump「用我們自己的資料驗證了三件已知的事（可直接引用進報告）」。
+去看現行檔（影像組 08-26 推的，244KB），三件裡有兩件已經不成立：
+
+| 文件寫的 | 實測 |
+|---|---|
+| 5 筆紀錄 | **15 筆** |
+| 4 筆分數全是 50 → 印證紅線 3「人為地板」 | 分數有 **14 個不同的值（11~97）**，**地板症狀不存在** |
+| `report_date` 全是 dump 產生當天 | 日期分散，但可信度分三層 |
+
+用 `created_at` 對照 `report_date` 分層（唯一的內部證據）：
+現場擷取 9 筆、事後批次補 5 筆（`created_at` 全是 `2026-08-12 13:21:29` 同一秒）、
+幾乎確定錯的 1 筆（宣稱 06-11 卻在 08-18 才建立，差 68 天）。
+
+→ 與 Garmin 51 晚的重疊是 **最寬鬆 10 晚、只算現場擷取 5 晚**，不是先前記的 3 晚。
+
+⚠️ 那筆 06-11 是**唯一**讓 TAPO 與 Garmin 六月資料重疊的紀錄。
+不分層就直接 `merge`，會憑空多出一個橫跨兩個月的「共同樣本」——
+而 3.10 ① 已經警告過 `how='inner'` 會安靜地丟掉配不上的列。
+
+同一份 CLAUDE.md 還同時寫著「那份 CREATE TABLE 沒有 created_at」與
+「08-26 那版第 38 行有 created_at」。實測有。已修掉這個自相矛盾。
+
+### ⑧ 攝影機到底能不能給「上床時刻」—— 樣本 3 晚 → 9 晚，結論更精確
+
+`PROJECT_STATUS.md` 3.9 的核心主張是「攝影機的價值是提供手錶量不到的上床時刻」，
+但它的證據只有三晚，而且那三晚取自**舊 dump**（其中 08-06 的「首事件 01:33」
+在現行檔已不成立——那一列時間戳全是 `00:00:00`）。用現行檔重做。
+
+**成功的四晚異常一致**：首事件早於入睡 31／33／37／48 分，
+落在合理的入睡潛伏期範圍，全距只有 17 分鐘。
+
+**失敗的五晚分成兩種完全不同的原因**，這是這次分析真正的產出：
+
+| 類型 | 晚數 | 原因 |
+|---|---|---|
+| timeline 時間戳壞掉 | 3 | 整串事件的 `time` 全是 `00:00:00`~`00:00:04`。工程 bug |
+| 監測窗沒開到 | 2 | `.env` 的 `SLEEP_START=01:00:00`，但那兩晚 22:31／22:32 就睡著了 |
+
+⚠️ 第二類可以量化，而且量化之後才看得出它有多結構性：
+**51 個 Garmin 夜晚裡有 7 晚（14%）入睡在 01:00 之前**，
+而觀察到的兩次窗口失敗**兩晚都正好落在那 7 晚裡**。
+兩晚落在 7/51 這個子集裡不是巧合——這是機制被證實，不是相關性。
+
+這也把 3.9 原本那句佐證推到更強的位置。先前只能說「首事件都緊接在
+01:00 開機之後，與『開機後的第一次動作』一致」——那是**相容於**假設的觀察。
+現在有兩晚，手錶明確指出人在 22:31 就睡著，攝影機首事件卻在 03:30：
+**首事件反映的是排程，不是行為。**
+
+**對建議的影響：把原本的 (A) 拆成 A1／A2。**
+原本「提早開機 + 床鋪 ROI 偵測」被當成一個大工程，所以整條被排在 (B) 之後。
+但那 14% 純粹是設定問題：
+
+  A1 只改 `SLEEP_START` —— 工程量極小，**先做**
+  A2 ROI 佔用偵測 —— 工程量大（影格差分要換成背景相減）
+
+A1 單獨做不能解決辨識問題，但它是 A2 的必要前置：
+**演算法再好也認不出沒錄到的畫面。**
+
+核心結論不變：攝影機給的是一串動作事件，但沒告訴你哪一個是「上床」。
+這是辨識問題不是資料量問題（現行 dump 最多的一晚有 754 個事件）。
+
+### ⑨ `inspect_tapo_dump.py` —— 因為上面那些數字不可重跑
+
+⑦⑧ 寫進 `PROJECT_STATUS.md` 的 TAPO 數字，全部來自臨時腳本。
+**沒有人能驗證，而影像組一送新 dump 就全部過期**——而那份文件會直接
+變成 9/9 的報告內容。這是不能接受的狀態，所以補一支可重複執行的清點工具。
+
+只用標準庫（專案規範），不做任何評分，只清點與比對。輸出重現了
+3.9 與 3.10 ② 的每一個數字。兩節都加了「這一節可以重跑」的指引，
+並明寫**不要照抄表格**。
+
+⚠️ 寫這支的時候，`created_at` 分層有一個地方單看一列判斷不出來：
+**「事後批次補」的判準是同一個 `created_at` 出現在多列**（那 5 筆全是
+`2026-08-12 13:21:29`，同一秒）。所以要先數過整批再分類，
+不能逐列判斷。這種「必須先看全體才能判斷個體」的規則，
+寫成逐列的函式會安靜地失效。
+
+順帶抓到一個先前沒發現的資料 bug：id 117（08-19）的 `total_events = 73`，
+`timeline` 卻是空陣列 `[]` → 寫入端與統計端不同步。不在重疊夜裡，
+所以不影響 3.9 的表，但任何以 `total_events` 為準的分析
+（含 `sleep_quality_score` 的扣分公式）會落在一份不存在的 timeline 上。
+
+### ⚠️ 方法論：「還沒做的事」清單本身也會過期
+
+交接區的「下次接手三件事」裡，第 ② 條寫「新 5 晚沒有 AI 夢境、
+`is_ai_generated=false`」。實際去看檔案：**51 晚全部 `source=llm`，
+最新一晚 `is_ai_generated=true`**。那條在 08-26 全量重跑之後就已經完成了，
+只是沒人回頭把它劃掉。
+
+如果照著文件做，就會白跑一次 `--ai`、白花一次 API 額度。
+→ 這跟「遠端狀態問 git 不要問文件」是同一條規則的延伸：
+  **待辦清單要問產出物，不要問清單。** 動手前先看一眼它宣稱的狀態是否還成立。
+
+---
+
+## 📌 2026-08-28（深夜）戴錶者分段的驗證與收尾
+
+這一輪**沒有寫 `WEARER_SEGMENTS`**——那是同一天稍早做的，當時停在工作區未提交。
+這則記的是「驗證它是不是真的對」與環境收尾。
+
+### 使用者一句話推翻了文件上的解釋
+
+使用者說「那支錶這段期間經歷三個人帶，我是今天 8/28 才開始戴」。
+在此之前 CLAUDE.md 把 08 月的訊號位移解釋成**配戴習慣改變**，
+並據此判斷「再四週這個問題會自己消失」。
+
+用 `garmin_sleep_summary.csv` 分段核對，那個解釋站不住：
+
+| 段 | 期間 | 晚 | 睡眠平均心率 | 靜止心率 | 步數中位 |
+|---|---|---|---|---|---|
+| A | 05-28 ~ 07-12 | 46 | 57.9（51–85） | 52.9 | 185 |
+| ? | 07-13 ~ 07-15 | 3 | **91.2**（88–95） | n/a | 10088 |
+| B | 07-16 ~ 07-28 | 13 | 55.4（53–58） | 52.1 | 47 |
+| C | 07-29 ~ 08-25 | 27 | **78.8**（70–88） | **68.0** | 98 |
+
+相鄰夜最大跳動剛好落在三個交界：
+`07-15→07-16 −40.5 bpm`（全資料集最大）、`07-28→07-29 +26.0`、`07-12→07-13 +21.8`。
+
+**決定性的一點：`avg_heart_rate` 量的是「睡眠期間」。**
+配戴習慣會改變步數與白天讀數，但**不會讓人睡著時的心率持續高 21 bpm、連續 27 晚**。
+而且 C 段步數中位數是 **98，比 A 段的 185 還低**——「開始整天配戴」在這裡也不成立。
+
+### 實測：分段之後改了哪 10 晚
+
+拿 `git show HEAD:` 的舊 CSV 與重跑後的新 CSV 逐晚比對：
+
+| | |
+|---|---|
+| 總夜數 | 51，**10 晚**分數改變（全在 `unverified` 區段） |
+| 修正值 | −2.37 ~ −9.75 → **0.0**，平均取消 **5.61 分** |
+| 品質等級 | **6 晚**改變（08-07 / 08-22 / 08-23 Normal→Good；08-09 / 08-21 Bad→Poor；08-17 Poor→Normal） |
+| 最新一晚 | `pet_mood` **anxious → happy**、`mood_reason` 由 `stress_modifier=-4.0 ≤ -3.0` 變成 `final_quality=Good`、energy 77 → 82 |
+
+最後那一列是最能說明問題的：**82.2 分的 Good 夜晚，原本顯示焦慮寵物**。
+CLAUDE.md 記的異常（新 5 晚 `total_modifier` 平均 −7.09、舊 46 晚 −0.33）
+根因就是拿別人的 baseline 在比，不是「那幾晚睡得特別差」。
+
+### 環境收尾（承 08-27 那則的四個坑）
+
+- **PATH**：使用者層的 `C:\src\flutter\bin` 換成 `C:\Users\user\flutter\bin`。
+  這才是 `local.properties` 一直被改回去的真正原因——任何程式呼叫 `flutter`
+  都解析到 3.47 那份。⚠️ 我先前用 `which -a flutter` 判斷「PATH 上沒有」是錯的，
+  **Git Bash 的 `which` 找不到 `.bat`**，要直接看 `PATH` 字串。
+- **刪掉 `C:\src\flutter`**（3.1GB）。先改名 → 驗證 `flutter --version` 與
+  `pub get` 正常（`package_config.json` 的 `generatorVersion` 要是 **3.12.2**）→ 才刪。
+- `pubspec.lock` 跟著回到穩定版解出來的版本（`matcher 0.12.20 → 0.12.19`）。
+  committed 那版是 3.47 的 pub 解的。
+- 兩支驗收測試全通過（含紅線 4「behavior/ 不得 import 評分層」）。
+
+⚠️ 手機上那個 APK 是**修正前**打包的（顯示 anxious）。要同步得重建重裝。
+
+### ⚠️ 方法論：文件上的因果，要拿「不受該原因影響的訊號」去驗
+
+「配戴習慣改變」能解釋步數、能解釋白天壓力讀數，所以看那兩個訊號時它是自洽的。
+真正證偽它的是**睡眠期間心率**——一個配戴習慣影響不到的量。
+→ 檢驗一個解釋時，去找**它預測不到的那個訊號**，不要在它能解釋的訊號裡反覆確認。
+
+---
+
+## 📌 2026-08-27 Android 實機環境從零建起（第一次把 App 裝進實體手機）
+
+目標：使用者要用自己的手機測試。**結果達成**——`app-debug.apk` 已安裝並執行於
+SM S9260（Android 16 / API 36 / arm64），資料讀取正常。
+分支是 `merge/jeremy-report-screen`（main + Jeremy 的 Insights 頁）。
+
+起點：Flutter 3.44.9 已裝在 `C:\Users\user\flutter`（但不在 PATH），
+**Android SDK 完全不存在**，Java 只有 JRE 8 與 JRE 9（都是 JRE 不是 JDK，
+且 Gradle 9 最低要 Java 17）。選了「裝完整 Android Studio」而非只裝 cmdline-tools，
+是使用者的決定。
+
+### ⚠️ 坑 1：安裝精靈裝的是 API 37，但 Flutter 3.44.9 寫死 compileSdk = 36
+
+`FlutterExtension.kt:23` 是 `compileSdkVersion: Int = 36`（minSdk 24、targetSdk 36）。
+Android Studio 2026.1 的精靈只裝最新的 `platforms;android-37.0`，
+AGP 找不到 `android-36` 會直接失敗。
+
+補裝過程踩到兩件事，記下來免得重來：
+
+1. **`sdkmanager "platforms;android-36"` 會失敗**，訊息是
+   `Package platforms not found. / Package android-36 not found.`
+   ——`.bat` 經 cmd 轉發時把 `;` 當成參數分隔字元切開了。
+   新版工具已把 `sdkmanager` 標為 deprecated，改用同目錄的
+   **`android.exe sdk install platforms/android-36`**（用斜線、直接呼叫 exe）。
+2. 但它自己的下載器在這條網路上會 `java.io.IOException` 中斷。
+   最後是用 `curl -C -` 抓 `platform-36_r02.zip`（62.8MB）解壓到 `platforms/`，
+   **並手動補一份 `package.xml`**——沒有這個檔，SDK 管理器與 AGP 都不認得它。
+   範本取自 `android-37.0/package.xml`，數值照 `android-36/source.properties` 改：
+   API 36、extension-level 17、revision 2、layoutlib 15。
+   驗證方式：`flutter doctor` 回報 `Android SDK version 36.0.0`，
+   最終 APK 的 `aapt2 dump badging` 顯示 `compileSdkVersion='36'`。
+
+### ⚠️ 坑 2：機器上有兩份 Flutter SDK，版本混用會出無意義的錯
+
+| 路徑 | 版本 | Engine |
+|---|---|---|
+| `C:\Users\user\flutter` | **3.44.9 stable**（專案用這個） | `5a2a6a42cc` |
+| `C:\src\flutter` | **3.47-candidate**（未發布） | `5d53178869` |
+
+`C:\src\flutter` 在 2026-08-27 04:03:27 出現（本輪對話開始時實測還不存在）。
+它是官方 SDK 的完整解壓，git remote 指向 `flutter/flutter`，
+reflog 是從 `flutter.googlesource.com/mirrors/flutter` clone——
+那是 **Google 打包機器**的記錄（日期 08-19），不是本機操作。
+**放進來的是什麼程式，查不出來。** 不是 Android Studio 的 Flutter 外掛
+（沒裝），也不是 VS Code 的 Dart-Code（沒裝）。
+
+症狀長這樣，而且**完全不會指向真正的原因**：
+
+```
+/C:/src/flutter/packages/flutter/lib/src/gestures/binding.dart:329:15:
+Error: Method not found: 'HitTestResponse'.
+```
+
+機制：`C:\src\flutter` 的 pub（3.13.1）改寫了 `app/android/local.properties`
+的 `flutter.sdk` 與 `.dart_tool/package_config.json`（4 個項目指過去），
+於是變成**拿 3.44.9 的編譯器去編 3.47 的 framework 原始碼**——
+3.47 的 `binding.dart` 呼叫 `ui.HitTestResponse`，那個 API 在 3.44.9 的
+`dart:ui` 裡還不存在。
+
+修法：`flutter clean` → `local.properties` 指回 stable → 用 3.44.9 重跑 `pub get`。
+驗證看 `package_config.json` 的 `generatorVersion`（要是 **3.12.2** 不是 3.13.1）。
+
+⚠️ **這顆地雷還在。** `C:\src\flutter` 沒有刪，而 `local.properties`
+在建置後又被改回 `C:\src\flutter`。下次建置前先確認這個檔。
+
+### ⚠️ 坑 3：`local.properties` 的路徑不能用單反斜線
+
+`app/android/settings.gradle.kts` 是用 Java `Properties.load()` 讀它，
+所以 `\` 是跳脫字元。寫成 `C:\Users\user\flutter`，`\user` 的 `\u`
+會被當成 Unicode 跳脫開頭，直接丟 **`Malformed \uxxxx encoding`**。
+
+我用 `sed` 改的時候真的寫成單反斜線了；heredoc `<<'EOF'` 也保不住雙反斜線。
+**最後用正斜線**（`C:/Users/user/flutter`），Java 與 Gradle 在 Windows 上都接受，
+而且沒有任何跳脫問題。驗證方式是寫一支三行的 Java 實際 `Properties.load()` 印出來，
+不要用肉眼看。
+
+### ⚠️ 坑 4：VS Code 的「Gradle for Java」擴充套件會搶 Gradle 鎖
+
+一開始它報 `No connection to gradle server`，我判斷「跟 Flutter 無關、按 ✕ 就好」
+——**前半對，後半錯**。Temurin 17 一裝好，它就能啟動 Gradle 了，
+於是自己跑了一次 sync 並吃下 `app/android/.gradle/noVersion/buildLogic.lock`，
+我們的建置晚 57 秒進場就被擋掉：
+
+```
+Timeout waiting to lock build logic queue. Owner PID: 16856
+```
+
+用父程序追出來：`gradlew(41760) → daemon(16856) → kotlin compiler(33384)`，
+與我們那條 `flutter build(1668)` 是兩條獨立的建置。
+→ **Flutter 專案應把這個擴充套件設成 workspace 停用。**
+
+### 網路：大檔下載會斷，一律用 curl 續傳
+
+Android Studio 安裝檔（1.4GB）winget 斷在 136MB、curl 第一次斷在 693MB、
+第二次才完成；SDK 精靈的 platform-tools 與 emulator 也各失敗一次。
+`curl -L -C - --retry 20 --retry-all-errors --speed-limit 1024 --speed-time 30`
+這組參數能自己撐完（`--speed-time` 是關鍵：龜速 30 秒就重試，不會卡死不動）。
+**驗證完整性用 `Get-AuthenticodeSignature`**，簽章能過就代表每個 byte 都對。
+
+### 最終環境
+
+| 項目 | 值 |
+|---|---|
+| Android Studio | 2026.1（3.29GB，**未裝 Flutter 外掛**） |
+| Android SDK | `platforms/android-36`（手補）+ `android-37.0`、`build-tools 36.0.0`、`platform-tools 37.0.1` |
+| JDK | **Temurin 17**（`C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot`） |
+| Gradle / AGP / Kotlin | 9.1.0 / 9.0.1 / 2.3.20 |
+
+⚠️ Flutter 挑的是 Temurin 17，**不是** Android Studio 自帶的 JBR 25——
+這是好事，JDK 25 與 Gradle 9.1 的相容性沒有驗證過。
+
+⚠️ `flutter doctor` 會報 `Android license status unknown`，**可以無視**：
+新版 Android CLI 已廢掉 `--licenses`（直接回 "no longer needed"），
+是 Flutter 的檢查方式過時，授權檔 `licenses/android-sdk-license` 實際存在。
+
+### 裝進手機的方式與驗證
+
+用 `adb install -r` 直接裝（繞開 Gradle 與 `local.properties`，不受 SDK 衝突影響），
+再 `adb shell am start -n com.example.app/.MainActivity` 啟動。
+
+驗證三項，都通過：
+
+- `aapt2 dump badging`：`compileSdkVersion='36'`、`application-label:'Sonnap'`
+  （後者證實合併時把 Jeremy 的 `pubspec name` 改動移到 `AndroidManifest` 的
+  `android:label` 是對的）
+- APK 內含 `assets/flutter_assets/assets/data/app_payload.json`
+- logcat：`SLEEP JSON LOADED`、`session_id: 20260823_001`、`pet_mood: anxious`，
+  渲染後端 Impeller (Vulkan)，無 `FATAL` / `AndroidRuntime`
+
+### ⚠️ 方法論：關聯不是因果
+
+我看到「Android Studio 在跑」+「`local.properties` 被改」+「多出一個 release APK」，
+就對使用者斷言是 Android Studio 幹的。使用者截圖顯示
+**Languages & Frameworks 裡根本沒有 Flutter**（外掛沒裝，做不到這件事）才發現講錯。
+→ 歸咎前先確認那個嫌疑者**有沒有能力**做這件事，不要只看時間吻合。
+
+---
+
 ## 📌 2026-08-26（下午）輸出語言改英文
 
 使用者決定「輸出一律以英文為主」。範圍：**後端 + `ai/`，不含 Flutter**

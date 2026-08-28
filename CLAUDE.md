@@ -28,11 +28,127 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 `garmin/.env` 有**真實 Garmin 帳號密碼**。絕不提交、絕不在回覆中印出或引用其內容。
 
 ⚠️ `tapo/tapo_detector.py:29` 與 `tapo/sound test.py:7` 的 RTSP 帳密仍是**明碼寫死**
-（影像組負責，尚未改成環境變數）。同樣不要複製進回覆或 commit。
+（影像組負責，尚未改成環境變數）。`tapo 2.0/` 的兩支也各有 2–4 處命中。
+同樣不要複製進回覆或 commit。
+
+### ⚠️ GitHub 網頁「Add files via upload」會繞過本機 `.gitignore`
+
+`.gitignore:8` 早就有 `.env` 規則，但那條規則**只在 `git add` 時生效**。
+從網頁上傳檔案不經過本機 git，所以擋不住——`tapo 2.0/.env` 就是這樣進版控的
+（commit `b5d166a`，08-27）。這是目前**唯一已知能繞過既有防護的路徑**。
+
+→ 一律用 `git commit` 推檔案，不要用網頁上傳。
+→ 收到隊友「Add files via upload」的 commit 時，先跑
+  `git show --stat <commit>` 看有沒有 `.env`、金鑰、憑證。
 
 ---
 
-## 🔖 交接區：現在在哪、下一步做什麼（2026-08-26 更新．新對話先讀這段）
+## 🔖 交接區：現在在哪、下一步做什麼（2026-08-28 更新．新對話先讀這段）
+
+> ⚠️ **這一輪是兩個 Claude Code session 同時在同一份 working copy 上工作**
+> （使用者開了不只一個視窗）。過程中發生過一次真的 race：一個 session
+> 正在存檔 `CLAUDE.md`，另一個同時 `git add -A` 把那次存檔也掃進了自己的
+> commit（`9646f2c`）——這次結果無害（內容本身正確），但下次可能不會這麼幸運。
+> **多開視窗同時改同一個 repo 時，commit 前先看 `git status` 裡有沒有
+> 自己沒改過的檔案**，那多半是另一個 session 剛寫的。
+
+### ✅ `tapo 2.0/.env` 的密碼已換（2026-08-28）
+
+08-27 影像組用 GitHub 網頁「Add files via upload」誤傳了 `tapo 2.0/.env`
+（含 RTSP 攝影機帳密），公開 repo 曝露約 12+ 小時。已在分支
+`fix/untrack-tapo-env`（1 個 commit `6b41901`，尚未 push）把它從版控移除、
+換成只留鍵名的 `.env.example`，並在檔案裡寫明「網頁上傳會繞過本機
+`.gitignore`」這個根因。
+
+⚠️ **08-28 深夜又發生一次獨立的意外**：`feature/pet-mood-animation` 的
+`8c52874`（寵物動畫）commit message 完全沒提到 `tapo 2.0/.env`，卻把它
+一起帶進了 commit——多 session 同時改同一份 working copy、`git add -A`
+把別人沒 commit 的修改也掃了進去。裡面的 `CAMERA_RTSP_URL` 因此帶了一組
+**先前從未在 `origin/main` 上出現過**的新值，隨這條分支一起 push 上了公開 repo，
+幾分鐘後才發現。已用 `c7c410d` 把三個受影響的檔案復原成 `origin/main` 版本，
+現在 GitHub 上看到的檔案內容不含那組新值。
+
+**兩次外洩用的都不是同一組值，但使用者已去 Tapo App 把攝影機的 RTSP
+密碼換掉**——不管 git 歷史裡（`b5d166a`、`8c52874`）留著哪一組舊值，
+兩組都已失效，曝露已解除。
+
+⚠️ `fix/untrack-tapo-env` 那個治本的修法（從版控移除、改用 `.env.example`）
+還沒推、也還沒套用到 `feature/pet-mood-animation`——**這個檔案目前
+仍在被追蹤**，下次任何人不小心又帶著真值 commit，會是第三次同型意外。
+下次接手優先把這個分支合掉。
+
+### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
+
+⚠️ **全部尚未 push。** 領先幾個 commit 請直接問 git，不要問這裡：
+`git log --oneline origin/main..feature/pet-mood-animation`（方法論第 2 點）。
+
+| # | 做了什麼 | 實測 |
+|---|---|---|
+| 1 | `tapo 2.0/.env` 停止追蹤 + `.env.example`（分支 `fix/untrack-tapo-env`，**獨立**） | — |
+| 2 | `wearable_nightly` 補 `sleep_start_time` / `wake_time` | 51 晚有值，與 asset 路徑 30/30 逐字相同 |
+| 3 | baseline 窗格改日曆天（`MAX_BASELINE_DAYS`） | 17 晚位移，最大 1.60，**0 晚換等級** |
+| 4 | `MOTIF_FAMILIES` 一對一 + 關鍵字擋得住改寫 | 對不到家族 **10/51 → 1/51** |
+| 5 | 沒量到睡眠的夜晚不得進 baseline | 27 晚位移，最大 1.30，2 晚換等級 |
+| 6 | **新增 `tests/test_scoring_guards.py`** | 4 條，全部驗證過「bug 重現時會紅」 |
+| 7 | `PROJECT_STATUS.md` 對齊現況（51 晚、三名配戴者） | 見六、0 |
+| 8 | 3.9 攝影機上床時刻：樣本 3 晚 → 9 晚 | 成功 4 晚、兩種失敗各有解 |
+| 9 | **新增 `inspect_tapo_dump.py`** | 讓 3.9/3.10 的數字可重跑 |
+
+⚠️ **第 2 項的教訓**：文件寫「要補是三處」，實際是**五處**。多的兩處是
+`db.py` 的欄位白名單（會拋錯）與 `healthconnect_adapter.to_wearable_row`
+（**不會報錯**）。以後在 `wearable_nightly` 加欄位請照五處盤點。
+
+### ⏭️ 這一輪之後，還沒做的（都卡在別人身上）
+
+| 事情 | 卡在誰 |
+|---|---|
+| **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
+| TAPO timeline 時間戳壞掉（3 晚全是 `00:00:00`） | 影像組 |
+| `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 影像組。**改一行設定** |
+| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組 |
+| `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
+| push / 開 PR | 使用者（公開 repo 的對外動作） |
+| 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
+| 分支要不要拆（見下方 ⚠️ 並行） | 使用者 |
+
+### ✅ demo 相關這一輪的三個進展
+
+1. **APK 已能自己建，且已裝進實體手機測過**（分支 `merge/jeremy-report-screen`，
+   已合併進 `main`，見下方「已完成」）。Flutter/Android 環境已從零建起，
+   細節與踩過的坑見 `DEVLOG.md` 2026-08-27 那則。
+   ⚠️ **手機上那份是修正前的舊版**（顯示 `anxious`）——下次要同步得重建重裝。
+2. **寵物動畫不再永遠播開心的狗**——跟著 `pet_mood` 走，四態各一個資產路徑，
+   資產還沒到位前退到濾鏡版的 `happy_dog.json`。分支 `feature/pet-mood-animation`
+   （3 個 commit：`8c52874` 動畫、`9646f2c` 見下、`6ba789d` DEVLOG，**尚未 push**）。
+3. **Tier3／SRI 不再跨戴錶者計算（`9646f2c`）**——這支手錶 2026-05-28~08-27
+   經手三個人，之前被當成同一個人處理，導致 08-02 之後 10 晚裡 9 晚被誤判
+   `anxious`（含兩個 90 分以上的 Good 夜晚）。已用 `WEARER_SEGMENTS` 分段，
+   細節見下方 ①。
+
+✅ **那個發現已修**（2026-08-28，commit 見下）。而且實際規模比當初記的大得多：
+不是 07-13~07-15 三筆，是 **89 列 summary 裡有 38 列沒量到睡眠**，
+其中大部分都帶著 `avg_heart_rate` 值。
+
+關鍵在語意——那一欄的定義是「**睡眠期間**平均心率」。
+`total_sleep_minutes = 0` 時手錶根本沒偵測到睡眠，那個數字量的是清醒時段。
+數值本身就說明了：`wearer_a` 真正睡眠夜的 avgHR 是 52–58，
+這些無效列上是 **85 / 88 / 90 / 95**。
+
+`compute_modifiers()` 現在有自己的 `has_measured_sleep()`，
+並且**分辨構念層級而不是整列丟掉**：
+
+| 欄位 | 無效夜晚 | 理由 |
+|---|---|---|
+| `avg_heart_rate`、`awake_count`、`sleep_segment_count`、`presleep_stress_score` | ❌ 排除 | 全由睡眠期推導，沒有睡眠期就沒有這些量 |
+| `resting_heart_rate`（每日單一數字）、`steps_total`（白天的量） | ✅ 保留 | 不是從睡眠期算出來的 |
+
+**實測**：27 晚分數改變（26 晚是 `avg_hr_modifier`，正是預測的機制），
+最大位移 **1.30**、平均 0.165，品質等級改變 **2 晚**
+（06-18 Normal→Good、07-09 Normal→Poor）。
+方向：**下降 24 晚、上升 3 晚**——與假設一致（baseline 原本被白天心率推高，
+正常夜晚因此拿到不該有的加分）。同樣是單向的：0 項變寬鬆、2 項變停用。
+
+⚠️ `build_sleep_timeline()`（SRI）**本來就有**自己的檢查，不受影響。
 
 現行路線圖：`C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
@@ -54,56 +170,106 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 > 與 `metrics` 同一個來源（features），最新一晚兩邊逐字相同。
 > 30/30 晚都有值，分數欄位逐欄未變。
 >
-> ⚠️ **`GET /insights` 的 `history` 還是沒有這兩欄**——`wearable_nightly`
-> （21 欄）連欄位都不存在（`migrate_garmin_to_db.py:319` 讀得到 `sleep_start_time`，
-> 但只拿來模擬 `lights_out_at`，沒寫進表）。Jeremy 目前走舊的 asset 路徑、
-> 不受影響，但**他一接新 API 就會再卡一次**。要補是三處：
-> `db.py` 的 SCHEMA + `COLUMN_MIGRATIONS`（兩邊都要改）、migrate 的寫入、
-> `main.py` 的 `/home` 與 `/insights`。
+> ✅ **`GET /insights` 的 `history` 也補上了**（2026-08-28，commit `4aff730`）。
+> `/home` 的 `metrics` 一併補齊。51 晚全部有值，與 `app_payload.json` 的
+> history 30/30 逐字相同，分數欄位逐列未變。**Jeremy 現在接新 API 不會再卡。**
+>
+> ⚠️ **當時文件寫「要補是三處」，實際是五處。** 多出來的兩處是
+> `db.py` 的 `upsert_wearable_nightly` 欄位白名單、以及
+> `wearable/healthconnect_adapter.py` 的 `to_wearable_row`。
+> 前者會拋 `ValueError`，跑一次就發現；**後者不會報錯**——不補的話
+> 只有 Health Connect 來源的使用者缺值、Garmin 來源有值，
+> 那種「只在一種來源下缺資料」的 bug 最難查。
+> → 以後在 `wearable_nightly` 加欄位，請照**五處**盤點。
 >
 > ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你
 > 「睡著」（生理），後者是「放下手機」（行為），後者一定較早。
 > （理由已寫在 `migrate_garmin_to_db.py:24-27`。）
 
 
-**① Tier3 的 baseline 會過期 —— 等使用者決定，程式一行都沒改**
+**① Tier3 的 baseline 跨了不同的戴錶者 —— 已修（2026-08-28）**
 
-`MAX_BASELINE_NIGHTS = 28`（`garmin/apply_recovery_modifier.py:181`）
-**數的是「晚」不是「天」**。配戴稀疏時 28 晚會橫跨兩三個月：
+那支手錶在 2026-05-28 ~ 08-27 之間**經手三個人**，專題負責人本人 08-28 才開始戴。
+在此之前 51 晚被當成同一個人處理。Tier3 的每一項都是「今晚的你 vs 過去的你」，
+SRI 也是個人內比較——**跨人比較沒有意義**。
 
-| 訊號 | 算 2026-08-17 時，baseline 實際往回跨了 |
+實作在 `garmin/apply_recovery_modifier.py` 的 `WEARER_SEGMENTS`：
+
+| 區段 | 期間 | 可信 |
+|---|---|---|
+| `wearer_a` | 2026-05-28 ~ 07-27 | ✅ |
+| `unverified` | 2026-07-28 ~ 08-27 | ❌ 已知多人戴過，訊號分不出是一人還兩人 |
+| `wearer_c` | 2026-08-28 起（專題負責人本人） | ✅ |
+
+換段時 baseline 歸零、SRI 窗格夾在本段起日之後；`trusted=False` 的區段
+把 Tier3 與 SRI 全部關掉，改輸出 `UNVERIFIED_SEGMENT_NOTE`
+（措辭刻意與「冷啟動」不同：冷啟動是「再戴幾晚就會好」，這個是「這段不該做個人化比較」）。
+
+分界是用生理訊號本身找的（使用者不記得交接日期）：對每個候選分界算
+「左右中位數差 / MAD」，真正的換人會在多個獨立訊號上同時跳躍。
+A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
+前 41 晚內部三個訊號的最大跳躍都 ≤ 1.03（確定同一人）。
+
+**實測影響**（51 晚重跑，2026-08-28）：
+
+| | |
 |---|---|
-| 靜止心率 | **60 天**（9 週） |
-| 睡眠期間平均心率 | 32 天 |
-| 入睡前壓力 | **79 天**（11 週） |
+| 分數改變 | **10 晚**，全部落在 `unverified` 區段 |
+| 修正值 | −2.37 ~ −9.75 → **0.0**，平均取消掉 **5.61 分** |
+| 品質等級改變 | **6 晚**（08-07 / 08-22 / 08-23 Normal→Good；08-09 / 08-21 Bad→Poor；08-17 Poor→Normal） |
+| 最新一晚心情 | `anxious` → `happy` ——那是一個 **82.2 分的 Good 夜晚卻顯示焦慮寵物** |
 
-程式第 396 行的註解寫「捨棄太久以前的資料」，但它**按筆數捨棄不按時間**。
-對照：`SRI_WINDOW_DAYS`（:265）明寫「用日曆天而非有資料的晚數」——
-這個區別程式裡別處有處理，Tier3 的 baseline 沒有。
+⚠️ **報告不能寫「51 晚單一使用者實測」**——那是三個人。誠實的寫法是
+「跨 3 名配戴者、51 晚」。**Tier1/2 的基礎分數完全不受影響**
+（文獻加權、不依賴個人 baseline），所以每一晚的分數本身仍然站得住。
 
-後果：新 5 晚（08-17~08-23）的 `total_modifier` 平均 **−7.09**，
-而舊 46 晚是 **−0.33**，三個訊號幾乎全部打滿負值。
-基於個人 baseline 的修正值長期本來就該趨近於零，
-所以那**不是「這幾晚睡得特別差」**，是 baseline 不能代表現在的自己。
+⚠️ **負責人本人的 baseline 從 2026-08-28 起算**，`MIN_BASELINE_NIGHTS = 14`，
+所以**前 14 晚 Tier3 是冷啟動、不產生修正值**（09-09 之前湊不滿）。
 
-⚠️ 但**訊號本身也真的位移了，而且從 08-02 就開始**（不是重抓造成的）：
-靜止心率 07-11~07-27 穩定在 50–56、08-02 起跳到 62–77；
-步數中位數 150 → 3624（**手錶開始整天配戴**）；入睡前壓力 4.9 → 32.8。
+✅ **那個殘留問題已修**（2026-08-28，commit `925e2b1`）。
+常數改名 `MAX_BASELINE_DAYS`，`rolling_baseline()` 改吃 `(日期, 值)` 並依
+日曆天夾窗，與 `SRI_WINDOW_DAYS` 一致。
 
-三個選項的實測影響（已算好，不必重算）：
+實測 51 晚：17 晚分數位移（最大 **1.60**、平均 0.129）、**0 晚品質等級改變**、
+最新一晚不變。**0 個項目「原本沒 baseline、改完才有」**——這一改只會更嚴不會更鬆。
+3 晚的 `stress_modifier` 改為停用（`presleep_stress_score` 要求前一晚也戴錶，
+是最稀疏的訊號，日曆天窗格最先咬到它）。
 
-| 選項 | 影響 |
-|---|---|
-| **(a) 不改，只在 `modifier_note` 標註 baseline 跨了幾天** | 分數一律不變。⚠️ 配戴率已大幅改善（新時期 6/9 天步數 >1000），再四週這個問題會自己消失 |
-| (b) 加「28 個日曆天」上限 | 讓程式做到它註解說的事。代價：靜止心率 38→**28** 晚、壓力 35→**16** 晚會回到冷啟動 |
-| (c) 什麼都不動 | 只寫進文件 |
+⚠️ 兩個門檻管的是不同的事，不要混為一談：
+`MAX_BASELINE_DAYS`（28）管「多舊的資料還算數」（日曆天），
+`MIN_BASELINE_NIGHTS`（14）管「要有幾晚才夠穩」（有效晚數）。
+配戴稀疏時兩者會同時咬到，那是正確行為——「最近 28 天只戴 9 晚」
+本來就不足以代表「現在的你」。
 
-**② 新 5 晚沒有 AI 夢境**
+**② AI 夢境 —— 這一條已經沒事了（2026-08-28 核對）**
 
-`python garmin/run_pipeline.py --ai` —— ⚠️ **會真的打 Claude API**（`ai/.env` 已有金鑰）。
-目前 `app_payload.json` 最新那晚 `is_ai_generated=false`，退回規則式文字。
-⚠️ 跑之前先看 8/15 記錄的「深睡類調色盤只對應 2 個家族」那個未解問題
-（`MOTIF_FAMILIES` 拆成一對一，約 6 行），否則新 5 晚很可能又寫出「棉被與雪」。
+「新 5 晚沒有 AI 夢境」這句**早就過期**：`ai/data/ai_advice.json` 的 51 晚
+全部 `source=llm`，`app_payload.json` 最新那晚 `is_ai_generated=true`
+（model `claude-sonnet-5`）。不需要再跑 `--ai`。
+
+✅ 那個擋路的「`MOTIF_FAMILIES` 不是一對一」也已修（commit `d79cf97`），
+而且一併抓到**第二個更嚴重的缺陷**：
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 家族數 | 21 | 27（與調色盤選項一對一） |
+| **對不到任何家族的夜晚** | **10 / 51** | **1 / 51** |
+| 實際用到的家族 | 13 | 19 |
+| 最集中的家族 | 19.6% | **11.8%** |
+
+第二個缺陷是：**關鍵字抄了調色盤的逐字片語，但 prompt 明寫
+"You may rephrase and extend"**。模型照做，關鍵字就對不上，
+10 晚的去重完全失效。最直接的證據是 08-18 與 08-22 兩晚的夢幾乎逐句相同
+（"a sky that could not decide / settle on a season"），卻因為關鍵字寫的是
+`changing season` 而雙雙沒被擋下。
+
+→ 新增調色盤選項時，這裡要**同步新增一個家族**，而且關鍵字要取
+「該選項獨有、改寫後仍會留下」的字（`season` / `lake` / `cold morning`），
+不是那一整句。
+
+⚠️ **`PROMPT_VERSION` 沒有動**（仍是 v4）。升版會把 51 晚全部標記為 stale
+要求重生，那會實際呼叫 Claude API 花掉額度；既有夢境的內容不因這次修改
+而失效，改善的是**往後**生成時的去重精細度。
 
 **③ TAPO 的 `sonnap` 資料庫不在這台機器上**
 
@@ -126,14 +292,20 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-08-26 更新）
+### git 狀態（2026-08-28 更新）
 
-✅ **這一輪的工作已經全部進 `main`** —— PR #11 於 2026-08-26 由使用者合併
-（`origin/main` = `e382b83`）。`db.py`、`main.py`、`behavior/`、`wearable/`、
-`tests/`、`migrate_garmin_to_db.py`、`PROPOSAL_GAP.md`、51 晚的資料全都在裡面。
+✅ `origin/main` 現在是 `98c51b2`（PR #16：併入 Jeremy 的 Insights 頁 + 修
+`energy_level` 捨入誤差）。PR #11（多使用者後端）、PR #12~15（文件與英文化）
+都已經在裡面。
 
-`origin/main` 也兩次合併進本分支：08-25 那次是影像組 8/17 的工作，
-08-26 那次是他們當天推的三個 commit（只動 `tapo/`，零衝突）。
+**本地還有兩個分支尚未 push**，都是這一輪（08-28）做的：
+
+| 分支 | commit | 內容 | 狀態 |
+|---|---|---|---|
+| `feature/pet-mood-animation` | 3 個 | 寵物動畫四態化 + 戴錶者分段修正 + DEVLOG | 尚未 push |
+| `fix/untrack-tapo-env` | 1 個 | 移除誤傳的 `tapo 2.0/.env` | 尚未 push，⚠️ 密碼本身仍未換（見上方紅字） |
+
+兩者的分歧點都是 `main`（`98c51b2`），互不衝突，可以各自開 PR。
 
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
@@ -162,6 +334,12 @@ Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已
 ⚠️ **`garminconnect` 沒裝不影響 pipeline 的後四步**——只有 `--fetch`（重抓資料）
 那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
 
+**Flutter/Android 這一輪（08-27）也從零裝起**：Flutter 3.44.9（`C:\Users\user\flutter`）
++ Android SDK + Temurin JDK 17。踩過的坑（`compileSdk` 版本不對、機器上一度有
+兩份 Flutter SDK 互相污染、`local.properties` 反斜線跳脫、VS Code Gradle 外掛搶鎖）
+全部記在 `DEVLOG.md` 2026-08-27 那則，這裡不重複。**現在 `flutter build apk`
+與 `adb install` 都能跑**，已裝進實體 Android 手機驗證過。
+
 ### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
 
 `garmin_connect_fetch.py:778` 用 `open(args.output, "w")`，
@@ -179,82 +357,77 @@ python garmin/run_pipeline.py          # 再跑後四步
 抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
 46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
 
-分支盤點（2026-08-26 用 `git ls-remote --heads origin` 實測）：
+分支盤點（2026-08-28 用 `git ls-remote --heads origin` 實測，只剩 4 條遠端分支）：
 
-| 遠端分支 | 作者 | 領先 main | 最後更新 | 狀態 |
-|---|---|---|---|---|
-| `main` | — | — | 2026-08-26 | `e382b83`（PR #11 合併點） |
-| **`second-flutter-integration`** | **Jeremy** | **1**（但**落後 21**） | **2026-08-21** | ⚠️ **見下方，不能直接合** |
-| `feature/behavior-loop` | 我 | 2 | 2026-08-26 | 合併後被刪過，又被第二次推送建回來 |
-| `feature/behavior-loop-feat(backend)-多使用者-…` | 我 | 0 | 2026-08-26 | PR #11 用的那個，名字裡有 commit message。**已完全合併** |
-| `flutter` | Jeremy | 0 | 2026-07-10 | 已全數合併，可刪 |
-| `feature/opencv-motion-garmin` | 影像組 | 12 | 2026-06-11 | ⚠️ 見再下方 |
+| 遠端分支 | 作者 | 狀態 |
+|---|---|---|
+| `main` | — | `98c51b2`（PR #16 合併點） |
+| `second-flutter-integration` | Jeremy | ✅ **內容已於 PR #16 併入 main**（走的是新分支 `merge/jeremy-report-screen`，不是直接合這條）。這條本身沒人刪，**可以刪了** |
+| `flutter` | Jeremy | 已全數合併，可刪 |
+| `feature/opencv-motion-garmin` | 影像組 | 12 個 commit 從沒合併，整條不能合，見下方 |
 
-⚠️ 前一版表上的 `feature/garmin-sleep-scoring` 與 `feature/project-setup`
-**已經不在遠端了**（08-25 記「可刪」，之後真的被刪了）。
-上面兩個 `behavior-loop` 分支仍待清，**刪之前先問過**。
+✅ 之前記的 `feature/behavior-loop` 那兩條、`feature/garmin-sleep-scoring`、
+`feature/project-setup` 都已經不在遠端了。
+⚠️ 兩個本地新分支（`feature/pet-mood-animation`、`fix/untrack-tapo-env`，
+見上方「git 狀態」）**還沒推上去**，不會出現在這張表裡。
 
-### Jeremy 的 `second-flutter-integration` 該怎麼合
+### Jeremy 的 `second-flutter-integration` —— ✅ 已於 PR #16 併入，這節可歸檔
 
-✅ 他卡的那個缺口（`history` 少兩欄）已於 2026-08-26 修好，見上方「下次接手」開頭。
-這裡只講**分支本身該怎麼處理**。
-
-⚠️ **不要把他的分支直接合進 `main`。** 實測狀態：
-
-| | |
-|---|---|
-| 分岐點 | `e0aa188`，**從來沒有 merge 過 main** |
-| 領先 main | 1 個 commit |
-| **落後 main** | **21 個 commit** |
-| PR #11 的後端 | `db.py`、`behavior/`、`wearable/`、`tests/` **全部不存在** |
-| 合併衝突 | 1 個檔：`app/assets/data/app_payload.json` |
-
-那個衝突檔是**生成檔**，衝突原因是他**手改了它**（把 `streak.definition`
-翻成英文）。而且他手改的那串跟他同一個 commit 改的
-`build_app_payload.py` **兩個英文版本不一致**（"The number of consecutive
-nights with sleep records" vs "Number of consecutive nights with recorded sleep"）
-→ **只要有人跑一次 `python build_app_payload.py`，他的手改就會被蓋掉。**
-
-建議的順序（不是先合他的）：
-
-1. ~~先在 `main` 上把 `history` 那兩欄補上~~ ✅ **已完成**
-2. ~~重跑 `python build_app_payload.py`~~ ✅ **已完成**
-3. 請他把 `main` merge 進他的分支（不是反過來），衝突檔直接取 main 的版本
-4. 他確認 Flutter 那邊讀得到新欄位之後再開 PR
-
-✅ **他把 `streak.definition` 改成英文這件事已經不是問題了**——
-2026-08-26 使用者決定全系統輸出改英文（見「輸出語言」那節），
-他那個改動方向是對的。但他是**手改生成檔**，還是會被蓋掉，
-要提醒他改 `build_app_payload.py` 而不是 `app_payload.json`。
+沒有走「直接合他那條分支」的路（原本規劃的順序，21 個落後 commit、
+1 個生成檔衝突）。實際做法是另開分支 `merge/jeremy-report-screen`
+（從當時的 `main` 分出去）手動合併他的內容，衝突檔取 main 版本重新產生，
+2026-08-27 併入 main（PR #16）。`second-flutter-integration` 本身還留在遠端，
+內容已經沒用了，可以刪。
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
 `garmin_importer.py` 救回來。唯一有價值的是 `sleep_records.sql`——那正是
 `PROJECT_STATUS.md` 3.5 說「不存在」的 TAPO 建表 SQL。
 
-**但它也不完整、不該直接撿來用**：`tapo_detector.py:499` 寫入的欄位與它逐欄相同，
-但 `sleep_anylzer.py:50` 與 `import mysql.py:57` 都 SELECT 了 `created_at`，
-而那份 `CREATE TABLE` **沒有這一欄**。拿它建表，寫得進去但分析程式會
-`Unknown column`。→ 應請影像組跑一次 `SHOW CREATE TABLE sleep_records` 給出現行結構。
+⚠️ **那條分支上的 `sleep_records.sql`（根目錄）已經被取代，不要再引用它。**
+現行版本是 `tapo/sleep_records.sql`（commit `00c08b1`，244KB），有 `created_at`，
+所以先前記的「建表後 `sleep_anylzer.py` 會 `Unknown column`」在現行版**不存在**。
 
-那份 dump 順帶用**我們自己的資料**驗證了三件已知的事（可直接引用進報告）：
-5 筆紀錄的 `report_date` 全是 dump 產生當天（證實 3.4「report_date 不可信」）；
-其中 4 筆分數**全是 50**，但事件數從 183 到 1225、翻身從 8 到 344——
-**四個完全不同的夜晚彼此無法區分**，正是 8.3 紅線 3「分數不得有人為地板」；
-timeline 第一筆是 16:48，且 `motion_intensity: 2073600` = 1920×1080，整畫面誤判。
+⚠️ **舊 dump 那三項「可直接引用進報告」的觀察，有兩項在新資料裡已經不成立。**
+2026-08-28 重新清點現行檔（實測，不是推論）：
 
-已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）。
+| 舊記錄（來自舊 dump） | 現行檔實際情形 |
+|---|---|
+| 5 筆紀錄 | **15 筆** |
+| 4 筆分數全是 50 → 印證紅線 3「人為地板」 | `sleep_quality_score` 有 **14 個不同的值（11~97）**，**地板症狀不存在** |
+| `report_date` 全是 dump 產生當天 | 日期是分散的，但**可信度分三層**，見下 |
+
+用 `created_at` 對照 `report_date` 分層（這是判斷日期可不可信的唯一內部證據）：
+
+| 分層 | 筆數 | 判準 |
+|---|---|---|
+| 現場擷取（可信） | 9 | `created_at` 與 `report_date` 同日或差 ±1 天（跨午夜） |
+| 事後批次補的 | 5 | `created_at` **全部是 `2026-08-12 13:21:29`**，同一秒 → 日期是人工填的 |
+| 幾乎確定是錯的 | 1 | id 48 宣稱 `2026-06-11`，卻在 **08-18** 才建立（差 68 天） |
+
+與 Garmin 51 晚的重疊：**最寬鬆 10 晚、只算現場擷取的 5 晚**（08-17/18/21/22/23）。
+
+⚠️ 那筆 06-11 是**唯一**讓 TAPO 與 Garmin 六月資料產生重疊的紀錄。
+不做這個分層就直接 `merge`，會憑空多出一個橫跨兩個月的「共同樣本」。
+
+（`motion_intensity: 2073600` = 1920×1080 整畫面誤判這一項仍然成立。）
+
+已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）、
+PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Jeremy 的 Insights 頁）。
 `main` 也含隊友的 Flutter app（`app/`）與 TAPO（`tapo/`）。
 
-> 💡 `gh` CLI 已於 2026-08-25 安裝（v2.98.0），但**尚未 `gh auth login`**，
-> 所以還看不到 PR 列表。要用的話請先在終端機登入一次。
+✅ `gh` CLI 已登入（帳號 `Nathan-0227`），可以直接用它開 PR、看 PR 列表。
 
 ### 已完成
 
-- Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 3 秒跑完
-- 46 晚實測資料（2026-05-28 ~ 08-10），每晚 0–100 分 + Good/Normal/Poor/Bad
-- Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12）+ SRI（呈現不計分）
+- Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 6 秒跑完
+- 51 晚實測資料（2026-05-28 ~ 08-25），每晚 0–100 分 + Good/Normal/Poor/Bad，
+  **跨 3 名戴錶者**（見上方 ①，報告不能寫成單一使用者）
+- Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
+  + SRI（呈現不計分）
 - 完整文獻依據：`Research-Background/Garmin手錶分數.md`
+- 後端多使用者 API、行為介入迴圈、Health Connect adapter（PR #11）
+- Flutter App 已能自己建置 APK 並裝進實體 Android 手機執行（見上方 ✅）
 
 ---
 
@@ -504,8 +677,23 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 `numpy`——只有 `itegration/` 與 `tapo/` 需要，要用時再 `pip install -r requirements.txt`。
 ⚠️ `garminconnect` 只有 `--fetch` 那一步需要，pipeline 後四步不受影響。
 
-**驗收指令**：`python tests/test_api.py`、`python tests/test_healthconnect_adapter.py`
-（`test_api.py` 全程用暫存資料庫，不碰 `data/sonnap.db`）。
+**驗收指令**（三支，都是獨立腳本、不需要 pytest）：
+
+```bash
+python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
+python tests/test_healthconnect_adapter.py
+python tests/test_scoring_guards.py      # 2026-08-28 新增
+```
+
+⚠️ `test_scoring_guards.py` 守的是**四個壞掉時不會報錯的機制**，
+每一條都用「把 bug 重新引入、確認測試會紅」驗證過：
+
+1. `has_measured_sleep()` 與 `extract_sleep_features.is_valid_night()` 的判準
+   不得漂移（兩支刻意不互相 import，所以漂移沒有任何錯誤訊息）
+2. 沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
+   （含反向對照，確認那些欄位真的有被讀，否則第 2 條會假性通過）
+3. baseline 窗格是日曆天不是筆數
+4. `MOTIF_FAMILIES` 與夢境調色盤選項一對一，且沒有兩個家族共用關鍵字
 
 **資料通道走 bundled asset，不走 HTTP**（已定案）：
 

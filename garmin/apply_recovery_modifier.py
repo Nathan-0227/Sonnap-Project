@@ -52,6 +52,11 @@ Cold start（冷啟動）處理
 還不具意義的雜訊資料誤導分數。baseline 只採用「當晚之前」的歷史資料（不含當晚本身），
 避免當晚資料影響自己的比較基準。
 
+⚠️ 那 14 晚必須落在 MAX_BASELINE_DAYS（28）個**日曆天**之內（2026-08-28 起）。
+   兩個門檻管不同的事：MAX_BASELINE_DAYS 管「多舊的資料還算數」，
+   MIN_BASELINE_NIGHTS 管「要有幾晚才夠穩」。配戴稀疏時兩者會同時咬到，
+   那是正確行為——「最近 28 天只戴 9 晚」本來就不足以代表「現在的你」。
+
 ═══════════════════════════════════════════════════════════════════
 ⚠️ 已知限制與設計變更記錄（誠實揭露）
 ═══════════════════════════════════════════════════════════════════
@@ -176,9 +181,86 @@ DEFAULT_OUTPUT_JSON = DATA_DIR / "garmin_sleep_quality_final.json"
 # 冷啟動保護：baseline 至少要有幾晚有效歷史資料，這項修正值才會啟動。
 # 14 這個數字對應 Kerkering/Quer 等文獻常用的「至少兩週」個人化基準門檻。
 MIN_BASELINE_NIGHTS = 14
-# baseline 最多往回看幾晚——避免一個月前的資料還一直影響「現在」的比較基準，
+# baseline 最多往回看幾天——避免一個月前的資料還一直影響「現在」的比較基準，
 # 讓 baseline 能跟著使用者近期的生活型態緩慢漂移，而不是永遠固定不變。
-MAX_BASELINE_NIGHTS = 28
+#
+# ⚠️【2026-08-28 修正】用「日曆天」而非「有資料的晚數」，與 SRI_WINDOW_DAYS 一致。
+#
+#    舊版寫成 MAX_BASELINE_NIGHTS，取的是 history[-28:]——**28 筆**而不是 28 天。
+#    配戴稀疏時這兩者差很多：51 晚裡有 28 個日曆日沒戴錶，所以「最近 28 筆」
+#    實際上可能橫跨兩三個月。那正好違背這個常數自己的目的——
+#    它存在的理由就是「不要讓一個月前的資料影響現在」。
+#
+#    ⚠️ 這不會讓 baseline 變得比較容易湊滿：MIN_BASELINE_NIGHTS = 14 仍然
+#       數「有效晚數」，只是現在那 14 晚必須落在最近 28 個日曆天之內。
+#       換句話說，這一改**只會讓門檻更嚴，不會更鬆**。
+MAX_BASELINE_DAYS = 28
+
+# ═══════════════════════════════════════════════════════════════════
+# 【2026-08-28】戴錶者分段 —— 這支手錶不只一個人戴過
+# ═══════════════════════════════════════════════════════════════════
+# Tier3 的每一項都是「今晚的你 vs 過去的你」，SRI 也是「你自己的作息
+# 有多規律」。兩者都是**個人內比較**，跨人計算沒有意義——
+# 拿 A 的靜止心率當 B 的基準，得到的不是「B 今晚恢復得好不好」，
+# 而是「B 的心臟跟 A 不一樣」。
+#
+# 這件事在 2026-08-28 才發現。在此之前 51 晚被當成同一個人處理，
+# 後果是 08-02 之後 10 晚裡有 9 晚被判定為 anxious（前 41 晚只有 4.9%），
+# 其中包括 93.1 分與 90.5 分的兩個 Good 夜晚——**焦慮狀態與睡眠品質脫鉤**。
+#
+# ── 分界怎麼定的 ────────────────────────────────────────────────
+# 使用者不記得交接日期，所以用生理訊號本身找。方法是對每個候選分界點
+# 算「左右中位數差 / MAD」，真正的換人會在多個獨立訊號上同時跳躍：
+#
+#   A → B 的分界    靜止心率跳躍 5.73~6.74、睡眠期間平均心率 4.13
+#                   逐週中位數 RHR 52 → 59 → 65 → 72，avgHR 56.0 → 73.6
+#   前 41 晚內部    三個訊號的最大跳躍都 ≤ 1.03  → **確定是同一個人**
+#   中段內部        最大跳躍 1.51~1.57（勉強過 1.5 門檻，且 RHR 散布
+#                   52~77 沒有乾淨階梯）→ **無法斷定是一人還是兩人**
+#
+# ⚠️ 中段標成 trusted=False 而不是給它一個名字：使用者只確定「中間有人
+#    戴過」，不確定幾個。與其猜，不如讓程式誠實說「這段來源不明」。
+#
+# ⚠️ 為什麼不倚賴 MIN_BASELINE_NIGHTS 順便擋掉：中段目前只有 10 個有效
+#    夜晚，確實不足 14 晚，Tier3 本來就算不出來。但那是**巧合**——
+#    哪天補了資料讓它超過 14 晚，門檻一過就會安靜地產生無效結果。
+#    來源不明就明確關掉，不要靠另一個機制的副作用。
+#
+# 格式：(起日, 迄日或 None 表示持續中, 代號, 是否確定為同一人)
+WEARER_SEGMENTS = [
+    ("2026-05-28", "2026-07-27", "wearer_a", True),
+    # 中段：使用者只確定「我之前有兩個人戴過」，訊號也分不出是一人還是兩人
+    ("2026-07-28", "2026-08-27", "unverified", False),
+    # 專題負責人本人，2026-08-28 起
+    ("2026-08-28", None, "wearer_c", True),
+]
+
+# 分段來源不明時，modifier_note 要說的話。刻意跟「冷啟動」講法不同：
+# 冷啟動是「再戴幾晚就會好」，這個是「這段資料不該拿來做個人化比較」。
+UNVERIFIED_SEGMENT_NOTE = (
+    "Personalized modifiers are disabled for this period: the watch is known to "
+    "have been worn by more than one person and the wearer cannot be identified "
+    "from the data. Tier 3 and SRI are within-person measures and are not "
+    "meaningful across wearers. Tier 1/2 base scores are unaffected."
+)
+
+
+def wearer_segment(date_str):
+    """
+    回傳該日期所屬的戴錶者分段 (代號, 是否確定為同一人, 起日, 迄日)。
+
+    起日一併回傳是給 SRI 用的：SRI 的窗格是「往回推 28 個日曆天」，
+    如果不夾在本段起日之後，換人後的頭四週會把前一個人的作息算進來。
+
+    落在所有分段之外的日期（例如比第一段還早）回傳 (None, False, None, None)——
+    無法歸屬就當成不可信，不要預設它屬於某個人。
+    """
+    if not date_str:
+        return None, False, None, None
+    for start, end, name, trusted in WEARER_SEGMENTS:
+        if date_str >= start and (end is None or date_str <= end):
+            return name, trusted, start, end
+    return None, False, None, None
 
 # ═══════════════════════════════════════════════════════════════════
 # 各修正項的分數上限（見 Garmin手錶分數.md 權重設定原則，Tier3 = ±10）
@@ -381,9 +463,13 @@ def load_summary(path):
     return rows
 
 
-def rolling_baseline(history_values):
+def rolling_baseline(history, current_date):
     """
-    以「當晚之前」最多 MAX_BASELINE_NIGHTS 筆有效數值算中位數，當作個人化 baseline。
+    以「當晚之前、最近 MAX_BASELINE_DAYS 個日曆天內」的有效數值算中位數，
+    當作個人化 baseline。
+
+    `history` 是 [(日期字串, 數值或 None), ...]，由呼叫端逐晚累積。
+    帶著日期是必要的——只有數值的話無從判斷那筆是昨天還是三個月前的。
 
     為什麼用中位數不用平均數：平均數容易被單一天的極端值拉走
     （例如某晚壓力飆到 46 分，用平均會把整個 baseline 往上拖），
@@ -391,10 +477,30 @@ def rolling_baseline(history_values):
 
     有效歷史筆數不足 MIN_BASELINE_NIGHTS 時回傳 None，
     呼叫端看到 None 就知道「這項還不能修正，資料還不夠」。
+
+    ⚠️ 兩個門檻管的是不同的事，缺一不可：
+       MAX_BASELINE_DAYS 管「多舊的資料還算數」（日曆天），
+       MIN_BASELINE_NIGHTS 管「要有幾晚才夠穩」（有效晚數）。
     """
-    # 只保留有量到的值（None 是那晚沒資料，不該算進 baseline），
-    # 再取最後 MAX_BASELINE_NIGHTS 筆，捨棄太久以前的資料
-    valid = [v for v in history_values if v is not None][-MAX_BASELINE_NIGHTS:]
+    try:
+        cutoff = datetime.fromisoformat(current_date).date() - timedelta(days=MAX_BASELINE_DAYS)
+    except (TypeError, ValueError):
+        # 日期壞掉時退回「不夾窗」，讓下游的 MIN_BASELINE_NIGHTS 自己擋。
+        # 不直接回 None 是因為那會讓一列壞日期靜靜地關掉整項修正值。
+        cutoff = None
+
+    valid = []
+    for d, v in history:
+        if v is None:
+            continue          # 那晚沒量到，不該算進 baseline
+        if cutoff is not None:
+            try:
+                if datetime.fromisoformat(d).date() < cutoff:
+                    continue  # 太久以前，已經不代表「現在的你」
+            except (TypeError, ValueError):
+                continue
+        valid.append(v)
+
     if len(valid) < MIN_BASELINE_NIGHTS:
         return None
 
@@ -610,7 +716,14 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
     notes = []
     if missing:
         notes.append(
-            f"Building personal baseline ({'/'.join(missing)} below {MIN_BASELINE_NIGHTS} nights of history); this modifier is paused."
+            # ⚠️ 措辭要把「窗格」講出來。2026-08-28 baseline 改用日曆天之後，
+            #    有 14 晚以上總資料、卻因為最近 28 天配戴太稀疏而停用的情況
+            #    是存在的（07-12 / 07-20 / 07-21 就是）。只寫
+            #    "below 14 nights of history" 會讓那種使用者以為是系統壞了。
+            #    行動仍然是「繼續戴」——與 UNVERIFIED_SEGMENT_NOTE 不同，
+            #    那個是「這段不該做個人化比較」，戴再多也不會變。
+            f"Building personal baseline ({'/'.join(missing)} below {MIN_BASELINE_NIGHTS} "
+            f"nights within the last {MAX_BASELINE_DAYS} days); this modifier is paused."
         )
     if not sri_available:
         notes.append(
@@ -628,6 +741,37 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
             "(the previous night was not recorded, so the start of that window cannot be determined)."
         )
     return " ".join(notes)
+
+
+def has_measured_sleep(row):
+    """
+    這一列有沒有**真的量到睡眠**。回傳 True / False。
+
+    ⚠️ 這是「任何讀 summary 的程式都得自己做有效性檢查」那條紀律的落實。
+       `summary` 是 analyze_garmin_sleep.py 的原始輸出，**沒有濾過**；
+       濾掉無效夜晚的是下游的 extract_sleep_features.py。
+       compute_modifiers() 讀的是 summary，所以必須自己擋。
+
+    判準與 extract_sleep_features.is_valid_night() 一致。**刻意重寫一份而不是
+    import**：pipeline 五步是五個各自獨立的行程（run_pipeline.py 分別呼叫），
+    互相 import 會破壞那個結構。防止兩份判準漂移的方法是測試而不是耦合——
+    見 tests/test_scoring_validity.py，它拿真實資料驗證兩邊逐列判斷相同。
+    """
+    start = row.get("sleep_start_time") or ""
+    wake = row.get("wake_time") or ""
+    if not start or not wake:
+        return False                      # 手錶沒戴著睡
+    try:
+        start_dt = datetime.fromisoformat(start)
+        wake_dt = datetime.fromisoformat(wake)
+    except (TypeError, ValueError):
+        return False
+    if (wake_dt - start_dt).total_seconds() <= 0:
+        return False                      # 入睡 == 起床（06-02 那筆）或反轉
+    total = to_float(row.get("total_sleep_minutes"))
+    if total is None or total <= 0:
+        return False                      # 有時間區間但一分鐘睡眠都沒偵測到
+    return True
 
 
 def prev_day_steps(row_date, steps_by_date):
@@ -686,8 +830,26 @@ def compute_modifiers(summary_rows):
 
     modifiers_by_date = {}
 
+    # 上一列屬於哪個戴錶者分段。換人時要把六條歷史清單全部清空，
+    # 否則下一個人的第一晚會拿前一個人的 baseline 來比。
+    # 因為 summary_rows 已由 load_summary() 依日期排序、而分段是連續的
+    # 日期區間，所以「換段就清空」等同於「只用本段的歷史」。
+    prev_segment = None
+
     for row in summary_rows:
         row_date = row.get("date", "")
+
+        segment_name, segment_trusted, segment_start, _ = wearer_segment(row_date)
+        if segment_name != prev_segment:
+            # 換人了（或第一次進迴圈）。清空所有跨人不可用的累積狀態。
+            rhr_history.clear()
+            avg_hr_history.clear()
+            stress_history.clear()
+            steps_history.clear()
+            awake_count_history.clear()
+            segment_count_history.clear()
+            prev_segment = segment_name
+
         # 讀出「今晚」的原始數值（可能是 None，代表那晚沒量到）
         rhr = to_float(row.get("resting_heart_rate"))
         avg_hr = to_float(row.get("avg_heart_rate"))
@@ -732,13 +894,41 @@ def compute_modifiers(summary_rows):
         awake_count = to_float(row.get("awake_count"))
         segment_count = to_float(row.get("sleep_segment_count"))
 
+        # ═══════════════════════════════════════════════════════════
+        # 【2026-08-28 修正】沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
+        # ═══════════════════════════════════════════════════════════
+        # summary 的 89 列裡有 38 列沒有量到睡眠（沒戴錶睡、或戴了但手錶
+        # 判定 total_sleep_minutes = 0）。這些列**仍然帶著 avg_heart_rate**，
+        # 而那一欄的定義是「**睡眠期間**平均心率」——沒偵測到睡眠時，
+        # 它量的是清醒時段，不是同一個東西。
+        #
+        # 數字本身就說得很清楚：wearer_a 真正睡眠夜的 avgHR 是 52–58，
+        # 而這些無效列上是 85 / 88 / 90 / 95。把它們併進 baseline，
+        # 等於拿白天心率當「你平常睡覺時的心率」，baseline 被推高，
+        # 之後每一個正常夜晚都會因為「比 baseline 低」而拿到不該有的加分。
+        #
+        # ⚠️ 分辨**構念層級**，不是整列丟掉：
+        #     排除 avg_hr / awake_count / segment_count / stress
+        #         —— 全部由睡眠期推導，沒有睡眠期就沒有這些量
+        #     保留 rhr（每日單一數字）與 steps（白天的量）
+        #         —— 這兩個不是從睡眠期算出來的，手錶沒測到睡眠不影響它們
+        #
+        # 設成 None 而不是 continue：rolling_baseline 本來就跳過 None，
+        # 效果相同，但這樣仍會為該日期產生一筆（不會被讀取的）modifier 項目，
+        # 迴圈的其他狀態機（換段偵測）也不會被跳過而錯亂。
+        if not has_measured_sleep(row):
+            avg_hr = None
+            awake_count = None
+            segment_count = None
+            stress = None
+
         # 用「今晚之前」累積的歷史（此時還沒把今晚加進去）算各項 baseline
-        rhr_baseline = rolling_baseline(rhr_history)
-        avg_hr_baseline = rolling_baseline(avg_hr_history)
-        stress_baseline = rolling_baseline(stress_history)
-        steps_baseline = rolling_baseline(steps_history)
-        awake_baseline = rolling_baseline(awake_count_history)
-        segment_baseline = rolling_baseline(segment_count_history)
+        rhr_baseline = rolling_baseline(rhr_history, row_date)
+        avg_hr_baseline = rolling_baseline(avg_hr_history, row_date)
+        stress_baseline = rolling_baseline(stress_history, row_date)
+        steps_baseline = rolling_baseline(steps_history, row_date)
+        awake_baseline = rolling_baseline(awake_count_history, row_date)
+        segment_baseline = rolling_baseline(segment_count_history, row_date)
 
         # 靜止心率、睡眠期間平均心率、壓力：數值越低越好，用絕對差距換算
         # （見檔頭修正記錄第 3 點）；心率拆成 RHR 與 avg_HR 兩個子項各佔一半額度
@@ -796,6 +986,14 @@ def compute_modifiers(summary_rows):
                 current_day - timedelta(days=offset)
                 for offset in range(SRI_WINDOW_DAYS - 1, -1, -1)
             ]
+            # ⚠️ 窗格不得跨過戴錶者分界。SRI 量的是「這個人的作息有多規律」，
+            #    把兩個人的上床時間混在一起算出來的不是規律性，是兩人作息的差異。
+            #    換人後的頭四週窗格會往回踩到前一個人，這裡把它夾在本段起日。
+            #    夾完後有效配對數會不足，compute_sri 自己會回 None——那是對的，
+            #    「還不知道你規律不規律」本來就該說不知道。
+            if segment_start:
+                seg_start_day = datetime.fromisoformat(segment_start).date()
+                window_days = [d for d in window_days if d >= seg_start_day]
             sri_value, valid_pairs = compute_sri(window_days, asleep_epochs, recorded_days)
 
         # 加總各修正項，None（該項未生效）不計入。
@@ -809,6 +1007,36 @@ def compute_modifiers(summary_rows):
         )
         # 保底再夾一次總範圍，防止未來調整個別上限時，總和意外超出 ±12
         total = max(-TOTAL_MODIFIER_CAP, min(TOTAL_MODIFIER_CAP, total))
+
+        # ⚠️ 戴錶者不明的區段：Tier3 與 SRI 全部關掉。
+        #
+        # 這兩者都是個人內比較，跨人算出來的數字沒有意義——不是「不準」，
+        # 是「量的根本不是那件事」。所以不是把值調小，是整個不輸出。
+        #
+        # 刻意放在最後覆寫，而不是在上面提早 continue：這樣前面的計算流程
+        # 完全不用改，讀的人也看得出「原本會算出東西，是這裡刻意丟掉的」。
+        # Tier1/2 的 base_score 不在這個字典裡，不受影響——那是絕對門檻，
+        # 不依賴任何個人歷史，換誰戴都成立。
+        if not segment_trusted:
+            modifiers_by_date[row_date] = {
+                "rhr_modifier": None,
+                "avg_hr_modifier": None,
+                "stress_modifier": None,
+                "activity_modifier": None,
+                "awake_modifier": None,
+                "segment_modifier": None,
+                "sri": None,
+                "sri_valid_pairs": 0,
+                "total_modifier": 0.0,
+                "modifier_note": UNVERIFIED_SEGMENT_NOTE,
+            }
+            rhr_history.append((row_date, rhr))
+            avg_hr_history.append((row_date, avg_hr))
+            stress_history.append((row_date, stress))
+            steps_history.append((row_date, steps))
+            awake_count_history.append((row_date, awake_count))
+            segment_count_history.append((row_date, segment_count))
+            continue
 
         modifiers_by_date[row_date] = {
             # None 代表這項因冷啟動未生效；有值的話四捨五入到小數點後兩位方便閱讀
@@ -840,15 +1068,15 @@ def compute_modifiers(summary_rows):
         # 否則今晚就會把自己算進自己的 baseline 裡，變成用自己評價自己。
         # （J 不在這裡累積，因為它用的是 build_sleep_timeline 建好的完整時間軸，
         #   由窗格範圍控制「看到哪些天」，不需要逐晚 append。）
-        rhr_history.append(rhr)
-        avg_hr_history.append(avg_hr)
-        stress_history.append(stress)
+        rhr_history.append((row_date, rhr))
+        avg_hr_history.append((row_date, avg_hr))
+        stress_history.append((row_date, stress))
         # ⚠️ 這裡 append 的是「已經位移過」的 steps（前一天的值）。這是對的，
         #    不是漏改：baseline 必須跟被比較的值取自同一個序列，否則就變成
         #    拿「睡前活動量」去比「全部白天活動量」的基準，兩者定義不同。
-        steps_history.append(steps)
-        awake_count_history.append(awake_count)
-        segment_count_history.append(segment_count)
+        steps_history.append((row_date, steps))
+        awake_count_history.append((row_date, awake_count))
+        segment_count_history.append((row_date, segment_count))
 
     return modifiers_by_date
 

@@ -140,6 +140,12 @@ def build_rows():
             "rem_min": f.get("rem_minutes"),
             "avg_hr": f.get("avg_heart_rate"),
             "resting_hr": f.get("resting_heart_rate"),
+            # ── 入睡／起床時刻 ──
+            # 與 build_app_payload.py 的 history 同一個來源（features），
+            # 所以 asset 路徑與 API 路徑不會給出兩套不一樣的時間。
+            # ⚠️ 這是「睡著」不是「上床」，不要拿去當 lights_out_at，理由見本檔開頭。
+            "sleep_start_time": f.get("sleep_start_time"),
+            "wake_time": f.get("wake_time"),
             # ── 臥床時間：Garmin **給不出來** ──
             # ⚠️ 一律 None 而不是拿 sleep_period 充數。Garmin 只知道
             #    你什麼時候睡著，不知道你什麼時候躺下——這正是

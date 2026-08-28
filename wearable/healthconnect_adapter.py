@@ -478,6 +478,11 @@ def to_wearable_row(session, date=None, age_band="young_adult",
         "rem_min": features["rem_minutes"],
         "avg_hr": features["avg_heart_rate"],
         "resting_hr": features["resting_heart_rate"],
+        # ⚠️ 用 sleep_onset / final_wake，**不是** session_start / session_end。
+        #    session 起點是「上床」（那個值已經在 time_in_bed_min 裡），
+        #    這兩欄要與 Garmin 同構念，才能放進同一張表、同一條 history。
+        "sleep_start_time": features["sleep_start_time"],
+        "wake_time": features["wake_time"],
         # 臥床時間：只有這個來源有
         "time_in_bed_min": features["time_in_bed_minutes"],
         "clinical_efficiency": features["clinical_sleep_efficiency"],
