@@ -9,6 +9,9 @@
 //   2. 未知的心情不得被當成 happy。把未知狀態顯示成最好的狀態，
 //      正是 CLAUDE.md 紅線 5 要防的「不管怎樣都給獎勵」。
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -70,5 +73,47 @@ void main() {
     // kPetFallbackAnimation 是三層退路的第二層，這個檔一定要存在，
     // 否則所有非 happy 的心情都會掉到最後的靜態 icon
     expect(kPetFallbackAnimation, petMoodVisual('happy').assetPath);
+  });
+
+  // ── 資產真的在磁碟上嗎 ───────────────────────────────────────────
+  //
+  // 這一組守的是「宣告了一個不存在的檔」。那種錯**不會有任何錯誤訊息**：
+  // Lottie 的 errorBuilder 會安靜地退到 happy_dog.json，畫面照樣有一隻狗，
+  // 只是四個心情又長得一樣了——正是這整個功能要解決的問題。
+  // bored/tired/anxious 三個檔在 2026-08-28 之前就是這個狀態。
+
+  test('四個心情宣告的動畫檔都真的存在', () {
+    for (final m in moods) {
+      final path = petMoodVisual(m).assetPath;
+      expect(
+        File(path).existsSync(),
+        isTrue,
+        reason: '$m 指向 $path，但那個檔不在。'
+            'Lottie 會安靜地退到 happy_dog.json，四個心情又會長得一樣。'
+            '跑 `python app/tools/derive_pet_moods.py` 可以重新產生。',
+      );
+    }
+  });
+
+  test('三個衍生檔的內容確實與 happy 不同', () {
+    final happy = jsonDecode(File(petMoodVisual('happy').assetPath)
+        .readAsStringSync()) as Map<String, dynamic>;
+
+    for (final m in ['bored', 'tired', 'anxious']) {
+      final doc = jsonDecode(File(petMoodVisual(m).assetPath).readAsStringSync())
+          as Map<String, dynamic>;
+
+      // 播放速率：每個心情都刻意不同（累的慢、焦慮的快）
+      expect(
+        doc['fr'],
+        isNot(happy['fr']),
+        reason: '$m 的 fr 與 happy 相同，衍生腳本可能沒跑或跑失敗了',
+      );
+
+      // 尺寸與時間長度必須一致，否則版面會跳動
+      expect(doc['w'], happy['w']);
+      expect(doc['h'], happy['h']);
+      expect(doc['op'], happy['op']);
+    }
   });
 }
