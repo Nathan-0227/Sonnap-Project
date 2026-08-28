@@ -52,19 +52,30 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 > **多開視窗同時改同一個 repo 時，commit 前先看 `git status` 裡有沒有
 > 自己沒改過的檔案**，那多半是另一個 session 剛寫的。
 
-### 🔴 還沒做完：`tapo 2.0/.env` 的密碼本身還沒換
+### ✅ `tapo 2.0/.env` 的密碼已換（2026-08-28）
 
 08-27 影像組用 GitHub 網頁「Add files via upload」誤傳了 `tapo 2.0/.env`
 （含 RTSP 攝影機帳密），公開 repo 曝露約 12+ 小時。已在分支
-`fix/untrack-tapo-env`（1 個 commit `6b41901`，**尚未 push**）把它從版控移除、
+`fix/untrack-tapo-env`（1 個 commit `6b41901`，尚未 push）把它從版控移除、
 換成只留鍵名的 `.env.example`，並在檔案裡寫明「網頁上傳會繞過本機
 `.gitignore`」這個根因。
 
-⚠️ **但這只解決「以後不再外流」，不解決「已經外流的那組密碼」。**
-從 git 拿掉檔案不會讓已經公開過的密碼失效——攻擊者只要在洩漏的 12 小時內
-複製過就永遠拿得到。**唯一真正解除暴露的動作是去 Tapo App 裡改攝影機的
-RTSP 密碼**，這件事只有影像組做得到，目前還沒人做。下次接手先確認這件事
-有沒有處理，沒有的話優先提醒他們。
+⚠️ **08-28 深夜又發生一次獨立的意外**：`feature/pet-mood-animation` 的
+`8c52874`（寵物動畫）commit message 完全沒提到 `tapo 2.0/.env`，卻把它
+一起帶進了 commit——多 session 同時改同一份 working copy、`git add -A`
+把別人沒 commit 的修改也掃了進去。裡面的 `CAMERA_RTSP_URL` 因此帶了一組
+**先前從未在 `origin/main` 上出現過**的新值，隨這條分支一起 push 上了公開 repo，
+幾分鐘後才發現。已用 `c7c410d` 把三個受影響的檔案復原成 `origin/main` 版本，
+現在 GitHub 上看到的檔案內容不含那組新值。
+
+**兩次外洩用的都不是同一組值，但使用者已去 Tapo App 把攝影機的 RTSP
+密碼換掉**——不管 git 歷史裡（`b5d166a`、`8c52874`）留著哪一組舊值，
+兩組都已失效，曝露已解除。
+
+⚠️ `fix/untrack-tapo-env` 那個治本的修法（從版控移除、改用 `.env.example`）
+還沒推、也還沒套用到 `feature/pet-mood-animation`——**這個檔案目前
+仍在被追蹤**，下次任何人不小心又帶著真值 commit，會是第三次同型意外。
+下次接手優先把這個分支合掉。
 
 ### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
 
