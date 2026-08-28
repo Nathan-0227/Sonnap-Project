@@ -40,6 +40,8 @@
 //
 // ═══════════════════════════════════════════════════════════════════
 
+import 'wall_clock.dart';
+
 /// Garmin 手錶的動作資料。
 ///
 /// ⚠️ 這**不是** [Metrics.motionCount]（翻身次數）的替代品，兩者測的東西不同。
@@ -200,13 +202,12 @@ class Metrics {
   /// 同一個檔案看得到，外部 import 不到。Dart 沒有 private 關鍵字，
   /// 就是用底線這個命名慣例——但它是編譯器強制的，不像 Python 的底線只是君子協定。
   static DateTime? _parseTime(dynamic value) {
-    // `is!` 是「不是這個型別」。
-    // 順帶一提：通過這個檢查之後 Dart 會自動把 value 當 String 看待
-    // （叫 type promotion），下面就能直接用字串的方法，不必再轉型。
-    if (value is! String || value.isEmpty) return null;
-
-    // tryParse 失敗回 null；對照 DateTime.parse 失敗會直接丟例外。
-    // 資料層一律用 try 版本——一筆壞資料不該讓整個 App 崩掉。
-    return DateTime.tryParse(value);
+    // ⚠️ 這裡刻意**不用** DateTime.tryParse。
+    //    payload 的時間長這樣：2026-08-22T22:32:00+08:00
+    //    tryParse 會把它轉成 UTC，`.hour` 讀出來是 14 不是 22——
+    //    畫面上每一個就寢時間都會早 8 小時。理由與作法見 wall_clock.dart。
+    //
+    // 轉不動回 null；一筆壞資料不該讓整個 App 崩掉。
+    return parseWallClock(value);
   }
 }
