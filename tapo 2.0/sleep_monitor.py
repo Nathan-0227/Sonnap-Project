@@ -70,7 +70,7 @@ def load_config():
         "min_motion_area": int(get_env_var('MIN_MOTION_AREA', '50000')),
         "audio_silence_threshold": int(get_env_var('AUDIO_SILENCE', '30')),
         "audio_snooze_threshold": int(get_env_var('AUDIO_SNOOZE', '40')),
-        "tapo_url": get_env_var('CAMERA_RTSP_URL', 'rtsp://imqs113:Monica113@10.204.162.253:554/stream1'),
+        "tapo_url": get_env_var('CAMERA_RTSP_URL', 'rtsp://imqs113:Monica113@10.22.221.253:554/stream1'),
         "video_min_duration": int(get_env_var('VIDEO_MIN_DURATION', '5')),
         "video_extend_duration": int(get_env_var('VIDEO_EXTEND_DURATION', '5')),
         "video_max_duration": int(get_env_var('VIDEO_MAX_DURATION', '30')),
@@ -137,7 +137,7 @@ def load_config():
         # 顯示從 .env 讀取的值
         current_start = default_config.get('start_time', '01:00:00')
         current_end = default_config.get('end_time', '08:00:00')
-        current_url = default_config.get('tapo_url', 'rtsp://imqs113:Monica113@10.204.162.253:554/stream1')
+        current_url = default_config.get('tapo_url', 'rtsp://imqs113:Monica113@10.22.221.253:554/stream1')
         
         user_input = input(f"開始時間 (預設 {current_start}): ").strip()
         if user_input:
