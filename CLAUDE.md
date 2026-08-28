@@ -72,10 +72,15 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 密碼換掉**——不管 git 歷史裡（`b5d166a`、`8c52874`）留著哪一組舊值，
 兩組都已失效，曝露已解除。
 
-⚠️ `fix/untrack-tapo-env` 那個治本的修法（從版控移除、改用 `.env.example`）
-還沒推、也還沒套用到 `feature/pet-mood-animation`——**這個檔案目前
-仍在被追蹤**，下次任何人不小心又帶著真值 commit，會是第三次同型意外。
-下次接手優先把這個分支合掉。
+✅ **治本的修法已合併**（PR #18，`origin/main` = `5e41e0f`）。
+`tapo 2.0/.env` **已不在版控中**，只剩 `.env.example`（實測：
+`git ls-tree origin/main "tapo 2.0/"` 只有 `.env.example`、
+`sleep_monitor.py`、`tapo_detector.py`）。
+
+→ 那條「`git add -A` 掃到別人沒 commit 的 `.env`」的路徑**已經堵住**：
+檔案不再被追蹤，`.gitignore:8` 的規則從此對它生效。
+⚠️ 但**網頁「Add files via upload」仍然繞得過去**（那是 08-27 那次的根因），
+所以規則不變：一律用 `git commit` 推檔案，不要用網頁上傳。
 
 ### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
 
