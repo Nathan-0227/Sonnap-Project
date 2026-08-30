@@ -56,9 +56,9 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 08-27 影像組用 GitHub 網頁「Add files via upload」誤傳了 `tapo 2.0/.env`
 （含 RTSP 攝影機帳密），公開 repo 曝露約 12+ 小時。已在分支
-`fix/untrack-tapo-env`（1 個 commit `6b41901`，尚未 push）把它從版控移除、
+`fix/untrack-tapo-env`（1 個 commit `6b41901`）把它從版控移除、
 換成只留鍵名的 `.env.example`，並在檔案裡寫明「網頁上傳會繞過本機
-`.gitignore`」這個根因。
+`.gitignore`」這個根因。**已由 PR #18 合併**。
 
 ⚠️ **08-28 深夜又發生一次獨立的意外**：`feature/pet-mood-animation` 的
 `8c52874`（寵物動畫）commit message 完全沒提到 `tapo 2.0/.env`，卻把它
@@ -84,8 +84,8 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
 
-⚠️ **全部尚未 push。** 領先幾個 commit 請直接問 git，不要問這裡：
-`git log --oneline origin/main..feature/pet-mood-animation`（方法論第 2 點）。
+✅ **全部已經合進 `main`**（PR #17 + #18）。下面那張表留著是為了記錄每一項的
+實測結果，不是進度追蹤——要知道 main 現在有什麼，問 git 不要問這裡（方法論第 2 點）。
 
 | # | 做了什麼 | 實測 |
 |---|---|---|
@@ -103,32 +103,43 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 `db.py` 的欄位白名單（會拋錯）與 `healthconnect_adapter.to_wearable_row`
 （**不會報錯**）。以後在 `wearable_nightly` 加欄位請照五處盤點。
 
-### ⏭️ 這一輪之後，還沒做的（都卡在別人身上）
+### ⏭️ 這一輪之後，還沒做的
 
 | 事情 | 卡在誰 |
 |---|---|
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
-| TAPO timeline 時間戳壞掉（3 晚全是 `00:00:00`） | 影像組 |
-| `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 影像組。**改一行設定** |
-| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組 |
-| `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
-| push / 開 PR | 使用者（公開 repo 的對外動作） |
+| TAPO 時間戳壞掉（08-06/07/18）+ id 117（08-19）`timeline=[]` | 影像組。**已開 Issue #19**，含根因與還原方法 |
+| `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
+| 缺 `bored_dog.json` / `tired_dog.json` / `anxious_dog.json` | UI/UX。**程式已就緒**，丟進 `app/assets/animations/` 即可，一行都不用改 |
 | 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
-| 分支要不要拆（見下方 ⚠️ 並行） | 使用者 |
 
-### ✅ demo 相關這一輪的三個進展
+✅ 已經不卡了：`report_screen.dart`（PR #16 就接好了）、`assistant_screen.dart`
+（PR #20 接上真實 payload）、push／開 PR（08-28 四個 PR 全部合完）。
+
+### ✅ demo 相關這一輪的四個進展
 
 1. **APK 已能自己建，且已裝進實體手機測過**（分支 `merge/jeremy-report-screen`，
    已合併進 `main`，見下方「已完成」）。Flutter/Android 環境已從零建起，
    細節與踩過的坑見 `DEVLOG.md` 2026-08-27 那則。
-   ⚠️ **手機上那份是修正前的舊版**（顯示 `anxious`）——下次要同步得重建重裝。
+   ✅ 手機上那份已重建重裝（08-28 實測：拉出手機裡的 APK、解出內嵌的
+   `app_payload.json`，`pet_mood: happy`、`82.2 Good`，與 repo 逐位元組相同）。
 2. **寵物動畫不再永遠播開心的狗**——跟著 `pet_mood` 走，四態各一個資產路徑，
-   資產還沒到位前退到濾鏡版的 `happy_dog.json`。分支 `feature/pet-mood-animation`
-   （3 個 commit：`8c52874` 動畫、`9646f2c` 見下、`6ba789d` DEVLOG，**尚未 push**）。
+   資產還沒到位前退到濾鏡版的 `happy_dog.json`（PR #17）。
 3. **Tier3／SRI 不再跨戴錶者計算（`9646f2c`）**——這支手錶 2026-05-28~08-27
    經手三個人，之前被當成同一個人處理，導致 08-02 之後 10 晚裡 9 晚被誤判
    `anxious`（含兩個 90 分以上的 Good 夜晚）。已用 `WEARER_SEGMENTS` 分段，
    細節見下方 ①。
+4. **睡眠助理不再是假回覆，且時區 bug 已修（PR #20）**——
+   `assistant_screen.dart` 改讀真實 payload。它是**路由器不是生成器**：
+   只把後端算好的欄位取出來組句子，**不自己產生任何建議**
+   （產生建議＝第二套沒有文獻依據的評分層，違反紅線 4）。
+   ⚠️ 順手抓到一個**已經在 `main` 上、使用者看得到**的 bug：
+   `DateTime.tryParse("...+08:00")` 回傳的是 UTC，`.hour` 因此**早 8 小時**
+   （22:32 顯示成 14:32）。Jeremy 的 Insights 圖表也中招
+   （`report_screen.dart` 的 `_timeToMinutes`）。
+   → 修法是新檔 `app/lib/models/wall_clock.dart` 的 `parseWallClock()`：
+   **不要用 `.toLocal()`**——那會跟著手機時區跑，而這些是已經記錄下來的事實，
+   要的是字串裡那個 `+08:00` 的牆鐘時間。**Flutter 端解析 payload 時間一律走它。**
 
 ✅ **那個發現已修**（2026-08-28，commit 見下）。而且實際規模比當初記的大得多：
 不是 07-13~07-15 三筆，是 **89 列 summary 裡有 38 列沒量到睡眠**，
@@ -299,18 +310,21 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 ### git 狀態（2026-08-28 更新）
 
-✅ `origin/main` 現在是 `98c51b2`（PR #16：併入 Jeremy 的 Insights 頁 + 修
-`energy_level` 捨入誤差）。PR #11（多使用者後端）、PR #12~15（文件與英文化）
-都已經在裡面。
+✅ `origin/main` 現在是 `18aa8ed`。08-28 這一輪的四個 PR 全部合完：
 
-**本地還有兩個分支尚未 push**，都是這一輪（08-28）做的：
+| PR | 內容 |
+|---|---|
+| #17 | 寵物動畫四態化 + 戴錶者分段（`WEARER_SEGMENTS`）+ baseline 日曆天窗格 |
+| #18 | `tapo 2.0/.env` 停止追蹤，改附 `.env.example` |
+| #20 | 睡眠助理接真實 payload + 修掉時區解析錯 8 小時 |
+| #21 | 本檔的 `.env` 狀態更新 |
 
-| 分支 | commit | 內容 | 狀態 |
-|---|---|---|---|
-| `feature/pet-mood-animation` | 3 個 | 寵物動畫四態化 + 戴錶者分段修正 + DEVLOG | 尚未 push |
-| `fix/untrack-tapo-env` | 1 個 | 移除誤傳的 `tapo 2.0/.env` | 尚未 push，⚠️ 密碼本身仍未換（見上方紅字） |
+更早的 PR #11（多使用者後端）、#12~15（文件與英文化）、#16（Jeremy 的
+Insights 頁）也都在裡面。
 
-兩者的分歧點都是 `main`（`98c51b2`），互不衝突，可以各自開 PR。
+**本地與遠端都只剩 `main` 一條自己的分支**，已合併的分支都刪了。
+遠端另有三條別人的：`flutter`、`second-flutter-integration`（都已併入、可刪）
+與 `feature/opencv-motion-garmin`（影像組，整條不能合，見下）。
 
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
@@ -362,19 +376,17 @@ python garmin/run_pipeline.py          # 再跑後四步
 抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
 46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
 
-分支盤點（2026-08-28 用 `git ls-remote --heads origin` 實測，只剩 4 條遠端分支）：
+分支盤點（2026-08-28 晚間用 `git ls-remote --heads origin` 實測，4 條遠端分支）：
 
 | 遠端分支 | 作者 | 狀態 |
 |---|---|---|
-| `main` | — | `98c51b2`（PR #16 合併點） |
+| `main` | — | `18aa8ed`（PR #21 合併點） |
 | `second-flutter-integration` | Jeremy | ✅ **內容已於 PR #16 併入 main**（走的是新分支 `merge/jeremy-report-screen`，不是直接合這條）。這條本身沒人刪，**可以刪了** |
 | `flutter` | Jeremy | 已全數合併，可刪 |
 | `feature/opencv-motion-garmin` | 影像組 | 12 個 commit 從沒合併，整條不能合，見下方 |
 
-✅ 之前記的 `feature/behavior-loop` 那兩條、`feature/garmin-sleep-scoring`、
-`feature/project-setup` 都已經不在遠端了。
-⚠️ 兩個本地新分支（`feature/pet-mood-animation`、`fix/untrack-tapo-env`，
-見上方「git 狀態」）**還沒推上去**，不會出現在這張表裡。
+✅ 自己開過的分支全部合完並刪除（遠端與本地都只剩 `main`）。
+剩下那兩條 Jeremy 的沒動——**別人的分支不代刪**。
 
 ### Jeremy 的 `second-flutter-integration` —— ✅ 已於 PR #16 併入，這節可歸檔
 
@@ -438,8 +450,10 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 
 ## 🚧 設計紅線與待補迴圈（2026-08-17 定．動評分或遊戲化之前必讀）
 
-來源：拿 GitHub 上同類型開源專案 **NightBloom**（`shev0k/sleep_tracker`，MIT，
-4 stars／34 commits／停更於 2024-11）逐行對照的結論。
+來源：拿 GitHub 上同類型開源專案 **NightBloom**（`shev0k/sleep_tracker`）逐行對照的結論。
+4 stars／34 commits／**最後一次 push 是 2024-11-02**，停更約 21 個月
+（2026-08-28 用 GitHub API 複查，仍是最新版本；為什麼要複查見方法論第 2 點）。
+⚠️ **授權不明**：README 宣稱 MIT，但 repo 裡沒有 LICENSE 檔（見方法論第 1 點）。
 **完整證據與行號在 [PROJECT_STATUS.md](PROJECT_STATUS.md) 第八節**，這裡只留規則。
 
 分寸先講清楚：對方是小型學生專案，**「它有問題」不能反過來證明我們是對的**。
@@ -682,12 +696,21 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 `numpy`——只有 `itegration/` 與 `tapo/` 需要，要用時再 `pip install -r requirements.txt`。
 ⚠️ `garminconnect` 只有 `--fetch` 那一步需要，pipeline 後四步不受影響。
 
-**驗收指令**（三支，都是獨立腳本、不需要 pytest）：
+**驗收指令**
+
+Python 三支，都是獨立腳本、不需要 pytest：
 
 ```bash
 python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
 python tests/test_healthconnect_adapter.py
 python tests/test_scoring_guards.py      # 2026-08-28 新增
+```
+
+Flutter（在 `app/` 底下跑，**34 條全過**）：
+
+```bash
+flutter test        # widget_test 4 + pet_mood_animation 5 + assistant_answers 17 + wall_clock 8
+flutter analyze     # 0 error（15 個既有的 warning／info 不是這一輪帶進來的）
 ```
 
 ⚠️ `test_scoring_guards.py` 守的是**四個壞掉時不會報錯的機制**，
@@ -711,9 +734,15 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 只產一份檔的理由：兩份就會有「App 顯示的跟 API 回傳的對不上」這種最難查的 bug。
 之後要接 HTTP 只要實作 `sleep_repository.dart` 裡預留的 `ApiSleepRepository`。
 
-**還沒接的**：`report_screen.dart`（Insights 頁，資料寫死在 `CustomPainter` 內部）
-與 `assistant_screen.dart` 的問答。`payload` 已帶 `history`（最近 30 晚），
-接 Insights 時不用改後端。
+✅ **四個畫面都接上真實資料了**：`home_screen` / `report_screen`（PR #16）/
+`assistant_screen`（PR #20）/ `friends_screen` 仍是假資料（社交功能還沒做後端）。
+
+⚠️ `assistant_screen` 的答案由 `app/lib/services/assistant_answers.dart` 產生，
+它是**查表路由器不是生成器**：`_topicKeywords` 把問題分到 12 個主題，
+每個主題只從 payload 取既有欄位組句。**不要在這裡加「算出來」的建議**——
+那會變成第二套沒有文獻依據的評分層（紅線 4）。
+問不出來的題目要老實說「我沒有這項資料」並列出真的做得到的事，
+不要寫「等後端接上就有了」。
 
 ---
 
@@ -798,9 +827,17 @@ PowerShell 則沒事——同一台機器兩種結果。新腳本要印中文請
    `pubspec.yaml` 沒有任何感測套件、「睡眠資料」頁的時數是寫死字串。
    **它的睡眠量測整個是假的**，README 描述的是路線圖不是現況。
    → 我們自己也犯過同型的錯：`ADVICE_LANG` 曾經寫在文件上卻沒有實作。
+   ⚠️ **同一份 README 還錯第二次**（2026-08-28 複查發現）：它寫「本專案採 MIT 授權，
+   詳見 LICENSE 檔」，但 repo 根目錄**沒有那個檔案**，GitHub API 的 `license` 因此是
+   `null`。→ 授權看 LICENSE 檔本身，不看 README。
+   **同一份文件錯兩次，就不是筆誤，是整份不能當事實來源。**
 2. **遠端狀態問 git，不要問文件**——連問這份檔案都不行。
    動手前先跑 `git ls-remote --heads origin` 與
    `git fetch && git log --oneline origin/main -1`。
+   ⚠️ **查外部 repo 有沒有停更，只看 `pushed_at`，不要看 `updated_at`。**
+   後者被 star、被 watch、改個描述都會動。NightBloom 的 `updated_at` 是
+   **2026-04-29**、`pushed_at` 是 **2024-11-02**——差 18 個月，
+   中間一行程式碼都沒進來。挑錯欄位就會得出「它最近有更新」的相反結論。
 3. **宣稱「跑過了」之前，先確認每一步都真的跑了。**
    一律用 `python garmin/run_pipeline.py`，不要手動一步一步跑——
    漏跑中間步驟**不會報錯**，後面的步驟會安靜地用上次留下的舊檔案算出結果。
