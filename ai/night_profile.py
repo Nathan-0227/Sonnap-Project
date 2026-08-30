@@ -25,7 +25,7 @@ night_profile.py — 把原始數據整理成「事實清單」餵給模型
 import json
 import statistics
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -44,14 +44,22 @@ from evaluate_sleep_quality import (  # noqa: E402
     WASO_THRESHOLD,
 )
 
-# build_app_payload.py 也在專案根目錄、也只用標準庫，
-# 它的 TAPO 有效性門檻沒有理由再寫第二份。
+# 攝影機資料的單一事實來源。只用標準庫，import 它不會多帶進任何相依套件。
 sys.path.insert(0, str(ROOT))
-from build_app_payload import load_tapo_report  # noqa: E402
+import tapo_index  # noqa: E402
 
 RECENT_WINDOW = 7    # 「近期」= 最近 7 晚
 BASELINE_WINDOW = 28  # 「先前」= 再往前 28 晚
 MIN_SAMPLES = 3       # 兩個窗格各至少要有這麼多晚才敢講趨勢
+
+# 攝影機首事件早於手錶入睡多久之內，還算得上是「上床時刻」。
+#
+# ⚠️ 這是**呈現層的閘門，不是計分門檻**——它決定要不要把那句話寫成
+#    「這可以當上床時刻」，不影響任何分數，所以不需要文獻依據
+#    （本專案「每項計分都要有引文」那條紀律管的是進 total_modifier 的東西）。
+#    值取 120 分鐘：實測 5 個可用夜晚落在 30–98 分鐘，08-06 的 136 分與
+#    08-18 的 244 分則明顯是「人在房間裡走動」而不是上床。
+BEDTIME_PLAUSIBLE_MINUTES = 120
 
 
 def load_nights():
@@ -242,6 +250,109 @@ def _wear_rate(recent, target_date):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 攝影機（TAPO）
+# ═══════════════════════════════════════════════════════════════════
+
+def _bedtime_line(night, cam):
+    """
+    攝影機首事件 vs 手錶入睡時刻。**這是攝影機唯一手錶量不到的東西。**
+
+    三種結果分開講，因為它們的成因完全不同，混為一談會讓報告寫錯：
+      早於入睡且在合理範圍   → 可以當上床時刻用
+      早太多                → 攝影機分不出「上床」與「醒著在房裡走動」
+      晚於入睡              → 攝影機那時還沒開機（SLEEP_START 設定問題）
+    """
+    onset_raw = night.get("sleep_start_time")
+    if not onset_raw:
+        return ("Watch sleep-onset time is not available for this night, so the "
+                "camera's first event cannot be interpreted as a bedtime.")
+    try:
+        onset = datetime.fromisoformat(onset_raw).replace(tzinfo=None)
+    except (TypeError, ValueError):
+        return None
+
+    first = cam["camera_first"]
+    minutes = (first - onset).total_seconds() / 60
+    clock = first.strftime("%H:%M")
+
+    if minutes > 0:
+        return (f"The camera's first event ({clock}) is {minutes:.0f} min AFTER the "
+                f"watch's sleep onset ({onset.strftime('%H:%M')}), so the camera was "
+                f"not yet recording when the user went to bed and did not capture "
+                f"bedtime. [MEASURED, BUT NOT A BEDTIME]")
+    if -BEDTIME_PLAUSIBLE_MINUTES <= minutes < 0:
+        return (f"First in-bed movement {clock}, {abs(minutes):.0f} min before the "
+                f"watch's sleep onset ({onset.strftime('%H:%M')}) - within a normal "
+                f"sleep-onset latency, so this can be read as the time the user "
+                f"settled into bed. [MEASURED]")
+    return (f"The camera's first event ({clock}) is {abs(minutes):.0f} min before the "
+            f"watch's sleep onset ({onset.strftime('%H:%M')}) - too far ahead to be "
+            f"the moment of getting into bed. The camera cannot tell 'got into bed' "
+            f"from 'awake and moving around the room'. [MEASURED, BUT NOT A BEDTIME]")
+
+
+def _camera_facts(night, cam):
+    """
+    那一晚攝影機的事實 —— **每個欄位都輸出**，各自帶可信度標籤。
+
+    為什麼全部給：先篩掉會讓「攝影機到底量到什麼」在 prompt 裡完全不可見。
+    標籤讓模型知道哪一個能講、哪一個只是背景。標籤來自
+    tapo_index.provenance()，不是在這裡各自判斷——那樣會漂移。
+
+    ⚠️ 標成 SIMULATED 的值仍然會進 prompt，但 generate_advice.validate()
+       另有一條硬檢查擋它們出現在輸出裡。只靠 prompt 指示不夠：
+       這個專案已經三次踩到「驗證規則安靜失效」。
+    """
+    if cam is None:
+        return ["No camera data for this night (the camera was not recording, or "
+                "its recording could not be matched to this night)."]
+
+    first, last = cam["camera_first"], cam["camera_last"]
+    lines = [
+        f"Camera recorded {first.strftime('%H:%M')}-{last.strftime('%H:%M')}, "
+        f"{cam['total_events']} motion events. [MEASURED - times come from the "
+        f"video filenames, which are the only trustworthy timestamps in this data]"
+    ]
+
+    # 不是一夜的睡眠（白天測試錄影、或翻身頻率不合生理）。
+    # ⚠️ 仍然寫進 prompt——使用者要求所有資料都進去，而且「這一晚的攝影機
+    #    紀錄不能用」本身就是模型該知道的事實，只是要標明它的等級。
+    problem = tapo_index.sleep_recording_problem(cam)
+    if problem:
+        lines.append(f"This recording cannot be read as a night's sleep: "
+                     f"{problem}. [NOT A SLEEP RECORDING]")
+        return lines
+
+    bedtime = _bedtime_line(night, cam)
+    if bedtime:
+        lines.append(bedtime)
+
+    lines.append(
+        f"Event counts: {cam['large_turn_count']} large turns, "
+        f"{cam['micro_motion_count']} micro-motions. [MEASURED, BUT NOT COMPARABLE "
+        f"ACROSS NIGHTS - the counts depend on detector settings that changed "
+        f"between recordings]"
+    )
+
+    scores = ", ".join(f"{score}" for _, score in cam["scores"]) or "none recorded"
+    score_line = (f"Camera sleep-quality score: {scores}. [NOT MEASUREMENT-GRADE - "
+                  f"this score is a function of how long the event list is, not of "
+                  f"how the user slept]")
+    if cam["score_disagreement"]:
+        score_line += (f" The two data sources for this same night disagree by "
+                       f"{cam['score_disagreement']} points.")
+    lines.append(score_line)
+
+    if cam["decibel_min"] is not None:
+        lines.append(
+            f"Snore count {cam['snore_count']}, sound level "
+            f"{cam['decibel_min']}-{cam['decibel_max']} dB. [SIMULATED - there is no "
+            f"microphone; these are random numbers. Never mention them.]"
+        )
+    return lines
+
+
+# ═══════════════════════════════════════════════════════════════════
 # 對外介面
 # ═══════════════════════════════════════════════════════════════════
 
@@ -251,8 +362,10 @@ def build_profile(target_date, nights):
     if night is None:
         return None
 
-    tapo, tapo_note = load_tapo_report()
-    sources = ["garmin"] + (["tapo"] if tapo else [])
+    # ⚠️ 依日期查，不是「載入唯一那份報告」。
+    #    改之前這裡不傳日期，一旦讀成功會把同一份攝影機報告掛到全部 51 晚上。
+    cam = tapo_index.get_index().get(target_date)
+    sources = ["garmin"] + (["tapo"] if cam else [])
 
     return {
         "date": target_date,
@@ -261,10 +374,11 @@ def build_profile(target_date, nights):
         "rem_unmeasured": not night.get("rem_minutes"),
         "tonight": _tonight_facts(night),
         "trends": _trend_facts(nights, target_date),
+        "camera": _camera_facts(night, cam),
         "recommendation": night.get("recommendation") or "",
         "modifier_note": night.get("modifier_note") or "",
         "data_sources": sources,
-        "tapo_note": tapo_note,
+        "camera_raw": cam,
         "raw": night,
     }
 
@@ -285,6 +399,15 @@ def format_facts(profile):
     ]
     if profile["modifier_note"]:
         parts += ["", "DATA STATUS NOTE:", profile["modifier_note"]]
-    if "tapo" not in profile["data_sources"]:
-        parts += ["", f"CAMERA DATA: {profile['tapo_note']}"]
+
+    # ⚠️ CAMERA 區塊在「有」與「沒有」兩種情形都要輸出。
+    #    改之前只有「沒有」那一支會寫進 prompt——攝影機真的有資料時，
+    #    模型反而什麼都看不到。
+    parts += [
+        "",
+        "CAMERA (a second device. The tag in brackets says how far each value can "
+        "be trusted; anything tagged SIMULATED or NOT MEASUREMENT-GRADE is "
+        "background only and must never appear in your output):",
+        *(f"- {line}" for line in profile["camera"]),
+    ]
     return "\n".join(parts)

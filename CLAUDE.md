@@ -108,9 +108,12 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 | 事情 | 卡在誰 |
 |---|---|
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
-| TAPO 時間戳壞掉（08-06/07/18）+ id 117（08-19）`timeline=[]` | 影像組。**已開 Issue #19**，含根因與還原方法 |
+| ~~TAPO timeline 時間戳壞掉~~ | ✅ **我方已繞過**：時刻在 `video_clip` 檔名裡，見 `tapo_index.py`。來源端的修法在 **Issue #19** |
+| **`MOTION_MICRO` 偵測門檻**（一晚 7000+ 個 micro_motion） | 影像組。**這才是攝影機分數歸零的根因**，見 PROJECT_STATUS 3.8 ⑤ |
 | `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
-| 缺 `bored_dog.json` / `tired_dog.json` / `anxious_dog.json` | UI/UX。**程式已就緒**，丟進 `app/assets/animations/` 即可，一行都不用改 |
+| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19 |
+| `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
+| push / 開 PR | 使用者（公開 repo 的對外動作） |
 | 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
 
 ✅ 已經不卡了：`report_screen.dart`（PR #16 就接好了）、`assistant_screen.dart`
@@ -426,8 +429,16 @@ python garmin/run_pipeline.py          # 再跑後四步
 
 ⚠️ 那筆 06-11 是**唯一**讓 TAPO 與 Garmin 六月資料產生重疊的紀錄。
 不做這個分層就直接 `merge`，會憑空多出一個橫跨兩個月的「共同樣本」。
+✅ 已處理：`tapo_index.sleep_recording_problem()` 會擋掉它（29 秒的白天錄影），
+三個呼叫端共用同一個判準。實測 `if_integrate.py` 的重疊因此從 10 晚變成 9 晚，
+日期範圍從「2026-06-12 ~ 08-23」收斂成「2026-08-02 ~ 08-23」。
 
-（`motion_intensity: 2073600` = 1920×1080 整畫面誤判這一項仍然成立。）
+⚠️ **「`motion_intensity` 恆為 2073600」這個說法已被實測推翻（2026-08-30）。**
+24949 筆事件裡有 20105 個相異值，整畫面值只有 **238 筆（0.95%）**，
+且全部集中在 `large_turn`（1017 筆中的 23.4%），micro_motion 一筆都沒有。
+整畫面誤判是真的、值得修，但**不是攝影機分數歸零的原因**——
+歸零的原因是事件量（micro_motion 佔全部事件的 93%）。
+重跑：`python inspect_tapo_score.py`。
 
 已合併的歷史：PR #9（Garmin 評分）、PR #10（資料交接層 + AI + Flutter 資料層）、
 PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Jeremy 的 Insights 頁）。
@@ -518,7 +529,7 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 | 欄位 | 它**不是**什麼 | 它**是**什麼 |
 |---|---|---|
 | `movement_sample_minutes` | 不是動作量／翻身次數 | 取樣分鐘數（每分鐘一筆，99.98% 間隔正好 60 秒）。與睡眠時長 r=+0.929、與 WASO r=−0.138 |
-| `avg_stress_score` | 不是睡眠期間的壓力 | 該**日曆日白天**的平均（11439 筆讀數中僅 8.6% 落在睡眠期間）。**已不計分**，保留只因 `itegration/if_integrate.py:250` 還在讀 |
+| `avg_stress_score` | 不是睡眠期間的壓力 | 該**日曆日白天**的平均（11439 筆讀數中僅 8.6% 落在睡眠期間）。**已不計分**，保留只因 `itegration/if_integrate.py` 的相關性分析還在讀 |
 | `presleep_stress_score` | — | 「上一次起床 → 這一次入睡」整段清醒時段。Tier3 壓力修正值用這個 |
 | `sleep_efficiency` | 不是臨床睡眠效率 | 分母是（起床 − 入睡），**不含入睡潛伏期**。報告中須誠實標註 |
 
@@ -563,18 +574,21 @@ python garmin/run_pipeline.py          # 再跑後四步
 | 分數 | 位置 | 狀態 |
 |---|---|---|
 | `final_score` | `garmin/apply_recovery_modifier.py` | ✅ 文獻加權，主線 |
-| `sleep_quality_score` | `tapo/tapo_detector.py:487` | ✅ 扣分制，影像組的 |
-| `integrated_score` | `itegration/if_integrate.py:214` | ✅ `0.6×garmin + 0.4×tapo`，**權重無依據** |
-| `calculate_camera_score()` | `itegration/if_integrate.py` | ❌ **死碼**（SQL 早就寫了 `sleep_quality_score as camera_score`） |
-| `calculate_garmin_score_from_features()` | 同上 | ❌ **死碼** |
+| `sleep_quality_score` | `tapo/tapo_detector.py:487` | ⚠️ 扣分制，影像組的。**量的是 timeline 長度不是睡眠**——同一晚跨來源差 80 分，見 PROJECT_STATUS 3.8 ⑤ |
+| `integrated_score` | `itegration/if_integrate.py` | ⚠️ `0.6×garmin + 0.4×tapo`，**權重無依據**，輸出已標成 PROVISIONAL |
+| ~~`calculate_camera_score()`~~ | — | ✅ **已刪除**（2026-08-30） |
+| ~~`calculate_garmin_score_from_features()`~~ | — | ✅ **已刪除**（2026-08-30） |
 
 ⚠️ **`PROJECT_STATUS.md` 3.10 主張根本不該做加權平均**：攝影機的價值是提供
 手錶量不到的「上床時刻」（→ 臥床時間 → 解掉效率限制 + 解鎖入睡潛伏期），
 那條路一個新參數都不用訂；而加權平均要 justify 60/40，還是拿有引文的分數
 去平均沒引文的分數。
 
-> ⚠️ 那兩段死碼我連續兩次寫錯、兩次同一個原因——見末尾「方法論」第 4 點。
-> （實際行號：`if_integrate.py:199-211`，`camera_score` 在 `:130` 的 SQL 就已經有值。）
+> 那兩段死碼在 2026-08-30 刪掉了。刪的理由不只是「跑不到」——**它們跑到也會壞**：
+> 裡面寫 `if eff < 85:` 而 `eff` 是一個 pandas Series，對 Series 取真值會拋
+> `ValueError: The truth value of a Series is ambiguous`。
+> 留著只會讓讀的人以為「沒有 Garmin 分數時系統會自己算」，那是假的。
+> （我曾連續兩次把它們當成現況寫進文件——見末尾「方法論」第 4 點。）
 
 ---
 
@@ -675,6 +689,15 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   `no such column`。加欄位時兩邊都要改。
 - `build_app_payload.py` — `garmin/data/*.json` → `app/assets/data/app_payload.json`
 - `migrate_garmin_to_db.py` — 46 晚 → `wearable_nightly`，可重複執行
+- **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
+  同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
+  **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
+  兩者都已有實例）。依 6 小時間隔切夜、去重、每個欄位附 `provenance()` 標籤。
+  ⚠️ 呼叫端有三個（`ai/night_profile.py`、`build_app_payload.py`、
+  `itegration/if_integrate.py`），**有效性判準只有一份**
+  （`sleep_recording_problem()`），不要各自再寫。
+- `inspect_tapo_score.py`（2026-08-30 新增）— 攝影機分數的根因分析，
+  只清點不評分。影像組送新 dump 之後直接重跑，不要照抄舊數字。
 
 **模組**
 
@@ -685,7 +708,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `wearable/` | `healthconnect_adapter.py`：Health Connect → **既有評分器**（一個門檻都沒改） |
 | `ai/` | 夢境日記（Claude API）。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
-| `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名 |
+| `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
 | `tests/` | `test_api.py`、`test_healthconnect_adapter.py`，**獨立腳本不需 pytest** |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
@@ -698,12 +721,13 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 三支，都是獨立腳本、不需要 pytest：
+Python 四支，都是獨立腳本、不需要 pytest：
 
 ```bash
 python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
 python tests/test_healthconnect_adapter.py
 python tests/test_scoring_guards.py      # 2026-08-28 新增
+python tests/test_tapo_index.py          # 2026-08-30 新增
 ```
 
 Flutter（在 `app/` 底下跑，**34 條全過**）：
@@ -712,6 +736,11 @@ Flutter（在 `app/` 底下跑，**34 條全過**）：
 flutter test        # widget_test 4 + pet_mood_animation 5 + assistant_answers 17 + wall_clock 8
 flutter analyze     # 0 error（15 個既有的 warning／info 不是這一輪帶進來的）
 ```
+
+⚠️ `test_tapo_index.py` 守的是 TAPO 資料那五個**壞掉時不會報錯**的機制
+（日期取自檔名而非 `report_date`、壞掉的時間戳要能還原、橫跨兩夜的紀錄要切開、
+重複檔要去重、每個欄位都要有 provenance 標籤）。五條都用
+「把 bug 重新引入、確認測試會紅」驗證過。
 
 ⚠️ `test_scoring_guards.py` 守的是**四個壞掉時不會報錯的機制**，
 每一條都用「把 bug 重新引入、確認測試會紅」驗證過：

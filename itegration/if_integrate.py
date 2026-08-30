@@ -2,9 +2,9 @@
 完整的 Garmin + 攝影機數據整合分析系統
 """
 import json
+import sys
 import pandas as pd
 import numpy as np
-import mysql.connector
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -12,24 +12,40 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# ==================== 設定 ====================
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "sonnap"
-}
+# 攝影機資料改由 tapo_index 提供（見下方 CameraDataLoader 的說明）。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import tapo_index
 
+# ==================== 設定 ====================
 GARMIN_DATA_DIR = "garmin/data"
 
-# 睡眠品質評級標準
+# 睡眠品質評級標準。
+#
+# ⚠️ 2026-08-30 從五級（優秀/良好/普通/需改善/待加強，切點 85/70/55/40）改成
+#    四級，與正式評分器對齊（garmin/evaluate_sleep_quality.py 的
+#    Good/Normal/Poor/Bad，切點 80/65/50）。
+#    改之前同一個 0–100 的數字會被兩套標準講成不同的等級——例如 82 分在
+#    正式評分器是 Good、在這裡是「良好」而不是「優秀」，報告裡並排會自相矛盾。
 SCORE_GRADES = {
-    "優秀": (85, 100),
-    "良好": (70, 84),
-    "普通": (55, 69),
-    "需改善": (40, 54),
-    "待加強": (0, 39)
+    "Good": (80, 100),
+    "Normal": (65, 79),
+    "Poor": (50, 64),
+    "Bad": (0, 49),
 }
+
+# integrated_score 的權重。
+#
+# ⚠️ **這兩個數字沒有依據**，本專案 Tier1/2 的每一個權重都有文獻
+#    （Garmin手錶分數.md 附錄有對照表），這裡是唯一的例外。
+#    而且 camera_score 目前是「timeline 有多長」的函數而不是睡眠品質的量度
+#    （同一晚跨來源差 80 分，重跑 python inspect_tapo_score.py 表二），
+#    所以這個加權平均在攝影機的偵測器修好之前**沒有解讀價值**。
+#
+#    保留它是為了讓既有的圖表與報告能跑，輸出一律標成 provisional，
+#    並且**同時並列** garmin_score 與 camera_score 讓讀者自己看。
+GARMIN_WEIGHT = 0.6
+CAMERA_WEIGHT = 0.4
+WEIGHTS_ARE_PROVISIONAL = True
 
 class GarminDataLoader:
     """Garmin 數據載入器"""
@@ -99,49 +115,72 @@ class GarminDataLoader:
         return self.merged_data
 
 class CameraDataLoader:
-    """攝影機數據載入器"""
-    
+    """
+    攝影機數據載入器。
+
+    ⚠️ 2026-08-30 從 MySQL 改成讀 tapo_index。三個理由，每一個單獨都足以擋掉舊寫法：
+
+      ① **那個資料庫不在這台機器上。** 本機 MySQL 只有系統內建的五個 schema，
+         沒有 `sonnap`，17 個 binlog 全是 198–221 bytes（只有啟動/關閉事件）
+         → 這個 server 從沒被寫過東西。所以整支程式**從來沒有跑過真實資料**。
+
+      ② **合併鍵 `report_date` 會錯。** 實例：sleep_reports/2026-08-04/
+         sleep_report_003653.json 的 report_date 寫 08-04，但裡面 106 個
+         video_clip 全是 turn_20260803_*。日期錯了就是把 A 晚的攝影機資料
+         配上 B 晚的手錶資料，而 how='inner' 會**安靜地**丟掉配不上的列。
+         tapo_index 改用 video_clip 檔名定日期。
+
+      ③ dump 檔案（tapo/sleep_records.sql）本來就在 repo 裡，讀檔比要求
+         每個人先架好 MySQL 合理。
+    """
+
     def __init__(self):
-        self.conn = None
         self.data = None
-        
-    def connect_db(self):
-        """連線資料庫"""
-        try:
-            self.conn = mysql.connector.connect(**DB_CONFIG)
-            print("✅ 資料庫連線成功")
-            return True
-        except Exception as e:
-            print(f"❌ 資料庫連線失敗: {e}")
-            return False
-    
+
     def load_data(self):
-        """載入攝影機數據"""
-        if not self.conn:
-            if not self.connect_db():
-                return None
-        
-        query = """
-            SELECT 
-                report_date as date,
-                total_events,
-                large_turn_count,
-                snore_count,
-                sleep_quality_score as camera_score,
-                timeline,
-                created_at
-            FROM sleep_records
-            ORDER BY report_date
-        """
-        
-        try:
-            self.data = pd.read_sql(query, self.conn)
-            self.data['date'] = pd.to_datetime(self.data['date']).dt.date
-            print(f"✅ 載入攝影機數據: {len(self.data)} 筆")
-            return self.data
-        except Exception as e:
-            print(f"❌ 載入失敗: {e}")
+        """從 tapo_index 載入攝影機數據，回傳與舊版相同形狀的 DataFrame。"""
+        index = tapo_index.get_index()
+        if not index:
+            print("❌ 找不到攝影機資料（tapo/sleep_records.sql 與 "
+                  "tapo/sleep_reports/ 都是空的）")
             return None
+
+        rows = []
+        excluded = []
+        for night in sorted(index.values(), key=lambda n: n["date"]):
+            # ⚠️ 這個過濾不能省。06-12 那筆是 29 秒的白天測試錄影，
+            #    而它是**唯一**讓 TAPO 與 Garmin 的六月資料產生重疊的紀錄——
+            #    不濾掉就會憑空多出一個橫跨兩個月的「共同樣本」，
+            #    整份相關性分析都會被它拉歪。
+            problem = tapo_index.sleep_recording_problem(night)
+            if problem:
+                excluded.append((night["date"], problem))
+                continue
+            scores = [s for _, s in night["scores"]]
+            rows.append({
+                "date": datetime.fromisoformat(night["date"]).date(),
+                "total_events": night["total_events"],
+                "large_turn_count": night["large_turn_count"],
+                "snore_count": night["snore_count"],
+                # 同一晚有多個來源時取中位數；落差另外用 score_disagreement 呈現，
+                # 不藏起來。**這一欄本身不可信**，見檔頭 SCORE_GRADES 的說明。
+                "camera_score": int(np.median(scores)) if scores else np.nan,
+                "camera_score_disagreement": night["score_disagreement"],
+                "camera_first": night["camera_first"],
+                "camera_last": night["camera_last"],
+            })
+
+        self.data = pd.DataFrame(rows)
+        conflicts = int((self.data["camera_score_disagreement"] > 0).sum())
+        print(f"✅ 載入攝影機數據: {len(self.data)} 晚"
+              f"（依 video_clip 檔名定日期）")
+        for date_str, problem in excluded:
+            print(f"   ⏭️  排除 {date_str}：{problem}")
+        if conflicts:
+            worst = int(self.data["camera_score_disagreement"].max())
+            print(f"   ⚠️ 其中 {conflicts} 晚的兩個來源對自己的分數就不一致，"
+                  f"最大差 {worst} 分")
+        return self.data
 
 class SleepDataIntegrator:
     """睡眠數據整合器"""
@@ -188,96 +227,52 @@ class SleepDataIntegrator:
         return self.integrated_data
     
     def calculate_sleep_scores(self):
-        """計算睡眠分數"""
+        """
+        算出三個分數並排在一起。
+
+        ⚠️ 這裡**不再**有 fallback 自行計算分數的分支。原本有兩支
+           （calculate_garmin_score_from_features / calculate_camera_score），
+           2026-08-30 刪掉，理由有二：
+
+           ① 它們是死碼。garmin_score 一定走 final_score 那一支（quality_final
+              永遠有這欄），camera_score 也一定已經在 SQL 的 SELECT 裡取好別名。
+           ② 就算走到了也會當場炸掉——裡面寫 `if eff < 85:`，而 eff 是
+              一個 pandas Series，對 Series 取真值會拋
+              ValueError: The truth value of a Series is ambiguous。
+
+           換句話說那兩支既跑不到、跑到也會壞。留著只會讓讀的人以為
+           「沒有 Garmin 分數時系統會自己算」——那是假的。
+        """
         if self.integrated_data is None or self.integrated_data.empty:
             print("❌ 沒有數據")
             return None
-        
+
         df = self.integrated_data.copy()
-        
-        # 1. Garmin 基礎分數
-        if 'final_score' in df.columns:
-            df['garmin_score'] = df['final_score']
-        elif 'sleep_quality_score' in df.columns:
-            df['garmin_score'] = df['sleep_quality_score']
-        else:
-            # 如果沒有 Garmin 分數，從睡眠數據計算
-            df['garmin_score'] = self.calculate_garmin_score_from_features(df)
-        
-        # 2. 攝影機分數
-        if 'camera_score' in df.columns:
-            df['camera_score'] = df['camera_score']
-        else:
-            df['camera_score'] = self.calculate_camera_score(df)
-        
-        # 3. 整合分數 (Garmin 60% + 攝影機 40%)
+
+        if 'final_score' not in df.columns:
+            print("❌ Garmin 資料缺 final_score 欄位。"
+                  "先跑 python garmin/run_pipeline.py")
+            return None
+        df['garmin_score'] = df['final_score']
+
+        if 'camera_score' not in df.columns:
+            print("❌ 攝影機資料缺 camera_score 欄位")
+            return None
+
+        # ⚠️ 加權平均只是暫定值，權重沒有依據（見檔頭 GARMIN_WEIGHT 的說明）。
+        #    真正該看的是並排的兩欄與它們的差，不是這一個合成數字。
         df['integrated_score'] = (
-            df['garmin_score'] * 0.6 + 
-            df['camera_score'] * 0.4
+            df['garmin_score'] * GARMIN_WEIGHT +
+            df['camera_score'] * CAMERA_WEIGHT
         ).round().astype(int)
-        
-        # 4. 分數一致性
+
+        # 逐晚的絕對差。⚠️ 在 camera_score 幾乎恆為 0 的情況下，
+        #    這一欄量到的是**尺度差**而不是共識，沒有解讀價值。
         df['score_difference'] = abs(df['garmin_score'] - df['camera_score'])
-        
+
         self.integrated_data = df
         return df
-    
-    def calculate_garmin_score_from_features(self, df):
-        """從 Garmin 特徵計算分數"""
-        score = 100
-        
-        # 睡眠效率
-        if 'sleep_efficiency' in df.columns:
-            eff = df['sleep_efficiency']
-            if eff < 85:
-                score -= (85 - eff) * 0.5
-        
-        # 睡眠時間
-        if 'sleep_duration_hours' in df.columns:
-            hours = df['sleep_duration_hours']
-            if hours < 6:
-                score -= (6 - hours) * 5
-            elif hours > 11:
-                score -= (hours - 11) * 3
-        
-        # 深層睡眠
-        if 'deep_ratio' in df.columns:
-            deep = df['deep_ratio']
-            if deep < 0.1:
-                score -= (0.1 - deep) * 50
-        
-        # 壓力
-        if 'avg_stress_score' in df.columns:
-            stress = df['avg_stress_score']
-            if stress > 20:
-                score -= min(20, (stress - 20) * 0.8)
-        
-        return np.clip(score, 0, 100).round().astype(int)
-    
-    def calculate_camera_score(self, df):
-        """計算攝影機分數"""
-        score = 100
-        
-        # 翻身懲罰
-        if 'large_turn_count' in df.columns:
-            turns = df['large_turn_count']
-            if turns > 20:
-                score -= (turns - 20) * 0.5
-        
-        # 總事件懲罰
-        if 'total_events' in df.columns:
-            events = df['total_events']
-            if events > 50:
-                score -= min(20, (events - 50) * 0.2)
-        
-        # 打呼懲罰
-        if 'snore_count' in df.columns:
-            snore = df['snore_count']
-            if snore > 10:
-                score -= min(15, (snore - 10) * 0.5)
-        
-        return np.clip(score, 0, 100).round().astype(int)
-    
+
     def get_correlation_analysis(self):
         """獲取相關性分析"""
         if self.integrated_data is None:
@@ -337,11 +332,29 @@ class ReportGenerator:
         print(f"📆 日期範圍: {report['日期範圍']}")
         print("-"*70)
         print("📊 分數統計:")
-        print(f"  Garmin 平均分數: {report['平均 Garmin 分數']:.1f}")
-        print(f"  攝影機平均分數: {report['平均攝影機分數']:.1f}")
-        print(f"  整合平均分數: {report['平均整合分數']:.1f}")
+        print(f"  Garmin 平均分數: {report['平均 Garmin 分數']:.1f}   ← 每項有文獻依據")
+        print(f"  攝影機平均分數: {report['平均攝影機分數']:.1f}   ← ⚠️ 零文獻依據，"
+              f"且量的是 timeline 長度")
+        if WEIGHTS_ARE_PROVISIONAL:
+            print(f"  整合平均分數: {report['平均整合分數']:.1f}   "
+                  f"⚠️ PROVISIONAL（{GARMIN_WEIGHT:.0%}/{CAMERA_WEIGHT:.0%} "
+                  f"權重無依據）")
+        else:
+            print(f"  整合平均分數: {report['平均整合分數']:.1f}")
         print(f"  最高分數: {report['最高整合分數']}")
         print(f"  最低分數: {report['最低整合分數']}")
+
+        # ⚠️ 一致性指標在這個樣本數下跑不了，講清楚比留白好。
+        #    Spearman 至少需 8–10 個點、Bland–Altman 建議 30+。
+        n = report['資料筆數']
+        print(f"\n🔬 一致性分析: n={n}。", end="")
+        if n < 8:
+            print("樣本不足（Spearman 至少需 8–10 點），不做等級相關。")
+        else:
+            print("可做 Spearman 等級相關；但 camera_score 若集中在少數值，"
+                  "算出來的是尺度差不是共識。")
+        print("   ⚠️ 建議報告採「兩個分數並列 + 一致性指標」，"
+              "不要只寫加權平均後的單一數字。")
         
         if report['平均翻身次數'] is not None:
             print(f"\n🔄 平均翻身次數: {report['平均翻身次數']:.1f}")
@@ -455,7 +468,16 @@ class ReportGenerator:
         
         if filename is None:
             filename = f"garmin_camera_integrated_{datetime.now().strftime('%Y%m%d')}.xlsx"
-        
+
+        # openpyxl 是選用的。缺了就跳過 Excel，不要讓整支程式在**圖表已經
+        # 產生之後**才炸掉——那會讓人以為前面的分析也失敗了。
+        try:
+            import openpyxl  # noqa: F401
+        except ImportError:
+            print("⏭️  略過 Excel 匯出：沒有安裝 openpyxl"
+                  "（pip install openpyxl）。圖表與報告不受影響。")
+            return
+
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             self.data.to_excel(writer, sheet_name='整合數據', index=False)
             

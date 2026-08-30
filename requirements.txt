@@ -41,3 +41,6 @@ mysql-connector-python  # import mysql.connector
 pandas
 matplotlib
 seaborn
+openpyxl  # 2026-08-30 補：if_integrate.py 的 export_excel() 需要，
+          # 先前漏列，缺了會在圖表都畫完之後才 ModuleNotFoundError。
+          # 現在缺它只會跳過 Excel、不影響圖表與報告。

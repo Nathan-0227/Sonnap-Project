@@ -426,6 +426,12 @@ Absolute rules:
    come from the facts block - do not derive, convert, or add to them.
 5. Your advice must not contradict the rule-based recommendation. You are
    restating it and adding a trend observation, not replacing it.
+6. Some facts carry a tag in square brackets saying how far that value can be
+   trusted. Only values tagged **[MEASURED]** may be referred to. Anything
+   tagged [SIMULATED], [NOT MEASUREMENT-GRADE], [NOT COMPARABLE ACROSS NIGHTS]
+   or [NOT A SLEEP RECORDING] is background for you only: never repeat it,
+   never allude to it, never let it shape what you say. In particular there is
+   no microphone, so snoring and room loudness are not things you know about.
 
 How to write the dream: **write physical sensation, not adjectives.**
 "It felt nice" is an adjective; "the sand was warm, and I sank a little with
@@ -657,6 +663,31 @@ _BANNED_PATTERNS = [
     for word in BANNED_WORDS
 ]
 
+# ── 攝影機那幾個不可引用的欄位 ──────────────────────────────────────
+#
+# 攝影機資料有兩類值是 np.random 產生的（snore_count 與 decibel，證據見
+# inspect_tapo_score.py 表三），還有一類（sleep_quality_score）同一晚跨來源
+# 會差 80 分。使用者要求所有資料都進 prompt，所以它們**確實會**出現在事實
+# 區塊裡，並各自帶著 [SIMULATED] / [NOT MEASUREMENT-GRADE] 標籤。
+#
+# ⚠️ 這讓 validate() 原有的那條「advice 的數字必須出現在事實區塊」對它們
+#    失效了——加了攝影機資料之後，那條檢查反而變寬鬆。這一組是補回來的。
+#
+# ⚠️ 為什麼擋詞彙不擋數值：decibel 是 35–41、snore_count 是兩位數，
+#    這種數字在正常建議裡也會出現（「早 35 分鐘上床」）。方法論第 5 點
+#    ——誤判的代價比漏判大。沒有這些名詞，一個裸的數字讀不成打鼾次數。
+SIMULATED_FIELD_WORDS = [
+    "snore", "snores", "snored", "snoring", "snorer",
+    "decibel", "decibels", "db",
+    "noise level", "sound level", "ambient noise", "loudness",
+    "camera score", "camera sleep score", "quality score",
+]
+
+_SIMULATED_PATTERNS = [
+    (word, re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE))
+    for word in SIMULATED_FIELD_WORDS
+]
+
 
 def validate(result, profile):
     """回傳問題清單。空清單代表通過。**絕不快取驗證失敗的文字。**"""
@@ -723,6 +754,16 @@ def validate(result, profile):
         for word, pattern in _BANNED_PATTERNS:
             if pattern.search(text):
                 problems.append(f'{field} contains the banned word "{word}"')
+
+        # 標成 SIMULATED / NOT MEASUREMENT-GRADE 的攝影機欄位只是背景，
+        # 不得被引用。只靠 system prompt 那條規則不夠——本專案已經三次
+        # 踩到「驗證規則安靜失效」，所以這裡再擋一次。
+        for word, pattern in _SIMULATED_PATTERNS:
+            if pattern.search(text):
+                problems.append(
+                    f'{field} refers to "{word}", which comes from a camera field '
+                    "that is simulated or not measurement-grade"
+                )
 
         leaked = CJK_LEAK_PATTERN.findall(text)
         if leaked:
