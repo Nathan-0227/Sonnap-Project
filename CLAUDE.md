@@ -109,9 +109,9 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 |---|---|
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
 | ~~TAPO timeline 時間戳壞掉~~ | ✅ **我方已繞過**：時刻在 `video_clip` 檔名裡，見 `tapo_index.py`。來源端的修法在 **Issue #19** |
-| **`MOTION_MICRO` 偵測門檻**（一晚 7000+ 個 micro_motion） | 影像組。**這才是攝影機分數歸零的根因**，見 PROJECT_STATUS 3.8 ⑤ |
+| **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現 |
 | `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
-| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19 |
+| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19；細節見 TAPO_HANDOFF #8(b) |
 | `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
 | push / 開 PR | 使用者（公開 repo 的對外動作） |
 | 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
@@ -475,10 +475,26 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 | # | 紅線 | 對方踩到的實例 |
 |---|---|---|
 | 1 | **同一個訊號不得以多個名義重複計分** | 它的 `movementScore` / `remSleepScore` / `lightSleepScore` 全是加速度 magnitude 的不同切法 → **70% 的分數只反映單一訊號** |
-| 2 | **每一項計分都必須有文獻門檻** | 它的 `1.5 / 2.5 / 60 / 20 / 50` 五個門檻零引用，且未扣重力（靜止時 magnitude 本來就是 1.0 g） |
+| 2 | **每一項計分都必須有文獻門檻**（見下方展開） | 它的 `1.5 / 2.5 / 60 / 20 / 50` 五個門檻零引用，且未扣重力（靜止時 magnitude 本來就是 1.0 g） |
 | 3 | **分數不得有人為地板** | 它所有子分數只有 100/75/50 三檔，總分被壓在 [50,100]，糟糕的夜晚彼此無法區分 |
 | 4 | **⚠️ 遊戲化層只讀，不得回寫評分層** | 見下方展開 |
 | 5 | **獎勵必須與「品質」耦合，不能只與「有資料」耦合** | 見下方展開 |
+
+**紅線 2 展開（2026-08-31 使用者重申，適用於所有新的計分項）**：
+**要計分，先有文獻證明並記錄下來**——文件寫好之前不寫公式，也不調既有係數。
+格式比照 `Research-Background/Garmin手錶分數.md`：
+「構念 → 文獻怎麼說 → 本專案採用的操作性門檻 → 為什麼這樣取捨 → 完整書目」，
+每一條引用都要**核對第一作者**（方法論第 6 點，已誤植過兩次）。
+
+→ 攝影機是現在唯一卡在這一關的模組：要讓 TAPO 參與計分，
+  必須先寫 **`Research-Background/攝影機分數.md`**。TAPO 那四代公式
+  （`2.0/0.1/0.4`、`10/5/2`、`95/85/70/50/30`）之所以全部失敗，
+  正是因為四代都跳過了這一步，沒有一個數字說得出出處。
+  已查證可用的種子文獻兩條，寫在 `inspect_tapo_score.py` 的常數區：
+  Montini 2024（video-PSG，動作率中位數 11 次/小時，IQR 8–15）與
+  De Koninck 1992（18–24 歲體位改變 3.6 次/小時）。
+  ⚠️ **常模不等於門檻**：文獻數的是人工判讀的動作，我們數的是像素面積過門檻的幀，
+  中間還缺一次效標驗證。
 
 **紅線 4 展開**：挑戰、獎勵、寵物成長、貨幣等模組**只能讀**
 `final_score` / `final_quality` / `sri`，**不得參與**
@@ -574,7 +590,7 @@ python garmin/run_pipeline.py          # 再跑後四步
 | 分數 | 位置 | 狀態 |
 |---|---|---|
 | `final_score` | `garmin/apply_recovery_modifier.py` | ✅ 文獻加權，主線 |
-| `sleep_quality_score` | `tapo/tapo_detector.py:487` | ⚠️ 扣分制，影像組的。**量的是 timeline 長度不是睡眠**——同一晚跨來源差 80 分，見 PROJECT_STATUS 3.8 ⑤ |
+| `sleep_quality_score` | `tapo/tapo_detector.py:486`（V1，另有 V2/V2.5/V3 三代） | ⚠️ 扣分制，影像組的。**量的是 timeline 長度不是睡眠**——同一晚跨來源差 80 分。再往下一層：timeline 長度取決於**當晚的偵測門檻**，而門檻逐晚變過至少四組且沒記在任何欄位裡 → **跨夜比較在原理上不成立，不是調係數能修的**。見 [TAPO_HANDOFF.md](TAPO_HANDOFF.md) |
 | `integrated_score` | `itegration/if_integrate.py` | ⚠️ `0.6×garmin + 0.4×tapo`，**權重無依據**，輸出已標成 PROVISIONAL |
 | ~~`calculate_camera_score()`~~ | — | ✅ **已刪除**（2026-08-30） |
 | ~~`calculate_garmin_score_from_features()`~~ | — | ✅ **已刪除**（2026-08-30） |
@@ -696,8 +712,17 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   ⚠️ 呼叫端有三個（`ai/night_profile.py`、`build_app_payload.py`、
   `itegration/if_integrate.py`），**有效性判準只有一份**
   （`sleep_recording_problem()`），不要各自再寫。
-- `inspect_tapo_score.py`（2026-08-30 新增）— 攝影機分數的根因分析，
-  只清點不評分。影像組送新 dump 之後直接重跑，不要照抄舊數字。
+- `inspect_tapo_score.py`（2026-08-30 新增，08-31 擴充）— 攝影機分數的根因分析，
+  只清點不評分。六張表：扣分拆解、跨來源落差、decibel 分世代、整畫面誤判、
+  **門檻漂移**、**事件節奏 vs 文獻常模**。
+  影像組送新 dump 之後直接重跑，不要照抄舊數字。
+- **`TAPO_HANDOFF.md`（2026-08-31 新增，09-01 擴充）— 給影像組的交接文件。**
+  上半部是 8 項問題（每條附 `檔案:行號` 與可重現的數字），
+  下半部是**偵測層規格**：為什麼 `countNonZero` 救不回來、
+  建議的管線（降取樣→照明否決→背景相減→開運算→ROI→連通域）、
+  ROI 三種定法、「一次動作 = 一段 episode 不是一幀」、起始參數與驗收條件。
+  ⚠️ 裡面有一條觀念要記住：**偵測門檻 ≠ 計分門檻**——前者拿影片人工標註校準，
+  不受紅線 2 約束；後者才必須有文獻。
 
 **模組**
 
