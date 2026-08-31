@@ -27,6 +27,18 @@
 > 新增 [PROPOSAL_GAP.md](PROPOSAL_GAP.md)：原始計畫書與現況的逐項對照，
 > 每條主張都附行號可查證。
 
+> **2026-08-28 更新摘要**：新增第九節，對照第二個外部專案 **Nyxo**
+> （`hello-nyxo/nyxo-app`，301 stars，上架中的商業睡眠 App）。
+> 🔴 **它是 GPL-3.0，一行都不能抄**——本節純粹是設計對照。
+> 三個要點：**①** 它刻意**完全不計算睡眠分數**（只呈現時長與使用者主觀評分），
+> 等於用迴避的方式繞開紅線 2，是報告「相關工作」很好的對照組；
+> **②** 它的「就寢時段」用線性平均算時鐘時間，跨午夜會算出中午——
+> 這條命中我們的挑戰系統，已實測驗過我們的 `bedtime_spread_minutes()`
+> **站得住、不需修**（46 個窗格 0 個判定翻轉，見 9.5）；
+> **③** 它的測試蓋滿了格式轉換、一條都沒蓋到會算錯的分析邏輯，
+> 而兩個真正的計算錯誤全落在沒測試的那一欄——這正是
+> `tests/test_scoring_guards.py` 存在的理由。
+
 ---
 
 ## 一、目前能動的東西
@@ -133,10 +145,11 @@ Garmin 也有一個 `movement_count`，但那是**我們自訂的翻動取樣筆
 > ⚠️ 資料夾名稱 `itegration` 是 `integration` 的拼字錯誤。改名是獨立決定，
 > 目前刻意不動——`requirements.txt:28` 的註解也指向這個名字，要改就一起改。
 
-**⚠️ TAPO 分數的尺度有問題**：`large_turns × 2.0` 代表**只要 50 次大翻身就歸零**。
-實測 08-06 那份報告有 7428 個事件，舊 dump 有 344 次翻身——它幾乎每晚都撞到 0
-（`PROJECT_STATUS.md` 3.4 記錄的「全是 0」）。這與舊資料「全是 50」是**同一個病的
-兩種症狀**：以前有人為地板，現在撞天花板，兩種情況下不同的夜晚**都無法區分**（紅線 3）。
+**⚠️ TAPO 分數量的是 timeline 長度，不是睡眠品質**（2026-08-30 實測，詳見 3.8 ⑤）。
+扣分公式是事件數的線性函數，總扣分實測落在 2.9~905.5（差 312 倍），
+而滿分只有 100 分可扣。決定性證據是**同一晚跨來源會差 80 分**
+（08-02：SQL dump 80 分、per-night JSON 0 分），因為兩邊的 timeline
+一個被清理過、一個是原始的。重跑：`python inspect_tapo_score.py`。
 
 **要決策的**：App 顯示哪一個？整合的 60/40 從哪裡來？整合路徑本身的問題見 3.8。
 
@@ -383,17 +396,52 @@ df['integrated_score'] = (garmin_score * 0.6 + camera_score * 0.4).round()
 本專案 Tier1/2 的每一個權重都有文獻（`Garmin手錶分數.md` 附錄有對照表），
 這裡是唯一的例外。
 
-**⑤ TAPO 分數的尺度讓它幾乎每晚都歸零。** `large_turns × 2.0` 表示
-**50 次大翻身就扣完 100 分**。實測 08-06 那份報告有 7428 個事件、
-舊 dump 有 344 次翻身。分數撞到 0 之後，**不同的夜晚彼此無法區分**——
-這與舊資料「全是 50」是同一個病的兩種症狀（紅線 3）。
-加權平均一個恆為 0 的數，等於 `integrated_score = 0.6 × final_score`，
-那個 0.4 完全沒有貢獻任何資訊。
+**⑤ TAPO 分數量的是「timeline 有多長」，不是睡眠品質。**（2026-08-30 重做，
+先前的記錄不正確——重跑：`python inspect_tapo_score.py`）
 
-**另外還有一個會讓報告自相矛盾的小問題**：`if_integrate.py` 的 `SCORE_GRADES`
-是五級（優秀/良好/普通/需改善/待加強，切點 85/70/55/40），而正式評分器是四級
-（Good/Normal/Poor/Bad，切點 80/65/50）。**同一個 0–100 的數字會被兩套標準
-講成不同的等級**。
+公式是 `max(0, 100 − (large×2.0 + micro×0.1 + snore×0.4))`。
+先前這裡寫「50 次大翻身就扣完 100 分」，**那只描述了一半的情況**，
+會讓人以為調 `large_turn` 的係數就能修好。實測 24 筆紀錄：
+
+| | |
+|---|---|
+| 總扣分範圍 | **2.9 ~ 905.5（差 312 倍）**，而滿分只有 100 分可扣 |
+| 撞到 0 的紀錄裡誰主導 | micro_motion 5 筆、large_turn 4 筆（**沒有單一元兇**） |
+| micro_motion 佔全部事件 | **93.0%**（23203 / 24949） |
+
+係數不是問題，**尺度才是**：公式是事件數的線性函數，既不除以錄影時長、
+也不隨偵測靈敏度調整。
+
+**最強的證據是同一晚跨來源的落差**：
+
+| 夜晚 | SQL dump | per-night JSON |
+|---|---|---|
+| 2026-08-02 | **80 分**（timeline 32 筆） | **0 分**（1177 筆） |
+| 2026-08-04 | **51 分**（75 筆） | **0 分**（6649 筆） |
+| 2026-08-06 | **49 分**（17 筆） | **0 分**（7428 筆） |
+
+SQL 的 timeline 被 `clean_timeline_data()` 與 `MAX_TIMELINE_EVENTS` 削過，
+JSON 是原始的。**同一晚可以是 80 也可以是 0，取決於你讀哪個檔**——
+這比「恆為 0」嚴重，恆為 0 至少是誠實的無資訊。
+
+→ 修法在影像組那一端：**`MOTION_MICRO` 偵測門檻**。一晚 7000+ 個
+micro_motion 不是生理現象。（整畫面誤判是另一個獨立問題，見下方 ⑥。）
+
+**⑥ `motion_intensity` 恆為 2073600 這個說法不成立。**（2026-08-30 實測更正）
+24949 筆事件裡有 **20105 個相異值**，整畫面值 2073600 只有 **238 筆（0.95%）**，
+而且全部集中在 `large_turn`（1017 筆中的 23.4%），micro_motion 一筆都沒有。
+整畫面誤判是真的、值得修，但**修了不會改變分數的行為**。
+
+**⑦ `snore_count` 是亂數的計數。** decibel 直方圖：35–41 dB 七個值
+各佔 13.4–14.2%（最多與最少只差 1.052 倍），是 `np.random.randint` 的均勻分布；
+34 dB 與 35 dB 之間還有斷崖。而現行程式根本不產生 `"snoring_or_noise"`
+這個字串（`sleep_monitor.py:881-885` 只產生 quiet/medium/LOUD）
+→ 資料是舊版程式寫的（3.3「六份版本」的殘留）。
+
+✅ **等級標準衝突已修（2026-08-30）**：`if_integrate.py` 的 `SCORE_GRADES`
+原本是五級（優秀/良好/普通/需改善/待加強，切點 85/70/55/40），與正式評分器的
+四級（Good/Normal/Poor/Bad，切點 80/65/50）不一致——同一個 0–100 的數字
+會被兩套標準講成不同的等級。現已改成四級並對齊切點。
 
 **建議的修復順序**：① → ⑤ → ② → ③ → ④。① 與 ⑤ 是資料正確性
 （日期對不上、分數全歸零），沒有它們後面都是空談；④ 放最後，
@@ -437,8 +485,19 @@ TIB = 上床時刻 → 離床時刻
 
 但九晚裡有五晚失敗，而且失敗分成**兩種完全不同的原因**，要分開處理：
 
-**失敗類型一：timeline 時間戳壞掉（3 晚）。** 整串事件的 `time` 全是
-`00:00:00`~`00:00:04`。這是工程 bug，不是方法問題，該回報給影像組。
+**失敗類型一：timeline 時間戳壞掉（3 晚）—— ✅ 已自行解決（2026-08-30）。**
+整串事件的 `time` 全是 `00:00:00`~`00:00:04`。這是工程 bug，
+但**不必等影像組修**：`video_clip` 的檔名是 `turn_YYYYMMDD_HHMMSS_*.mp4`，
+**日期與時間都在檔名裡**，而且是錄影當下由檔案系統寫的，不經過那層會出錯的邏輯。
+
+| 夜晚 | `time` 欄位說 | 從檔名還原 |
+|---|---|---|
+| 2026-08-06 | `00:00:00`~`00:00:04` | 01:06:09 → 06:04:34（17 筆） |
+| 2026-08-07 | `00:00:00`~`00:00:04` | 02:21:07 → 11:27:37（42 筆） |
+| 2026-08-18 | `00:00:00`~`00:00:01` | 00:51:53 → 次日 03:10:38（34/46 筆） |
+
+實作在 `tapo_index.py`，回歸測試在 `tests/test_tapo_index.py`【2】。
+**同一個機制也解掉了 `report_date` 不可信的問題**（3.8 ①）——那同樣改用檔名定日期。
 
 （同類的第二個 bug，不在重疊夜裡所以不影響上表，但一起回報：
 id 117／08-19 的 `total_events = 73`，`timeline` 卻是空陣列 `[]`——
@@ -939,13 +998,35 @@ Assistants / Settings 仍是寫死或罐頭內容）。
 
 | | |
 |---|---|
-| 專案 | NightBloom（`shev0k/sleep_tracker`），MIT 授權 |
-| 規模 | 34 commits、4 stars、最後更新 2024-11-02（停更約 21 個月） |
+| 專案 | NightBloom（`shev0k/sleep_tracker`） |
+| 規模 | 34 commits、4 stars、2 個 fork、6 條分支（全是已合併的 feature 分支） |
+| 活躍度 | **最後一次 push：2024-11-02**，停更約 21 個月。⚠️ 判準見 8.1.1 |
+| 授權 | **不明**。README 宣稱 MIT 並要讀者去看 LICENSE 檔，但 repo 裡**沒有那個檔案**，GitHub 偵測不到授權。見 8.8 |
 | 技術棧 | Flutter + Node.js/Express + MongoDB |
 | 定位 | 遊戲化睡眠追蹤：睡眠品質驅動一個會成長的虛擬花園 |
 
 **查核方法：clone 下來讀原始碼，不採信 README 的自述。**
 這一點是本節最重要的方法論結論，理由見 8.2。
+
+### 8.1.1 ⚠️ 判斷「停更了沒」要看 `pushed_at`，不是 `updated_at`（2026-08-28 複查）
+
+有人回報「NightBloom 好像更新了」，複查後**沒有**。差點下錯結論的原因是
+GitHub 有兩個長得很像的時間欄位：
+
+| 欄位 | 意思 | NightBloom 的值 |
+|---|---|---|
+| `pushed_at` | **最後一次 push 程式碼**（推到任何分支都算） | **2024-11-02T19:16:57Z** |
+| `updated_at` | 最後一次 metadata 變動（**被 star、被 watch、改描述都會動**） | 2026-04-29T10:14:55Z |
+
+兩者差 **18 個月**，而這中間一行程式碼都沒有進來。三條交叉驗證：
+
+1. 全 repo 最新 commit 是 `Reward names fix`，2024-11-02T19:16:38Z
+2. 6 條分支全部停在 2024-10～11（`backend-setup`、`daily-challenges-sleep-score`、
+   `progress-feature` 都是當時經 PR #3／#4 合併掉的）
+3. 2 個 fork 也沒動：其中一個的 `pushed_at` 與原 repo **同一秒**（純 fork 未提交），
+   另一個停在 2024-10-02
+
+→ **本節所有結論建立在 2024-11-02 那個版本上，而它至今仍是最新版本。**
 
 ### 8.2 ⚠️ 它的 README 宣稱了一個沒有實作的功能
 
@@ -969,6 +1050,10 @@ README 寫「整合手機感測器（加速度計、陀螺儀）與穿戴裝置�
 README 描述的常常是路線圖而不是現況。這跟我們自己的紀律是同一件事——
 我們的 `ADVICE_LANG` 設定也曾經寫在文件上卻沒有實作，後來把 `.env.example`
 改成誠實說明。
+
+⚠️ **同一份 README 還有第二處與 repo 對不上**：授權（見 8.1 表格與 8.8）。
+它寫「採 MIT 授權，詳見 LICENSE 檔」，但那個檔案不存在。
+**同一份文件錯兩次，就不是筆誤，是整份不能當事實來源。**
 
 ### 8.3 它的評分演算法：五個我們該避免的問題
 
@@ -1149,7 +1234,13 @@ NightBloom 評分崩壞的根因，是把五個沒有文獻依據的門檻**直�
 
 ### 8.8 程式碼本身沒有可直接沿用的部分
 
-MIT 授權，法律上可以參考。但演算法不要碰（理由見 8.3）。
+⚠️ **授權狀態不明，不要直接複製任何程式碼。**
+README 寫「本專案採 MIT 授權，詳見 LICENSE 檔」，但 repo 根目錄**沒有 LICENSE 檔**
+（2026-08-28 以 GitHub contents API 確認），因此 GitHub 判定為「無授權」。
+無授權檔的預設是**保留所有權利**，README 那句話的法律效力是模糊的。
+
+我們目前的用途是**閱讀與對照**，不涉及重製，不受影響。
+但**不要照抄程式碼**——何況演算法本來就不值得抄（理由見 8.3）。
 資料模型也不要學：`models/SleepData.js` 全部只有 5 個欄位，
 **沒有日期、沒有 `user_id`**——所以畫不出趨勢，而
 `getSleepDataByUserId` 查詢 `{ userId }` 但 schema 根本沒有這個欄位。
@@ -1157,3 +1248,306 @@ MIT 授權，法律上可以參考。但演算法不要碰（理由見 8.3）。
 
 真正值得看的是 UI/UX 的組織方式：挑戰卡片把三種型別抽象成
 `time` / `action` / `count` 的做法，以及導覽流程的分鏡。
+
+---
+
+## 九、外部開源專案對照之二：Nyxo（2026-08-28）
+
+> **這一節的用途**：第八節的對照組是一個學生專案，可以拿來當「反例」；
+> 這一節的對照組是**上架中的商業產品**，性質完全不同——它證明的是
+> 「即使做成產品也會犯這些錯」，因此我們的取捨不是學術潔癖。
+>
+> ⚠️ **分寸要跟第八節反過來拿捏**：NightBloom 是「它做錯了所以我們的原則有價值」，
+> Nyxo 是「它在某些地方比我們成熟，但在我們最在意的地方一樣會出錯」。
+> 不要把這一節寫成貶低對方——它有七個穿戴裝置來源、四週教練課程、
+> 雙語與雲端同步，那些我們都沒有。
+
+### 9.1 對照對象、授權與查核方法
+
+| | |
+|---|---|
+| 專案 | Nyxo（`hello-nyxo/nyxo-app`），芬蘭商業睡眠 App，App Store／Play 上架中 |
+| 規模 | **301 stars**、68 forks、293 個 `.ts/.tsx`、**28040 行** |
+| 技術棧 | React Native + AWS Amplify（GraphQL）+ Redux + styled-components + Contentful |
+| 定位 | 多來源睡眠追蹤 + 四週睡眠教練課程（付費訂閱，RevenueCat） |
+| 授權 | 🔴 **GPL-3.0**。`LICENSE.md` 是 35KB 的 GPLv3 全文，與 GitHub API 的 `license.spdx_id` 一致 |
+
+🔴 **授權結論：一行都不能抄。**
+GPL-3.0 是**傳染性**授權——複製任何一段程式碼進 Sonnap，整個 Sonnap 就必須以 GPL 開源。
+本節的用途純粹是**閱讀與設計對照**，不涉及重製。
+
+⚠️ 與第八節對照著看，這裡剛好是相反的情形：NightBloom 是「README 宣稱 MIT 但沒有
+LICENSE 檔」（授權不明），Nyxo 是「LICENSE 檔實體存在且與 API 一致」（授權明確但更嚴格）。
+**兩種情況都不能抄，但理由完全不同**——一個是不知道能不能用，一個是知道用了要付什麼代價。
+→ 方法論第 1 點成立：**授權看 LICENSE 檔本身，不看 README、不看直覺。**
+
+**查核方法：`git clone` 下來讀原始碼，不採信 README。** 同第八節。
+
+### 9.1.1 ⚠️ `pushed_at` 陷阱的第二種變形：機器人在推
+
+第八節 8.1.1 的教訓是「看 `pushed_at` 不要看 `updated_at`」。Nyxo 顯示這條規則**還不夠**：
+
+| | |
+|---|---|
+| `pushed_at` | **2026-04-15T06:47:16Z**（看起來還在活躍開發） |
+| master 最後一個功能 commit | **2021-04-24**（`aa3f8d9` "Refactor/upgrade packages"） |
+
+差 **5 年**。`git ls-remote --heads origin` 拉出來的近期分支**全部是 dependabot**
+（lodash、handlebars、follow-redirects、picomatch…）加一條 `claude/modernize-react-native-jSSD7`。
+
+→ **`pushed_at` 只證明「有東西被推上去」，不證明「有人在寫產品程式碼」。**
+相依套件更新機器人會讓一個停更五年的 repo 看起來每個月都在動。
+下次判斷外部專案活躍度，除了 `pushed_at` 還要看**主分支的最後一個功能 commit**。
+
+### 9.2 ⚠️ 這份 repo 不等於那個 App
+
+`hooks/useSleep.tsx:25-27`——整支睡眠 hook 的資料來源被註解掉：
+
+```ts
+const windowStart = new Date() //useAppSelector(getGoToSleepWindowStart)
+const night = []               //useAppSelector(getNightForSelectedDate)
+```
+
+master 停在一次「搬到 Apollo/GraphQL」的重構中途。所以：
+
+- **判斷「Nyxo 這個產品怎麼設計」→ 看 App Store 上的 App 與 README**
+- **判斷「這段程式碼寫得對不對」→ 才看 repo**
+
+這跟第八節不一樣：NightBloom 的 repo 就是它的全部，Nyxo 的 repo 是一個時間切片。
+9.4 列的缺陷**只能宣稱「這份 2021 年的程式碼有這些問題」**，
+不能宣稱「Nyxo 這個 App 有這些問題」。報告若要引用，這句話必須一起寫。
+
+### 9.3 值得參考的四點
+
+**① 多來源 adapter：七個來源 → 一個 `Night` 型別**
+
+`src/helpers/sleep/` 底下七支（`health-kit` / `google-fit` / `oura` / `fitbit` /
+`withings` / `polar` / `garmin`），每支只做格式轉換。下游完全不知道資料來自哪支錶。
+`Night` 只有 6 個欄位：`sourceId` / `sourceName` / `value`(INBED/ASLEEP/AWAKE) /
+`startDate` / `endDate` / `totalDuration`。
+
+→ 印證我們 `wearable/healthconnect_adapter.py` 的方向正確（轉成既有評分器吃的格式、
+一個門檻都沒改）。**它的教訓是「介面要窄」**——欄位越少，新增來源越不會污染下游。
+
+⚠️ **但也要看反面**：把 `Night` 壓到只剩三個狀態，代價是**深睡／REM 分期資訊在轉換
+時被丟掉**（`garmin-helper.ts:31` 把 `sleepLevelsMap` 的 deep/light/rem 全部標成
+`ASLEEP`）。我們 Tier1/2 的分數靠的就是深睡與 REM 比例，**這一點不能學**。
+窄介面的代價是資訊損失，要看下游需要什麼。
+
+**② `unfilteredNight` + `mutated`：保留原始量測，允許使用者手動修正**
+
+`typings/Sleepdata.ts` 的 `Day` 同時有 `night` 與 `unfilteredNight`，加一個
+`mutated: boolean`。使用者可以改上床／起床時間，但**原始值留著、且標記為已修改**。
+
+→ 我們沒有這一層。`SLEEP_START=01:00` 那 14% 結構上錄不到的夜晚、
+TAPO 時間戳壞掉的三天（Issue #19），若有「手動補值 + 標記」的路徑就不必整晚報廢。
+而且 `mutated` 讓報告能誠實區分「量到的」與「補的」，比現在直接丟掉更符合
+第六節的誠實揭露原則。
+
+**③ 內容走 CMS，不寫死在程式裡**
+
+四週課程的所有文字（課程、章節、專家、習慣範例）放 Contentful，
+另有 `contentful-typescript-codegen` 自動生型別。
+
+→ 對我們的意義：**挑戰與寵物的文案不要硬編碼在 Python 裡**。
+現在 `behavior/challenges.py` 改一句話就要改程式、重跑 pipeline、重建 APK。
+至少該抽成一個 JSON。（不必上 CMS，我們沒有那個規模。）
+
+**④ 它刻意不算 0–100 分——這是一個成熟產品的選擇**
+
+原本預期會找到評分公式，結果 `helpers/rating.ts` 全文只有一個 switch，
+把 `ratingValue` 對到 icon／文字／顏色——**而那個值是使用者自己選的**
+（bad / ok / good / great，`RatingModal.tsx`）。
+
+**整個 App 沒有任何一行程式計算睡眠品質分數。** 它呈現時長、上床／起床時刻、
+效率、趨勢圖、社交時差、加上主觀評分，然後把「怎麼改善」交給教練課程。
+
+→ 這等於用**迴避**的方式繞開了第八節紅線 2（每項計分都要有文獻門檻）。
+我們不必跟——我們的 Tier1/2 有 `Research-Background/Garmin手錶分數.md` 撐著，
+那正是最難被複製的資產。**但這是報告「相關工作」很好的一句話**：
+
+> 同類商業產品選擇不給出綜合分數，把詮釋權留給使用者與教練；
+> 本專案選擇給分，並為每一項計分附上文獻依據。
+
+### 9.4 實測抓到的六項缺陷（2021 版程式碼）
+
+| # | 缺陷 | 位置 | 後果 |
+|---|---|---|---|
+| 1 | **睡眠效率分子分母顛倒** | `sleep-data-helper.ts:182`，呼叫端 `useSleep.tsx:32` | `totalBedTime / totalSleepTime`。臥床 ≥ 睡著，所以**永遠 ≥ 100%** |
+| 2 | **用線性平均算時鐘時間** | `sleep-data-helper.ts:44` `calculateBedtimeWindow()` | 見 9.5 |
+| 3 | **死碼** | `sleep-data-helper.ts:129` `calculateSocialJetlag()` | 全 repo 定義了沒人呼叫。社交時差是有文獻的構念，做了卻沒接上 |
+| 4 | **Garmin 轉換整支壞掉** | `garmin-helper.ts:11,15,31` | 見下方展開 |
+| 5 | **streak 昨天完成今天就歸零** | `helpers/habits.ts:120` | 見 9.7 |
+| 6 | **測試蓋在最不需要的地方** | 見下方表 | 1 與 2 全落在沒測試的那一欄 |
+
+**#4 展開**——`garmin-helper.ts` 一支 83 行，四個獨立缺陷：
+
+1. `:11` `new Date(startTimeInSeconds + offset)`——JS 的 `new Date(number)` 吃**毫秒**，
+   Garmin 給的是**秒**（型別檔 `Garmin.ts:4` 就叫 `startTimeInSeconds`）。日期會落在 1970 年
+2. `:15` `new Date(startDate.valueOf() + durationInSeconds)`——`startDate` 上一行才被
+   `.toISOString()` 轉成**字串**，字串 `.valueOf()` 還是字串，字串 + 數字 = 串接 → `Invalid Date`
+3. `:31` `Object.values(sleepLevelsMap)` 把 **`awake` 區段也標成 `Value.Asleep`**——清醒被算成睡眠
+4. 所有 asleep sample 共用同一個 `id`（用整晚起訖組，不是該區段的）
+
+呼叫端 `store/reducers/sleep.ts:103-104` 更糟：
+
+```ts
+const formattedResponse = formatGarminSamples(combinedSleepData) // combinedSleepData 未定義
+dispatch(addNights(formatGarminSample()))                        // 少傳參數、且用了單數版
+```
+
+組裝 `combinedSleepData` 的迴圈就在上面幾行被註解掉。`formattedResponse` 算完沒人用。
+整段包在 `try/catch`，`catch` 只呼叫 `rejectWithValue(undefined)` 也沒 return
+→ **功能完全壞掉且靜默，使用者只會看到「沒有資料」**。
+
+✅ **對照 README 要給它一個公道**：README 的功能清單列了 Google Fit / Apple Health /
+Oura / Withings / Fitbit / Polar，**沒有列 Garmin**。所以這裡 README 反而比程式碼誠實，
+Garmin 是做到一半的分支。**跟 NightBloom「README 吹牛、程式碼是空的」方向相反**，
+記錄下來免得把兩者混為一談。
+
+**#6 展開**——測試分布：
+
+| 有測試 | 沒測試 |
+|---|---|
+| `fitbit-helper.spec.ts`（**404 行**） | `garmin-helper.ts`（缺陷 #4） |
+| `oura-helper.spec.ts`（74 行） | `withings-helper.ts`、`google-fit-helper.ts` |
+| `polar-helper.spec.ts`（65 行） | **`calculateEfficiency`（缺陷 #1）** |
+| `health-kit-helper.spec.ts`（36 行） | **`calculateBedtimeWindow`（缺陷 #2）** |
+| `sleep-data-helper.spec.ts`（**15 行，只測 `matchDayAndNight` 一個函式**） | — |
+
+外加一批 component 的 snapshot 測試（`Card`、`SvgIcon`、`IconBold`…）。
+
+模式很清楚：**測試蓋滿了「機械式的格式轉換」，一條都沒蓋到「會算錯的分析邏輯」。**
+而且有測試的來源（Oura）程式碼是正確的、沒測試的來源（Garmin）整支是壞的。
+
+→ 這正是 `tests/test_scoring_guards.py` 做對的事——那四條守的都是
+**壞掉時不會報錯**的機制。**這份對照可以直接寫進報告當論據。**
+
+### 9.5 🔴 圓形統計：我們自己的實測結果（2026-08-28）
+
+**缺陷 #2 是本節唯一命中我們下一步的東西**，所以實測驗了。
+
+Nyxo 的 `calculateBedtimeWindow()`（`sleep-data-helper.ts:44`）把每晚的上床時刻換算成
+「距當日 00:00 幾分鐘」，加總除以天數。問題是**跨午夜的時刻不能用算術平均**：
+23:50 與 00:10 只差 20 分鐘，算術平均卻是 720 分 = **中午 12:00**。
+它甚至留了一行不知道在解什麼的 hack：`if (averageBedTime > 1440) { averageBedTime = -1440 }`。
+
+我們的曝險面在 `behavior/adherence.py` 的 `bedtime_spread_minutes()`
+（挑戰 `consistency` 的標的）。**已驗，結論是我們的實作站得住，不需要修。**
+
+驗法：拿 `garmin_sleep_summary.csv` 的 52 個有效 `sleep_start_time`
+（summary 層；評分用的 51 晚是 features 層再過濾一次的結果）跑 46 個滾動 7 晚窗格，
+比對三種算法：
+
+| 算法 | 對真正的圓形統計偏離 |
+|---|---|
+| **Nyxo 的線性平均** | 最大 **998.0** 分鐘、平均 **310.7** 分鐘 |
+| **我們現行的作法** | 最大 **8.0** 分鐘、平均 **1.28** 分鐘 |
+
+**對挑戰判定（spread ≤ 60 分鐘）的影響：我們與圓形基準判定不一致的窗格 = 0 個。**
+（三種算法通過的都是同 3 個窗格；但這**不代表 Nyxo 的方法可用**——
+其餘 43 個窗格它偏離基準最多 998 分鐘，只是那些窗格的離散度本來就遠超門檻，
+錯得再多結論也一樣是「不通過」。）
+
+合成案例的對照（`23:50 / 00:10`，實際相差 20 分鐘）：
+
+| | 算出的 spread |
+|---|---|
+| Nyxo 線性 | **710.0 分鐘** ❌ |
+| 我們現行 | 10.0 分鐘 ✅ |
+| 圓形基準 | 10.0 分鐘 |
+
+**我們為什麼沒踩到**：`adherence_minutes()` 與 `bedtime_spread_minutes()` 都把差距
+正規化到 (−720, +720]，也就是把時鐘當成環狀取較短的一段並保留方向。
+`adherence.py` 的 docstring 還記著這個坑是怎麼發現的——
+**2026-08-10 評估「就寢時間標準差」方案時，橫跨中午的資料算出過 507 分鐘的假變異度**
+（第 6.5 節排除的第二種做法）。那次的教訓直接救了這次。
+
+⚠️ **殘留的 8 分鐘差距是真的，成因也明確**：`bedtime_spread_minutes()` 的 `center`
+用的是「展開後偏移的**算術**平均」，不是真正的圓形平均。兩者在資料聚集時幾乎相同，
+只有在離散度已經高達數百分鐘時才拉開——而那種窗格早就遠超任何門檻。
+**已驗它不受輸入順序影響**（46 個窗格各隨機打亂 40 次，回傳值全部相同）。
+
+⚠️ **這個結論的適用範圍**：校準樣本是同一位使用者的 52 晚，就寢時刻是聚集的。
+若 D2 遇到**雙峰作息**的受測者（例如輪班，有些晚上 23:00、有些 11:00），
+線性與圓形的中心會拉開更多。但那種人的離散度必然遠超 ±60 分鐘，
+**判定結果仍然穩健**，只是回報的數字本身不夠精確。
+
+→ **行動：不改。** 但若之後要把 spread 的數值本身呈現給使用者
+（而不只是拿來判定通過與否），就要換成真正的圓形平均。
+
+✅ **SRI 完全不受影響**：`compute_sri()` 是逐分鐘 epoch 比對「同一個時鐘時間，今天與昨天」，
+結構上沒有「一天從幾點開始算」這個問題。`apply_recovery_modifier.py:616` 的 docstring
+已經寫明這一點，並且明確對比了「就寢時間標準差」那個需要挑錨點的方案。
+
+### 9.6 ⚠️ CI 設定是對的，但沒有人理它
+
+`.github/workflows/test.yml` 在**每次 push** 跑 `yarn lint` 與 `yarn test`，
+而 `lint` 的定義是 `eslint ... && tsc --noEmit`——型別檢查**有**納入。
+
+但 9.4 的 `combinedSleepData`（未定義變數）、`formatGarminSample()`（參數數量不對）、
+`habits.ts:109` 的 `resultHabits.set(id, ...)`（`id` 這個變數根本不存在），
+在 `tsconfig.json` 的 `strict: true` 底下必定是 tsc error。
+
+→ **master 的 CI 是紅的，而且他們照樣合併。**
+這比沒有 CI 更糟：`.github` 資料夾的存在會讓後來的人以為這份程式碼被檢查過。
+
+⚠️ **我們有同型風險**：`tests/*.py` 三支都是獨立腳本、沒有 CI，全靠人記得跑。
+現行的防線只有 `CLAUDE.md` 驗收指令那一段。**一個沒被執行的檢查，
+比沒有檢查更危險，因為它會製造已經檢查過的錯覺。**
+
+### 9.7 ⏭️ streak 邏輯：我們該補的一條測試
+
+`helpers/habits.ts:120`：
+
+```ts
+export const shouldResetDayStreak = ({ latestCompletedDate }: Habit): boolean => {
+  const today = startOfDay(new Date())
+  const lastDate = new Date(latestCompletedDate ?? new Date())
+  return !isSameDay(today, lastDate)
+}
+```
+
+昨天完成 → 今天不是同一天 → 回傳 true → **連續紀錄歸零**，儘管今天根本還沒過完。
+正確判準是「距今超過 1 天」。另外 `?? new Date()` 讓「從沒完成過」的習慣
+預設成「今天完成過」，方向也是反的。
+
+🔴 **這直接對到我們的挑戰系統。** 「連續 3 晚」是同一個形狀的邏輯，而且我們還多一個
+變因：**缺資料的夜晚**（8.4 已經決定「缺資料會中斷連續紀錄」，那是刻意的防選擇性記錄）。
+
+→ **建議補進 `tests/test_scoring_guards.py`**（或 `test_api.py`）三個 case：
+
+| case | 期望 |
+|---|---|
+| 昨天完成、今天尚未完成 | 連續紀錄**不得**歸零（今天還沒過完） |
+| 隔了兩天沒完成 | **必須**歸零 |
+| 中間有一晚缺資料 | **必須**歸零（8.4 的既定決定，要鎖住免得日後被「優化」掉） |
+
+第三條特別重要：它是一個**看起來像 bug 的正確行為**，沒有測試鎖住的話，
+下一個接手的人很可能會把它「修掉」。
+
+### 9.8 這一節得到的三件事
+
+| # | 事情 | 狀態 |
+|---|---|---|
+| 1 | 驗證 `bedtime_spread_minutes()` 的圓形統計 | ✅ **已驗，不需修**（見 9.5：46 窗格 0 個判定翻轉） |
+| 2 | 給連續挑戰補三條測試 | ⏭️ 待做（見 9.7），十分鐘的事 |
+| 3 | 報告「相關工作」加入三方對照 | ⏭️ 待做（見下） |
+
+**第 3 點的具體寫法**——三個專案剛好構成一個光譜：
+
+| | 評分 | 文獻依據 | 對評分機制本身的測試 |
+|---|---|---|---|
+| NightBloom | ✅ 有 | ❌ 零引用 | ❌ 無 |
+| Nyxo | ❌ 刻意不給分 | —（不適用） | ❌ 分析邏輯零測試 |
+| **Sonnap** | ✅ 有 | ✅ 每項有引文 | ✅ `test_scoring_guards.py` 4 條 |
+
+這比單獨說「我們有文獻依據」有力得多，因為它同時回答了
+「那你怎麼知道那些依據沒有在後續修改中被弄壞」。
+
+**另外一個順手撿到的**：Garmin API 原始資料有 `validation` 欄位
+（`MANUAL` / `DEVICE` / …），標示這筆睡眠是裝置量到的還是使用者手動輸入的
+（Nyxo 的 `typings/sources/Garmin.ts` 有這個型別）。
+**我們的 `garmin_connect_fetch.py` 沒有讀它**（2026-08-28 實測 grep 過，零結果）。
+跨 3 名配戴者那 51 晚若混進手動輸入的紀錄，Tier3 baseline 會被污染，目前沒有機制擋。
+成本很低、屬於第六節「誠實揭露」的同類改善，優先度由報告時程決定。

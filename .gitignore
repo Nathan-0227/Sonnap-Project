@@ -39,3 +39,6 @@ garmin/data/_backup_*/
 #    但**之後新增的檔案會被靜默擋掉、且沒有任何錯誤訊息**。
 #    已用 `git check-ignore -v garmin/data/x.csv` 實測確認過這個行為。
 /data/
+
+# tapo_metric_logger 的輸出（每晚約 3MB 的原始度量，不進版控）
+/tapo_metrics/

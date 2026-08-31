@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-28T02:15:10+08:00",
+  "generated_at": "2026-08-31T00:23:39+08:00",
   "session_id": "20260823_001",
   "status": {
     "pet_mood": "happy",
@@ -29,9 +29,9 @@
     "resting_heart_rate": 69
   },
   "ai_content": {
-    "advice": "Sleep quality was good tonight, but you slept only 6.4 hours. Keep your current routine, and try adding just a little more time in bed tonight.",
-    "dream_summary": "I dreamt I was lying on moss thick as a mattress, all four paws sinking in, smelling rain that had just stopped. The air was cool and heavy with green. I felt myself settle deeper with every breath, too comfortable to twitch an ear. A few pages in the middle of the diary are blank - I did not see that part.",
-    "trend_note": "Your heart rate, resting heart rate, and stress score have all been higher over the last seven nights compared to the month before, while your sleep score has dropped.",
+    "advice": "Your sleep was good overall at 6.4 hours with deep sleep at 67.2% and no awake time. Keep your current routine tonight, just as the recommendation says.",
+    "dream_summary": "I dreamt I sank into moss thick as a mattress, all four paws pressed in deep, the air smelling of rain that had just stopped. Everything went heavy and warm, and I did not want to move. A few pages in the middle of the diary are blank - I did not see that part. I only remember waking still sunk into that soft green place.",
+    "trend_note": "Your resting heart rate and stress score have both risen over the last week compared to the month before, while your sleep score has dipped slightly.",
     "is_ai_generated": true,
     "content_type": "fiction+advice",
     "source": "llm",
@@ -303,10 +303,11 @@
     }
   ],
   "data_sources": [
-    "garmin"
+    "garmin",
+    "tapo"
   ],
   "notes": {
-    "tapo": "Camera data unavailable: all footage in sleep_report.json falls during daytime hours (17:00–17:59); judged to be a test recording rather than a full night's sleep.",
+    "tapo": "Camera recorded 05:43-07:16 on 2026-08-23 (7 motion events). Only the event times are used: the camera score, decibel and snore counts are not measurement-grade and are never shown.",
     "mapping": "The pet_mood / energy_level mapping is a default value, still pending PM approval. (mapping_version=1)"
   },
   "disclaimer": "Sleep scores are computed from Garmin watch data using literature-weighted rules and do not constitute a medical diagnosis. Any dream content, where generated, is an AI creation imagined from sleep data, not a record of the user’s actual dreams.",

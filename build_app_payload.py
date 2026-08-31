@@ -58,20 +58,11 @@ GARMIN_DATA = ROOT / "garmin" / "data"
 AI_DATA = ROOT / "ai" / "data"
 OUTPUT_PATH = ROOT / "app" / "assets" / "data" / "app_payload.json"
 
-# TAPO 單檔報告的候選位置。
-#
-# ⚠️ 2026-08-12 起 `app/sleep_report.json` 已刪除（它與 `tapo/` 那份是同一支程式
-#    跑錯資料夾的複本）。剩下的 `tapo/sleep_report.json` 內容是 17:26 開始、
-#    只有 29 秒的測試錄影，會被 load_tapo_report() 的白天時段門檻擋掉——
-#    這是正確行為，不是 bug。
-#
-#    真正的整晚資料在 `tapo/sleep_reports/<日期>/sleep_report_*.json`（每夜一份），
-#    尚未接入。接入時要注意那邊的 report_date 是「報告產生時間」不是「那一夜」，
-#    日期必須從 video_clip 檔名取。
-TAPO_REPORT_CANDIDATES = [
-    ROOT / "tapo" / "sleep_report.json",
-    ROOT / "app" / "sleep_report.json",  # 已刪除，留著讓舊 clone 仍能運作
-]
+# TAPO 攝影機資料統一由 tapo_index 讀（它同時吃 tapo/sleep_records.sql 與
+# tapo/sleep_reports/<日期>/*.json，並依 video_clip 檔名定日期）。
+# 只用標準庫，import 它不會多帶進任何相依套件。
+sys.path.insert(0, str(ROOT))
+import tapo_index  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAPPING_VERSION = 1  # pet_mood 映射表的版本，改映射規則時要 +1
@@ -282,65 +273,54 @@ def compute_streak(quality_rows, latest_date):
     }
 
 
-def load_tapo_report():
+def load_tapo_night(night_iso):
     """
-    載入 TAPO 攝影機的報告——**但只在資料真的可用時才回傳**。
+    那一晚的攝影機資料——**依日期查**，不是「載入唯一那一份報告」。
 
-    回傳 (data_or_None, note)。note 一定有值，會寫進 payload 讓「為什麼沒有
-    攝影機資料」這件事對團隊可見，而不是安靜地消失。
+    回傳 (資料 or None, note)。note 一定有值，會寫進 payload 讓
+    「為什麼沒有攝影機資料」對團隊可見，而不是安靜地消失。
 
-    ⚠️ 光檢查檔案存在**不夠**。app/sleep_report.json 確實存在，但內容是廢的：
-       - report_date 2026-06-11，timeline 從 15:47 開始 → 下午的測試錄影，不是整晚
-       - motion_intensity 高達 2073600 = 正好 1920×1080 → 整個畫面都在動
-       - 15 分鐘內 large_turn_count 301 → 平均每 3 秒翻身一次
-       - sleep_quality_score 50 → 撞到 max(50, ...) 的地板
-       把這種資料餵給使用者的建議，跟本專案一路的誠實標準直接衝突。
+    ⚠️ 改之前這支不吃日期，只讀 tapo/sleep_report.json 一個檔。那個檔是
+       29 秒的白天測試錄影，每次都被下面的白天門檻擋掉，所以實務上永遠
+       回傳 None；而一旦哪天讀成功了，同一份報告會被掛到所有夜晚上。
+       真正的每夜資料在 tapo/sleep_reports/ 與 tapo/sleep_records.sql，
+       現在由 tapo_index 依 video_clip 檔名統一定日期。
 
-    ⚠️ decibel / snore_count 一律不採用，無論其他檢查過不過。
-       那兩個欄位是 np.random 產生的（motion_detector.py 與 sleep_monitor.py
-       都沒有麥克風、沒有音訊擷取），不是量測值。
+    ⚠️ decibel / snore_count 一律不放進 payload。那兩個欄位是 np.random
+       產生的——實測 35–41 dB 七個值各佔 13.4–14.2%，是均勻分布
+       （重跑：python inspect_tapo_score.py）。AI 那條路徑拿得到它們，
+       但有 provenance 標籤加 validate() 擋著；payload 是 App 直接顯示的，
+       沒有那層保護，所以這裡不給。
+
+    ⚠️ sleep_quality_score 同樣不放進來：同一晚在兩個來源會差 80 分
+       （08-02：SQL 80 分、JSON 0 分），它量的是 timeline 長度不是睡眠。
     """
-    path = next((p for p in TAPO_REPORT_CANDIDATES if p.exists()), None)
-    if path is None:
-        return None, "Camera data unavailable: sleep_report.json not found."
+    cam = tapo_index.get_index().get(night_iso)
+    if cam is None:
+        return None, ("Camera data unavailable: no camera recording could be "
+                      f"matched to the night of {night_iso}.")
 
-    try:
-        data = json.load(path.open(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        return None, f"Camera data unavailable: could not read {path.name} ({exc})."
+    # 有效性判準只有一份，放在 tapo_index，三個呼叫端共用（見該函式的說明）。
+    problem = tapo_index.sleep_recording_problem(cam)
+    if problem:
+        return None, f"Camera data unavailable for {night_iso}: {problem}."
 
-    timeline = data.get("timeline") or []
-    if not timeline:
-        return None, "Camera data unavailable: timeline is empty."
+    first, last = cam["camera_first"], cam["camera_last"]
+    note = (f"Camera recorded {first:%H:%M}-{last:%H:%M} on {night_iso} "
+            f"({cam['total_events']} motion events). Only the event times are "
+            "used: the camera score, decibel and snore counts are not "
+            "measurement-grade and are never shown.")
+    if cam["score_disagreement"]:
+        note += (f" (The two camera data sources disagree about this night's own "
+                 f"score by {cam['score_disagreement']} points.)")
 
-    # 檢查一：時段。整段錄影都落在白天 → 是測試不是睡眠
-    hours = {int(ev["time"].split(":")[0]) for ev in timeline if ev.get("time")}
-    if hours and all(6 <= h < 20 for h in hours):
-        return None, (
-            f"Camera data unavailable: all footage in {path.name} falls during "
-            f"daytime hours ({min(hours):02d}:00–{max(hours):02d}:59); "
-            "judged to be a test recording rather than a full night's sleep."
-        )
-
-    # 檢查二：翻身頻率。人一整晚翻身約 10–40 次，每小時超過 30 次不合生理
-    summary = data.get("summary") or {}
-    large_turns = summary.get("large_turn_count", 0)
-    span_hours = max(len(hours), 1)
-    if large_turns / span_hours > 30:
-        return None, (
-            f"Camera data unavailable: {path.name} reports roughly "
-            f"{large_turns / span_hours:.0f} large turns per hour, outside the "
-            "physiologically plausible range; the motion detector is judged to be "
-            "picking up whole-frame changes rather than body movement."
-        )
-
-    # 通過門檻：只取視覺類欄位，聲音類一律丟棄
     return {
-        "report_date": data.get("report_date"),
-        "large_turn_count": large_turns,
-        "total_events": summary.get("total_events"),
-    }, ("Camera data included (visual fields only; decibel and snore counts are "
-        "simulated values and are never used).")
+        "night": night_iso,
+        "camera_first": first.isoformat(),
+        "camera_last": last.isoformat(),
+        "large_turn_count": cam["large_turn_count"],
+        "total_events": cam["total_events"],
+    }, note
 
 
 def load_ai_advice(target_date, fallback_recommendation):
@@ -408,7 +388,7 @@ def build_payload(target_date=None):
     final_quality = quality.get("final_quality", "Normal")
     display = DISPLAY_STRINGS.get(final_quality, DISPLAY_STRINGS["Normal"])
 
-    tapo, tapo_note = load_tapo_report()
+    tapo, tapo_note = load_tapo_night(night_iso)
     ai_content = load_ai_advice(night_iso, quality.get("recommendation"))
 
     data_sources = ["garmin"]
