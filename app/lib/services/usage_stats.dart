@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'lights_out.dart';
+
 /// 一個 App 在某段期間的前景使用時間。
 ///
 /// ⚠️ **這是「前景時間」不是「盯著螢幕的時間」**——App 在前景但使用者
@@ -117,13 +119,13 @@ class UsageStatsResult {
 ///
 /// - ✅ 「昨天你最常用哪些 App」——算得出來
 /// - ❌ 「睡前 60 分鐘用了什麼」——**算不出來**，日彙總沒有時間軸
-/// - ❌ `lights_out_at`（最後一次放下手機的時刻）——**算不出來**，
-///   那是 `POST /nightly` 的必填欄位，也是整個 Tier A 行為層的入口
 ///
-/// 後兩者要改用 `queryEvents()` 去讀 `ACTIVITY_PAUSED` 之類的逐筆事件，
-/// 那是 Kotlin 那邊要新增的方法。
+/// **畫面上不可以把日彙總說成「睡前使用」**——那是兩個不同的量。
 ///
-/// **在那之前，畫面上不可以把日彙總說成「睡前使用」**——那是兩個不同的量。
+/// `lights_out_at`（最後一次放下手機的時刻）走的是另一條路：[lightsOut]
+/// 用 `queryEvents()` 的逐筆事件推出來，判斷邏輯在 `lights_out.dart`。
+/// 要做「睡前 60 分鐘用了什麼」的話，材料已經在那條路上了——把事件流
+/// 依 App 切段即可，但那是另一件工作。
 ///
 /// ## ⚠️ 這個數字不會跟系統「數位健康」一樣，那是正常的
 ///
@@ -234,6 +236,65 @@ class UsageStatsService {
       return UsageStatsResult(UsageStatsStatus.failed, error: e.message);
     } on MissingPluginException {
       return const UsageStatsResult(UsageStatsStatus.unsupported);
+    }
+  }
+
+  /// 逐筆互動事件（`getUsage` 的日彙總沒有時間軸，答不出就寢時刻）。
+  ///
+  /// 回傳原始事件，判斷交給 [detectLightsOut]。
+  Future<List<InteractionEvent>> interactionEvents({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    if (!isSupported) return const [];
+
+    final raw = await _channel.invokeMethod<List<Object?>>(
+      'getInteractionEvents',
+      {
+        'startTime': start.millisecondsSinceEpoch,
+        'endTime': end.millisecondsSinceEpoch,
+      },
+    );
+
+    return (raw ?? const [])
+        .whereType<Map<Object?, Object?>>()
+        .map(InteractionEvent.fromMap)
+        .toList();
+  }
+
+  /// 上一次放下手機的時刻。
+  ///
+  /// ⚠️ 視窗刻意用「往回 24 小時」而不是「昨天 18:00 到今天 18:00」：
+  /// 不管使用者是早上八點開 App 還是深夜十一點開，上一段睡眠都會落在
+  /// 視窗裡。固定日界的話，深夜查詢會查到還沒發生的今晚。
+  Future<LightsOutResult> lightsOut({
+    Duration window = kLightsOutWindow,
+    int minQuietMinutes = kMinQuietMinutes,
+    DateTime? now,
+  }) async {
+    if (!isSupported) {
+      return const LightsOutResult(LightsOutStatus.unsupported);
+    }
+
+    if (!await hasAccess()) {
+      return const LightsOutResult(LightsOutStatus.permissionRequired);
+    }
+
+    final end = now ?? DateTime.now();
+    final start = end.subtract(window);
+
+    try {
+      final events = await interactionEvents(start: start, end: end);
+      return detectLightsOut(
+        events,
+        windowStart: start,
+        windowEnd: end,
+        minQuietMinutes: minQuietMinutes,
+      );
+    } on PlatformException catch (e) {
+      return LightsOutResult(LightsOutStatus.failed, error: e.message);
+    } on MissingPluginException {
+      return const LightsOutResult(LightsOutStatus.unsupported);
     }
   }
 

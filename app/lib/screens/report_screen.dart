@@ -4,6 +4,7 @@ import 'package:lottie/lottie.dart';
 
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
+import '../services/lights_out.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
 import '../widgets/pet_mood_animation.dart';
@@ -77,6 +78,10 @@ class _ReportScreenState extends State<ReportScreen>
   /// 但那不該影響整頁的其他區塊，所以不併進 `_sessionFuture`。
   UsageStatsResult? _usage;
 
+  /// 上一次放下手機的時刻。與 [_usage] 同一個權限、同一次重查，
+  /// 但**是兩個不同的量**：一個是整天的總量，一個是一個時刻。
+  LightsOutResult? _lightsOut;
+
   @override
   void initState() {
     super.initState();
@@ -112,8 +117,12 @@ class _ReportScreenState extends State<ReportScreen>
 
   Future<void> _loadUsage() async {
     final result = await widget.usageStats.queryYesterday();
+    final lightsOut = await widget.usageStats.lightsOut();
     if (!mounted) return;
-    setState(() => _usage = result);
+    setState(() {
+      _usage = result;
+      _lightsOut = lightsOut;
+    });
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -1124,10 +1133,120 @@ class _ReportScreenState extends State<ReportScreen>
 
           const SizedBox(height: 12),
 
+          _buildLightsOutRow(),
+
           _buildUsageBody(),
         ],
       ),
     );
+  }
+
+  /// 「你幾點放下手機」——`lights_out_at`，Tier A 行為層的入口。
+  ///
+  /// ⚠️ 這裡刻意**不算**「比目標晚了幾分鐘」。跨午夜的正規化
+  /// （目標 23:30、實際 02:15 直覺相減會得到「提早 21 小時」）已經寫在
+  /// 後端 `behavior/adherence.py`；在 Dart 再寫一份就會有第二個定義處。
+  /// 這張卡只呈現量到的事實。
+  Widget _buildLightsOutRow() {
+    final result = _lightsOut;
+
+    // 沒授權／非 Android／還在讀——底下的 _buildUsageBody 已經在講同一件事了，
+    // 這裡再講一次只會變成兩段重複的錯誤訊息。
+    if (result == null ||
+        result.status == LightsOutStatus.permissionRequired ||
+        result.status == LightsOutStatus.unsupported ||
+        result.status == LightsOutStatus.failed) {
+      return const SizedBox.shrink();
+    }
+
+    late final String value;
+    late final String caption;
+
+    switch (result.status) {
+      case LightsOutStatus.ok:
+        final at = result.at!;
+        final hh = at.hour.toString().padLeft(2, '0');
+        final mm = at.minute.toString().padLeft(2, '0');
+        value = 'Phone down at $hh:$mm';
+        caption =
+            'A proxy for bedtime, not sleep onset - people often lie down for '
+            'another half hour. Quiet for ${_formatQuiet(result.quietMinutes)} '
+            'afterwards.';
+        break;
+
+      case LightsOutStatus.noQuietGap:
+        value = 'No clear wind-down';
+        caption =
+            'The phone was picked up at least every three hours over the last '
+            'day, so there is no single moment worth calling bedtime.';
+        break;
+
+      case LightsOutStatus.noEvents:
+        value = 'No phone events yet';
+        caption =
+            'Android only starts recording these after Usage Access is granted. '
+            'Check back tomorrow.';
+        break;
+
+      // 上面已經提早 return 了，這幾個到不了。
+      case LightsOutStatus.permissionRequired:
+      case LightsOutStatus.unsupported:
+      case LightsOutStatus.failed:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: purpleColor.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.bedtime_outlined,
+                color: purpleColor,
+                size: 15,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            caption,
+            style: const TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatQuiet(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
   }
 
   Widget _buildUsageBody() {

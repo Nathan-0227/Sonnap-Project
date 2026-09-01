@@ -65,6 +65,30 @@ class MainActivity : FlutterActivity() {
                     result.success(usage)
                 }
 
+                "getInteractionEvents" -> {
+                    val startTime =
+                        call.argument<Long>("startTime")
+
+                    val endTime =
+                        call.argument<Long>("endTime")
+
+                    if (startTime == null || endTime == null) {
+                        result.error(
+                            "INVALID_ARGUMENTS",
+                            "startTime and endTime are required.",
+                            null
+                        )
+                        return@setMethodCallHandler
+                    }
+
+                    result.success(
+                        usageStatsService.getInteractionEvents(
+                            startTime,
+                            endTime
+                        )
+                    )
+                }
+
                 else -> {
                     result.notImplemented()
                 }

@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/report_screen.dart';
+import 'package:app/services/lights_out.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/usage_stats.dart';
 
@@ -30,10 +31,19 @@ class _ImmediateRepository implements SleepRepository {
 
 class _FakeUsageStats extends UsageStatsService {
   UsageStatsResult result;
+
+  /// ⚠️ 這個一定要一起攔。少了它，widget test 會打到真的 MethodChannel，
+  /// 整個 `_loadUsage()` 卡在那個 await 上——畫面停在「Reading phone
+  /// usage...」，而失敗訊息看起來像是「找不到 App 名稱」，指向錯的地方。
+  LightsOutResult lightsOutResult;
+
   int openSettingsCalls = 0;
   int queryCalls = 0;
 
-  _FakeUsageStats(this.result);
+  _FakeUsageStats(
+    this.result, {
+    this.lightsOutResult = const LightsOutResult(LightsOutStatus.noEvents),
+  });
 
   @override
   bool get isSupported => true;
@@ -43,6 +53,14 @@ class _FakeUsageStats extends UsageStatsService {
     queryCalls++;
     return result;
   }
+
+  @override
+  Future<LightsOutResult> lightsOut({
+    Duration window = kLightsOutWindow,
+    int minQuietMinutes = kMinQuietMinutes,
+    DateTime? now,
+  }) async =>
+      lightsOutResult;
 
   @override
   Future<void> openSettings() async => openSettingsCalls++;
@@ -183,6 +201,24 @@ void main() {
       );
     });
 
+    testWidgets('沒有權限時不要把同一件事講兩遍', (tester) async {
+      // 就寢時刻與 App 清單是同一個權限。沒授權時兩邊都會回
+      // permissionRequired，各自畫一段的話卡片上會出現兩段一樣的錯誤訊息。
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.permissionRequired),
+        lightsOutResult:
+            const LightsOutResult(LightsOutStatus.permissionRequired),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.textContaining('Phone down at'), findsNothing);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Open Usage Access settings'),
+        findsOneWidget,
+        reason: '帶路按鈕只該有一顆',
+      );
+    });
+
     testWidgets('非 Android 平台要說清楚，不要假裝是沒有資料', (tester) async {
       final usage =
           _FakeUsageStats(const UsageStatsResult(UsageStatsStatus.unsupported));
@@ -286,6 +322,85 @@ void main() {
 
       expect(find.text('One UI Home'), findsNothing);
       expect(find.text('Threads'), findsOneWidget);
+    });
+  });
+
+  group('就寢時刻（lights_out_at）在畫面上', () {
+    testWidgets('偵測到就顯示時刻，而且要標明是 proxy', (tester) async {
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.empty),
+        lightsOutResult: LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 1, 23, 12),
+          quietMinutes: 8 * 60 + 28,
+          sourceType: 'paused',
+          eventCount: 40,
+        ),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.text('Phone down at 23:12'), findsOneWidget);
+
+      // ⚠️ 這一條不是文案潔癖。放下手機不等於睡著——有人躺著再過半小時
+      // 才睡。整個專案對 proxy 的處理標準都是「限制寫在使用者看得到的
+      // 地方」，同 sleep_efficiency 與 movement_sample_minutes。
+      expect(
+        find.textContaining('not sleep onset'),
+        findsOneWidget,
+        reason: '沒有這句話，使用者會把它當成入睡時間讀',
+      );
+      expect(find.textContaining('8h 28m'), findsOneWidget);
+    });
+
+    testWidgets('整天都在滑就老實說偵測不到，不要硬挑一個時刻', (tester) async {
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.empty),
+        lightsOutResult: const LightsOutResult(
+          LightsOutStatus.noQuietGap,
+          quietMinutes: 95,
+          eventCount: 210,
+        ),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.text('No clear wind-down'), findsOneWidget);
+      expect(find.textContaining('Phone down at'), findsNothing);
+    });
+
+    testWidgets('⚠️ 畫面上不得出現「比目標晚幾分鐘」', (tester) async {
+      // 那個數字由後端 behavior/adherence.py 算，它處理了跨午夜正規化
+      // （目標 23:30、實際 02:15，直覺相減會得到「提早 21 小時」）。
+      // 在 Dart 算第二份，兩邊漂移時不會有任何錯誤訊息——與「不要在
+      // Dart 從 final_quality 推 pet_mood」是同一條紀律。
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.empty),
+        lightsOutResult: LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 2, 2, 15),
+          quietMinutes: 300,
+          sourceType: 'screen_off',
+        ),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.text('Phone down at 02:15'), findsOneWidget);
+      // 找的是「在 Dart 算了達成度」才會產生的措辭。
+      // ⚠️ 不要用 'late' 這種泛用字串——整頁其他地方本來就有
+      //    （第一版這樣寫，紅在一段跟就寢時刻無關的文案上）。
+      for (final phrase in [
+        'minutes late',
+        'min late',
+        'behind target',
+        'ahead of target',
+        'past your target',
+        'On time',
+      ]) {
+        expect(
+          find.textContaining(phrase),
+          findsNothing,
+          reason: '出現「$phrase」代表有人在 Dart 端算了達成度',
+        );
+      }
     });
   });
 }
