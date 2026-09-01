@@ -31,7 +31,11 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).resolve().parent
-DUMP = ROOT / "tapo" / "sleep_records.sql"
+sys.path.insert(0, str(ROOT))
+from tapo_index import DUMPS  # noqa: E402
+
+# ⚠️ dump 的位置由 tapo_index 統一定義（影像組有兩代程式、兩個落點）。
+#    這裡若自己寫死一個路徑，新資料會安靜地不出現在清點結果裡。
 GARMIN = ROOT / "garmin" / "data" / "garmin_sleep_quality_final.csv"
 FEATURES = ROOT / "garmin" / "data" / "garmin_sleep_features.csv"
 
@@ -111,17 +115,31 @@ def load_garmin_nights():
 
 
 def main():
-    if not DUMP.exists():
-        sys.exit(f"✗ 找不到 {DUMP}。這個檔由影像組提供。")
+    found = [d for d in DUMPS if d.exists()]
+    if not found:
+        sys.exit("✗ 找不到任何 sleep_records.sql。這個檔由影像組提供。")
 
-    rows = classify(parse_dump(DUMP))
+    # ⚠️ 先去重再 classify。兩份 dump 有大量重複的紀錄（新的是舊的超集），
+    #    不去重的話每個 created_at 都會出現兩次，而「事後批次補」的判準正是
+    #    「同一個 created_at 出現在多列」——結果**每一筆都會被誤判成事後補**，
+    #    而且不會有任何錯誤訊息。
+    seen, rows = set(), []
+    for d in found:
+        for r in parse_dump(d):
+            key = (r["id"], r["report_date"], r["created_at"], r["score"])
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(r)
+    rows = classify(rows)
     if not rows:
         sys.exit("✗ 解析不到任何紀錄。dump 的欄位順序可能改了，請看 ROW_RE。")
 
     nights, feats = load_garmin_nights()
 
     print("=" * 78)
-    print(f"TAPO dump 清點：{DUMP.relative_to(ROOT)}")
+    print("TAPO dump 清點：" + "、".join(
+        d.relative_to(ROOT).as_posix() for d in found))
     print("=" * 78)
     print(f"紀錄數：{len(rows)}")
     scores = sorted({r['score'] for r in rows})
