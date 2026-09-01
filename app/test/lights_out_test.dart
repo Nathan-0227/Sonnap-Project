@@ -188,6 +188,140 @@ void main() {
     });
   });
 
+  group('⚠️ 螢幕亮不等於有人在用（實機抓到的錯）', () {
+    // 第一版把 screen_on 與 resumed 當成互動，單元測試全過、實機卻答不出
+    // 就寢時刻。dumpsys 拉出來看，2026-09-01 03:45~08:00 那段（人在睡）：
+    //
+    //     keyguard_hidden      0 次   ← 手機一次都沒被解鎖
+    //     screen_on           14 次
+    //     resumed             14 次   Bixby 6、抖音 6、鬧鐘 2
+    //
+    // 全是通知把螢幕點亮與背景活動。那些假互動把整夜切成 39/30/28 分鐘的
+    // 碎片，最長的安靜期只剩 148 分鐘而且落在白天。
+    //
+    // 下面這組事件是那一晚的縮影：真的解鎖只有睡前與早上兩次，
+    // 中間三次都只有螢幕亮 + 背景 App，沒有解鎖。
+    final night = [
+      at(3, 30, 'keyguard_hidden'), // 睡前最後一次真的在用
+      at(3, 51, 'keyguard_shown'), // ← 這才是就寢時刻
+      // 半夜的通知：螢幕亮了、背景 App 也動了，但沒有人解鎖
+      at(4, 30, 'screen_on'),
+      at(4, 30, 'resumed'), // com.samsung.android.bixby.agent
+      at(4, 31, 'paused'),
+      at(4, 31, 'screen_off'),
+      at(5, 0, 'screen_on'),
+      at(5, 0, 'resumed'), // com.ss.android.ugc.aweme
+      at(5, 1, 'paused'),
+      at(5, 1, 'screen_off'),
+      at(5, 29, 'screen_on'),
+      at(5, 29, 'resumed'),
+      at(5, 30, 'paused'),
+      at(5, 30, 'screen_off'),
+      at(8, 0, 'keyguard_hidden'), // 早上真的拿起手機
+      at(8, 40, 'keyguard_shown'),
+    ];
+
+    final windowEnd = day.add(const Duration(days: 1, hours: 2));
+
+    test('有解鎖訊號時，通知點亮螢幕不算互動', () {
+      final result = run(night, start: day, end: windowEnd);
+
+      expect(result.mode, LightsOutMode.unlock);
+      expect(result.status, LightsOutStatus.ok);
+      expect(
+        result.at,
+        day.add(const Duration(hours: 3, minutes: 51)),
+        reason: '半夜那三次「螢幕亮但沒解鎖」被算成互動了',
+      );
+      expect(result.quietMinutes, 4 * 60 + 9);
+    });
+
+    test('把 keyguard 事件拿掉，答案就會壞（反向對照）', () {
+      // 同一晚，只是這支手機不給鎖定畫面事件。退化模式下那三次通知
+      // 會把夜晚切碎，最長的安靜期只剩 149 分鐘 → 答不出來。
+      final result = run(
+        night.where((e) => !e.type.startsWith('keyguard')).toList(),
+        start: day,
+        end: windowEnd,
+      );
+
+      expect(result.mode, LightsOutMode.activity);
+      expect(
+        result.status,
+        LightsOutStatus.noQuietGap,
+        reason: '反向對照失效——若這裡也答對，表示上一條測的不是解鎖判準',
+      );
+      expect(result.quietMinutes, lessThan(kMinQuietMinutes));
+    });
+
+    test('就寢時刻正好是事件流第一筆時，仍然抓得到', () {
+      // ⚠️ 實機真的長這樣。2026-09-02 02:25 那次查詢，queryEvents()
+      // 回來的**第一筆**是 03:51:11 screen_off，接著 03:51:16
+      // keyguard_shown——那正是就寢時刻，前面沒有任何解鎖事件。
+      //
+      // 「沒配對的 end 一律丟掉」會把唯一正確的答案丟掉，最長空隙變成
+      // 白天的 147 分鐘。分界是 keyguard_shown 算、screen_off 不算：
+      // 上鎖一定是從解鎖狀態轉過去的，通知則只會讓螢幕亮了又暗。
+      final result = run([
+        at(3, 51, 'screen_off'), // 流的第一筆，沒有配對的解鎖
+        at(3, 51, 'keyguard_shown'), // ← 就寢
+        // 半夜五次通知：螢幕亮又暗，沒有任何 keyguard 事件
+        at(4, 30, 'screen_on'), at(4, 30, 'screen_off'),
+        at(5, 0, 'screen_on'), at(5, 1, 'screen_off'),
+        at(5, 29, 'screen_on'), at(5, 29, 'screen_off'),
+        at(5, 48, 'screen_on'), at(5, 48, 'screen_off'),
+        at(7, 53, 'screen_on'), at(7, 53, 'screen_off'),
+        at(8, 0, 'keyguard_hidden'), // 早上第一次真的解鎖
+        at(8, 40, 'keyguard_shown'),
+      ], start: day.add(const Duration(hours: 2)), end: windowEnd);
+
+      expect(result.mode, LightsOutMode.unlock);
+      expect(result.status, LightsOutStatus.ok);
+      expect(result.at, day.add(const Duration(hours: 3, minutes: 51)));
+      expect(result.quietMinutes, 4 * 60 + 9);
+    });
+
+    test('沒配對的 screen_off 不算證據（否則夜晚會被切碎）', () {
+      // 上一條的反面：把 03:51 那筆 keyguard_shown 拿掉，只剩 screen_off。
+      // 若 screen_off 也算，半夜那五次通知會各插一個點，
+      // 249 分鐘就會被切成 39/30/28/19/125 分鐘。
+      final result = run([
+        at(3, 51, 'screen_off'),
+        at(4, 30, 'screen_on'), at(4, 30, 'screen_off'),
+        at(5, 0, 'screen_on'), at(5, 1, 'screen_off'),
+        at(5, 29, 'screen_on'), at(5, 29, 'screen_off'),
+        at(5, 48, 'screen_on'), at(5, 48, 'screen_off'),
+        at(7, 53, 'screen_on'), at(7, 53, 'screen_off'),
+        at(8, 0, 'keyguard_hidden'),
+        at(8, 40, 'keyguard_shown'),
+      ], start: day.add(const Duration(hours: 2)), end: windowEnd);
+
+      expect(
+        result.status,
+        LightsOutStatus.noQuietGap,
+        reason: '回報了 ${result.at}——沒配對的 screen_off 被當成了「放下手機」，'
+            '但那一晚手機根本沒被解鎖過',
+      );
+    });
+
+    test('unlock 模式下 paused 不得結束一段使用', () {
+      // 解鎖著切 App 會產生 paused。若 paused 也算「停止使用」，
+      // 一次正常的滑手機就會被切成好幾段，中間憑空多出安靜期。
+      final result = run([
+        at(23, 0, 'keyguard_hidden'),
+        at(23, 10, 'paused'), // 切換 App
+        at(23, 10, 'resumed'),
+        at(23, 50, 'paused'),
+        at(23, 50, 'resumed'),
+        at(1, 30, 'keyguard_shown', dayOffset: 1), // 真正放下手機
+        at(9, 0, 'keyguard_hidden', dayOffset: 1),
+      ], end: day.add(const Duration(days: 1, hours: 10)));
+
+      expect(result.at, day.add(const Duration(days: 1, hours: 1, minutes: 30)));
+      expect(result.quietMinutes, 7 * 60 + 30);
+    });
+  });
+
   group('邊界', () {
     test('視窗外的事件不算', () {
       final result = run(

@@ -285,12 +285,46 @@ class UsageStatsService {
 
     try {
       final events = await interactionEvents(start: start, end: end);
-      return detectLightsOut(
+
+      // ⚠️ 原生端筆數超過上限時會**丟掉最舊的**，而昨晚睡覺那段正好在最舊
+      // 的那一半。實機上這件事真的發生過（上限 2000、24 小時有 4057 筆），
+      // 結果是「偵測不到就寢時刻」——看起來完全正常的錯誤答案。
+      //
+      // 上限已經拉到有餘裕，但真的又撞到時要**把視窗起點夾到第一筆事件**：
+      // 那之前的資料我們沒有，宣稱查過等於拿半截資料算出一個像真的答案。
+      // 夾住之後，「視窗開頭的空白不算安靜期」那條規則就會自然接手。
+      final truncated = events.length >= kMaxInteractionEvents;
+      final effectiveStart =
+          truncated && events.isNotEmpty ? events.first.timestamp : start;
+
+      final result = detectLightsOut(
         events,
-        windowStart: start,
+        windowStart: effectiveStart,
         windowEnd: end,
         minQuietMinutes: minQuietMinutes,
       );
+
+      // ⚠️ 這一行不是暫時的除錯輸出，請不要順手刪掉。
+      //
+      // 這個功能會不會運作，取決於**這支手機給不給 keyguard 事件**——
+      // 而給不給是看不出來的：畫面上「偵測不到就寢時刻」跟「這支手機
+      // 只能跑退化模式」長得一模一樣。第一次實機測試就是卡在這裡：
+      // 演算法對、資料錯，但沒有任何跡象指向資料。
+      //
+      // 印的是型別分布而不是逐筆事件，因為要判斷的就是「有沒有收到
+      // keyguard_hidden」；逐筆會有幾千行，也會把使用者用了哪些 App
+      // 寫進 logcat。
+      final histogram = <String, int>{};
+      for (final e in events) {
+        histogram[e.type] = (histogram[e.type] ?? 0) + 1;
+      }
+      debugPrint(
+        'LightsOut[${result.mode.name}] ${result.status.name} '
+        'raw=${events.length} used=${result.eventCount} '
+        'quiet=${result.quietMinutes}m at=${result.at} $histogram',
+      );
+
+      return result;
     } on PlatformException catch (e) {
       return LightsOutResult(LightsOutStatus.failed, error: e.message);
     } on MissingPluginException {

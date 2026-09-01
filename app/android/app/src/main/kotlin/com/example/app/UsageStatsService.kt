@@ -152,12 +152,23 @@ class UsageStatsService(private val context: Context) {
      * 但**不保證拿得到**（部分 ROM 只發給系統 App）。所以兩者都收，
      * 有就更準、沒有也不會失效，並在每一筆標上 type 讓上層看得出來源。
      *
-     * @param limit 上限筆數，超過時**保留最新的**（就寢時刻在區間尾端）。
+     * ## ⚠️ limit 訂太小會安靜地給出錯的答案
+     *
+     * 第一版是 2000。實機上 24 小時有 **4057 筆**事件（三星 One UI，
+     * 通知多），於是視窗被砍掉一半——而且砍掉的是**舊的那半**，
+     * 也就是昨晚睡覺的那段。畫面顯示「偵測不到就寢時刻」，看起來完全
+     * 正常，實際上是資料被截斷了。
+     *
+     * 現在的值有 5 倍餘裕。呼叫端另外會用「筆數剛好等於上限」判斷是不是
+     * 被截斷，是的話把視窗起點夾到第一筆事件——寧可少報一晚，
+     * 也不要拿半截資料算出一個看起來像真的答案。
+     *
+     * @param limit 上限筆數，超過時保留**最新的**。
      */
     fun getInteractionEvents(
         startTime: Long,
         endTime: Long,
-        limit: Int = 2000,
+        limit: Int = 20000,
     ): List<Map<String, Any>> {
 
         if (!hasUsageAccess()) {

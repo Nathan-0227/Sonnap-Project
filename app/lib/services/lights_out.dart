@@ -53,22 +53,51 @@ class InteractionEvent {
     );
   }
 
-  /// 代表「開始使用」的事件。
-  static const Set<String> startTypes = {
-    'resumed',
-    'screen_on',
-    'keyguard_hidden',
-  };
+  /// 解鎖了——**這是唯一能證明「人拿起了手機」的事件**。見 [LightsOutMode]。
+  static const String unlocked = 'keyguard_hidden';
+}
 
-  /// 代表「停止使用」的事件。
-  static const Set<String> endTypes = {
-    'paused',
-    'screen_off',
-    'keyguard_shown',
-  };
+/// 判斷「人在用手機」的兩種模式。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// ⚠️ 螢幕亮 ≠ 有人在用（實機才看得到的錯）
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 第一版把 `SCREEN_INTERACTIVE`（螢幕亮）與 `ACTIVITY_RESUMED` 當成互動。
+/// 單元測試全過，實機上卻回報「偵測不到就寢時刻」。
+///
+/// 拉 `adb shell dumpsys usagestats` 出來對，2026-09-01 03:45~08:00
+/// 那段（人明顯在睡）有：
+///
+///     KEYGUARD_HIDDEN      0 次   ← 手機一次都沒被解鎖
+///     SCREEN_INTERACTIVE  14 次
+///     ACTIVITY_RESUMED    14 次   Bixby 6、抖音 6、鬧鐘 2
+///
+/// 全部是**通知把螢幕點亮**與背景活動，沒有一次是人拿起手機。這些假的
+/// 互動把整夜切成 39 / 30 / 28 分鐘的碎片，最長的安靜期只剩 148 分鐘
+/// （而且落在白天），於是畫面顯示「沒有一段安靜超過三小時」——
+/// 結論講得很誠實，前提卻是錯的。
+///
+/// 改成「解鎖才算互動」之後，同一份資料的最長安靜期變成
+/// **249 分鐘（03:51 放下 → 08:00 拿起）**，第二長的只有 148 分鐘，
+/// 兩者分得很開。
+///
+/// ⚠️ 順帶解掉了另一個問題：解鎖區段本來就涵蓋「連續看兩小時同一個 App」，
+/// 因為那段期間手機一直是解鎖的。activity 模式要靠 resumed→paused 配對
+/// 才補得起來的那個洞，unlock 模式根本不存在。
+enum LightsOutMode {
+  /// 拿 `keyguard_hidden` → `keyguard_shown` / `screen_off`
+  /// 圈出「解鎖中」的區段。**這是想要的模式。**
+  ///
+  /// ⚠️ 這個模式**完全不看** `resumed` / `paused`。鎖著的時候那兩種事件
+  /// 照樣會發生（背景服務、通知），算進來就回到上面那個錯誤。
+  unlock,
 
-  bool get isStart => startTypes.contains(type);
-  bool get isEnd => endTypes.contains(type);
+  /// 退化模式：這支手機在這個視窗裡沒有給任何 `keyguard_hidden`。
+  ///
+  /// 部分 ROM 只把鎖定畫面事件發給系統 App。沒有解鎖訊號時只能退回
+  /// 「App 前景切換」，**準確度明顯較差**——夜間的背景活動分不出來。
+  activity,
 }
 
 enum LightsOutStatus {
@@ -106,8 +135,12 @@ class LightsOutResult {
   /// `paused` 更貼近「放下手機」，但不是每支手機都給得到。
   final String? sourceType;
 
-  /// 視窗內收到幾筆事件。0 筆與「有事件但沒有安靜期」要分得開。
+  /// 視窗內收到幾筆**採用的**事件（見 [mode]，兩種模式看的事件不同）。
+  /// 0 筆與「有事件但沒有安靜期」要分得開。
   final int eventCount;
+
+  /// 用哪一種判準認定「人在用手機」。`activity` 是退化模式，準確度較差。
+  final LightsOutMode mode;
 
   final String? error;
 
@@ -117,6 +150,7 @@ class LightsOutResult {
     this.quietMinutes = 0,
     this.sourceType,
     this.eventCount = 0,
+    this.mode = LightsOutMode.unlock,
     this.error,
   });
 
@@ -145,6 +179,44 @@ const int kMinQuietMinutes = 180;
 /// 往回看多久。一天，這樣不管在早上還是深夜查，上一段睡眠都在視窗裡。
 const Duration kLightsOutWindow = Duration(hours: 24);
 
+/// 一次最多向原生端要幾筆事件。要與 `UsageStatsService.kt` 的
+/// `getInteractionEvents(limit)` 預設值一致。
+///
+/// ⚠️ 實機（三星 One UI）24 小時有 **4057 筆**，所以 2000 這種值會把視窗
+/// 砍掉一半——而且砍掉的是舊的那半，正好是昨晚睡覺的那段。
+const int kMaxInteractionEvents = 20000;
+
+/// 一個「停止使用」事件在**沒有配對的開始事件**時，還算不算證據。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// ⚠️ 這個函式存在的唯一理由，是實機上就寢時刻**正好是事件流的第一筆**
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 實測 2026-09-02 02:25 那次查詢，`queryEvents()` 回來的第一筆是
+/// `2026-09-01 03:51:11 screen_off`——而那正是要找的就寢時刻。
+/// 它前面沒有解鎖事件（流就從那裡開始），所以「沒配對就丟掉」會把
+/// 唯一正確的答案丟掉，剩下的最長空隙變成白天的 147 分鐘。
+///
+/// 但也不能全部收下：那一夜 04:30~07:53 有五次通知把螢幕點亮又熄掉，
+/// 每一次都會產生一個沒配對的 `screen_off`，收下就會把 249 分鐘切碎。
+///
+/// 分界在**這個事件本身能不能證明「剛剛還在用」**：
+///
+/// | 事件 | 沒配對時 | 為什麼 |
+/// |---|---|---|
+/// | `keyguard_shown` | ✅ 算 | 上鎖是 解鎖→鎖定 的轉換，不解鎖就不會發生 |
+/// | `screen_off` | ❌ 不算 | 鎖著的時候通知也會讓螢幕亮了又暗 |
+///
+/// 實測驗證：那一夜 03:50~08:05 之間 `KEYGUARD_SHOWN` 只出現在
+/// **03:51:16**（就寢），中間五次通知一次都沒有。這個訊號是乾淨的。
+///
+/// activity 模式沒有鎖定畫面訊號可以倚賴，`paused` 已經是最好的證據，
+/// 所以照收。
+bool _unmatchedEndIsEvidence(String type, LightsOutMode mode) {
+  if (mode == LightsOutMode.activity) return true;
+  return type == 'keyguard_shown';
+}
+
 class _Interval {
   DateTime start;
   DateTime end;
@@ -155,26 +227,50 @@ class _Interval {
 /// 從事件流找出就寢時刻。**純函式，沒有 I/O，測得到。**
 ///
 /// 做法是把事件流還原成「使用中的區間」，再找區間之間最長的空隙。
-///
-/// ⚠️ 為什麼不能只取最後一筆 `paused`：**連續使用同一個 App 期間一個
-/// 事件都不會產生**。23:05 打開 YouTube、看到 01:00 螢幕關掉，中間是空的。
-/// 只看 paused 的話那兩小時看起來像「沒動手機」。必須把 resumed→paused
-/// 之間整段標成使用中，空隙才是真的空隙。
+/// 「使用中」怎麼認由 [LightsOutMode] 決定——**那一段一定要讀**，
+/// 用錯判準的話演算法完全正確、答案卻是錯的（實機上真的發生過）。
 LightsOutResult detectLightsOut(
   List<InteractionEvent> events, {
   required DateTime windowStart,
   required DateTime windowEnd,
   int minQuietMinutes = kMinQuietMinutes,
 }) {
-  final relevant = events
-      .where((e) => e.isStart || e.isEnd)
+  final inWindow = events
       .where((e) =>
           !e.timestamp.isBefore(windowStart) && !e.timestamp.isAfter(windowEnd))
       .toList()
     ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-  if (relevant.isEmpty) {
+  if (inWindow.isEmpty) {
     return const LightsOutResult(LightsOutStatus.noEvents);
+  }
+
+  // ── 挑判準 ──────────────────────────────────────────────────────
+  //
+  // 有解鎖訊號就用解鎖，沒有才退回 App 前景切換。判斷依據是**這個視窗裡
+  // 實際收到的事件**而不是 Android 版本——同一支手機在不同情況下給不給
+  // keyguard 事件是會變的，問資料比問版本可靠。
+  final bool hasUnlock =
+      inWindow.any((e) => e.type == InteractionEvent.unlocked);
+  final mode = hasUnlock ? LightsOutMode.unlock : LightsOutMode.activity;
+
+  // ⚠️ unlock 模式**刻意不含** resumed / paused：手機鎖著的時候那兩種
+  //    事件照樣會發生（通知、背景服務），算進來就等於沒有這個修正。
+  final Set<String> startTypes =
+      hasUnlock ? const {'keyguard_hidden'} : const {'resumed', 'screen_on'};
+  final Set<String> endTypes = hasUnlock
+      ? const {'keyguard_shown', 'screen_off'}
+      : const {'paused', 'screen_off', 'keyguard_shown'};
+
+  final relevant = inWindow
+      .where((e) => startTypes.contains(e.type) || endTypes.contains(e.type))
+      .toList();
+
+  if (relevant.isEmpty) {
+    return LightsOutResult(
+      LightsOutStatus.noEvents,
+      mode: mode,
+    );
   }
 
   // ── 還原「使用中」的區間 ────────────────────────────────────────
@@ -182,16 +278,18 @@ LightsOutResult detectLightsOut(
   DateTime? openStart;
 
   for (final e in relevant) {
-    if (e.isStart) {
+    if (startTypes.contains(e.type)) {
       // 連續兩個 start（切 App 時 resumed 會比前一個 paused 早到）
       // 只認第一個，後面的落在同一段使用裡。
       openStart ??= e.timestamp;
-    } else {
-      // ⚠️ 沒有配對 start 的 end，代表這段使用從視窗之前就開始了。
-      //    這裡當成**一個點**而不是「從 windowStart 一路用到現在」——
-      //    我們沒有那段的證據，硬填會把視窗開頭的空隙整個吃掉。
-      intervals.add(_Interval(openStart ?? e.timestamp, e.timestamp, e.type));
+    } else if (openStart != null) {
+      intervals.add(_Interval(openStart, e.timestamp, e.type));
       openStart = null;
+    } else if (_unmatchedEndIsEvidence(e.type, mode)) {
+      // 沒有配對 start 的 end，但仍然算數——當成**一個點**而不是
+      // 「從 windowStart 一路用到現在」。我們沒有那段的證據，
+      // 硬填會把視窗開頭的空隙整個吃掉。
+      intervals.add(_Interval(e.timestamp, e.timestamp, e.type));
     }
   }
   if (openStart != null) {
@@ -214,15 +312,23 @@ LightsOutResult detectLightsOut(
 
   // ── 找最長的空隙 ────────────────────────────────────────────────
   //
-  // ⚠️ 只看「某一段使用之後」的空隙。視窗開頭到第一段使用之間也是空的，
-  //    但那是「更早的事我們沒查」，不是「他放下了手機」——把它算進來，
-  //    剛授權完的第一次查詢就會回一個憑空生出來的就寢時刻。
+  // ⚠️ 只認**兩段使用之間**的空隙，頭尾都不算：
+  //
+  //  - 視窗開頭到第一段使用之間也是空的，但那是「更早的事我們沒查」，
+  //    不是「他放下了手機」。算進去的話，剛授權完的第一次查詢就會回一個
+  //    憑空生出來的就寢時刻。
+  //  - 最後一段使用到視窗結尾同理：那段安靜**還沒結束**，不構成「睡了
+  //    一晚」的證據。而且視窗結尾是「現在」，它幾乎一定是最長的一段，
+  //    會直接蓋掉真正的那一段。實務上不會因此漏掉——人要開這個 App
+  //    就得先解鎖，所以視窗結尾一定落在一段使用裡。
+  //
+  // 換句話說：**就寢時刻一定是一段「已經結束」的安靜期的起點**，
+  // 而結束的證據就是他後來又把手機拿了起來。
   _Interval? best;
   int bestMinutes = 0;
 
-  for (var i = 0; i < merged.length; i++) {
-    final gapEnd = i + 1 < merged.length ? merged[i + 1].start : windowEnd;
-    final minutes = gapEnd.difference(merged[i].end).inMinutes;
+  for (var i = 0; i + 1 < merged.length; i++) {
+    final minutes = merged[i + 1].start.difference(merged[i].end).inMinutes;
     if (minutes > bestMinutes) {
       bestMinutes = minutes;
       best = merged[i];
@@ -234,6 +340,7 @@ LightsOutResult detectLightsOut(
       LightsOutStatus.noQuietGap,
       eventCount: relevant.length,
       quietMinutes: bestMinutes,
+      mode: mode,
     );
   }
 
@@ -243,5 +350,6 @@ LightsOutResult detectLightsOut(
     quietMinutes: bestMinutes,
     sourceType: best.endType,
     eventCount: relevant.length,
+    mode: mode,
   );
 }
