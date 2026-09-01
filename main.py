@@ -604,6 +604,21 @@ async def get_insights(
     ratio, late_nights, recorded = adherence.late_night_ratio(behavior_rows)
     spread, spread_n = adherence.bedtime_spread_minutes(behavior_rows)
 
+    # 每晚的寵物心情，給 Insights 頁「點某一晚 → 寵物跟著換」用。
+    #
+    # ⚠️ 用 resolve_mood 而不是直接用 map_pet_mood，理由是 /home 的
+    #    status.pet_mood 也走 resolve_mood——兩邊規則不一致的話，有行為
+    #    資料的使用者會在首頁與 Insights 對**同一晚**看到兩隻不同的寵物，
+    #    而那種 bug 不會有任何錯誤訊息。沒有行為資料時 resolve_mood 會
+    #    完全退回 map_pet_mood，所以與打包 asset 的 history 逐字相同。
+    #
+    # ⚠️ 心情不在 Dart 端推。history 沒有 stress/rhr/avg_hr modifier 三欄，
+    #    照 final_quality 硬推會把 anxious 的夜晚畫成 happy。
+    moods = {
+        r["date"]: resolve_mood(_row_for(behavior_rows, r["date"]), r)
+        for r in wearable_rows
+    }
+
     scored = [r for r in wearable_rows if r.get("final_score") is not None]
     distribution: Dict[str, int] = {}
     for r in scored:
@@ -642,6 +657,8 @@ async def get_insights(
             "history": [
                 {
                     "date": r["date"],
+                    "pet_mood": moods[r["date"]][0],
+                    "mood_reason": moods[r["date"]][1],
                     "final_score": r["final_score"],
                     "final_quality": r["final_quality"],
                     "sleep_duration_hours": (

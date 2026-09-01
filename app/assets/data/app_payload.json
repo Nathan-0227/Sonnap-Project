@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-08-31T00:23:39+08:00",
+  "generated_at": "2026-09-01T11:00:10+08:00",
   "session_id": "20260823_001",
   "status": {
     "pet_mood": "happy",
@@ -67,7 +67,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 9.18,
       "sleep_start_time": "2026-06-22T23:41:00+08:00",
-      "wake_time": "2026-06-23T08:57:00+08:00"
+      "wake_time": "2026-06-23T08:57:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-06-24",
@@ -75,7 +77,9 @@
       "final_quality": "Normal",
       "sleep_duration_hours": 10.28,
       "sleep_start_time": "2026-06-24T01:50:00+08:00",
-      "wake_time": "2026-06-24T12:14:00+08:00"
+      "wake_time": "2026-06-24T12:14:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     },
     {
       "date": "2026-06-26",
@@ -83,7 +87,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 7.78,
       "sleep_start_time": "2026-06-26T02:07:00+08:00",
-      "wake_time": "2026-06-26T10:02:00+08:00"
+      "wake_time": "2026-06-26T10:02:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-06-27",
@@ -91,7 +97,9 @@
       "final_quality": "Normal",
       "sleep_duration_hours": 11.47,
       "sleep_start_time": "2026-06-27T02:48:08+08:00",
-      "wake_time": "2026-06-27T10:16:00+08:00"
+      "wake_time": "2026-06-27T10:16:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     },
     {
       "date": "2026-06-28",
@@ -99,7 +107,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 6.47,
       "sleep_start_time": "2026-06-28T02:18:00+08:00",
-      "wake_time": "2026-06-28T08:47:00+08:00"
+      "wake_time": "2026-06-28T08:47:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-06-30",
@@ -107,7 +117,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.82,
       "sleep_start_time": "2026-06-30T01:56:00+08:00",
-      "wake_time": "2026-06-30T10:45:00+08:00"
+      "wake_time": "2026-06-30T10:45:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-01",
@@ -115,7 +127,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.28,
       "sleep_start_time": "2026-07-01T00:52:00+08:00",
-      "wake_time": "2026-07-01T09:19:00+08:00"
+      "wake_time": "2026-07-01T09:19:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-02",
@@ -123,7 +137,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.75,
       "sleep_start_time": "2026-07-02T01:06:00+08:00",
-      "wake_time": "2026-07-02T09:52:00+08:00"
+      "wake_time": "2026-07-02T09:52:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-06",
@@ -131,7 +147,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 7.3,
       "sleep_start_time": "2026-07-06T03:02:00+08:00",
-      "wake_time": "2026-07-06T10:25:00+08:00"
+      "wake_time": "2026-07-06T10:25:00+08:00",
+      "pet_mood": "anxious",
+      "mood_reason": "rhr+avg_hr modifier=-4.0 ≤ -3.0"
     },
     {
       "date": "2026-07-07",
@@ -139,7 +157,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.77,
       "sleep_start_time": "2026-07-07T03:28:00+08:00",
-      "wake_time": "2026-07-07T12:14:00+08:00"
+      "wake_time": "2026-07-07T12:14:00+08:00",
+      "pet_mood": "anxious",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0"
     },
     {
       "date": "2026-07-09",
@@ -147,7 +167,9 @@
       "final_quality": "Poor",
       "sleep_duration_hours": 9.02,
       "sleep_start_time": "2026-07-09T01:06:00+08:00",
-      "wake_time": "2026-07-09T10:24:00+08:00"
+      "wake_time": "2026-07-09T10:24:00+08:00",
+      "pet_mood": "anxious",
+      "mood_reason": "rhr+avg_hr modifier=-3.5300000000000002 ≤ -3.0"
     },
     {
       "date": "2026-07-11",
@@ -155,7 +177,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 9.08,
       "sleep_start_time": "2026-07-10T22:42:00+08:00",
-      "wake_time": "2026-07-11T07:51:00+08:00"
+      "wake_time": "2026-07-11T07:51:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-12",
@@ -163,7 +187,9 @@
       "final_quality": "Poor",
       "sleep_duration_hours": 12.75,
       "sleep_start_time": "2026-07-12T02:39:00+08:00",
-      "wake_time": "2026-07-12T15:29:00+08:00"
+      "wake_time": "2026-07-12T15:29:00+08:00",
+      "pet_mood": "anxious",
+      "mood_reason": "rhr+avg_hr modifier=-3.0 ≤ -3.0"
     },
     {
       "date": "2026-07-17",
@@ -171,7 +197,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 6.73,
       "sleep_start_time": "2026-07-17T03:09:00+08:00",
-      "wake_time": "2026-07-17T09:55:00+08:00"
+      "wake_time": "2026-07-17T09:55:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-19",
@@ -179,7 +207,9 @@
       "final_quality": "Normal",
       "sleep_duration_hours": 11.03,
       "sleep_start_time": "2026-07-19T04:14:00+08:00",
-      "wake_time": "2026-07-19T15:21:00+08:00"
+      "wake_time": "2026-07-19T15:21:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     },
     {
       "date": "2026-07-20",
@@ -187,7 +217,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 6.85,
       "sleep_start_time": "2026-07-20T04:20:00+08:00",
-      "wake_time": "2026-07-20T11:45:00+08:00"
+      "wake_time": "2026-07-20T11:45:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-21",
@@ -195,7 +227,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.45,
       "sleep_start_time": "2026-07-21T03:58:00+08:00",
-      "wake_time": "2026-07-21T12:53:00+08:00"
+      "wake_time": "2026-07-21T12:53:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-23",
@@ -203,7 +237,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 6.02,
       "sleep_start_time": "2026-07-23T04:53:00+08:00",
-      "wake_time": "2026-07-23T11:00:00+08:00"
+      "wake_time": "2026-07-23T11:00:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-07-25",
@@ -211,7 +247,9 @@
       "final_quality": "Normal",
       "sleep_duration_hours": 7.95,
       "sleep_start_time": "2026-07-25T03:15:00+08:00",
-      "wake_time": "2026-07-25T12:00:00+08:00"
+      "wake_time": "2026-07-25T12:00:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     },
     {
       "date": "2026-07-27",
@@ -219,7 +257,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.05,
       "sleep_start_time": "2026-07-27T04:01:00+08:00",
-      "wake_time": "2026-07-27T12:17:00+08:00"
+      "wake_time": "2026-07-27T12:17:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-02",
@@ -227,7 +267,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 9.13,
       "sleep_start_time": "2026-08-02T02:13:00+08:00",
-      "wake_time": "2026-08-02T11:21:00+08:00"
+      "wake_time": "2026-08-02T11:21:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-04",
@@ -235,7 +277,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 8.88,
       "sleep_start_time": "2026-08-04T01:40:00+08:00",
-      "wake_time": "2026-08-04T10:42:00+08:00"
+      "wake_time": "2026-08-04T10:42:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-06",
@@ -243,7 +287,9 @@
       "final_quality": "Poor",
       "sleep_duration_hours": 12.12,
       "sleep_start_time": "2026-08-06T03:22:00+08:00",
-      "wake_time": "2026-08-06T15:29:00+08:00"
+      "wake_time": "2026-08-06T15:29:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor"
     },
     {
       "date": "2026-08-07",
@@ -251,7 +297,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 7.08,
       "sleep_start_time": "2026-08-07T03:59:00+08:00",
-      "wake_time": "2026-08-07T11:25:00+08:00"
+      "wake_time": "2026-08-07T11:25:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-09",
@@ -259,7 +307,9 @@
       "final_quality": "Poor",
       "sleep_duration_hours": 5.35,
       "sleep_start_time": "2026-08-09T01:44:00+08:00",
-      "wake_time": "2026-08-09T07:53:00+08:00"
+      "wake_time": "2026-08-09T07:53:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor"
     },
     {
       "date": "2026-08-17",
@@ -267,7 +317,9 @@
       "final_quality": "Normal",
       "sleep_duration_hours": 5.78,
       "sleep_start_time": "2026-08-17T02:24:00+08:00",
-      "wake_time": "2026-08-17T08:37:00+08:00"
+      "wake_time": "2026-08-17T08:37:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     },
     {
       "date": "2026-08-18",
@@ -275,7 +327,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 7.03,
       "sleep_start_time": "2026-08-18T04:56:00+08:00",
-      "wake_time": "2026-08-18T11:59:00+08:00"
+      "wake_time": "2026-08-18T11:59:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-21",
@@ -283,7 +337,9 @@
       "final_quality": "Poor",
       "sleep_duration_hours": 10.65,
       "sleep_start_time": "2026-08-20T22:31:00+08:00",
-      "wake_time": "2026-08-21T09:38:00+08:00"
+      "wake_time": "2026-08-21T09:38:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor"
     },
     {
       "date": "2026-08-22",
@@ -291,7 +347,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 9.37,
       "sleep_start_time": "2026-08-22T06:41:00+08:00",
-      "wake_time": "2026-08-22T16:12:00+08:00"
+      "wake_time": "2026-08-22T16:12:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     },
     {
       "date": "2026-08-23",
@@ -299,7 +357,9 @@
       "final_quality": "Good",
       "sleep_duration_hours": 6.4,
       "sleep_start_time": "2026-08-22T22:32:00+08:00",
-      "wake_time": "2026-08-23T04:56:00+08:00"
+      "wake_time": "2026-08-23T04:56:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good"
     }
   ],
   "data_sources": [

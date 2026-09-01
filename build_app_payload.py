@@ -408,9 +408,27 @@ def build_payload(target_date=None):
     #    值是 ISO8601 (+08:00) 字串，與 metrics 同一個來源（features），
     #    所以兩邊逐字相同，不會有「首頁跟報表對不上」的問題。
     #    沒戴錶的夜晚 features 裡沒有該日，.get() 會回 None——前端要能處理 null。
+    #
+    # ⚠️ pet_mood / mood_reason 是 2026-09-01 補上的，**必須在這裡算，
+    #    不能讓 Dart 端照 final_quality 自己推**：anxious 是 map_pet_mood()
+    #    用 Tier3 的 stress_modifier 與 rhr+avg_hr_modifier 做的覆寫，
+    #    那三欄不在 history 裡。Dart 端硬推會（a）把 anxious 的夜晚畫成 happy，
+    #    （b）讓 QUALITY_TO_MOOD 有第二個定義處。
+    #    這裡直接餵整列 quality row（modifier 三欄都在），
+    #    與 status.pet_mood 走的是同一個函式、同一份資料。
+    #
+    # ⚠️ 窗格夾在目標夜晚**之前**（不是無條件取最後 30 列）。
+    #    先前是 quality_rows[-HISTORY_NIGHTS:]，給了 --date 就會出現
+    #    「status 是 7 月某晚、history[-1] 是 8 月最後一晚」——
+    #    兩邊的 pet_mood 因此指向不同的夜晚。預設（不給 --date）取到的
+    #    列與先前完全相同，所以既有輸出不受影響。
+    night_index = next(
+        i for i, row in enumerate(quality_rows) if row["date"] == night_iso
+    )
     history = []
-    for row in quality_rows[-HISTORY_NIGHTS:]:
+    for row in quality_rows[max(0, night_index + 1 - HISTORY_NIGHTS): night_index + 1]:
         feat = by_date_features.get(row["date"], {})
+        row_mood, row_mood_reason = map_pet_mood(row)
         history.append(
             {
                 "date": row["date"],
@@ -419,6 +437,8 @@ def build_payload(target_date=None):
                 "sleep_duration_hours": feat.get("sleep_duration_hours"),
                 "sleep_start_time": feat.get("sleep_start_time"),
                 "wake_time": feat.get("wake_time"),
+                "pet_mood": row_mood,
+                "mood_reason": row_mood_reason,
             }
         )
 
