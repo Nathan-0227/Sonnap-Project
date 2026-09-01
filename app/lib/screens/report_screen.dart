@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/sleep_repository.dart';
+import '../services/usage_stats.dart';
 
 class ReportScreen extends StatefulWidget {
   final SleepRepository repository;
 
+  /// 手機使用時間的來源。可以注入，測試才不必依賴真的原生 channel。
+  final UsageStatsService usageStats;
+
   const ReportScreen({
     super.key,
+    this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
   });
 
@@ -17,7 +22,8 @@ class ReportScreen extends StatefulWidget {
   State<ReportScreen> createState() => _ReportScreenState();
 }
 
-class _ReportScreenState extends State<ReportScreen> {
+class _ReportScreenState extends State<ReportScreen>
+    with WidgetsBindingObserver {
   // ============================================================
   // COLORS
   // ============================================================
@@ -51,11 +57,51 @@ class _ReportScreenState extends State<ReportScreen> {
   // INIT
   // ============================================================
 
+  /// 手機使用時間。與睡眠資料完全獨立——它可能失敗（沒授權、非 Android），
+  /// 但那不該影響整頁的其他區塊，所以不併進 `_sessionFuture`。
+  UsageStatsResult? _usage;
+
   @override
   void initState() {
     super.initState();
+    // 監聽 App 回到前景。理由見 didChangeAppLifecycleState。
+    WidgetsBinding.instance.addObserver(this);
     _sessionFuture = widget.repository.load();
+    _loadUsage();
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// App 回到前景時重新查一次手機使用時間。
+  ///
+  /// ⚠️ **這一段是必要的，不是最佳化。** 授權「使用情況存取」一定要跳出 App
+  /// 到系統設定頁，而 `openSettings()` 送出 intent 之後**立刻返回**——它不會
+  /// 等使用者操作完，也拿不到使用者按了什麼。
+  ///
+  /// 第一版就是在 `openSettings()` 之後直接重查，結果實機上授權完回到 App，
+  /// 卡片還是顯示「需要權限」——因為那次重查發生在使用者還沒點下去的時候。
+  /// 單元測試看不出這個問題（測試裡沒有「離開 App 再回來」這件事），
+  /// 是插上手機實際跑一遍才發現的。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _loadUsage();
+    }
+  }
+
+  Future<void> _loadUsage() async {
+    final result = await widget.usageStats.queryYesterday();
+    if (!mounted) return;
+    setState(() => _usage = result);
+  }
+
+  /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
+  Future<void> _requestUsageAccess() => widget.usageStats.openSettings();
 
   // ============================================================
   // BUILD
@@ -974,6 +1020,15 @@ class _ReportScreenState extends State<ReportScreen> {
   // DISTRACTIONS
   // ============================================================
 
+  /// 手機使用時間。
+  ///
+  /// ⚠️ **標題刻意不寫「Sleep Distractions」。** 原生端用的是
+  /// `queryUsageStats(INTERVAL_DAILY)`，拿到的是**整天的前景總時間**，
+  /// 不是睡前那一小時——日彙總沒有時間軸，切不出來。把整天的數字放在
+  /// 「睡前分心」的標題底下，就是拿一個量去冒充另一個量。
+  ///
+  /// 要真的做到睡前歸因得改用 `queryEvents()` 讀逐筆事件（那同時也是
+  /// `lights_out_at` 的來源）。在那之前，這張卡誠實地講它是什麼。
   Widget _buildDistractionsCard(
     SleepSession session,
   ) {
@@ -992,7 +1047,7 @@ class _ReportScreenState extends State<ReportScreen> {
               SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Top Sleep Distractions',
+                  'Phone Use Yesterday',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -1001,24 +1056,88 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
                 ),
               ),
-              Icon(
-                Icons.info_outline_rounded,
-                color:
-                    Color(0xFF8296B7),
-                size: 15,
-              ),
             ],
+          ),
+
+          const SizedBox(height: 3),
+
+          const Text(
+            'Daily totals. Not yet narrowed to the hour before bed.',
+            style: TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+            ),
           ),
 
           const SizedBox(height: 12),
 
-          const _NoDataMessage(
-            message:
-                'No phone activity data is available in this sleep session.',
-          ),
+          _buildUsageBody(),
         ],
       ),
     );
+  }
+
+  Widget _buildUsageBody() {
+    final usage = _usage;
+
+    if (usage == null) {
+      return const _NoDataMessage(message: 'Reading phone usage...');
+    }
+
+    switch (usage.status) {
+      case UsageStatsStatus.unsupported:
+        return const _NoDataMessage(
+          message: 'Phone usage tracking is only available on Android.',
+        );
+
+      case UsageStatsStatus.permissionRequired:
+        // ⚠️ PACKAGE_USAGE_STATS 是特殊權限，跳不出系統的授權對話框——
+        // 使用者一定要自己走一趟設定頁，所以這裡要給一個按鈕帶路，
+        // 不能只寫「沒有權限」然後把人丟在原地。
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _NoDataMessage(
+              message:
+                  'Sonnap needs Usage Access to see which apps keep you up. '
+                  'Android asks for this in system settings, not in the app.',
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _requestUsageAccess,
+                icon: const Icon(Icons.settings_rounded, size: 16),
+                label: const Text('Open Usage Access settings'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: purpleColor),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      case UsageStatsStatus.empty:
+        return const _NoDataMessage(
+          message: 'No app activity was recorded yesterday.',
+        );
+
+      case UsageStatsStatus.failed:
+        return _NoDataMessage(
+          message: 'Could not read phone usage: ${usage.error ?? "unknown error"}',
+        );
+
+      case UsageStatsStatus.ok:
+        final busiest = usage.apps.first.minutes;
+        return Column(
+          children: [
+            for (final app in usage.apps)
+              _UsageRow(app: app, busiestMinutes: busiest),
+          ],
+        );
+    }
   }
 
   // ============================================================
@@ -2291,5 +2410,74 @@ class SleepTrendPainter
             history ||
         oldDelegate.selectedIndex !=
             selectedIndex;
+  }
+}
+/// 一列 App 使用時間：名稱、長條、分鐘數。
+///
+/// 長條長度是「相對於當天用最久的那個 App」，不是相對於 24 小時——
+/// 後者會讓所有長條都短到看不出差別。這是相對比較，不是絕對比例。
+class _UsageRow extends StatelessWidget {
+  final AppUsage app;
+  final int busiestMinutes;
+
+  const _UsageRow({required this.app, required this.busiestMinutes});
+
+  String _format(int minutes) {
+    if (minutes < 60) return '${minutes}m';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return m == 0 ? '${h}h' : '${h}h ${m}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = busiestMinutes <= 0
+        ? 0.0
+        : (app.minutes / busiestMinutes).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  app.appName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                _format(app.minutes),
+                style: const TextStyle(
+                  color: Color(0xFF8296B7),
+                  fontSize: 10,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 5,
+              backgroundColor: const Color(0xFF0A1934),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF7657FF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
