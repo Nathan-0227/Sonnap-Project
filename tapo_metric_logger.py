@@ -68,6 +68,11 @@ MIN_BLOB_PX = 4              # 小於這個不算一「塊」（純粹避免數�
 # MOG2 一開始沒有背景模型，整幀都會被判成前景（實測第 0 幀 = 100% 畫面）。
 # 這段時間照樣記錄，但標成 warmup，事後一律排除。
 WARMUP_SECONDS = 90
+# ROI 要從「動作實際發生在哪裡」推出來。CSV 只記 bbox（矩形）不夠——
+# 實測那樣糊掉之後熱區沒有自然邊界，百分位一動 ROI 就從 19% 跳到 72%。
+# 所以另外在記憶體裡累積**真正的遮罩**，結束時存成 .npy。
+# 每幀成本是一次陣列加法，CSV 大小完全不受影響。
+HEAT_MIN_FRAC = 0.01         # 最大區塊要 ≥ 這個比例才進熱區圖（雜訊不算）
 
 FLUSH_EVERY = 100            # 每幾列 flush 一次，斷電時損失有限
 
@@ -143,6 +148,8 @@ def run(url, out_path, selftest_seconds=None):
     reconnects = 0
     next_due = time.time()
     warm_from = time.time()      # 重連之後背景模型要重建，這個會跟著重設
+    heat = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
+    heat_frames = 0
 
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         # 檔頭把參數寫進去——這樣這份 CSV 自己就說得出它是怎麼產生的，
@@ -224,9 +231,10 @@ def run(url, out_path, selftest_seconds=None):
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
             fg_px = int(cv2.countNonZero(mask))
 
-            n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+            n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
             blobs = 0
             max_px = max_x = max_y = max_w = max_h = 0
+            max_label = -1
             for i in range(1, n):                       # 第 0 個是背景
                 area = int(stats[i, cv2.CC_STAT_AREA])
                 if area < MIN_BLOB_PX:
@@ -234,10 +242,17 @@ def run(url, out_path, selftest_seconds=None):
                 blobs += 1
                 if area > max_px:
                     max_px = area
+                    max_label = i
                     max_x = int(stats[i, cv2.CC_STAT_LEFT])
                     max_y = int(stats[i, cv2.CC_STAT_TOP])
                     max_w = int(stats[i, cv2.CC_STAT_WIDTH])
                     max_h = int(stats[i, cv2.CC_STAT_HEIGHT])
+
+            # 只有夠大的區塊才進熱區圖，而且加的是**這一塊的實際形狀**，
+            # 不是它的外接矩形 —— 這是 bbox 版做不到的。
+            if max_px / (WIDTH * HEIGHT) >= HEAT_MIN_FRAC:
+                heat[labels == max_label] += 1.0
+                heat_frames += 1
 
             writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
                              f"{mean_now:.2f}", raw_px, fg_px, blobs,
@@ -247,6 +262,10 @@ def run(url, out_path, selftest_seconds=None):
                 fh.flush()
 
     cap.release()
+    if heat_frames:
+        heat_path = out_path.with_name(out_path.stem + "_heat.npy")
+        np.save(heat_path, heat)
+        print(f"● 熱區圖 {heat_path.name}（{heat_frames} 幀累積）")
     elapsed = (datetime.now() - started).total_seconds()
     print(f"\n● 結束：{rows} 列 / {elapsed / 3600:.2f} 小時"
           f"（照明否決 {skipped_illum} 列、重連 {reconnects} 次）")
