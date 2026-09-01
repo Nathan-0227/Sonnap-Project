@@ -92,12 +92,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
             final session = snapshot.data!;
 
-            print('===== REPORT DEBUG =====');
-print('finalScore: ${session.scoring.finalScore}');
-print('scoreAsInt: ${session.scoring.scoreAsInt}');
-print('finalQuality: ${session.scoring.finalQuality}');
-print('history length: ${session.history.length}');
-print('========================');
+            // ⚠️ 這裡原本有一組 print()。它們在 build() 裡面，所以**每次重繪
+            // 都會印一次**——捲動、切分頁、改期間都會觸發，logcat 會被洗掉。
+            // 資料載入的摘要現在由 sleep_repository.dart 印一行就好。
 
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -1089,7 +1086,38 @@ print('========================');
                     'Data source',
               ),
             ),
+
+          _buildDeliveryRow(),
         ],
+      ),
+    );
+  }
+
+  /// 這份資料是「即時從後端拿的」還是「打包在 App 裡的」。
+  ///
+  /// ⚠️ **這一列不能省。** App 在後端連不上時會自動退回打包的 asset
+  /// （見 `FallbackSleepRepository`），那份資料是真的、但可能已經過期。
+  /// 不講出來的話，使用者會以為看到的是即時資料——「安靜地顯示過期資料」
+  /// 比「明確地報錯」更糟，那正是本專案一路以來最想避免的失敗模式。
+  ///
+  /// 完全沒設定 API（沒給 `--dart-define=SONNAP_API_BASE`）時不顯示這一列：
+  /// 那是預期中的單機模式，不是降級。
+  Widget _buildDeliveryRow() {
+    final repo = widget.repository;
+    if (repo is! FallbackSleepRepository) return const SizedBox.shrink();
+
+    final live = repo.lastSource == SleepDataSource.api;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: _TrackingSourceRow(
+        icon: live
+            ? Icons.cloud_done_rounded
+            : Icons.cloud_off_rounded,
+        title: live ? 'Live from backend' : 'Bundled with the app',
+        subtitle: live
+            ? 'Fetched just now'
+            : 'Backend unreachable - this data may be out of date',
       ),
     );
   }

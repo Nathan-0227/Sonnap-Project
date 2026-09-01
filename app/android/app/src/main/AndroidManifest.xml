@@ -1,5 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <!--
+      INTERNET：讓 App 打得到後端。
+      ⚠️ 這一條非加不可，而且很容易漏：debug 與 profile 的 manifest 裡有
+      Flutter 自動加的 INTERNET（給 hot reload 用），所以「開發時連得上、
+      release 版連不上」是一個只在正式建置才出現的故障。
+      在此之前 release 版就是沒有這一條，App 完全無法連線。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      PACKAGE_USAGE_STATS：讀取手機各 App 的前景使用時間（睡前分心分析用）。
+      ⚠️ 這不是一般權限，requestPermissions() 要不到——使用者必須到系統
+      「設定 → 使用情況存取」手動開啟。UsageStatsService.openUsageAccessSettings()
+      會把人帶到那一頁。
+    -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
     <application
         android:label="Sonnap"
         android:name="${applicationName}"
