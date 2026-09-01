@@ -52,8 +52,20 @@ class UsageStatsService(private val context: Context) {
                 Context.USAGE_STATS_SERVICE
             ) as UsageStatsManager
 
-        val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
+        // ⚠️ 用 queryAndAggregateUsageStats 而不是 queryUsageStats。
+        //
+        // `queryUsageStats(INTERVAL_DAILY, ...)` 回傳的是一串**原始 bucket**，
+        // 同一個 package 只要跨到多個 bucket 就會出現好幾筆，而每一筆的
+        // totalTimeInForeground 只是那個 bucket 的片段。不自己加總的話：
+        //
+        //   - 同一個 App 在畫面上重複出現（實機看到 One UI Home 兩列、
+        //     Google 兩列——那不是兩個不同的 package，是同一個的不同 bucket）
+        //   - 每一筆的數字都遠小於真實使用時間，跟系統「數位健康」對不上
+        //     （實機：Sonnap 顯示 Google 10 分鐘，數位健康顯示的量級完全不同）
+        //
+        // `queryAndAggregateUsageStats` 是專門為此設計的：回傳
+        // Map<packageName, UsageStats>，已經依 package 把區間內的量加總好。
+        val aggregated = usageStatsManager.queryAndAggregateUsageStats(
             startTime,
             endTime
         )
@@ -61,39 +73,40 @@ class UsageStatsService(private val context: Context) {
         val packageManager = context.packageManager
         val launchers = launcherPackages()
 
-        return stats
+        return aggregated.values
             .filter { it.totalTimeInForeground > 0 }
-            .mapNotNull { usage ->
+            .map { usage ->
 
                 val packageName = usage.packageName
 
-                try {
-                    val applicationInfo =
-                        packageManager.getApplicationInfo(
-                            packageName,
-                            0
+                // ⚠️ 查不到名稱時**退回套件名，不要把整筆丟掉**。
+                //
+                // 前一版是 `catch { null }` + mapNotNull，於是每一個查不到
+                // 名稱的 App 都被安靜刪除，清單看起來正常但漏掉了重點
+                // （見 AndroidManifest 的 <queries> 註解）。
+                // <queries> 補上之後這種情況應該極少，但真的發生時，
+                // 顯示 "com.某個.套件" 遠好過假裝那段使用時間不存在。
+                val appName = try {
+                    packageManager
+                        .getApplicationLabel(
+                            packageManager.getApplicationInfo(packageName, 0)
                         )
-
-                    val appName =
-                        packageManager.getApplicationLabel(
-                            applicationInfo
-                        ).toString()
-
-                    mapOf(
-                        "package_name" to packageName,
-                        "app_name" to appName,
-                        "usage_minutes" to
-                            (usage.totalTimeInForeground / 60000L).toInt(),
-                        // 是不是桌面啟動器。實機實測它永遠排第一——只要人停在
-                        // 主畫面就累積它的前景時間，但那不是「讓你熬夜的 App」。
-                        // 這裡只標記、不過濾：原生端提供事實，
-                        // 「要不要顯示」是產品決定，留在 Dart 端。
-                        "is_launcher" to launchers.contains(packageName),
-                    )
-
+                        .toString()
                 } catch (_: Exception) {
-                    null
+                    packageName
                 }
+
+                mapOf(
+                    "package_name" to packageName,
+                    "app_name" to appName,
+                    "usage_minutes" to
+                        (usage.totalTimeInForeground / 60000L).toInt(),
+                    // 是不是桌面啟動器。實機實測它永遠排第一——只要人停在
+                    // 主畫面就累積它的前景時間，但那不是「讓你熬夜的 App」。
+                    // 這裡只標記、不過濾：原生端提供事實，
+                    // 「要不要顯示」是產品決定，留在 Dart 端。
+                    "is_launcher" to launchers.contains(packageName),
+                )
             }
             .filter {
                 (it["usage_minutes"] as Int) > 0

@@ -16,6 +16,30 @@
     -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
+    <!--
+      套件可見性（Android 11 / API 30 起）。
+
+      ⚠️ 沒有這一段，睡前分心分析會**安靜地少掉最重要的那幾個 App**。
+      targetSdk 30 以上的 App 預設只看得到少數套件，其餘一律當作不存在：
+      `getApplicationInfo()` 直接拋 NameNotFoundException。
+
+      實機實測：系統「數位健康」顯示今天抖音 2h9m、Instagram 33m、
+      YouTube 32m，Sonnap 卻一個都沒列出來——因為那三個都被可見性擋掉，
+      而原生端把查不到名稱的項目安靜丟棄了。剩下的清單只有系統 App
+      與 Sonnap 自己，看起來「有資料」，其實漏掉了全部重點。
+
+      用 <queries> 宣告「所有出現在啟動器裡的 App」而不是
+      QUERY_ALL_PACKAGES 權限：範圍剛好夠用（我們只需要使用者自己開得起來
+      的 App），而且 QUERY_ALL_PACKAGES 在 Google Play 是受限權限、
+      要額外聲明理由才能上架。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:label="Sonnap"
         android:name="${applicationName}"

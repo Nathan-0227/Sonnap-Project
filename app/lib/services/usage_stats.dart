@@ -39,13 +39,18 @@ class AppUsage {
 ///
 /// ## 為什麼需要這一步
 ///
-/// 實機上同一個名稱會出現兩次以上：Samsung 的桌面有兩個 package 都叫
-/// 「One UI Home」，Google 搜尋與 Play 服務都叫「Google」。畫面上就變成
-/// 「One UI Home 24m」「One UI Home 12m」兩列——看起來像程式壞了。
+/// 實機上曾出現「One UI Home 24m」「One UI Home 12m」兩列，看起來像程式壞了。
 ///
-/// 依**顯示名稱**合併而不是 package：使用者認得的是名稱，兩個都叫 Google
-/// 的東西對他而言就是同一個。代價是技術上不同的元件被算在一起，
-/// 但這張卡問的是「你花時間在什麼上面」，那個層級才是對的。
+/// ⚠️ 當時我判斷成「兩個不同的 package 共用同一個顯示名稱」，**那個診斷是錯的**。
+/// 真正的原因是原生端用了 `queryUsageStats`，它回傳的是原始 bucket，同一個
+/// package 跨多個 bucket 就會出現好幾筆。改用 `queryAndAggregateUsageStats`
+/// 之後那個重複已經在源頭消失了。
+///
+/// 這一層仍然留著，因為「不同 package 真的共用顯示名稱」是會發生的
+/// （Google 搜尋與 Play 服務都叫「Google」）。依**顯示名稱**合併而不是
+/// package：使用者認得的是名稱，兩個都叫 Google 的東西對他而言就是同一個。
+/// 代價是技術上不同的元件被算在一起，但這張卡問的是「你花時間在什麼上面」，
+/// 那個層級才是對的。
 List<AppUsage> mergeByLabel(Iterable<AppUsage> apps) {
   final merged = <String, AppUsage>{};
 
@@ -107,8 +112,8 @@ class UsageStatsResult {
 ///
 /// ## ⚠️ 它給得出什麼、給不出什麼
 ///
-/// 原生端用的是 `queryUsageStats(INTERVAL_DAILY, ...)`，回傳的是
-/// **每天每個 App 的前景總分鐘數**。所以：
+/// 原生端用的是 `queryAndAggregateUsageStats()`，回傳的是
+/// **一段期間內每個 App 的前景總分鐘數**。所以：
 ///
 /// - ✅ 「昨天你最常用哪些 App」——算得出來
 /// - ❌ 「睡前 60 分鐘用了什麼」——**算不出來**，日彙總沒有時間軸
@@ -119,6 +124,29 @@ class UsageStatsResult {
 /// 那是 Kotlin 那邊要新增的方法。
 ///
 /// **在那之前，畫面上不可以把日彙總說成「睡前使用」**——那是兩個不同的量。
+///
+/// ## ⚠️ 這個數字不會跟系統「數位健康」一樣，那是正常的
+///
+/// 實機對照（2026-08-31，兩次量測差約 20 分鐘）：
+///
+/// | | 數位健康 | Sonnap |
+/// |---|---|---|
+/// | 抖音 | 2h9m | 2h28m |
+/// | YouTube | 32m | 35m |
+/// | Instagram | 33m | 1h28m |
+///
+/// 兩者量的**不是同一件事**：`totalTimeInForeground` 是「App 的 Activity
+/// 處於前景」，數位健康量的是「螢幕亮著且已解鎖」。App 停在前景但螢幕關掉、
+/// 或人離開去做別的事，前者照算、後者不算。
+///
+/// → 報告一律寫成 **proxy（替代測量）**，比照本專案對 `sleep_efficiency`
+///   與 `movement_sample_minutes` 的既有處理標準。不要寫成「使用時間」。
+///
+/// ## ⚠️ 「昨天」的邊界是近似的
+///
+/// `queryAndAggregateUsageStats` 會把**與查詢區間有重疊的**日 bucket 全部
+/// 算進來，而系統的日 bucket 不保證切在午夜。所以「昨天」可能沾到一點今天。
+/// 要精確的區間同樣得靠 `queryEvents()`。
 ///
 /// ## 權限
 ///
@@ -164,7 +192,7 @@ class UsageStatsService {
 
   /// 查 [start] 到 [end] 之間的前景使用時間，已依分鐘數遞減排序。
   ///
-  /// ⚠️ `queryUsageStats` 是**以日為單位的桶**，傳進去的區間只是用來挑桶子，
+  /// ⚠️ 系統是**以日為單位存桶**的，傳進去的區間只是用來挑桶子，
   /// 不會把某一天切成幾個小時。要一小時的解析度得改用 `queryEvents()`。
   Future<UsageStatsResult> query({
     required DateTime start,
@@ -211,8 +239,10 @@ class UsageStatsService {
 
   /// 昨天一整天。
   ///
-  /// ⚠️ 刻意用「昨天」而不是「今天」：`INTERVAL_DAILY` 的當天桶還在累積中，
-  /// 早上看到的數字會少得莫名其妙。昨天的桶已經結算完了。
+  /// ⚠️ 刻意用「昨天」而不是「今天」，有兩個理由：
+  /// 1. 當天的桶還在累積中，數字會隨著使用一直變，跨天比較沒有意義
+  /// 2. 這張卡跟 Insights 上「昨晚的睡眠」放在一起，期間要對得上——
+  ///    配今天的手機使用等於把兩個不同時期的東西並排
   Future<UsageStatsResult> queryYesterday({int limit = 5}) {
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
