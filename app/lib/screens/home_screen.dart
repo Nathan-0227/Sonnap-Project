@@ -18,9 +18,23 @@ import '../widgets/sleep_streak_card.dart';
 class HomeScreen extends StatefulWidget {
   final SleepRepository repository;
 
+  /// 目標就寢時間。**擁有者是 `main.dart` 的 `_MainPageState`**，這裡只是轉交
+  /// 給 HeaderCard。⚠️ 不要在這個畫面自己存一份——Settings 也顯示同一個值，
+  /// 兩邊各存一份就是先前那個「改了 Settings 首頁倒數不動」的 bug。
+  final TimeOfDay targetBedtime;
+  final bool reminderOn;
+
+  /// 使用者在首頁改了就寢時間／提醒開關時往上通知，由 `main.dart` 統一更新。
+  final ValueChanged<TimeOfDay>? onBedtimeChanged;
+  final ValueChanged<bool>? onReminderChanged;
+
   const HomeScreen({
     super.key,
     this.repository = const AssetSleepRepository(),
+    this.targetBedtime = const TimeOfDay(hour: 23, minute: 30),
+    this.reminderOn = true,
+    this.onBedtimeChanged,
+    this.onReminderChanged,
   });
 
   @override
@@ -183,23 +197,15 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
+          // 就寢時間與提醒開關的值來自 main.dart，改動也往上回報。
+          // Settings 頁顯示的是同一份 state，所以兩邊永遠一致。
           HeaderCard(
             username: "Jeremy",
             message: display.headerMessage,
-            initialReminderOn: true,
-            initialTargetBedtime: const TimeOfDay(hour: 23, minute: 30),
-            onReminderChanged: (value) {
-              debugPrint("Reminder: $value");
-              // Save to local storage or backend later.
-            },
-            onBedtimeChanged: (value) {
-              debugPrint(
-                "Bedtime: "
-                "${value.hour.toString().padLeft(2, '0')}:"
-                "${value.minute.toString().padLeft(2, '0')}",
-              );
-              // Save to local storage or backend later.
-            },
+            initialReminderOn: widget.reminderOn,
+            initialTargetBedtime: widget.targetBedtime,
+            onReminderChanged: widget.onReminderChanged,
+            onBedtimeChanged: widget.onBedtimeChanged,
           ),
 
           SleepStreakCard(

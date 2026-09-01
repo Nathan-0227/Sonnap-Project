@@ -1,15 +1,22 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/sleep_repository.dart';
+import '../services/usage_stats.dart';
+import '../widgets/pet_mood_animation.dart';
 
 class ReportScreen extends StatefulWidget {
   final SleepRepository repository;
 
+  /// 手機使用時間的來源。可以注入，測試才不必依賴真的原生 channel。
+  final UsageStatsService usageStats;
+
   const ReportScreen({
     super.key,
+    this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
   });
 
@@ -17,7 +24,8 @@ class ReportScreen extends StatefulWidget {
   State<ReportScreen> createState() => _ReportScreenState();
 }
 
-class _ReportScreenState extends State<ReportScreen> {
+class _ReportScreenState extends State<ReportScreen>
+    with WidgetsBindingObserver {
   // ============================================================
   // COLORS
   // ============================================================
@@ -39,23 +47,77 @@ class _ReportScreenState extends State<ReportScreen> {
 
   int? _selectedTrendIndex;
 
+  /// 趨勢圖可選的期間。**0 代表「全部」**。
+  ///
+  /// ⚠️ 沒有「全部」這個選項時，payload 裡有 30 晚、卻只有最近 30 個**日曆天**
+  /// 之內的看得到——實測那是 12 晚，另外 18 晚在 App 裡永遠打不開。
+  /// 而 `anxious` 的四晚全部落在那 18 晚裡，所以那個心情根本無法被看見。
+  ///
+  /// 這是「資料在 payload 裡但使用者到不了」的缺口，不只是 demo 不方便。
   static const List<int> _periodOptions = [
     1,
     7,
     14,
     21,
     30,
+    0,
   ];
+
+  /// 0 是「全部」的哨兵值，不要印成「0 Days」。
+  static String _periodLabel(int days) {
+    if (days == 0) return 'All nights';
+    return '$days ${days == 1 ? 'Day' : 'Days'}';
+  }
 
   // ============================================================
   // INIT
   // ============================================================
 
+  /// 手機使用時間。與睡眠資料完全獨立——它可能失敗（沒授權、非 Android），
+  /// 但那不該影響整頁的其他區塊，所以不併進 `_sessionFuture`。
+  UsageStatsResult? _usage;
+
   @override
   void initState() {
     super.initState();
+    // 監聽 App 回到前景。理由見 didChangeAppLifecycleState。
+    WidgetsBinding.instance.addObserver(this);
     _sessionFuture = widget.repository.load();
+    _loadUsage();
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// App 回到前景時重新查一次手機使用時間。
+  ///
+  /// ⚠️ **這一段是必要的，不是最佳化。** 授權「使用情況存取」一定要跳出 App
+  /// 到系統設定頁，而 `openSettings()` 送出 intent 之後**立刻返回**——它不會
+  /// 等使用者操作完，也拿不到使用者按了什麼。
+  ///
+  /// 第一版就是在 `openSettings()` 之後直接重查，結果實機上授權完回到 App，
+  /// 卡片還是顯示「需要權限」——因為那次重查發生在使用者還沒點下去的時候。
+  /// 單元測試看不出這個問題（測試裡沒有「離開 App 再回來」這件事），
+  /// 是插上手機實際跑一遍才發現的。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _loadUsage();
+    }
+  }
+
+  Future<void> _loadUsage() async {
+    final result = await widget.usageStats.queryYesterday();
+    if (!mounted) return;
+    setState(() => _usage = result);
+  }
+
+  /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
+  Future<void> _requestUsageAccess() => widget.usageStats.openSettings();
 
   // ============================================================
   // BUILD
@@ -92,12 +154,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
             final session = snapshot.data!;
 
-            print('===== REPORT DEBUG =====');
-print('finalScore: ${session.scoring.finalScore}');
-print('scoreAsInt: ${session.scoring.scoreAsInt}');
-print('finalQuality: ${session.scoring.finalQuality}');
-print('history length: ${session.history.length}');
-print('========================');
+            // ⚠️ 這裡原本有一組 print()。它們在 build() 裡面，所以**每次重繪
+            // 都會印一次**——捲動、切分頁、改期間都會觸發，logcat 會被洗掉。
+            // 資料載入的摘要現在由 sleep_repository.dart 印一行就好。
 
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -612,80 +671,97 @@ print('========================');
   // SELECTED TREND INFO
   // ============================================================
 
+  /// 選到趨勢圖上某一晚時顯示的資訊條。
+  ///
+  /// ## 為什麼這裡要放寵物
+  ///
+  /// 首頁只顯示**最新一晚**的心情，所以四種心情裡使用者一次只看得到一種。
+  /// 把寵物放進這條資訊，點趨勢圖上任何一晚就能看到那一晚的寵物——
+  /// 「睡得好不好 → 寵物的狀態」這個對應關係因此變得可以直接感受，
+  /// 而不只是首頁上一個靜態的結果。
+  ///
+  /// ⚠️ **心情來自 payload 的 `history[].pet_mood`，不是在這裡從
+  /// `final_quality` 推出來的。** `anxious` 是 Tier3 生理修正值的覆寫，
+  /// 那些欄位不在 history 裡；照品質推會把 anxious 的夜晚畫成 happy。
+  /// 詳見 `HistoryEntry.petMood` 的說明。
   Widget _buildSelectedTrendInfo(
     HistoryEntry entry,
   ) {
-    final duration =
-        entry.sleepDurationHours;
+    final duration = entry.sleepDurationHours;
+    final durationText = duration == null
+        ? null
+        : '${duration.floor()}h '
+            '${((duration - duration.floor()) * 60).round()}m';
 
-    if (duration == null) {
-      return const SizedBox.shrink();
-    }
-
-    final hours = duration.floor();
-
-    final minutes =
-        ((duration - hours) * 60)
-            .round();
-
-    final durationText =
-        '${hours}h ${minutes}m';
+    final mood = entry.petMood;
 
     return Container(
       width: double.infinity,
-      margin:
-          const EdgeInsets.only(bottom: 12),
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF101F3B),
-        borderRadius:
-            BorderRadius.circular(11),
-        border: Border.all(
-          color: purpleColor
-              .withValues(alpha: 0.35),
-        ),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: purpleColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.nights_stay_rounded,
-            color: purpleColor,
-            size: 18,
-          ),
+          if (mood != null)
+            _HistoryPet(mood: mood)
+          else
+            const Icon(
+              Icons.nights_stay_rounded,
+              color: purpleColor,
+              size: 18,
+            ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _formatTrendDate(
-                    entry.date,
-                  ),
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(0xFF8296B7),
+                  _formatTrendDate(entry.date),
+                  style: const TextStyle(
+                    color: Color(0xFF8296B7),
                     fontSize: 9,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  durationText,
-                  style:
-                      const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight:
-                        FontWeight.w700,
+                if (durationText != null)
+                  Text(
+                    durationText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
+                if (mood != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Your buddy was ${_moodLabel(mood)}',
+                    style: TextStyle(
+                      color: _moodColor(mood),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  // 心情要能追溯到依據。這一行是後端算心情時記下的規則，
+                  // 不是這裡編出來的說法——與評分系統「數字要能講出理由」
+                  // 是同一個要求。
+                  if (entry.moodReason != null)
+                    Text(
+                      entry.moodReason!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6C7FA0),
+                        fontSize: 8.5,
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -701,6 +777,26 @@ print('========================');
         ],
       ),
     );
+  }
+
+  /// 只是查表把後端給的字串轉成顯示用的樣子，不做任何判斷。
+  static String _moodLabel(String mood) =>
+      mood.isEmpty ? 'Unknown' : mood[0].toUpperCase() + mood.substring(1);
+
+  /// 與 `home_screen.dart` 的 `_moodColor()` 同一組顏色。
+  static Color _moodColor(String mood) {
+    switch (mood) {
+      case 'happy':
+        return const Color(0xFF7ED957);
+      case 'bored':
+        return const Color(0xFFFFC83D);
+      case 'tired':
+        return const Color(0xFFFF9518);
+      case 'anxious':
+        return const Color(0xFFFF4F63);
+      default:
+        return const Color(0xFFFFC83D);
+    }
   }
 
   String _formatTrendDate(
@@ -977,6 +1073,15 @@ print('========================');
   // DISTRACTIONS
   // ============================================================
 
+  /// 手機使用時間。
+  ///
+  /// ⚠️ **標題刻意不寫「Sleep Distractions」。** 原生端用的是
+  /// `queryUsageStats(INTERVAL_DAILY)`，拿到的是**整天的前景總時間**，
+  /// 不是睡前那一小時——日彙總沒有時間軸，切不出來。把整天的數字放在
+  /// 「睡前分心」的標題底下，就是拿一個量去冒充另一個量。
+  ///
+  /// 要真的做到睡前歸因得改用 `queryEvents()` 讀逐筆事件（那同時也是
+  /// `lights_out_at` 的來源）。在那之前，這張卡誠實地講它是什麼。
   Widget _buildDistractionsCard(
     SleepSession session,
   ) {
@@ -995,7 +1100,7 @@ print('========================');
               SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Top Sleep Distractions',
+                  'Phone Use Yesterday',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -1004,24 +1109,88 @@ print('========================');
                   ),
                 ),
               ),
-              Icon(
-                Icons.info_outline_rounded,
-                color:
-                    Color(0xFF8296B7),
-                size: 15,
-              ),
             ],
+          ),
+
+          const SizedBox(height: 3),
+
+          const Text(
+            'Daily totals. Not yet narrowed to the hour before bed.',
+            style: TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+            ),
           ),
 
           const SizedBox(height: 12),
 
-          const _NoDataMessage(
-            message:
-                'No phone activity data is available in this sleep session.',
-          ),
+          _buildUsageBody(),
         ],
       ),
     );
+  }
+
+  Widget _buildUsageBody() {
+    final usage = _usage;
+
+    if (usage == null) {
+      return const _NoDataMessage(message: 'Reading phone usage...');
+    }
+
+    switch (usage.status) {
+      case UsageStatsStatus.unsupported:
+        return const _NoDataMessage(
+          message: 'Phone usage tracking is only available on Android.',
+        );
+
+      case UsageStatsStatus.permissionRequired:
+        // ⚠️ PACKAGE_USAGE_STATS 是特殊權限，跳不出系統的授權對話框——
+        // 使用者一定要自己走一趟設定頁，所以這裡要給一個按鈕帶路，
+        // 不能只寫「沒有權限」然後把人丟在原地。
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _NoDataMessage(
+              message:
+                  'Sonnap needs Usage Access to see which apps keep you up. '
+                  'Android asks for this in system settings, not in the app.',
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _requestUsageAccess,
+                icon: const Icon(Icons.settings_rounded, size: 16),
+                label: const Text('Open Usage Access settings'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: purpleColor),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      case UsageStatsStatus.empty:
+        return const _NoDataMessage(
+          message: 'No app activity was recorded yesterday.',
+        );
+
+      case UsageStatsStatus.failed:
+        return _NoDataMessage(
+          message: 'Could not read phone usage: ${usage.error ?? "unknown error"}',
+        );
+
+      case UsageStatsStatus.ok:
+        final busiest = usage.apps.first.minutes;
+        return Column(
+          children: [
+            for (final app in usage.apps)
+              _UsageRow(app: app, busiestMinutes: busiest),
+          ],
+        );
+    }
   }
 
   // ============================================================
@@ -1089,7 +1258,41 @@ print('========================');
                     'Data source',
               ),
             ),
+
+          _buildDeliveryRow(),
         ],
+      ),
+    );
+  }
+
+  /// 這份資料是「即時從後端拿的」還是「打包在 App 裡的」。
+  ///
+  /// ⚠️ **這一列不能省。** App 在後端連不上時會自動退回打包的 asset
+  /// （見 `FallbackSleepRepository`），那份資料是真的、但可能已經過期。
+  /// 不講出來的話，使用者會以為看到的是即時資料——「安靜地顯示過期資料」
+  /// 比「明確地報錯」更糟，那正是本專案一路以來最想避免的失敗模式。
+  ///
+  /// 完全沒設定 API（沒給 `--dart-define=SONNAP_API_BASE`）時不顯示這一列：
+  /// 那是預期中的單機模式，不是降級。
+  Widget _buildDeliveryRow() {
+    final repo = widget.repository;
+    if (repo is! FallbackSleepRepository) return const SizedBox.shrink();
+
+    final live = repo.lastSource == SleepDataSource.api;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: _TrackingSourceRow(
+        icon: live
+            ? Icons.cloud_done_rounded
+            : Icons.cloud_off_rounded,
+        title: live ? 'Live from backend' : 'Bundled with the app',
+        subtitle: live
+            ? 'Fetched just now'
+            : 'Backend unreachable - this data may be out of date',
+        // ⚠️ 降級狀態不能掛綠色勾勾。實機看到「Backend unreachable」旁邊
+        // 一個綠勾，讀起來像「一切正常」，把那句話的意思整個抵消掉。
+        healthy: live,
       ),
     );
   }
@@ -1165,8 +1368,7 @@ print('========================');
                   ),
 
                   Text(
-                    '$days '
-                    '${days == 1 ? 'Day' : 'Days'}',
+                    _periodLabel(days),
                     style:
                         const TextStyle(
                       color:
@@ -1199,8 +1401,7 @@ print('========================');
               MainAxisSize.min,
           children: [
             Text(
-              '$_selectedDays '
-              '${_selectedDays == 1 ? 'Day' : 'Days'}',
+              _periodLabel(_selectedDays),
               style:
                   const TextStyle(
                 color:
@@ -1245,6 +1446,11 @@ print('========================');
       (a, b) =>
           a.date.compareTo(b.date),
     );
+
+    // 0 = 全部。history 只有 30 晚，全畫出來不會有效能問題。
+    if (_selectedDays == 0) {
+      return sortedHistory;
+    }
 
     if (_selectedDays == 1) {
       return [
@@ -1596,10 +1802,18 @@ class _TrackingSourceRow
   final String title;
   final String subtitle;
 
+  /// 右邊那個狀態圖示要不要顯示成「正常」。
+  ///
+  /// ⚠️ 實機看到「Backend unreachable」旁邊掛著一個綠色勾勾——那讀起來像
+  /// 「一切正常」，把旁邊那句話的意思整個抵消掉。降級狀態就要看起來像降級，
+  /// 否則「顯示來源」這件事等於白做。
+  final bool healthy;
+
   const _TrackingSourceRow({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.healthy = true,
   });
 
   @override
@@ -1669,10 +1883,13 @@ class _TrackingSourceRow
             ),
           ),
 
-          const Icon(
-            Icons.check_circle_rounded,
-            color:
-                Color(0xFF7ED957),
+          Icon(
+            healthy
+                ? Icons.check_circle_rounded
+                : Icons.error_outline_rounded,
+            color: healthy
+                ? const Color(0xFF7ED957)
+                : const Color(0xFFFFC83D),
             size: 20,
           ),
         ],
@@ -2263,5 +2480,127 @@ class SleepTrendPainter
             history ||
         oldDelegate.selectedIndex !=
             selectedIndex;
+  }
+}
+/// 一列 App 使用時間：名稱、長條、分鐘數。
+///
+/// 長條長度是「相對於當天用最久的那個 App」，不是相對於 24 小時——
+/// 後者會讓所有長條都短到看不出差別。這是相對比較，不是絕對比例。
+class _UsageRow extends StatelessWidget {
+  final AppUsage app;
+  final int busiestMinutes;
+
+  const _UsageRow({required this.app, required this.busiestMinutes});
+
+  String _format(int minutes) {
+    if (minutes < 60) return '${minutes}m';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return m == 0 ? '${h}h' : '${h}h ${m}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = busiestMinutes <= 0
+        ? 0.0
+        : (app.minutes / busiestMinutes).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  app.appName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                _format(app.minutes),
+                style: const TextStyle(
+                  color: Color(0xFF8296B7),
+                  fontSize: 10,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 5,
+              backgroundColor: const Color(0xFF0A1934),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF7657FF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 趨勢圖上選到某一晚時，顯示那一晚的寵物。
+///
+/// 三層退路與首頁的 PetCard 相同：
+///   ① 該心情專屬的 Lottie 檔
+///   ② 檔案讀不到 → happy_dog.json + 該心情的濾鏡
+///   ③ 連退路都讀不到 → 靜態的爪印 icon
+///
+/// 尺寸刻意比首頁小很多——這裡是一條資訊列的配角，不是主角。
+class _HistoryPet extends StatelessWidget {
+  final String mood;
+
+  const _HistoryPet({required this.mood});
+
+  static const double _size = 46;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = petMoodVisual(mood);
+
+    Widget fallback() {
+      final animation = Lottie.asset(
+        kPetFallbackAnimation,
+        width: _size,
+        height: _size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(
+          Icons.pets_rounded,
+          color: Colors.white54,
+          size: 22,
+        ),
+      );
+      return visual.fallbackFilter == null
+          ? animation
+          : ColorFiltered(
+              colorFilter: visual.fallbackFilter!,
+              child: animation,
+            );
+    }
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: Lottie.asset(
+        visual.assetPath,
+        width: _size,
+        height: _size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => fallback(),
+      ),
+    );
   }
 }

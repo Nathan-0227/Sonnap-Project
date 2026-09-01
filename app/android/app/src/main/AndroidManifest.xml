@@ -1,5 +1,45 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <!--
+      INTERNET：讓 App 打得到後端。
+      ⚠️ 這一條非加不可，而且很容易漏：debug 與 profile 的 manifest 裡有
+      Flutter 自動加的 INTERNET（給 hot reload 用），所以「開發時連得上、
+      release 版連不上」是一個只在正式建置才出現的故障。
+      在此之前 release 版就是沒有這一條，App 完全無法連線。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      PACKAGE_USAGE_STATS：讀取手機各 App 的前景使用時間（睡前分心分析用）。
+      ⚠️ 這不是一般權限，requestPermissions() 要不到——使用者必須到系統
+      「設定 → 使用情況存取」手動開啟。UsageStatsService.openUsageAccessSettings()
+      會把人帶到那一頁。
+    -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+    <!--
+      套件可見性（Android 11 / API 30 起）。
+
+      ⚠️ 沒有這一段，睡前分心分析會**安靜地少掉最重要的那幾個 App**。
+      targetSdk 30 以上的 App 預設只看得到少數套件，其餘一律當作不存在：
+      `getApplicationInfo()` 直接拋 NameNotFoundException。
+
+      實機實測：系統「數位健康」顯示今天抖音 2h9m、Instagram 33m、
+      YouTube 32m，Sonnap 卻一個都沒列出來——因為那三個都被可見性擋掉，
+      而原生端把查不到名稱的項目安靜丟棄了。剩下的清單只有系統 App
+      與 Sonnap 自己，看起來「有資料」，其實漏掉了全部重點。
+
+      用 <queries> 宣告「所有出現在啟動器裡的 App」而不是
+      QUERY_ALL_PACKAGES 權限：範圍剛好夠用（我們只需要使用者自己開得起來
+      的 App），而且 QUERY_ALL_PACKAGES 在 Google Play 是受限權限、
+      要額外聲明理由才能上架。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:label="Sonnap"
         android:name="${applicationName}"
