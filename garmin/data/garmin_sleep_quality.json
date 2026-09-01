@@ -661,5 +661,83 @@
     "rem_score": null,
     "rem_measured": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-08-27",
+    "score": 35.4,
+    "quality": "Bad",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 25.0,
+    "waso_score": 9.0,
+    "deep_score": 0.0,
+    "rem_score": 1.4,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.13 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-08-28",
+    "score": 83.3,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 15.3,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 8.8,
+    "rem_score": 9.3,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-08-29",
+    "score": 73.6,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 12.5,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 5.7,
+    "rem_score": 5.4,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.25 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-08-30",
+    "score": 79.8,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 12.2,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 7.6,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.22 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-08-31",
+    "score": 86.8,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 26.3,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 1.6,
+    "rem_score": 8.9,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-09-01",
+    "score": 75.2,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 8.8,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 6.7,
+    "rem_score": 9.7,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.88 h). Try going to bed earlier; aim for 7.0–9.0 h."
   }
 ]

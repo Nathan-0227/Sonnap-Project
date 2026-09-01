@@ -255,17 +255,25 @@ def _wear_rate(recent, target_date):
 
 def _bedtime_line(night, cam):
     """
-    攝影機首事件 vs 手錶入睡時刻。**這是攝影機唯一手錶量不到的東西。**
+    攝影機首事件 vs 手錶入睡時刻。
 
-    三種結果分開講，因為它們的成因完全不同，混為一談會讓報告寫錯：
-      早於入睡且在合理範圍   → 可以當上床時刻用
-      早太多                → 攝影機分不出「上床」與「醒著在房裡走動」
-      晚於入睡              → 攝影機那時還沒開機（SLEEP_START 設定問題）
+    ⚠️ **2026-09-02 更正——先前這裡是錯的。**
+       原本把首事件寫成「使用者上床的時刻」並標成 [MEASURED]。追進偵測器
+       原始碼後發現：背景模型是在連上攝影機的當下才建立的，所以第一次比對
+       沒有背景可比，整個畫面都被判成前景，記下一筆假的「超大動作」。
+       實測 15/15（去重後）—— 所有含整畫面事件的紀錄，那一筆永遠排第一。
+       （機制與證據見 tapo_index._is_warmup_artifact()。）
+
+       → 那個時刻反映的是**監測程式幾點被打開**，不是使用者幾點躺上床。
+         `SLEEP_START` 是每次執行由操作者輸入的，所以它頂多是一個
+         **自我回報**的就寢訊號，不是攝影機量出來的。
+
+    所以現在分四種情況講，而且只有 first_is_warmup 為假時才可能談「動作」。
     """
     onset_raw = night.get("sleep_start_time")
     if not onset_raw:
         return ("Watch sleep-onset time is not available for this night, so the "
-                "camera's first event cannot be interpreted as a bedtime.")
+                "camera's first event cannot be compared with anything.")
     try:
         onset = datetime.fromisoformat(onset_raw).replace(tzinfo=None)
     except (TypeError, ValueError):
@@ -274,21 +282,36 @@ def _bedtime_line(night, cam):
     first = cam["camera_first"]
     minutes = (first - onset).total_seconds() / 60
     clock = first.strftime("%H:%M")
+    onset_clock = onset.strftime("%H:%M")
 
+    # ── 首事件是暖機假影：時刻屬於程式，不屬於使用者 ──────────────
+    if cam.get("first_is_warmup"):
+        if minutes < 0:
+            return (f"Monitoring started at {clock}, {abs(minutes):.0f} min before "
+                    f"the watch's sleep onset ({onset_clock}). This is the moment "
+                    f"the monitoring program connected, NOT a movement by the user - "
+                    f"the detector logs a false whole-frame event on its first "
+                    f"comparison, before it has learned what the empty room looks "
+                    f"like. Treat it as a self-reported 'going to bed now', not as a "
+                    f"measurement. [NOT A MEASUREMENT OF THE USER]")
+        return (f"Monitoring started at {clock}, {minutes:.0f} min AFTER the watch's "
+                f"sleep onset ({onset_clock}), so the camera was not running when the "
+                f"user went to bed. [NOT A MEASUREMENT OF THE USER]")
+
+    # ── 首事件不是暖機假影：可能是真的動作，但仍不等於「上床」 ──────
     if minutes > 0:
         return (f"The camera's first event ({clock}) is {minutes:.0f} min AFTER the "
-                f"watch's sleep onset ({onset.strftime('%H:%M')}), so the camera was "
-                f"not yet recording when the user went to bed and did not capture "
-                f"bedtime. [MEASURED, BUT NOT A BEDTIME]")
+                f"watch's sleep onset ({onset_clock}), so the camera was not yet "
+                f"recording when the user went to bed. [MEASURED, BUT NOT A BEDTIME]")
     if -BEDTIME_PLAUSIBLE_MINUTES <= minutes < 0:
-        return (f"First in-bed movement {clock}, {abs(minutes):.0f} min before the "
-                f"watch's sleep onset ({onset.strftime('%H:%M')}) - within a normal "
-                f"sleep-onset latency, so this can be read as the time the user "
-                f"settled into bed. [MEASURED]")
+        return (f"The camera's first event ({clock}) is {abs(minutes):.0f} min before "
+                f"the watch's sleep onset ({onset_clock}). It is real detected motion "
+                f"(not the start-up artefact), but the camera cannot tell 'got into "
+                f"bed' from 'already in bed and turned over'. "
+                f"[MEASURED, BUT NOT A BEDTIME]")
     return (f"The camera's first event ({clock}) is {abs(minutes):.0f} min before the "
-            f"watch's sleep onset ({onset.strftime('%H:%M')}) - too far ahead to be "
-            f"the moment of getting into bed. The camera cannot tell 'got into bed' "
-            f"from 'awake and moving around the room'. [MEASURED, BUT NOT A BEDTIME]")
+            f"watch's sleep onset ({onset_clock}) - too far ahead to be the moment of "
+            f"getting into bed. [MEASURED, BUT NOT A BEDTIME]")
 
 
 def _camera_facts(night, cam):
@@ -308,11 +331,16 @@ def _camera_facts(night, cam):
                 "its recording could not be matched to this night)."]
 
     first, last = cam["camera_first"], cam["camera_last"]
-    lines = [
-        f"Camera recorded {first.strftime('%H:%M')}-{last.strftime('%H:%M')}, "
-        f"{cam['total_events']} motion events. [MEASURED - times come from the "
-        f"video filenames, which are the only trustworthy timestamps in this data]"
-    ]
+    coverage = (f"Camera recorded {first.strftime('%H:%M')}-{last.strftime('%H:%M')}, "
+                f"{cam['total_events']} motion events. [MEASURED - times come from "
+                f"the video filenames, which are the only trustworthy timestamps in "
+                f"this data]")
+    if cam.get("first_is_warmup"):
+        # 事件數把那筆假的也算進去了。差一筆不影響任何結論，但不講就等於默認
+        # 它是真的動作——而整個 _bedtime_line 的更正就是為了不要再那樣。
+        coverage += (" The first of those events is a detector start-up artefact, "
+                     "not a movement.")
+    lines = [coverage]
 
     # 不是一夜的睡眠（白天測試錄影、或翻身頻率不合生理）。
     # ⚠️ 仍然寫進 prompt——使用者要求所有資料都進去，而且「這一晚的攝影機
