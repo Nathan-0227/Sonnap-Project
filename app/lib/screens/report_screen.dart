@@ -1290,6 +1290,9 @@ class _ReportScreenState extends State<ReportScreen>
         subtitle: live
             ? 'Fetched just now'
             : 'Backend unreachable - this data may be out of date',
+        // ⚠️ 降級狀態不能掛綠色勾勾。實機看到「Backend unreachable」旁邊
+        // 一個綠勾，讀起來像「一切正常」，把那句話的意思整個抵消掉。
+        healthy: live,
       ),
     );
   }
@@ -1799,10 +1802,18 @@ class _TrackingSourceRow
   final String title;
   final String subtitle;
 
+  /// 右邊那個狀態圖示要不要顯示成「正常」。
+  ///
+  /// ⚠️ 實機看到「Backend unreachable」旁邊掛著一個綠色勾勾——那讀起來像
+  /// 「一切正常」，把旁邊那句話的意思整個抵消掉。降級狀態就要看起來像降級，
+  /// 否則「顯示來源」這件事等於白做。
+  final bool healthy;
+
   const _TrackingSourceRow({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.healthy = true,
   });
 
   @override
@@ -1872,10 +1883,13 @@ class _TrackingSourceRow
             ),
           ),
 
-          const Icon(
-            Icons.check_circle_rounded,
-            color:
-                Color(0xFF7ED957),
+          Icon(
+            healthy
+                ? Icons.check_circle_rounded
+                : Icons.error_outline_rounded,
+            color: healthy
+                ? const Color(0xFF7ED957)
+                : const Color(0xFFFFC83D),
             size: 20,
           ),
         ],
