@@ -43,9 +43,51 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：現在在哪、下一步做什麼（2026-08-28 更新．新對話先讀這段）
+## 🔖 交接區：現在在哪、下一步做什麼（2026-09-01 更新．新對話先讀這段）
 
-> ⚠️ **這一輪是兩個 Claude Code session 同時在同一份 working copy 上工作**
+### ✅ 2026-09-01 這一輪（Session B：`app/` 以外）
+
+**history 每晚補上了 `pet_mood` / `mood_reason`**（commit `f938606`）。
+在此之前 Insights 頁做不了「點某一晚 → 寵物跟著換」：history 只有
+`final_quality`，而 `anxious` 是用 Tier3 三個 modifier 做的覆寫，
+那三欄不在 history 裡 → 在 Dart 端硬推會把 **4 晚 anxious 畫成 happy/tired**。
+
+| | |
+|---|---|
+| 改了哪兩處 | `build_app_payload.py`（asset 路徑）與 `main.py` 的 `/insights`（SQLite 路徑） |
+| API 那邊用哪個函式 | **`resolve_mood()` 不是 `map_pet_mood()`**——`/home` 的 `status.pet_mood` 也走 `resolve_mood`，兩邊不一致的話有行為資料的使用者會在首頁與 Insights 對同一晚看到兩隻不同的寵物 |
+| 順手修掉 | history 原本無條件取最後 30 列，給了 `--date` 就會「status 是 7 月某晚、history[-1] 是 8 月最後一晚」。改成夾在目標夜晚之前 |
+| 實測 | 分數**零位移**（`garmin_sleep_quality_final.csv` 逐位元組未變）；30 晚全有值，四種心情都出現（happy 18 / bored 5 / anxious 4 / tired 3） |
+| 新測試 | `tests/test_history_mood.py`，三條都用「把 bug 重新引入、確認會紅」驗證過 |
+
+⚠️ **`ANXIOUS_*` 門檻仍然只有一個定義處**（`build_app_payload.py`）。
+兩條路徑最後都會走到 `map_pet_mood()`，不要為了方便在任何地方複製那兩個數字。
+
+### ⚠️ 手機連後端：程式端好了，**防火牆還沒開**（2026-09-01 實測）
+
+| 項目 | 狀態 |
+|---|---|
+| CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]`（早先的 PR 就修了） |
+| 綁 `0.0.0.0` | ✅ `uvicorn main:app --host 0.0.0.0 --port 8000` 實測可用 |
+| 區網 IP | **`192.168.1.75`**（Wi-Fi）。⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到 |
+| Windows 防火牆 | ❌ **還沒放行**。現有的兩條 inbound allow 規則指向**系統 Python**（`...\python313\python.exe`），而伺服器跑的是 **venv 的 python.exe**，路徑不同 → 規則不適用。而且目前網路設定檔是 **Public**（預設擋 inbound） |
+
+⚠️ **「本機用區網 IP 打得開」不等於手機打得開**——同一台機器發往自己區網 IP
+的封包**不經過防火牆**。09-01 這次就是這樣差點誤判成「已經通了」。
+要驗證只能**從手機瀏覽器開 `http://192.168.1.75:8000/health`**。
+
+放行指令（**需要系統管理員權限**，且會對區網開一個埠）：
+
+```powershell
+New-NetFirewallRule -DisplayName "Sonnap uvicorn 8000" -Direction Inbound `
+  -Action Allow -Protocol TCP -LocalPort 8000 -Profile Private,Public
+```
+
+
+> ✅ **這個風險已於 2026-09-01 用 git worktree 從結構上解決**（見下方「工作位置」）。
+> 以下保留當初的記錄：
+>
+> ⚠️ **08-28 那一輪是兩個 Claude Code session 同時在同一份 working copy 上工作**
 > （使用者開了不只一個視窗）。過程中發生過一次真的 race：一個 session
 > 正在存檔 `CLAUDE.md`，另一個同時 `git add -A` 把那次存檔也掃進了自己的
 > commit（`9646f2c`）——這次結果無害（內容本身正確），但下次可能不會這麼幸運。
@@ -303,7 +345,31 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 ### 工作位置（重要）
 
-**唯一該用的位置：`C:\Users\user\Projects\Sonnap-Project`**（真正的 git clone）
+**真正的 git clone：`C:\Users\user\Projects\Sonnap-Project`**
+
+⚠️ **2026-09-01 起另有兩個 git worktree**，那是**安全措施不是便利措施**：
+
+| 目錄 | 誰用 | 分支 |
+|---|---|---|
+| `Sonnap-Project` | 留在 `main` 當乾淨對照 | `main` |
+| `Sonnap-app` | Session A：只動 `app/` | `feature/app-wiring` |
+| `Sonnap-backend` | Session B：動 `app/` 以外的一切 | `feature/payload-history-mood` |
+
+理由是這個 repo 已經因為兩個 session 共用一份 working copy 而外洩過密碼
+（`8c52874` 的 `git add -A` 把另一個 session 沒 commit 的 `tapo 2.0/.env`
+掃進 commit 並推上公開 repo）。三個目錄**各自有 working directory 與 staging
+area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。額外的好處是
+**worktree 裡完全沒有 `.env`**（三個 `.env` 都是未追蹤的，只存在於主目錄）。
+
+⚠️ 唯一跨疆界的檔案是 `app/assets/data/app_payload.json`——它是 B 的 pipeline
+產物，**只有 B 能重新產生，A 永遠不跑 `build_app_payload.py`**。
+
+⚠️ worktree **不需要自己的 venv**，直接用主目錄那個：
+`C:\Users\user\Projects\Sonnap-Project\.venv\Scripts\python.exe`
+（腳本用 `Path(__file__).parent` 定位，資料路徑會正確落在 worktree 內）。
+但 **`data/sonnap.db` 不會跟過去**（它是未追蹤的），要在 worktree 裡跑
+`/home`、`/insights` 之前得先 `python db.py --init && python db.py --seed`
+再 `python migrate_garmin_to_db.py`。
 
 桌面上那份 `OneDrive\桌面\Sonnap-Project-main\Sonnap-舊工作副本_勿用\` 是最初下載的 zip，
 **沒有版控、已停用**。它裡面只剩三樣東西沒被搬過來，都是刻意的：`garmin/.env`（帳密）、
@@ -311,9 +377,18 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-08-28 更新）
+### git 狀態（2026-09-01 更新）
 
-✅ `origin/main` 現在是 `18aa8ed`。08-28 這一輪的四個 PR 全部合完：
+✅ `origin/main` 現在是 `406554f`。08-28 之後又合了四個 PR：
+
+| PR | 內容 |
+|---|---|
+| #22 | 合併後的文件狀態同步 |
+| #23 | 補上 bored/tired/anxious 三個 Lottie（從 happy 衍生） |
+| #24 | TAPO 原始度量記錄器：門檻從錄製階段移到事後 |
+| #25 | 用整夜資料把 TAPO 偵測門檻校準到文獻常模 |
+
+08-28 那一輪的四個：
 
 | PR | 內容 |
 |---|---|
@@ -449,8 +524,11 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 ### 已完成
 
 - Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 6 秒跑完
-- 51 晚實測資料（2026-05-28 ~ 08-25），每晚 0–100 分 + Good/Normal/Poor/Bad，
-  **跨 3 名戴錶者**（見上方 ①，報告不能寫成單一使用者）
+- 51 晚實測資料（**2026-05-29 ~ 08-23**，實測自 `garmin_sleep_quality_final.json`），
+  每晚 0–100 分 + Good/Normal/Poor/Bad，**跨 3 名戴錶者**
+  （41 晚 `wearer_a` + 10 晚 `unverified` + **0 晚 `wearer_c`**——
+  負責人本人 08-28 才開始戴，資料止於 08-23，**本人的夜晚一晚都不在這 51 晚裡**）。
+  ⚠️ 報告怎麼寫才誠實，見 [REPORT_CAVEATS.md](REPORT_CAVEATS.md)
 - Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
   + SRI（呈現不計分）
 - 完整文獻依據：`Research-Background/Garmin手錶分數.md`
@@ -746,13 +824,14 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 四支，都是獨立腳本、不需要 pytest：
+Python 五支，都是獨立腳本、不需要 pytest：
 
 ```bash
 python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
 python tests/test_healthconnect_adapter.py
 python tests/test_scoring_guards.py      # 2026-08-28 新增
 python tests/test_tapo_index.py          # 2026-08-30 新增
+python tests/test_history_mood.py        # 2026-09-01 新增
 ```
 
 Flutter（在 `app/` 底下跑，**34 條全過**）：
@@ -776,6 +855,20 @@ flutter analyze     # 0 error（15 個既有的 warning／info 不是這一輪�
    （含反向對照，確認那些欄位真的有被讀，否則第 2 條會假性通過）
 3. baseline 窗格是日曆天不是筆數
 4. `MOTIF_FAMILIES` 與夢境調色盤選項一對一，且沒有兩個家族共用關鍵字
+
+⚠️ `test_history_mood.py` 守的是 **history 每晚的 `pet_mood` 在兩條路徑上一致**。
+同樣三條都用「把 bug 重新引入、確認測試會紅」驗證過：
+
+1. `history[-1].pet_mood` 與 `status.pet_mood` 逐字相同，**且講的是同一晚**
+   （少了後面那半句，兩晚剛好都是 Good 時會假性通過）
+2. history 每晚都有 `pet_mood`，值落在四個合法值內
+3. `/insights`（讀 SQLite）與 asset（讀 JSON）對同一晚給出相同的心情
+
+⚠️ 第 3 條是這支測試存在的主因：兩條路徑讀**不同的資料來源**、走**不同的函式**
+（asset 用 `map_pet_mood`、API 用 `resolve_mood`），任何一邊改了規則而另一邊
+沒改，都不會有錯誤訊息，只會讓使用者在首頁與 Insights 看到兩隻不同的寵物。
+測試裡有一條**反向對照**（確認樣本裡真的有 anxious 的夜晚）——沒有它的話，
+把 anxious 覆寫整個拿掉，測試仍然全綠。
 
 **資料通道走 bundled asset，不走 HTTP**（已定案）：
 
