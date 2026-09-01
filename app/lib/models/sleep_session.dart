@@ -196,6 +196,18 @@ class HistoryEntry {
   final String? bedtime;
   final String? wakeTime;
 
+  /// 這一晚寵物的心情，由後端 `build_app_payload.py` 的 `map_pet_mood()` 算好。
+  ///
+  /// ⚠️ **不要在 Dart 端從 [finalQuality] 自己推。** `anxious` 是 Tier3 生理
+  /// 修正值（壓力、心率相對個人 baseline）的覆寫，那幾個欄位根本不在 history
+  /// 裡——照品質推會把 anxious 的夜晚畫成 happy。而且那等於讓
+  /// `QUALITY_TO_MOOD` 有第二個定義處，違反「Python 判斷、Dart 只負責畫」。
+  final String? petMood;
+
+  /// 這個心情是哪一條規則造成的（例：`final_quality=Good`、
+  /// `stress_modifier=-4.2 ≤ -3.0`）。讓畫面上的心情可以追溯到依據。
+  final String? moodReason;
+
   const HistoryEntry({
     required this.date,
     this.finalScore,
@@ -203,6 +215,8 @@ class HistoryEntry {
     this.sleepDurationHours,
     this.bedtime,
     this.wakeTime,
+    this.petMood,
+    this.moodReason,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) {
@@ -214,6 +228,8 @@ class HistoryEntry {
           (json['sleep_duration_hours'] as num?)?.toDouble(),
       bedtime: json['sleep_start_time'] as String?,
       wakeTime: json['wake_time'] as String?,
+      petMood: json['pet_mood'] as String?,
+      moodReason: json['mood_reason'] as String?,
     );
   }
 }

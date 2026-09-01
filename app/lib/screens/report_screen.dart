@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
+import '../widgets/pet_mood_animation.dart';
 
 class ReportScreen extends StatefulWidget {
   final SleepRepository repository;
@@ -45,13 +47,27 @@ class _ReportScreenState extends State<ReportScreen>
 
   int? _selectedTrendIndex;
 
+  /// 趨勢圖可選的期間。**0 代表「全部」**。
+  ///
+  /// ⚠️ 沒有「全部」這個選項時，payload 裡有 30 晚、卻只有最近 30 個**日曆天**
+  /// 之內的看得到——實測那是 12 晚，另外 18 晚在 App 裡永遠打不開。
+  /// 而 `anxious` 的四晚全部落在那 18 晚裡，所以那個心情根本無法被看見。
+  ///
+  /// 這是「資料在 payload 裡但使用者到不了」的缺口，不只是 demo 不方便。
   static const List<int> _periodOptions = [
     1,
     7,
     14,
     21,
     30,
+    0,
   ];
+
+  /// 0 是「全部」的哨兵值，不要印成「0 Days」。
+  static String _periodLabel(int days) {
+    if (days == 0) return 'All nights';
+    return '$days ${days == 1 ? 'Day' : 'Days'}';
+  }
 
   // ============================================================
   // INIT
@@ -655,80 +671,97 @@ class _ReportScreenState extends State<ReportScreen>
   // SELECTED TREND INFO
   // ============================================================
 
+  /// 選到趨勢圖上某一晚時顯示的資訊條。
+  ///
+  /// ## 為什麼這裡要放寵物
+  ///
+  /// 首頁只顯示**最新一晚**的心情，所以四種心情裡使用者一次只看得到一種。
+  /// 把寵物放進這條資訊，點趨勢圖上任何一晚就能看到那一晚的寵物——
+  /// 「睡得好不好 → 寵物的狀態」這個對應關係因此變得可以直接感受，
+  /// 而不只是首頁上一個靜態的結果。
+  ///
+  /// ⚠️ **心情來自 payload 的 `history[].pet_mood`，不是在這裡從
+  /// `final_quality` 推出來的。** `anxious` 是 Tier3 生理修正值的覆寫，
+  /// 那些欄位不在 history 裡；照品質推會把 anxious 的夜晚畫成 happy。
+  /// 詳見 `HistoryEntry.petMood` 的說明。
   Widget _buildSelectedTrendInfo(
     HistoryEntry entry,
   ) {
-    final duration =
-        entry.sleepDurationHours;
+    final duration = entry.sleepDurationHours;
+    final durationText = duration == null
+        ? null
+        : '${duration.floor()}h '
+            '${((duration - duration.floor()) * 60).round()}m';
 
-    if (duration == null) {
-      return const SizedBox.shrink();
-    }
-
-    final hours = duration.floor();
-
-    final minutes =
-        ((duration - hours) * 60)
-            .round();
-
-    final durationText =
-        '${hours}h ${minutes}m';
+    final mood = entry.petMood;
 
     return Container(
       width: double.infinity,
-      margin:
-          const EdgeInsets.only(bottom: 12),
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF101F3B),
-        borderRadius:
-            BorderRadius.circular(11),
-        border: Border.all(
-          color: purpleColor
-              .withValues(alpha: 0.35),
-        ),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: purpleColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.nights_stay_rounded,
-            color: purpleColor,
-            size: 18,
-          ),
+          if (mood != null)
+            _HistoryPet(mood: mood)
+          else
+            const Icon(
+              Icons.nights_stay_rounded,
+              color: purpleColor,
+              size: 18,
+            ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _formatTrendDate(
-                    entry.date,
-                  ),
-                  style:
-                      const TextStyle(
-                    color:
-                        Color(0xFF8296B7),
+                  _formatTrendDate(entry.date),
+                  style: const TextStyle(
+                    color: Color(0xFF8296B7),
                     fontSize: 9,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  durationText,
-                  style:
-                      const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight:
-                        FontWeight.w700,
+                if (durationText != null)
+                  Text(
+                    durationText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
+                if (mood != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Your buddy was ${_moodLabel(mood)}',
+                    style: TextStyle(
+                      color: _moodColor(mood),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  // 心情要能追溯到依據。這一行是後端算心情時記下的規則，
+                  // 不是這裡編出來的說法——與評分系統「數字要能講出理由」
+                  // 是同一個要求。
+                  if (entry.moodReason != null)
+                    Text(
+                      entry.moodReason!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6C7FA0),
+                        fontSize: 8.5,
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -744,6 +777,26 @@ class _ReportScreenState extends State<ReportScreen>
         ],
       ),
     );
+  }
+
+  /// 只是查表把後端給的字串轉成顯示用的樣子，不做任何判斷。
+  static String _moodLabel(String mood) =>
+      mood.isEmpty ? 'Unknown' : mood[0].toUpperCase() + mood.substring(1);
+
+  /// 與 `home_screen.dart` 的 `_moodColor()` 同一組顏色。
+  static Color _moodColor(String mood) {
+    switch (mood) {
+      case 'happy':
+        return const Color(0xFF7ED957);
+      case 'bored':
+        return const Color(0xFFFFC83D);
+      case 'tired':
+        return const Color(0xFFFF9518);
+      case 'anxious':
+        return const Color(0xFFFF4F63);
+      default:
+        return const Color(0xFFFFC83D);
+    }
   }
 
   String _formatTrendDate(
@@ -1312,8 +1365,7 @@ class _ReportScreenState extends State<ReportScreen>
                   ),
 
                   Text(
-                    '$days '
-                    '${days == 1 ? 'Day' : 'Days'}',
+                    _periodLabel(days),
                     style:
                         const TextStyle(
                       color:
@@ -1346,8 +1398,7 @@ class _ReportScreenState extends State<ReportScreen>
               MainAxisSize.min,
           children: [
             Text(
-              '$_selectedDays '
-              '${_selectedDays == 1 ? 'Day' : 'Days'}',
+              _periodLabel(_selectedDays),
               style:
                   const TextStyle(
                 color:
@@ -1392,6 +1443,11 @@ class _ReportScreenState extends State<ReportScreen>
       (a, b) =>
           a.date.compareTo(b.date),
     );
+
+    // 0 = 全部。history 只有 30 晚，全畫出來不會有效能問題。
+    if (_selectedDays == 0) {
+      return sortedHistory;
+    }
 
     if (_selectedDays == 1) {
       return [
@@ -2477,6 +2533,59 @@ class _UsageRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 趨勢圖上選到某一晚時，顯示那一晚的寵物。
+///
+/// 三層退路與首頁的 PetCard 相同：
+///   ① 該心情專屬的 Lottie 檔
+///   ② 檔案讀不到 → happy_dog.json + 該心情的濾鏡
+///   ③ 連退路都讀不到 → 靜態的爪印 icon
+///
+/// 尺寸刻意比首頁小很多——這裡是一條資訊列的配角，不是主角。
+class _HistoryPet extends StatelessWidget {
+  final String mood;
+
+  const _HistoryPet({required this.mood});
+
+  static const double _size = 46;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = petMoodVisual(mood);
+
+    Widget fallback() {
+      final animation = Lottie.asset(
+        kPetFallbackAnimation,
+        width: _size,
+        height: _size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(
+          Icons.pets_rounded,
+          color: Colors.white54,
+          size: 22,
+        ),
+      );
+      return visual.fallbackFilter == null
+          ? animation
+          : ColorFiltered(
+              colorFilter: visual.fallbackFilter!,
+              child: animation,
+            );
+    }
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: Lottie.asset(
+        visual.assetPath,
+        width: _size,
+        height: _size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => fallback(),
       ),
     );
   }
