@@ -63,25 +63,44 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 ⚠️ **`ANXIOUS_*` 門檻仍然只有一個定義處**（`build_app_payload.py`）。
 兩條路徑最後都會走到 `map_pet_mood()`，不要為了方便在任何地方複製那兩個數字。
 
-### ⚠️ 手機連後端：程式端好了，**防火牆還沒開**（2026-09-01 實測）
+### ✅ 手機連後端：已用實機實測通過（2026-09-01）
 
 | 項目 | 狀態 |
 |---|---|
 | CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]`（早先的 PR 就修了） |
 | 綁 `0.0.0.0` | ✅ `uvicorn main:app --host 0.0.0.0 --port 8000` 實測可用 |
 | 區網 IP | **`192.168.1.75`**（Wi-Fi）。⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到 |
-| Windows 防火牆 | ❌ **還沒放行**。現有的兩條 inbound allow 規則指向**系統 Python**（`...\python313\python.exe`），而伺服器跑的是 **venv 的 python.exe**，路徑不同 → 規則不適用。而且目前網路設定檔是 **Public**（預設擋 inbound） |
+| Windows 防火牆 | ✅ 已加規則 `Sonnap venv python (demo)`（Inbound / Allow / TCP / Private+Public） |
 
-⚠️ **「本機用區網 IP 打得開」不等於手機打得開**——同一台機器發往自己區網 IP
-的封包**不經過防火牆**。09-01 這次就是這樣差點誤判成「已經通了」。
-要驗證只能**從手機瀏覽器開 `http://192.168.1.75:8000/health`**。
+⚠️ 防火牆規則**綁定的是程式不是埠**：放行的是
+`Sonnap-Project\.venv\Scripts\python.exe`。刻意不開 `-LocalPort 8000`——
+開埠的話任何監聽該埠的程式都會對區網露出。
 
-放行指令（**需要系統管理員權限**，且會對區網開一個埠）：
+⚠️ **換了 venv（重建、搬家、改用系統 Python）規則就失效**，而且症狀是
+「手機連不上」沒有任何錯誤訊息。原本擋住的就是這件事：機器上兩條既有的
+inbound 規則指向**系統 Python**（`...\python313\python.exe`），
+伺服器跑的卻是 venv 的 python.exe，路徑不同所以規則不適用。
+
+demo 結束後移除：
 
 ```powershell
-New-NetFirewallRule -DisplayName "Sonnap uvicorn 8000" -Direction Inbound `
-  -Action Allow -Protocol TCP -LocalPort 8000 -Profile Private,Public
+Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 ```
+
+✅ **2026-09-01 用實機開 `http://192.168.1.75:8000/health` 實測通過**，
+所以這個 Wi-Fi 上沒有 client isolation 的問題。
+
+⚠️ **驗證只能從手機做**。「本機用區網 IP 打得開」不等於手機打得開——
+同一台機器發往自己區網 IP 的封包**不經過防火牆**，09-01 這次就是這樣
+差點誤判成「已經通了」。以後任何一次「手機連得到嗎」都要從手機開網址，
+不要用電腦上的 `curl` 或 `Invoke-WebRequest` 代替。
+
+⚠️ **在家裡通不代表在現場通**：不少學校/公共 Wi-Fi 開了 client isolation，
+會直接擋掉手機↔筆電，與防火牆無關、這邊也修不了。
+**09-09 的進度查核前務必在現場再測一次**，別把上面那個 ✅ 當成現場也沒問題。
+
+⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），規則掛在 Public 設定檔上
+代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
 
 
 > ✅ **這個風險已於 2026-09-01 用 git worktree 從結構上解決**（見下方「工作位置」）。
