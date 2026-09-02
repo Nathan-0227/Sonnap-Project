@@ -33,6 +33,13 @@ tapo_metric_logger.py — 只記錄原始度量，不判事件、不設門檻、
 ────
   python tapo_metric_logger.py --selftest 60      # 先跑 60 秒確認接得上
   python tapo_metric_logger.py                    # 整晚跑，Ctrl+C 結束
+  python tapo_metric_logger.py --save-video 60    # 順便存前 60 分鐘的影片
+
+⚠️ `--save-video` 存的影片與 CSV **逐幀對齊**（影片第 N 幀 == CSV 裡 vf==N
+   那一列）。這是校準偵測門檻唯一可靠的樣本來源：
+   `tapo 2.0/sleep_videos/` 那些片段是舊偵測器自己挑的，有選擇偏誤
+   —— 實測片長與人工標註次數 r=0.84，控制掉片長之後什麼都不剩
+   （見 tapo_annotate_clips.py 的檔頭）。
 
 ⚠️ RTSP 網址從 `tapo 2.0/.env` 的 CAMERA_RTSP_URL 讀，**永遠不印出來**
    （那是帳密，這個 repo 為此外洩過兩次）。
@@ -91,6 +98,11 @@ WARMUP_SECONDS = 90
 # 所以另外在記憶體裡累積**真正的遮罩**，結束時存成 .npy。
 # 每幀成本是一次陣列加法，CSV 大小完全不受影響。
 HEAT_MIN_FRAC = 0.01         # 最大區塊要 ≥ 這個比例才進熱區圖（雜訊不算）
+# 連續錄影（--save-video）。存的是**降取樣後、實際拿去分析的那些幀**，
+# 所以影片第 N 幀 == CSV 裡 vf==N 的那一列，逐幀對齊。
+# 這是校準門檻唯一可靠的樣本來源：detector-triggered 的片段有選擇偏誤
+# （片長由偵測器自己決定，實測與人工次數 r=0.84，控制掉之後什麼都不剩）。
+VIDEO_FOURCC = "mp4v"
 
 FLUSH_EVERY = 100            # 每幾列 flush 一次，斷電時損失有限
 
@@ -141,7 +153,7 @@ def open_capture(url):
     return cap
 
 
-def run(url, out_path, selftest_seconds=None):
+def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
     fgbg = cv2.createBackgroundSubtractorMOG2(
         history=MOG2_HISTORY, varThreshold=MOG2_VAR_THRESHOLD, detectShadows=False
     )
@@ -169,6 +181,18 @@ def run(url, out_path, selftest_seconds=None):
     warm_from = time.time()      # 重連之後背景模型要重建，這個會跟著重設
     heat = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
     heat_frames = 0
+    writer_v = None
+    video_path = None
+    vf = 0
+    video_until = time.time() + save_video_minutes * 60 if save_video_minutes else 0
+    if save_video_minutes:
+        video_path = out_path.with_suffix(".mp4")
+        writer_v = cv2.VideoWriter(str(video_path),
+                                   cv2.VideoWriter_fourcc(*VIDEO_FOURCC),
+                                   TARGET_FPS, (WIDTH, HEIGHT), False)
+        if not writer_v.isOpened():
+            print("⚠ 影片編碼器開不起來，這一次不存影片（度量照常）")
+            writer_v = None
 
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         # 檔頭把參數寫進去——這樣這份 CSV 自己就說得出它是怎麼產生的，
@@ -190,6 +214,7 @@ def run(url, out_path, selftest_seconds=None):
             "max_x", "max_y", "max_w", "max_h",   # 最大區塊的 bbox（事後推 ROI 用）
             "illum_skip", # 這一幀是否因照明變化被否決
             "warmup",     # 背景模型還沒建好，這一幀不可用
+            "vf",         # 對應到影片的第幾幀（--save-video 時才有值）
         ])
 
         print(f"● 連上 {describe(url)}")
@@ -209,7 +234,7 @@ def run(url, out_path, selftest_seconds=None):
                     # 在 CSV 裡留一個洞的標記，事後才看得出這裡斷過，
                     # 而不是以為那段時間「什麼都沒發生」。
                     writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
-                                     "", "", "", "", "", "", "", "", "", 1, 1])
+                                     "", "", "", "", "", "", "", "", "", 1, 1, ""])
                     rows += 1
                     fh.flush()
                 if consecutive_fail <= 3 or consecutive_fail % 10 == 0:
@@ -239,6 +264,18 @@ def run(url, out_path, selftest_seconds=None):
             blur = cv2.GaussianBlur(gray, BLUR_KERNEL, 0)
             mean_now = float(blur.mean())
 
+            # 影片與 CSV 逐幀對齊：只要這一幀有被處理，就同時寫影片與 vf
+            vf_now = ""
+            if writer_v is not None:
+                if now <= video_until:
+                    writer_v.write(gray)   # 存未模糊的，人眼比較好判讀
+                    vf_now = vf
+                    vf += 1
+                else:
+                    writer_v.release()
+                    writer_v = None
+                    print(f"● 影片錄滿 {save_video_minutes:.0f} 分鐘（{vf} 幀），度量繼續")
+
             warming = 1 if (now - warm_from) < WARMUP_SECONDS else 0
 
             # ── 照明變化否決 ──
@@ -255,7 +292,7 @@ def run(url, out_path, selftest_seconds=None):
                     fgbg.apply(blur, learningRate=0.2)
                 skipped_illum += 1
                 writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
-                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming])
+                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming, vf_now])
                 rows += 1
                 continue
 
@@ -289,12 +326,17 @@ def run(url, out_path, selftest_seconds=None):
 
             writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
                              f"{mean_now:.2f}", raw_px, fg_px, blobs,
-                             max_px, max_x, max_y, max_w, max_h, 0, warming])
+                             max_px, max_x, max_y, max_w, max_h, 0, warming, vf_now])
             rows += 1
             if rows % FLUSH_EVERY == 0:
                 fh.flush()
 
     cap.release()
+    if writer_v is not None:
+        writer_v.release()
+    if video_path and video_path.exists():
+        mb = video_path.stat().st_size / 1e6
+        print(f"● 影片 {video_path.name}（{vf} 幀、{mb:.0f} MB）← 標註用這個，與 CSV 的 vf 欄逐幀對齊")
     if heat_frames:
         heat_path = out_path.with_name(out_path.stem + "_heat.npy")
         np.save(heat_path, heat)
@@ -353,6 +395,8 @@ def main():
     ap.add_argument("--stream1", action="store_true",
                     help="用主碼流。預設走 stream2，才不會跟現行偵測器搶")
     ap.add_argument("--out", type=Path, help="輸出 CSV 路徑")
+    ap.add_argument("--save-video", type=float, metavar="分鐘", default=0,
+                    help="同時存一份降取樣的連續影片，供人工標註校準門檻。給幾分鐘就只錄前幾分鐘（實測真實紅外線畫面約 70 MB/小時，整夜約 0.5 GB。給大一點的數字就整夜錄）")
     args = ap.parse_args()
 
     signal.signal(signal.SIGINT, _handle_stop)
@@ -366,7 +410,7 @@ def main():
         datetime.now().strftime("%Y%m%d_%H%M%S")
         + ("_selftest" if args.selftest else "") + ".csv"
     )
-    path = run(url, out, args.selftest)
+    path = run(url, out, args.selftest, args.save_video)
     preview(path)
 
 
