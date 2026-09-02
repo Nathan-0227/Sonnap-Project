@@ -144,6 +144,67 @@ def describe(url):
     return f"rtsp://…@{tail}"
 
 
+def local_ipv4():
+    """本機對外那張介面的 IPv4。用 UDP connect 找，不會真的送封包。"""
+    import socket as _s
+    sock = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
+def discover_camera(timeout=1.5, workers=160):
+    """
+    在本機所在的 /24 掃 RTSP 埠，回傳找到的第一台。
+
+    ⚠️ 為什麼需要這個：這台相機在校園 Wi-Fi 上拿 DHCP，**網路前綴會變**。
+       09-01 是 10.204.162.253、09-03 變成 10.91.117.253（主機碼沒變，
+       前綴整個換掉）。09-02 那一夜就是因此在 04:09 斷掉，
+       之後空轉 4 小時什麼都沒錄到。
+    """
+    import socket as _s
+    import concurrent.futures as _cf
+    me = local_ipv4()
+    if not me:
+        return None
+    prefix = me.rsplit(".", 1)[0]
+
+    def probe(i):
+        ip = f"{prefix}.{i}"
+        if ip == me:
+            return None
+        sock = _s.socket()
+        sock.settimeout(timeout)
+        try:
+            sock.connect((ip, 554))
+            return ip
+        except OSError:
+            return None
+        finally:
+            sock.close()
+
+    with _cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        for hit in ex.map(probe, range(1, 255)):
+            if hit:
+                return hit
+    return None
+
+
+def swap_host(url, new_ip):
+    """把 URL 裡的主機換掉，帳密原封不動。⚠️ 回傳值不得印出。"""
+    head, sep, tail = url.rpartition("@")
+    if not sep:
+        return url
+    rest = tail.split("/", 1)
+    port = ":" + rest[0].split(":", 1)[1] if ":" in rest[0] else ""
+    path = "/" + rest[1] if len(rest) > 1 else ""
+    return f"{head}@{new_ip}{port}{path}"
+
+
 def open_capture(url):
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     try:
@@ -162,6 +223,14 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
     )
 
     cap = open_capture(url)
+    if not cap.isOpened():
+        print(f"⚠ 連不上 {describe(url)}，掃描本機網段找相機…")
+        found = discover_camera()
+        if found:
+            url = swap_host(url, found)
+            print(f"● 找到 {describe(url)}，改用這個位址")
+            print("  ⚠️ .env 裡的位址已經過期，記得更新，否則下次還要再掃一次")
+            cap = open_capture(url)
     if not cap.isOpened():
         sys.exit(f"✗ 連不上 {describe(url)}\n"
                  "   檢查：相機開著嗎？在同一個網段嗎？.env 的密碼是換過之後的嗎？")
@@ -245,6 +314,12 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
                     break
                 cap.release()
                 time.sleep(min(2 * consecutive_fail, RECONNECT_BACKOFF_MAX))
+                # 斷了一陣子還連不回來，多半是 DHCP 換了位址而不是相機關機
+                if consecutive_fail in (10, 25):
+                    found = discover_camera(timeout=1.0)
+                    if found and found not in url:
+                        url = swap_host(url, found)
+                        print(f"● 相機換位址了，改連 {describe(url)}")
                 cap = open_capture(url)
                 if not cap.isOpened():
                     continue
