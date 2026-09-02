@@ -101,8 +101,12 @@ print("\n【3】橫跨兩夜的紀錄要依間隔切開")
 # ───────────────────────────────────────────────────────────────────
 # sql#51 有 32 筆在 08-18、2 筆在 08-19，中間空了 15.2 小時。
 # 不切的話，08-19 的兩筆事件會被算進 08-18，而且 camera_last 會變成隔天早上。
-if "sql#51" in by_id:
-    sessions = tapo_index.split_sessions(by_id["sql#51"]["stamps"])
+# 用結尾比對而不是完整字串：source_id 前面帶著是哪一份 dump
+# （`tapo/sql#51` 與 `tapo 2.0/sql#51` 都可能存在），而這條測的是切段，
+# 不是哪一份檔案。
+_51 = next((r for k, r in by_id.items() if k.endswith("sql#51")), None)
+if _51:
+    sessions = tapo_index.split_sessions(_51["stamps"])
     check("sql#51 切成幾段", len(sessions), 2)
     if len(sessions) == 2:
         check("第一段屬於哪一夜", tapo_index.night_key(sessions[0][0]), "2026-08-18")
@@ -153,7 +157,8 @@ print("\n【5】provenance() 必須涵蓋索引輸出的每一個資料欄位")
 # provenance() 把標籤寫進 prompt；漏標的欄位會**沒有標籤地**進到模型面前，
 # 而那正是 np.random 的數值混進夢境的路徑。漏標不會報錯。
 labels = tapo_index.provenance()
-VALID = {"MEASURED", "MEASURED_NOT_COMPARABLE", "NOT_MEASUREMENT_GRADE", "SIMULATED"}
+VALID = {"MEASURED", "MEASURED_SESSION_START", "MEASURED_NOT_COMPARABLE",
+         "NOT_MEASUREMENT_GRADE", "SIMULATED"}
 
 # 這些是結構性欄位（日期、來源清單、比對結果），不是量測值，不需要標籤。
 STRUCTURAL = {"date", "sources", "report_dates", "date_mismatch",
@@ -169,9 +174,17 @@ check_true("np.random 產生的欄位標成 SIMULATED",
            and labels.get("decibel_max") == "SIMULATED")
 check_true("攝影機分數標成 NOT_MEASUREMENT_GRADE（同一晚跨來源差 80 分）",
            labels.get("stored_score") == "NOT_MEASUREMENT_GRADE")
-check_true("事件時刻是唯一標成 MEASURED 的量",
-           {k for k, v in labels.items() if v == "MEASURED"}
-           == {"camera_first", "camera_last"})
+# ⚠️ camera_first 不可以標成純 MEASURED。它在 first_is_warmup 為真時記錄的是
+#    「監測程式連上攝影機的那一刻」而不是使用者的動作（去重後實測 15/15，
+#    見 tapo_index._is_warmup_artifact）。標錯會讓下游把它當成上床時刻。
+check("camera_first 的標籤", labels.get("camera_first"), "MEASURED_SESSION_START")
+check_true("暖機旗標存在且標成 MEASURED",
+           labels.get("first_is_warmup") == "MEASURED")
+
+# 反向對照：確認索引真的會標出暖機夜晚，否則上面兩條會假性通過。
+warmup_nights = [n["date"] for n in index.values() if n["first_is_warmup"]]
+check_true(f"至少有一晚的首事件被認出是暖機假影（實際 {len(warmup_nights)} 晚）",
+           len(warmup_nights) >= 1)
 
 
 # ═══════════════════════════════════════════════════════════════════

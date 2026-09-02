@@ -41,7 +41,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-DUMP = ROOT / "tapo" / "sleep_records.sql"
+# 影像組的 MySQL dump 有兩個落點，因為他們的程式有兩代。
+#
+# ⚠️ **兩個都要讀。** 2026-09-02 實測：新版 `tapo 2.0/` 那份是舊份的嚴格超集
+#    （共同的 15 筆逐欄相同，另外多 5 晚 08-28~09-01）。但下次不一定——
+#    影像組更新哪一個是他們的習慣問題，不是我們能假設的。
+#    只讀其中一個的話，新資料會**安靜地**從所有分析裡消失，沒有任何錯誤訊息。
+#
+#    重複的紀錄由 build_index() 的內容指紋擋掉，多讀一個檔不會重複計算。
+DUMPS = [
+    ROOT / "tapo" / "sleep_records.sql",        # 第一代
+    ROOT / "tapo 2.0" / "sleep_records.sql",    # 第二代（目前較新）
+]
 REPORT_GLOB = str(ROOT / "tapo" / "sleep_reports" / "*" / "sleep_report_*.json")
 
 # 一列 INSERT 的形狀：
@@ -69,15 +80,23 @@ NIGHT_BOUNDARY_HOUR = 12
 # 解析：兩個來源 → 同一種形狀
 # ═══════════════════════════════════════════════════════════════════
 
-def _clip_stamps(timeline):
-    """從 video_clip 檔名取出每個事件的真實時刻，排序後回傳。"""
+def _clip_events(timeline):
+    """
+    從 video_clip 檔名取出每個事件的真實時刻，附上該事件的 motion_intensity，
+    依時間排序回傳 [(時刻, intensity), ...]。
+
+    intensity 帶著走是為了認出**暖機假影**，見 _is_warmup_artifact()。
+    """
     out = []
     for event in timeline or []:
         match = CLIP_STAMP_RE.search(event.get("video_clip") or "")
         if match:
-            out.append(datetime.strptime(match.group(1) + match.group(2),
-                                         "%Y%m%d%H%M%S"))
-    return sorted(out)
+            out.append((datetime.strptime(match.group(1) + match.group(2),
+                                          "%Y%m%d%H%M%S"),
+                        event.get("motion_intensity")))
+    return sorted(out, key=lambda pair: pair[0])
+
+
 
 
 def _count_levels(timeline):
@@ -97,9 +116,48 @@ def _count_levels(timeline):
     return large, micro, snore, decibels
 
 
+# 1920×1080：整個畫面都被判定成前景。
+FULL_FRAME_INTENSITY = 1920 * 1080
+
+
+def _is_warmup_artifact(clip_events):
+    """
+    這串事件的第一筆是不是**背景模型的暖機假影**？
+
+    ═══════════════════════════════════════════════════════════════
+    為什麼要認它出來（2026-09-02 追到的根因）
+    ═══════════════════════════════════════════════════════════════
+    影像組用 `cv2.createBackgroundSubtractorMOG2()` 做背景相減
+    （`tapo 2.0/sleep_monitor.py:1026-1028`）：程式先記住「沒有人的時候
+    房間長什麼樣」，再比對每一幀有什麼不同。
+
+    但那個背景模型是**在連上攝影機的當下才建立的**，所以第一次比對根本
+    沒有背景可比 → 整個畫面都被判成前景 → 記下一筆 intensity 恰好等於
+    1920×1080 的「超大動作」。
+
+    **實測 15 / 15**（去重後）：所有含整畫面事件的紀錄裡，那一筆永遠排在
+    第一個。真的動作不可能每次都剛好排第一。
+    ⚠️ 兩份 dump 有大量重複，不去重會把同一筆算兩次而虛報成 25/25。
+
+    ⚠️ **後果**：那一筆的時刻不是使用者的動作，是**監測程式被打開的時刻**。
+       先前把它讀成「上床時刻」並算出「比入睡早 30–48 分鐘」——那個數字
+       描述的是操作者幾點啟動程式，不是使用者幾點躺上床。
+
+    ⚠️ 這不代表那個時刻沒有用。`SLEEP_START` 是每次執行時由操作者輸入的
+       （`sleep_monitor.py:138-162`），如果他是「準備睡了才啟動」，那它就
+       等同於一顆「我要睡了」按鈕——但那是**自我回報**，不是攝影機量到的。
+
+    ✅ 未來錄的資料不受影響：`tapo_metric_logger.py` 已經把暖機期標成
+       `warmup` 並在事後排除。這個函式處理的是**既有的歷史資料**。
+    """
+    return bool(clip_events) and clip_events[0][1] == FULL_FRAME_INTENSITY
+
+
 def _record(source_id, kind, report_date, stored_score, timeline):
     large, micro, snore, decibels = _count_levels(timeline)
+    clip_events = _clip_events(timeline)
     return {
+        "first_is_warmup": _is_warmup_artifact(clip_events),
         "source_id": source_id,
         "source_kind": kind,             # "sql" | "json"
         "report_date": report_date,      # ⚠️ 已證實會錯，只留著做對照
@@ -109,14 +167,21 @@ def _record(source_id, kind, report_date, stored_score, timeline):
         "micro_motion_count": micro,
         "snore_count": snore,
         "decibels": decibels,
-        "stamps": _clip_stamps(timeline),   # ← 唯一可信的時間
+        "stamps": [t for t, _ in clip_events],   # ← 唯一可信的時間
         "timeline": timeline or [],
     }
 
 
-def parse_dump(path=DUMP):
-    """解析 MySQL dump。壞掉的 timeline 不會讓整支掛掉。"""
-    if not Path(path).exists():
+def parse_dump(path):
+    """
+    解析一份 MySQL dump。壞掉的 timeline 不會讓整支掛掉。
+
+    ⚠️ `source_id` 要帶上是哪一份檔案。兩代 dump 的紀錄 id 會撞
+       （兩邊都有 `sql#1`），不帶檔名的話，跨來源落差那張表會出現
+       兩個同名的來源，看的人分不出誰是誰。
+    """
+    path = Path(path)
+    if not path.exists():
         return []
     sql = io.open(path, encoding="utf-8", errors="replace").read()
     out = []
@@ -126,7 +191,8 @@ def parse_dump(path=DUMP):
             timeline = json.loads(raw.replace('\\"', '"'))
         except (ValueError, TypeError):
             timeline = []
-        out.append(_record("sql#" + rid, "sql", rdate, int(score), timeline))
+        out.append(_record(f"{path.parent.name}/sql#{rid}", "sql",
+                           rdate, int(score), timeline))
     return out
 
 
@@ -153,7 +219,10 @@ def iter_raw_records():
     inspect_tapo_score.py 要的是這一層——它要證明的正是
     「同一晚在兩個來源會得到不同的分數」，合併掉就看不到了。
     """
-    return parse_dump() + parse_reports()
+    records = []
+    for dump in DUMPS:
+        records += parse_dump(dump)
+    return records + parse_reports()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -236,7 +305,15 @@ def build_index(records=None):
                 "scores": [],
                 "sources": [],
                 "report_dates": set(),
+                "first_is_warmup": False,
             })
+            # first_is_warmup 描述的是**現在這個 camera_first 那一筆**，不是整晚。
+            # 所以只有在這一段成為新的（或並列的）最早時刻時才更新。
+            # 而且只有紀錄的**第一段**可能是暖機——背景模型在連線當下建一次，
+            # 之後的段落是同一次連線裡的後續事件。
+            if session[0] <= night["camera_first"]:
+                night["first_is_warmup"] = (record["first_is_warmup"]
+                                            and session[0] == record["stamps"][0])
             night["camera_first"] = min(night["camera_first"], session[0])
             night["camera_last"] = max(night["camera_last"], session[-1])
             night["sources"].append(record["source_id"])
@@ -329,7 +406,12 @@ def provenance():
     重跑方式：python inspect_tapo_score.py
     """
     return {
-        "camera_first": "MEASURED",
+        # ⚠️ camera_first **不是**單純的量測值。當 first_is_warmup 為真時，
+        #    它記錄的是「監測程式連上攝影機的那一刻」，不是使用者的動作
+        #    （見 _is_warmup_artifact()，實測 15/15）。呼叫端必須看那個旗標，
+        #    不可以無條件當成上床時刻用。
+        "camera_first": "MEASURED_SESSION_START",
+        "first_is_warmup": "MEASURED",
         "camera_last": "MEASURED",
         "total_events": "MEASURED_NOT_COMPARABLE",
         "large_turn_count": "MEASURED_NOT_COMPARABLE",
