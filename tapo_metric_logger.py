@@ -45,6 +45,19 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import os
+
+# ⚠️ 必須在 import cv2 之前設，之後才會生效。
+#    UDP 的 RTSP 在 Wi-Fi 上很脆弱：第二晚實測 04:09 之後串流永久掛掉，
+#    連續 257 次重連每次都在 30 秒逾時，一列資料都沒再寫進去。
+#    影像組的音訊路徑（tapo 2.0/tapo_detector.py）本來就用 -rtsp_transport tcp，
+#    所以這台相機吃 TCP 是已知可行的。
+os.environ.setdefault(
+    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+    "rtsp_transport;tcp|stimeout;15000000|max_delay;500000",
+)
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")   # 別讓逾時警告洗版
+
 import cv2
 import numpy as np
 
@@ -67,6 +80,8 @@ LEARNING_RATE = 1.0 / MOG2_HISTORY   # 明確寫出來，不用預設的 -1
 OPEN_KERNEL_SIZE = 5         # 開運算：孤立雜訊點消失、大區塊保留
 ILLUM_JUMP = 4.0             # 平均亮度跳這麼多 = 紅外燈切換／自動曝光，不是動作
 RELEARN_FRAMES = 10          # 照明變化後讓背景重學幾幀
+RECONNECT_BACKOFF_MAX = 15   # 重連間隔上限（秒）
+GIVE_UP_AFTER = 40           # 連續失敗這麼多次就收工 —— 空轉 4 小時不如乾淨結束
 MIN_BLOB_PX = 4              # 小於這個不算一「塊」（純粹避免數到單點）
 # MOG2 一開始沒有背景模型，整幀都會被判成前景（實測第 0 幀 = 100% 畫面）。
 # 這段時間照樣記錄，但標成 warmup，事後一律排除。
@@ -149,6 +164,7 @@ def run(url, out_path, selftest_seconds=None):
     rows = 0
     skipped_illum = 0
     reconnects = 0
+    consecutive_fail = 0
     next_due = time.time()
     warm_from = time.time()      # 重連之後背景模型要重建，這個會跟著重設
     heat = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
@@ -188,15 +204,29 @@ def run(url, out_path, selftest_seconds=None):
             ok, frame = cap.read()
             if not ok or frame is None:
                 reconnects += 1
-                print(f"⚠ 串流中斷，第 {reconnects} 次重連…")
+                consecutive_fail += 1
+                if consecutive_fail == 1:
+                    # 在 CSV 裡留一個洞的標記，事後才看得出這裡斷過，
+                    # 而不是以為那段時間「什麼都沒發生」。
+                    writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
+                                     "", "", "", "", "", "", "", "", "", 1, 1])
+                    rows += 1
+                    fh.flush()
+                if consecutive_fail <= 3 or consecutive_fail % 10 == 0:
+                    print(f"⚠ 串流中斷（第 {reconnects} 次，連續失敗 {consecutive_fail}）")
+                if consecutive_fail >= GIVE_UP_AFTER:
+                    print(f"✗ 連續失敗 {consecutive_fail} 次，收工。"
+                          "已寫下的資料都在，不會白費。")
+                    break
                 cap.release()
-                time.sleep(min(2 * reconnects, 30))
+                time.sleep(min(2 * consecutive_fail, RECONNECT_BACKOFF_MAX))
                 cap = open_capture(url)
                 if not cap.isOpened():
                     continue
                 mean_prev, relearn = None, RELEARN_FRAMES
                 warm_from = time.time()
                 continue
+            consecutive_fail = 0
 
             now = time.time()
             if now < next_due:          # 依牆鐘節流，不依幀數（RTSP 幀率會浮動）
