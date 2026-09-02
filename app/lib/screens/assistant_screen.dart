@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/account_service.dart';
 import '../models/sleep_session.dart';
 import '../services/assistant_answers.dart';
 import '../services/sleep_repository.dart';
@@ -30,7 +31,7 @@ class AssistantScreen extends StatefulWidget {
 
   const AssistantScreen({
     super.key,
-    this.username = "Jeremy",
+    this.username = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
   });
 

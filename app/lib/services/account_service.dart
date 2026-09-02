@@ -6,6 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'key_value_store.dart';
 import 'user_identity.dart';
 
+/// 還沒有帳號時，畫面上稱呼使用者的方式。
+///
+/// ⚠️ 在此之前這三個畫面各自寫死 "Jeremy"——那是隊友的名字。實機上剛用
+/// 「Nathan」註冊完，首頁還是說「Good morning Jeremy」，一眼就看得出來。
+/// 有帳號時一律用帳號的暱稱；沒有帳號時要用一個**明顯不是人名**的字，
+/// 不要拿任何人的名字當佔位符。
+const String kFallbackDisplayName = 'Sleeper';
+
 /// 這台裝置目前處在哪一種身分狀態。
 ///
 /// ⚠️ 四種要分得開。混成「有 / 沒有」的話，「後端沒開所以還建不了帳號」

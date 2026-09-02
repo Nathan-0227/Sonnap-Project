@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/account_service.dart';
 import '../models/sleep_session.dart';
 import '../services/sleep_repository.dart';
 import '../widgets/feature_card.dart';
@@ -16,6 +17,9 @@ import '../widgets/sleep_streak_card.dart';
 /// 全部由後端算好放在 payload 裡。專案原則是「Python 判斷，Dart 只負責畫」，
 /// 這樣所有判斷都可以追溯到有文獻依據的那一層。
 class HomeScreen extends StatefulWidget {
+  /// 帳號的暱稱。沒有帳號時是 [kFallbackDisplayName]。
+  final String displayName;
+
   final SleepRepository repository;
 
   /// 目標就寢時間。**擁有者是 `main.dart` 的 `_MainPageState`**，這裡只是轉交
@@ -30,6 +34,7 @@ class HomeScreen extends StatefulWidget {
 
   const HomeScreen({
     super.key,
+    this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
     this.targetBedtime = const TimeOfDay(hour: 23, minute: 30),
     this.reminderOn = true,
@@ -200,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // 就寢時間與提醒開關的值來自 main.dart，改動也往上回報。
           // Settings 頁顯示的是同一份 state，所以兩邊永遠一致。
           HeaderCard(
-            username: "Jeremy",
+            username: widget.displayName,
             message: display.headerMessage,
             initialReminderOn: widget.reminderOn,
             initialTargetBedtime: widget.targetBedtime,

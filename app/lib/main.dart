@@ -132,9 +132,10 @@ class _MainPageState extends State<MainPage> {
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
   /// 新的值才傳得下去。IndexedStack 依「型別 ＋ 位置」保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
-  List<Widget> _buildPages() {
+  List<Widget> _buildPages(AccountStatus account) {
     return <Widget>[
       HomeScreen(
+        displayName: account.displayName ?? kFallbackDisplayName,
         repository: _repository,
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
@@ -143,8 +144,12 @@ class _MainPageState extends State<MainPage> {
       ),
       const FriendsScreen(),
       ReportScreen(repository: _repository, uploader: _uploader),
-      AssistantScreen(repository: _repository),
+      AssistantScreen(
+        repository: _repository,
+        username: account.displayName ?? kFallbackDisplayName,
+      ),
       SettingsScreen(
+        username: account.displayName ?? kFallbackDisplayName,
         initialTargetBedtime: targetBedtime,
         initialReminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
@@ -180,7 +185,7 @@ class _MainPageState extends State<MainPage> {
 
       body: IndexedStack(
         index: currentIndex,
-        children: _buildPages(),
+        children: _buildPages(account),
       ),
 
       bottomNavigationBar: Container(

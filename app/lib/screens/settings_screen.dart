@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/account_service.dart';
+
 class SettingsScreen extends StatefulWidget {
   final String username;
   final String email;
@@ -23,7 +25,7 @@ class SettingsScreen extends StatefulWidget {
 
   const SettingsScreen({
     super.key,
-    this.username = "Jeremy",
+    this.username = kFallbackDisplayName,
     this.email = "jeremy@email.com",
     this.petName = "Golden Retriever",
     this.language = "English",

@@ -23,7 +23,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/main.dart';
+import 'package:app/screens/assistant_screen.dart';
+import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/onboarding_screen.dart';
+import 'package:app/screens/settings_screen.dart';
 import 'package:app/services/account_service.dart';
 import 'package:app/services/key_value_store.dart';
 
@@ -212,6 +215,31 @@ void main() {
 
       expect(find.byType(OnboardingScreen), findsNothing);
       expect(find.text('Home'), findsOneWidget);
+    });
+  });
+
+  group('⚠️ 不得拿任何人的名字當佔位符', () {
+    testWidgets('沒有帳號時首頁不得出現隊友的名字', (tester) async {
+      // 這三個畫面原本各自寫死 "Jeremy"（隊友的名字）。實機上用「Nathan」
+      // 註冊完，首頁還是說「Good morning Jeremy」——一眼就看得出來，
+      // 而且是在帳號功能做完之後才變得明顯。
+      await tester.pumpWidget(const SonnapApp());
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Jeremy'), findsNothing);
+    });
+
+    test('三個畫面的預設稱呼都是 kFallbackDisplayName', () {
+      // ⚠️ 直接驗預設值而不是驗畫面：widget test 的假時間推不動真正的
+      //    檔案 I/O，首頁要等 payload 載入才畫得出名字（同一個坑寫在
+      //    usage_stats_test.dart 的 setUpAll）。這裡驗的是同一件事的源頭。
+      expect(const HomeScreen().displayName, kFallbackDisplayName);
+      expect(const SettingsScreen().username, kFallbackDisplayName);
+      expect(const AssistantScreen().username, kFallbackDisplayName);
+
+      // 佔位符不可以是人名。這是規則本身，不是實作細節。
+      expect(kFallbackDisplayName, isNot('Jeremy'));
     });
   });
 
