@@ -43,34 +43,109 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：現在在哪、下一步做什麼（2026-09-01 更新．新對話先讀這段）
+## 🔖 交接區：現在在哪、下一步做什麼（2026-09-03 更新．新對話先讀這段）
 
-### ✅ 2026-09-01 這一輪（Session B：`app/` 以外）
+### 現在在哪：Tier A 行為迴圈已經通了
 
-**history 每晚補上了 `pet_mood` / `mood_reason`**（commit `f938606`）。
-在此之前 Insights 頁做不了「點某一晚 → 寵物跟著換」：history 只有
-`final_quality`，而 `anxious` 是用 Tier3 三個 modifier 做的覆寫，
-那三欄不在 history 裡 → 在 Dart 端硬推會把 **4 晚 anxious 畫成 happy/tired**。
+```
+手機事件流 → lights_out_at → POST /nightly → nightly_behavior
+                                                 ↓
+                                   挑戰進度、熬夜比率、寵物狀態
+```
 
-| | |
+`nightly_behavior` 從 08-26（PR #11）就有端點、有測試、有挑戰邏輯，
+但**一直沒有任何東西寫進去**。2026-09-03 接上了來源，實機實測：
+
+```
+LightsOut[unlock] ok at=2026-09-02 02:39:18 quiet=329m
+NightlyUpload: ok date=2026-09-02 adherence=189m late=true
+→ GET /challenges："Lights out on time" recorded_nights 1
+→ bedtime_spread_minutes 36.0（「作息收斂」挑戰第一次有真實資料）
+```
+
+（這一段由 PR #30 帶進來。過程記錄——包含三個只有實機看得到的錯——見
+[DEVLOG.md](DEVLOG.md) 2026-09-02~03 那則。）
+
+### ⚠️ 就寢時刻偵測的三條規則（`app/lib/services/lights_out.dart`）
+
+這三條都是**實機才看得到**的——單元測試全綠、畫面顯示「偵測不到就寢時刻」
+看起來完全正常，其實是錯的。改那個檔案之前逐條確認。
+
+| 規則 | 不遵守的後果 |
 |---|---|
-| 改了哪兩處 | `build_app_payload.py`（asset 路徑）與 `main.py` 的 `/insights`（SQLite 路徑） |
-| API 那邊用哪個函式 | **`resolve_mood()` 不是 `map_pet_mood()`**——`/home` 的 `status.pet_mood` 也走 `resolve_mood`，兩邊不一致的話有行為資料的使用者會在首頁與 Insights 對同一晚看到兩隻不同的寵物 |
-| 順手修掉 | history 原本無條件取最後 30 列，給了 `--date` 就會「status 是 7 月某晚、history[-1] 是 8 月最後一晚」。改成夾在目標夜晚之前 |
-| 實測 | 分數**零位移**（`garmin_sleep_quality_final.csv` 逐位元組未變）；30 晚全有值，四種心情都出現（happy 18 / bored 5 / anxious 4 / tired 3） |
-| 新測試 | `tests/test_history_mood.py`，三條都用「把 bug 重新引入、確認會紅」驗證過 |
+| **解鎖（`keyguard_hidden`）才算互動，螢幕亮不算** | 通知整夜點亮螢幕，把安靜期切成碎片。實測那一夜 `KEYGUARD_HIDDEN` 是 0 次但 `SCREEN_INTERACTIVE` 14 次，最長安靜期從 249 分鐘掉到 148 分鐘 |
+| **`keyguard_shown` 沒配對也算，`screen_off` 沒配對不算** | 就寢時刻常常正好是事件流的**第一筆**（前面沒有解鎖可配對），一律丟掉就會丟掉唯一正確的答案 |
+| **只認兩段使用之間的空隙，頭尾都不算** | 視窗結尾是「現在」，那段安靜還沒結束卻幾乎一定最長，會蓋掉真的那一段 |
 
-⚠️ **`ANXIOUS_*` 門檻仍然只有一個定義處**（`build_app_payload.py`）。
-兩條路徑最後都會走到 `map_pet_mood()`，不要為了方便在任何地方複製那兩個數字。
+⚠️ **事件量比想像大：實機 24 小時 4057 筆**（三星 One UI）。原生端的 `limit`
+訂太小會把視窗砍掉一半，而且丟的是**舊的**那半——正好是昨晚睡覺那段。
 
-### ✅ 手機連後端：已用實機實測通過（2026-09-01）
+⚠️ **不需要背景服務，也不能在半夜跑。** `queryEvents()` 讀的是 Android 自己的
+歷史（實測保留 **≥5 天**），早上開 App 就回推得到昨晚；而演算法要求那段安靜
+**已經結束**，半夜跑的時候人還在睡，結構上得不到答案。
+
+### ⚠️ 達成度只在後端算
+
+`adherence_minutes` / `is_late` 一律來自 `POST /nightly` 的回應，畫面上標著
+"from backend"。跨午夜正規化寫在 `behavior/adherence.py`——目標 23:30、
+實際 02:39，直覺相減會得到「提早 20 小時 51 分」而不是「晚了 189 分鐘」。
+**在 Dart 重算就有第二個定義處，兩份漂移時不會有任何錯誤訊息**，
+與「不要在 Dart 從 `final_quality` 推 `pet_mood`」是同一條紀律。
+
+`app/test/usage_stats_test.dart` 有兩條互為反面的測試守著：沒有後端回應時
+不得出現任何達成度措辭；有回應時必須照抄它的數字。
+
+### ⚠️ App 的身分有兩條路，建置參數優先
+
+| 實作 | 身分從哪來 | 一支 APK |
+|---|---|---|
+| `BuildTimeUserIdentity` | `--dart-define=SONNAP_USER_ID` | = 一個人。demo 用 |
+| `AccountService` | 首次開啟 `POST /users`，存本機 | 給所有人。D2 用 |
+
+測試用的 id 由 `migrate_garmin_to_db.py` 的 `RESEARCHER_USER_ID` 產生。
+
+⚠️ **`user_id` 本身就是憑證**（免註冊、無密碼）。不要印進 logcat（裝了 adb
+就讀得到）、不要放進會外流的檔案。註冊畫面**不得出現「安全」「加密」字眼**
+（有測試守著）——那會讓畫面與同意書自相矛盾。上架前要補認證。
+
+⚠️ **建不了帳號絕對不能擋住 App。** 後端沒開是 demo 的常態。跳過**不寫進儲存**：
+最常見的原因是暫時連不到後端，記成永久決定的話之後永遠不會被問第二次。
+
+⚠️ 本機儲存走 `sonnap/store` MethodChannel 包 Android SharedPreferences，
+**刻意不裝 `shared_preferences`**——那會連帶動到 linux/macos/windows 三個平台的
+generated plugin 檔，而這個專案不出那三個平台。同一個取捨見
+`ApiSleepRepository` 用 `dart:io` 而不裝 `package:http`。
+
+### ⚠️ 不要拿任何人的名字當佔位符
+
+`home` / `settings` / `assistant` 三個畫面原本各自寫死 `"Jeremy"`（隊友的名字）。
+帳號做完之後才看得出來：用「Nathan」註冊完，首頁還是說「Good morning Jeremy」。
+現在有帳號就用帳號的暱稱，沒有就用 `kFallbackDisplayName`（`"Sleeper"`）。
+
+### ✅ 手機連後端：CORS / 綁定 / 防火牆都就緒
 
 | 項目 | 狀態 |
 |---|---|
-| CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]`（早先的 PR 就修了） |
+| CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]` |
 | 綁 `0.0.0.0` | ✅ `uvicorn main:app --host 0.0.0.0 --port 8000` 實測可用 |
-| 區網 IP | **`192.168.1.75`**（Wi-Fi）。⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到 |
 | Windows 防火牆 | ✅ 已加規則 `Sonnap venv python (demo)`（Inbound / Allow / TCP / Private+Public） |
+
+### 🔴 IP 每次都不一樣，而且它是**編譯期**參數
+
+三輪實測分別是 `192.168.1.75`、`192.168.1.104`、`10.91.117.92`（最後那次是
+電腦連手機熱點）。`SONNAP_API_BASE` 用 `--dart-define` 帶入，**IP 一變就要重建 APK**：
+
+```bash
+flutter build apk --debug \
+  --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000 \
+  --dart-define=SONNAP_USER_ID=<測試用 id>     # demo build 才加
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
+
+→ **demo 當天要當場查 IP、當場重建。** 連不上不會壞——會退回打包的資料
+並在 Insights 頁如實標示「Bundled with the app / Backend unreachable」。
+
+⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到。
 
 ⚠️ 防火牆規則**綁定的是程式不是埠**：放行的是
 `Sonnap-Project\.venv\Scripts\python.exe`。刻意不開 `-LocalPort 8000`——
@@ -87,31 +162,18 @@ demo 結束後移除：
 Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 ```
 
-✅ **2026-09-01 用實機開 `http://192.168.1.75:8000/health` 實測通過**，
-所以這個 Wi-Fi 上沒有 client isolation 的問題。
-
 ⚠️ **驗證只能從手機做**。「本機用區網 IP 打得開」不等於手機打得開——
-同一台機器發往自己區網 IP 的封包**不經過防火牆**，09-01 這次就是這樣
-差點誤判成「已經通了」。以後任何一次「手機連得到嗎」都要從手機開網址，
-不要用電腦上的 `curl` 或 `Invoke-WebRequest` 代替。
+同一台機器發往自己區網 IP 的封包**不經過防火牆**，09-01 那次就是這樣
+差點誤判成「已經通了」。以後任何一次「手機連得到嗎」都要從手機開網址
+（或 `adb shell curl`），不要用電腦上的 `curl` 代替。
 
 ⚠️ **在家裡通不代表在現場通**：不少學校/公共 Wi-Fi 開了 client isolation，
 會直接擋掉手機↔筆電，與防火牆無關、這邊也修不了。
-**09-09 的進度查核前務必在現場再測一次**，別把上面那個 ✅ 當成現場也沒問題。
+**09-09 的進度查核前務必在現場再測一次。**
+（09-03 那次是把電腦連上手機熱點才通的——那也是現場可用的備案。）
 
 ⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），規則掛在 Public 設定檔上
 代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
-
-
-> ✅ **這個風險已於 2026-09-01 用 git worktree 從結構上解決**（見下方「工作位置」）。
-> 以下保留當初的記錄：
->
-> ⚠️ **08-28 那一輪是兩個 Claude Code session 同時在同一份 working copy 上工作**
-> （使用者開了不只一個視窗）。過程中發生過一次真的 race：一個 session
-> 正在存檔 `CLAUDE.md`，另一個同時 `git add -A` 把那次存檔也掃進了自己的
-> commit（`9646f2c`）——這次結果無害（內容本身正確），但下次可能不會這麼幸運。
-> **多開視窗同時改同一個 repo 時，commit 前先看 `git status` 裡有沒有
-> 自己沒改過的檔案**，那多半是另一個 session 剛寫的。
 
 ### ✅ `tapo 2.0/.env` 的密碼已換（2026-08-28）
 
@@ -143,129 +205,83 @@ Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 ⚠️ 但**網頁「Add files via upload」仍然繞得過去**（那是 08-27 那次的根因），
 所以規則不變：一律用 `git commit` 推檔案，不要用網頁上傳。
 
-### ✅ 2026-08-28 凌晨那一輪（另一個 session，9 個 commit，全在 `feature/pet-mood-animation`）
+### ⚠️ 在 `wearable_nightly` 加欄位請照**五處**盤點
 
-✅ **全部已經合進 `main`**（PR #17 + #18）。下面那張表留著是為了記錄每一項的
-實測結果，不是進度追蹤——要知道 main 現在有什麼，問 git 不要問這裡（方法論第 2 點）。
+文件曾經寫「要補是三處」，實際是五處。多出來的兩處是 `db.py` 的
+`upsert_wearable_nightly` 欄位白名單（會拋 `ValueError`，跑一次就發現）
+與 `wearable/healthconnect_adapter.py` 的 `to_wearable_row`
+（**不會報錯**——不補的話只有 Health Connect 來源的使用者缺值、
+Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難查）。
 
-| # | 做了什麼 | 實測 |
-|---|---|---|
-| 1 | `tapo 2.0/.env` 停止追蹤 + `.env.example`（分支 `fix/untrack-tapo-env`，**獨立**） | — |
-| 2 | `wearable_nightly` 補 `sleep_start_time` / `wake_time` | 51 晚有值，與 asset 路徑 30/30 逐字相同 |
-| 3 | baseline 窗格改日曆天（`MAX_BASELINE_DAYS`） | 17 晚位移，最大 1.60，**0 晚換等級** |
-| 4 | `MOTIF_FAMILIES` 一對一 + 關鍵字擋得住改寫 | 對不到家族 **10/51 → 1/51** |
-| 5 | 沒量到睡眠的夜晚不得進 baseline | 27 晚位移，最大 1.30，2 晚換等級 |
-| 6 | **新增 `tests/test_scoring_guards.py`** | 4 條，全部驗證過「bug 重現時會紅」 |
-| 7 | `PROJECT_STATUS.md` 對齊現況（51 晚、三名配戴者） | 見六、0 |
-| 8 | 3.9 攝影機上床時刻：樣本 3 晚 → 9 晚 | 成功 4 晚、兩種失敗各有解 |
-| 9 | **新增 `inspect_tapo_dump.py`** | 讓 3.9/3.10 的數字可重跑 |
-
-⚠️ **第 2 項的教訓**：文件寫「要補是三處」，實際是**五處**。多的兩處是
-`db.py` 的欄位白名單（會拋錯）與 `healthconnect_adapter.to_wearable_row`
-（**不會報錯**）。以後在 `wearable_nightly` 加欄位請照五處盤點。
+（08-28 那一輪九個 commit 的逐項實測數字見 [DEVLOG.md](DEVLOG.md)。）
 
 ### ⏭️ 這一輪之後，還沒做的
 
 | 事情 | 卡在誰 |
 |---|---|
+| **合併 PR #30**（Tier A 行為迴圈） | 使用者。已合過 `origin/main` 重跑，120 條全過 |
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
-| ~~TAPO timeline 時間戳壞掉~~ | ✅ **我方已繞過**：時刻在 `video_clip` 檔名裡，見 `tapo_index.py`。來源端的修法在 **Issue #19** |
 | **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現 |
 | `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
 | id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19；細節見 TAPO_HANDOFF #8(b) |
-| `report_screen.dart` / `assistant_screen.dart` 接資料 | Jeremy（`app/` 動之前先問他） |
-| push / 開 PR | 使用者（公開 repo 的對外動作） |
-| 要不要跑 `--ai` 重生 51 晚 | 使用者（會花 API 額度；**目前沒必要**，51 晚全是 llm） |
+| 要不要跑 `--ai` 重生所有夜晚 | 使用者（會花 API 額度；**目前沒必要**，2026-09-03 核對 57/57 全是 llm） |
 
-✅ 已經不卡了：`report_screen.dart`（PR #16 就接好了）、`assistant_screen.dart`
-（PR #20 接上真實 payload）、push／開 PR（08-28 四個 PR 全部合完）。
+**刻意不做**（09-09 之前）：
 
-### ✅ demo 相關這一輪的四個進展
+| 事情 | 理由 |
+|---|---|
+| 背景排程（WorkManager）每天自動上傳 | 事件保留 ≥5 天，「忘記開 App」有很大容錯；而三星會殺背景、各家 ROM 不同 |
+| 睡前 60 分鐘的 App 歸因 | 材料已經在 `queryEvents` 那條路上（把事件流依 App 切段），但畫面現在誠實地寫著「Daily totals. Not yet narrowed to the hour before bed.」 |
+| 遊戲化、Accessibility 阻斷、Health Connect、好友社交、D2 實測 | 見末尾「設計紅線」與路線圖 |
 
-1. **APK 已能自己建，且已裝進實體手機測過**（分支 `merge/jeremy-report-screen`，
-   已合併進 `main`，見下方「已完成」）。Flutter/Android 環境已從零建起，
-   細節與踩過的坑見 `DEVLOG.md` 2026-08-27 那則。
-   ✅ 手機上那份已重建重裝（08-28 實測：拉出手機裡的 APK、解出內嵌的
-   `app_payload.json`，`pet_mood: happy`、`82.2 Good`，與 repo 逐位元組相同）。
-2. **寵物動畫不再永遠播開心的狗**——跟著 `pet_mood` 走，四態各一個資產路徑，
-   資產還沒到位前退到濾鏡版的 `happy_dog.json`（PR #17）。
-3. **Tier3／SRI 不再跨戴錶者計算（`9646f2c`）**——這支手錶 2026-05-28~08-27
-   經手三個人，之前被當成同一個人處理，導致 08-02 之後 10 晚裡 9 晚被誤判
-   `anxious`（含兩個 90 分以上的 Good 夜晚）。已用 `WEARER_SEGMENTS` 分段，
-   細節見下方 ①。
-4. **睡眠助理不再是假回覆，且時區 bug 已修（PR #20）**——
-   `assistant_screen.dart` 改讀真實 payload。它是**路由器不是生成器**：
-   只把後端算好的欄位取出來組句子，**不自己產生任何建議**
-   （產生建議＝第二套沒有文獻依據的評分層，違反紅線 4）。
-   ⚠️ 順手抓到一個**已經在 `main` 上、使用者看得到**的 bug：
-   `DateTime.tryParse("...+08:00")` 回傳的是 UTC，`.hour` 因此**早 8 小時**
-   （22:32 顯示成 14:32）。Jeremy 的 Insights 圖表也中招
-   （`report_screen.dart` 的 `_timeToMinutes`）。
-   → 修法是新檔 `app/lib/models/wall_clock.dart` 的 `parseWallClock()`：
-   **不要用 `.toLocal()`**——那會跟著手機時區跑，而這些是已經記錄下來的事實，
-   要的是字串裡那個 `+08:00` 的牆鐘時間。**Flutter 端解析 payload 時間一律走它。**
+### ⚠️ Flutter 端解析 payload 的時間一律走 `parseWallClock()`
 
-✅ **那個發現已修**（2026-08-28，commit 見下）。而且實際規模比當初記的大得多：
-不是 07-13~07-15 三筆，是 **89 列 summary 裡有 38 列沒量到睡眠**，
-其中大部分都帶著 `avg_heart_rate` 值。
+`app/lib/models/wall_clock.dart`。理由：`DateTime.tryParse("...+08:00")`
+回傳的是 **UTC**，`.hour` 因此早 8 小時（22:32 顯示成 14:32）。
+這個 bug 曾經在 `main` 上、使用者看得到，首頁與 Insights 圖表都中招。
 
-關鍵在語意——那一欄的定義是「**睡眠期間**平均心率」。
-`total_sleep_minutes = 0` 時手錶根本沒偵測到睡眠，那個數字量的是清醒時段。
-數值本身就說明了：`wearer_a` 真正睡眠夜的 avgHR 是 52–58，
-這些無效列上是 **85 / 88 / 90 / 95**。
+⚠️ **不要用 `.toLocal()`**——那會跟著手機時區跑，而這些是已經記錄下來的事實，
+要的是字串裡那個 `+08:00` 的牆鐘時間。
 
-`compute_modifiers()` 現在有自己的 `has_measured_sleep()`，
-並且**分辨構念層級而不是整列丟掉**：
+### ⚠️ 沒量到睡眠的夜晚不得進 baseline
+
+`total_sleep_minutes = 0` 時手錶根本沒偵測到睡眠，但那一列**照樣帶著
+`avg_heart_rate`**——量的是清醒時段。`wearer_a` 真正睡眠夜的 avgHR 是 52–58，
+這些無效列上是 85 / 88 / 90 / 95。89 列 summary 裡有 **38 列**是這種。
+
+`compute_modifiers()` 的 `has_measured_sleep()` **分辨構念層級而不是整列丟掉**：
 
 | 欄位 | 無效夜晚 | 理由 |
 |---|---|---|
 | `avg_heart_rate`、`awake_count`、`sleep_segment_count`、`presleep_stress_score` | ❌ 排除 | 全由睡眠期推導，沒有睡眠期就沒有這些量 |
 | `resting_heart_rate`（每日單一數字）、`steps_total`（白天的量） | ✅ 保留 | 不是從睡眠期算出來的 |
 
-**實測**：27 晚分數改變（26 晚是 `avg_hr_modifier`，正是預測的機制），
-最大位移 **1.30**、平均 0.165，品質等級改變 **2 晚**
-（06-18 Normal→Good、07-09 Normal→Poor）。
-方向：**下降 24 晚、上升 3 晚**——與假設一致（baseline 原本被白天心率推高，
-正常夜晚因此拿到不該有的加分）。同樣是單向的：0 項變寬鬆、2 項變停用。
+⚠️ `has_measured_sleep()` 與 `extract_sleep_features.is_valid_night()`
+**刻意不互相 import**，所以判準漂移時沒有任何錯誤訊息——
+`tests/test_scoring_guards.py` 第 1 條就是在守這件事。
 
 ⚠️ `build_sleep_timeline()`（SRI）**本來就有**自己的檢查，不受影響。
 
 現行路線圖：`C:\Users\user\.claude\plans\abundant-nibbling-sutton.md`
 （D2 使用者實測 → 多使用者架構 → 行為介入迴圈）。
 
-✅ **那份路線圖的後端部分已於 2026-08-26 全部完成並合併進 `main`**
-（PR #11：多使用者持久化、Health Connect adapter、行為介入迴圈、51 晚遷移、驗收測試）。
-**剩下的全部在手機端**：Android 的 UsageStats（取得 `lights_out_at` 與睡前 App 分布）、
-Accessibility 阻斷、Health Connect 串接。後端的端點與資料表都已就緒且有測試，
-手機端接上去就能跑 D2。
+✅ **後端部分 2026-08-26 完成**（PR #11：多使用者持久化、Health Connect adapter、
+行為介入迴圈、資料遷移、驗收測試）。
+✅ **手機端的 UsageStats 與 `lights_out_at` 2026-09-03 完成**（PR #30），
+連同暱稱制帳號——**D2 需要的最小組合已經齊了**。
+
+剩下的：**睡前 App 分布**（材料已在 `queryEvents` 那條路上，只是還沒切段）、
+**Accessibility 阻斷**、**Health Connect 串接**。三個都不在 09-09 之前的範圍。
 
 ⚠️ **要動評分邏輯或新增遊戲化功能（挑戰／獎勵／寵物成長／貨幣）之前，
 先讀「🚧 設計紅線」那一節**——那五條紅線是拿外部同類專案對照後定的，
 其中第 4、5 條防的是我們還沒踩但下一步最可能踩的坑。
 
-### ⏭️ 下次接手的三件事（2026-08-26 留．按這個順序）
+### ⚠️ 三個已修、但規則仍然有效的地方
 
-> ✅ **Jeremy 那個卡點已於 2026-08-26 修好**（分支 `feature/history-sleep-times`）。
-> `build_app_payload.py` 的 `history` 每晚現在帶 `sleep_start_time` 與 `wake_time`，
-> 與 `metrics` 同一個來源（features），最新一晚兩邊逐字相同。
-> 30/30 晚都有值，分數欄位逐欄未變。
->
-> ✅ **`GET /insights` 的 `history` 也補上了**（2026-08-28，commit `4aff730`）。
-> `/home` 的 `metrics` 一併補齊。51 晚全部有值，與 `app_payload.json` 的
-> history 30/30 逐字相同，分數欄位逐列未變。**Jeremy 現在接新 API 不會再卡。**
->
-> ⚠️ **當時文件寫「要補是三處」，實際是五處。** 多出來的兩處是
-> `db.py` 的 `upsert_wearable_nightly` 欄位白名單、以及
-> `wearable/healthconnect_adapter.py` 的 `to_wearable_row`。
-> 前者會拋 `ValueError`，跑一次就發現；**後者不會報錯**——不補的話
-> 只有 Health Connect 來源的使用者缺值、Garmin 來源有值，
-> 那種「只在一種來源下缺資料」的 bug 最難查。
-> → 以後在 `wearable_nightly` 加欄位，請照**五處**盤點。
->
-> ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你
-> 「睡著」（生理），後者是「放下手機」（行為），後者一定較早。
-> （理由已寫在 `migrate_garmin_to_db.py:24-27`。）
-
+⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你
+「睡著」（生理），後者是「放下手機」（行為），後者一定較早。
+（理由寫在 `migrate_garmin_to_db.py:24-27`。）
 
 **① Tier3 的 baseline 跨了不同的戴錶者 —— 已修（2026-08-28）**
 
@@ -323,9 +339,11 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 **② AI 夢境 —— 這一條已經沒事了（2026-08-28 核對）**
 
-「新 5 晚沒有 AI 夢境」這句**早就過期**：`ai/data/ai_advice.json` 的 51 晚
-全部 `source=llm`，`app_payload.json` 最新那晚 `is_ai_generated=true`
-（model `claude-sonnet-5`）。不需要再跑 `--ai`。
+`ai/data/ai_advice.json` **57 晚全部 `source=llm`、0 晚 fallback**
+（2026-09-03 核對，含 Garmin 補抓進來的新夜晚）。不需要再跑 `--ai`。
+
+⚠️ 這一行的數字會隨重抓資料變動，核對指令：
+`python -c "import json,collections;e=json.load(open('ai/data/ai_advice.json',encoding='utf-8'))['entries'];print(len(e),collections.Counter(v['source'] for v in e.values()))"`
 
 ✅ 那個擋路的「`MOTIF_FAMILIES` 不是一對一」也已修（commit `d79cf97`），
 而且一併抓到**第二個更嚴重的缺陷**：
@@ -366,22 +384,26 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 **真正的 git clone：`C:\Users\user\Projects\Sonnap-Project`**
 
-⚠️ **2026-09-01 起另有兩個 git worktree**，那是**安全措施不是便利措施**：
+⚠️ **多開 session 時用 git worktree**，那是**安全措施不是便利措施**。
+現在有一個：
 
-| 目錄 | 誰用 | 分支 |
+| 目錄 | 用途 | 分支 |
 |---|---|---|
-| `Sonnap-Project` | 留在 `main` 當乾淨對照 | `main` |
-| `Sonnap-app` | Session A：只動 `app/` | `feature/app-wiring` |
-| `Sonnap-backend` | Session B：動 `app/` 以外的一切 | `feature/payload-history-mood` |
+| `Sonnap-Project` | 主 clone | 看 `git -C . branch` |
+| `Sonnap-app` | 只動 `app/` | `feature/lights-out-event` |
 
 理由是這個 repo 已經因為兩個 session 共用一份 working copy 而外洩過密碼
 （`8c52874` 的 `git add -A` 把另一個 session 沒 commit 的 `tapo 2.0/.env`
-掃進 commit 並推上公開 repo）。三個目錄**各自有 working directory 與 staging
+掃進 commit 並推上公開 repo）。各目錄**各自有 working directory 與 staging
 area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。額外的好處是
 **worktree 裡完全沒有 `.env`**（三個 `.env` 都是未追蹤的，只存在於主目錄）。
 
-⚠️ 唯一跨疆界的檔案是 `app/assets/data/app_payload.json`——它是 B 的 pipeline
-產物，**只有 B 能重新產生，A 永遠不跑 `build_app_payload.py`**。
+用完 `git worktree remove ../<目錄>` 收掉，不要放著長草。
+
+⚠️ 唯一跨疆界的檔案是 `app/assets/data/app_payload.json`——它是 pipeline 產物。
+**動 `app/` 的 session 永遠不跑 `build_app_payload.py`**，只從 main 拿。
+它被重新產生時 history 的 30 晚窗格會整個滑動（09-03 那次多了 5 晚），
+所以**釘住特定夜晚的驗收測試要跟著重看**。
 
 ⚠️ worktree **不需要自己的 venv**，直接用主目錄那個：
 `C:\Users\user\Projects\Sonnap-Project\.venv\Scripts\python.exe`
@@ -396,32 +418,39 @@ area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。�
 
 > 為什麼不放 OneDrive：OneDrive 同步 `.git` 資料夾會弄壞 repo。
 
-### git 狀態（2026-09-01 更新）
+### git 狀態
 
-✅ `origin/main` 現在是 `406554f`。08-28 之後又合了四個 PR：
+**這一節只列「哪些 PR 帶來了什麼」。`origin/main` 現在是哪個 commit、
+有哪些分支，一律問 git 不要問這裡**（理由見下面那個引言框）。
+
+09-01 ~ 09-03 合併的：
 
 | PR | 內容 |
 |---|---|
-| #22 | 合併後的文件狀態同步 |
-| #23 | 補上 bored/tired/anxious 三個 Lottie（從 happy 衍生） |
-| #24 | TAPO 原始度量記錄器：門檻從錄製階段移到事後 |
-| #25 | 用整夜資料把 TAPO 偵測門檻校準到文獻常模 |
+| #26 / #27 | history 每晚補 `pet_mood` / `mood_reason` |
+| #28 | 就寢時間同步、開通後端連線、手機使用時間、點歷史換寵物 |
+| #29 | TAPO 首事件是暖機假影不是上床時刻；Garmin 補抓到 09-01 |
 
-08-28 那一輪的四個：
+08-28 ~ 09-01 那幾輪：
 
 | PR | 內容 |
 |---|---|
 | #17 | 寵物動畫四態化 + 戴錶者分段（`WEARER_SEGMENTS`）+ baseline 日曆天窗格 |
 | #18 | `tapo 2.0/.env` 停止追蹤，改附 `.env.example` |
 | #20 | 睡眠助理接真實 payload + 修掉時區解析錯 8 小時 |
-| #21 | 本檔的 `.env` 狀態更新 |
+| #21 / #22 | 文件狀態同步 |
+| #23 | 補上 bored/tired/anxious 三個 Lottie（從 happy 衍生） |
+| #24 | TAPO 原始度量記錄器：門檻從錄製階段移到事後 |
+| #25 | 用整夜資料把 TAPO 偵測門檻校準到文獻常模 |
 
 更早的 PR #11（多使用者後端）、#12~15（文件與英文化）、#16（Jeremy 的
 Insights 頁）也都在裡面。
 
-**本地與遠端都只剩 `main` 一條自己的分支**，已合併的分支都刪了。
+**開著的：PR #30**（Tier A 行為迴圈，見交接區開頭）。
+
 遠端另有三條別人的：`flutter`、`second-flutter-integration`（都已併入、可刪）
 與 `feature/opencv-motion-garmin`（影像組，整條不能合，見下）。
+**別人的分支不代刪。**
 
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
 >
@@ -436,25 +465,36 @@ Insights 頁）也都在裡面。
 >
 > ⚠️ 更早的一版還寫過「4 個 commit 直接打在 main 上、尚未 push」，那也早就過期了。
 
-### ⚠️ 環境（2026-08-26 補記）
+### ⚠️ 環境
 
-專案有 `.venv`，但**相依套件從來沒有裝過**——所以在此之前
-`main.py` 其實跑不起來（`ModuleNotFoundError: fastapi`）。
+**Python**：`.venv` 在專案根目錄。2026-09-03 實測，`requirements.txt` 的東西
+**全部裝好了**（`fastapi` / `uvicorn` / `httpx` / `garminconnect` /
+`mysql-connector-python` / `pandas` / `numpy` / `matplotlib` / `seaborn` /
+`opencv-python`）。要確認就直接跑：
 
-已裝：`fastapi`、`uvicorn`、`httpx`（測試用）、`garminconnect`（`--fetch` 需要）、
-`mysql-connector-python`（查 TAPO 時裝的）。
-仍未裝：`pandas`、`matplotlib`、`seaborn`、`opencv-python`、`numpy`
-——只有 `itegration/` 與 `tapo/` 那幾支需要，要用時再
-`pip install -r requirements.txt`。
+```bash
+.venv/Scripts/python.exe -m pip list
+```
 
-⚠️ **`garminconnect` 沒裝不影響 pipeline 的後四步**——只有 `--fetch`（重抓資料）
-那一步需要它，其餘四步讀既有的 `garmin_standard_data.json`。
+⚠️ **`garminconnect` 只有 `--fetch`（重抓資料）那一步需要**，pipeline 的後四步
+讀既有的 `garmin_standard_data.json`，不受影響。
 
-**Flutter/Android 這一輪（08-27）也從零裝起**：Flutter 3.44.9（`C:\Users\user\flutter`）
-+ Android SDK + Temurin JDK 17。踩過的坑（`compileSdk` 版本不對、機器上一度有
+⚠️ **worktree 不需要自己的 venv**，直接用主目錄那個絕對路徑：
+`C:\Users\user\Projects\Sonnap-Project\.venv\Scripts\python.exe`。
+腳本用 `Path(__file__).parent` 定位，資料路徑會正確落在 worktree 內。
+但 **`data/sonnap.db` 不會跟過去**（未追蹤），要先
+`python db.py --init && python db.py --seed && python migrate_garmin_to_db.py`。
+
+**Flutter/Android**：Flutter 3.44.9（`C:\Users\user\flutter`）+ Android SDK
++ Temurin JDK 17，08-27 從零裝起。踩過的坑（`compileSdk` 版本不對、機器上一度有
 兩份 Flutter SDK 互相污染、`local.properties` 反斜線跳脫、VS Code Gradle 外掛搶鎖）
-全部記在 `DEVLOG.md` 2026-08-27 那則，這裡不重複。**現在 `flutter build apk`
-與 `adb install` 都能跑**，已裝進實體 Android 手機驗證過。
+記在 `DEVLOG.md` 2026-08-27 那則。`flutter build apk` 與 `adb install` 都能跑。
+
+⚠️ **`flutter build` 會動到 `app/linux`、`app/macos`、`app/windows` 的
+generated plugin 檔**。那是雜訊（這個專案不出那三個平台），commit 前
+`git checkout -- app/linux app/macos app/windows` 丟掉。
+⚠️ **`adb` 在 Git Bash 底下要 `MSYS_NO_PATHCONV=1`**，否則 `/sdcard/x.png`
+會被改寫成 `C:/Program Files/Git/sdcard/x.png`。
 
 ### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
 
@@ -485,13 +525,7 @@ python garmin/run_pipeline.py          # 再跑後四步
 ✅ 自己開過的分支全部合完並刪除（遠端與本地都只剩 `main`）。
 剩下那兩條 Jeremy 的沒動——**別人的分支不代刪**。
 
-### Jeremy 的 `second-flutter-integration` —— ✅ 已於 PR #16 併入，這節可歸檔
-
-沒有走「直接合他那條分支」的路（原本規劃的順序，21 個落後 commit、
-1 個生成檔衝突）。實際做法是另開分支 `merge/jeremy-report-screen`
-（從當時的 `main` 分出去）手動合併他的內容，衝突檔取 main 版本重新產生，
-2026-08-27 併入 main（PR #16）。`second-flutter-integration` 本身還留在遠端，
-內容已經沒用了，可以刪。
+### ⚠️ TAPO 資料：哪些能引用、哪些不能
 
 ⚠️ **`feature/opencv-motion-garmin` 有 12 個 commit 從沒合併，但整條不能合。**
 另外 11 個 commit 會刪掉 `app`、`backend`、`docs`，還會把 2026-08-11 刪掉的
@@ -543,16 +577,27 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 ### 已完成
 
 - Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 6 秒跑完
-- 51 晚實測資料（**2026-05-29 ~ 08-23**，實測自 `garmin_sleep_quality_final.json`），
-  每晚 0–100 分 + Good/Normal/Poor/Bad，**跨 3 名戴錶者**
-  （41 晚 `wearer_a` + 10 晚 `unverified` + **0 晚 `wearer_c`**——
-  負責人本人 08-28 才開始戴，資料止於 08-23，**本人的夜晚一晚都不在這 51 晚裡**）。
+- **57 晚**實測資料（**2026-05-29 ~ 09-01**，實測自
+  `garmin_sleep_quality_final.json`），每晚 0–100 分 + Good/Normal/Poor/Bad，
+  **跨 3 名戴錶者**：
+
+  | 區段 | 晚數 | 可信 |
+  |---|---|---|
+  | `wearer_a`（2026-05-28 ~ 07-27） | 41 | ✅ |
+  | `unverified`（07-28 ~ 08-27） | 11 | ❌ 已知多人戴過 |
+  | `wearer_c`（08-28 起，負責人本人） | **5** | ✅ |
+
+  ⚠️ **這個數字每次重抓 Garmin 都會變**，寫進報告前跑一次上面那段確認。
+  ⚠️ `wearer_c` 只有 5 晚，而 `MIN_BASELINE_NIGHTS = 14`，所以**本人的
+  Tier3 還在冷啟動、不產生修正值**。
   ⚠️ 報告怎麼寫才誠實，見 [REPORT_CAVEATS.md](REPORT_CAVEATS.md)
 - Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
   + SRI（呈現不計分）
 - 完整文獻依據：`Research-Background/Garmin手錶分數.md`
-- 後端多使用者 API、行為介入迴圈、Health Connect adapter（PR #11）
-- Flutter App 已能自己建置 APK 並裝進實體 Android 手機執行（見上方 ✅）
+- 後端多使用者 API、Health Connect adapter（PR #11）
+- **Tier A 行為迴圈端到端接通**（PR #30）：手機偵測就寢時刻 → 上傳 →
+  挑戰進度。暱稱制帳號，一支 APK 給所有人
+- Flutter App 已能自己建置 APK 並裝進實體 Android 手機執行
 
 ---
 
@@ -607,24 +652,25 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第一個要驗的就是
 「差的夜晚拿到的回饋明顯少於好的夜晚」**。
 
-### ✅ 該補的：行為介入迴圈（我們缺一整層）
+### ✅ 行為介入迴圈：已經接通（2026-09-03）
 
-兩邊的缺口剛好互補：**它是「假量測 + 真迴圈」，我們是「真量測 + 無迴圈」。**
-目前使用者看完分數與夢境日記就結束了，**沒有可以「做」的事**。
+當初的診斷是「它是**假量測 + 真迴圈**，我們是**真量測 + 無迴圈**」——
+使用者看完分數與夢境日記就結束了，沒有可以「做」的事。
 
-要補的話，**標的用 SRI**。這不是抄它，是從我們自己的資料長出來的：
+那一層現在通了：手機量到 `lights_out_at` → `POST /nightly` →
+`behavior/adherence.py` 算達成度 → 挑戰進度。實測數字見交接區。
 
-- SRI 已經在 `apply_recovery_modifier.py` 算好並輸出，但**刻意不計分、只呈現**
-  → 目前實質上是一筆沒人使用的死資料
-- 挑戰標的必須是**行為**（幾點上床），不能是**生理結果**（深睡幾分鐘）。
-  使用者控制得了前者，控制不了後者
-- ⚠️ **拿 SRI 當挑戰目標不違反「不計分」的決定**——當初不計分的理由是
+當初定下、現在仍然有效的三條：
+
+- **挑戰標的必須是行為**（幾點放下手機），不能是**生理結果**（深睡幾分鐘）。
+  使用者控制得了前者，控制不了後者。三個挑戰目前沒有一個讀 `wearable_nightly`
+- ⚠️ **拿作息收斂當挑戰目標不違反「SRI 不計分」的決定**——當初不計分的理由是
   「不同計算方法算出的 SRI 差異大到不能對照外部常模」（Czeisler 2026），
   而「這 7 天你的上床時間有沒有收斂」是**個人內比較**，不受該問題影響。
   但**它仍然不准進 `total_modifier`**，兩件事不要混淆
-- 有 46 晚實測資料，可先驗證挑戰難度再上線
-
-建議形式：「連續 7 天上床時間落在 ±30 分鐘內」→ 寵物解鎖某個狀態。
+- ⚠️ 實際用的不是 SRI 而是 `bedtime_spread_minutes`（`lights_out_at` 的收斂），
+  理由寫在 `behavior/challenges.py`：**SRI 需要手錶的睡眠時間軸，而 D2 的
+  受測者沒有錶**
 
 ## ⚠️ 資料語意：最容易誤讀的欄位（動 Garmin 資料前必讀）
 
@@ -801,7 +847,8 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   的表什麼都不做、連新加的欄位也不補，只改 SCHEMA 會讓已跑過 `--init` 的開發機
   `no such column`。加欄位時兩邊都要改。
 - `build_app_payload.py` — `garmin/data/*.json` → `app/assets/data/app_payload.json`
-- `migrate_garmin_to_db.py` — 46 晚 → `wearable_nightly`，可重複執行
+- `migrate_garmin_to_db.py` — Garmin 的每一晚 → `wearable_nightly`，可重複執行。
+  也是測試用 `RESEARCHER_USER_ID` 的產生處
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -853,12 +900,30 @@ python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
 ```
 
-Flutter（在 `app/` 底下跑，**34 條全過**）：
+Flutter（在 `app/` 底下跑，**120 條全過**）：
 
 ```bash
-flutter test        # widget_test 4 + pet_mood_animation 5 + assistant_answers 17 + wall_clock 8
-flutter analyze     # 0 error（15 個既有的 warning／info 不是這一輪帶進來的）
+flutter test
+flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色常數，
+                    #                        是 Jeremy 既有的，不是新帶進來的）
 ```
+
+⚠️ Flutter 這邊有幾條測試守的是**壞掉時不會報錯**的機制，改到對應的檔案時要一起看：
+
+| 測試檔 | 守什麼 |
+|---|---|
+| `lights_out_test.dart` | 就寢時刻偵測的三條規則（見交接區）。含「把 `resumed` 濾掉答案就會壞」的反向對照 |
+| `nightly_uploader_test.dart` | 三種「沒上傳」的原因要分得開；body 不含 `target_bedtime`；達成度照抄後端 |
+| `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
+| `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚） |
+| `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用；沒有後端回應時不得顯示達成度 |
+
+⚠️ **`TestWidgetsFlutterBinding` 會把全域 `HttpClient` 換成「一律回 400」的假實作**，
+只要同一個檔案裡有任何一條 `testWidgets` 就會裝上。症狀是連 `127.0.0.1:1`
+（根本沒有東西在聽）都「成功」拿到 400 而不是丟 `SocketException`，
+錯誤訊息完全不會指向 `HttpOverrides`。要打真的 local server 就在該 group 的
+`setUp` 裡 `HttpOverrides.global = null`，`tearDown` 還原
+（`account_test.dart` 有現成的寫法）。
 
 ⚠️ `test_tapo_index.py` 守的是 TAPO 資料那五個**壞掉時不會報錯**的機制
 （日期取自檔名而非 `report_date`、壞掉的時間戳要能還原、橫跨兩夜的紀錄要切開、
@@ -902,6 +967,24 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 
 ✅ **四個畫面都接上真實資料了**：`home_screen` / `report_screen`（PR #16）/
 `assistant_screen`（PR #20）/ `friends_screen` 仍是假資料（社交功能還沒做後端）。
+
+`app/lib/services/` 現在的分工：
+
+| 檔案 | 做什麼 |
+|---|---|
+| `sleep_repository.dart` | 睡眠資料。asset / API 兩種來源 + 失敗退回，來源顯示在 Insights 頁 |
+| `usage_stats.dart` | 包 `sonnap/usage` channel：手機使用時間 + 就寢時刻查詢 |
+| `lights_out.dart` | **純函式**：把互動事件流變成一個就寢時刻。沒有 I/O，測得到 |
+| `nightly_uploader.dart` | `POST /nightly` |
+| `user_identity.dart` / `account_service.dart` | 身分的兩條路（見交接區） |
+| `key_value_store.dart` | 包 `sonnap/store` channel（Android SharedPreferences） |
+
+原生端在 `app/android/app/src/main/kotlin/com/example/app/`：
+`UsageStatsService.kt`（使用時間 + `queryEvents`）、`KeyValueStore.kt`、
+`MainActivity.kt`（註冊兩個 channel）。
+
+⚠️ **原生端只回事實，產品判斷留在 Dart。** 「哪些 App 要顯示」「哪一段安靜算睡覺」
+都在 Dart——門檻寫進 Kotlin 的話，每次調整都要重編 APK 才驗得了。
 
 ⚠️ `assistant_screen` 的答案由 `app/lib/services/assistant_answers.dart` 產生，
 它是**查表路由器不是生成器**：`_topicKeywords` 把問題分到 12 個主題，
