@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
+import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
 import '../widgets/pet_mood_animation.dart';
@@ -15,10 +16,14 @@ class ReportScreen extends StatefulWidget {
   /// 手機使用時間的來源。可以注入，測試才不必依賴真的原生 channel。
   final UsageStatsService usageStats;
 
+  /// 把偵測到的就寢時刻送去後端。null = 這支 build 沒設定後端，不上傳。
+  final NightlyUploader? uploader;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
+    this.uploader,
   });
 
   @override
@@ -82,6 +87,9 @@ class _ReportScreenState extends State<ReportScreen>
   /// 但**是兩個不同的量**：一個是整天的總量，一個是一個時刻。
   LightsOutResult? _lightsOut;
 
+  /// 把 [_lightsOut] 送去後端的結果。**達成度的數字來自這裡而不是 Dart。**
+  NightlyUploadResult? _upload;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +131,15 @@ class _ReportScreenState extends State<ReportScreen>
       _usage = result;
       _lightsOut = lightsOut;
     });
+
+    // ⚠️ 上傳放在畫面更新**之後**，而且失敗不影響上面任何一格。
+    //    後端沒開是 demo 的常態（見 FallbackSleepRepository 的理由），
+    //    不能讓它把已經算出來的就寢時刻連帶擋掉。
+    final uploader = widget.uploader;
+    if (uploader == null) return;
+    final upload = await uploader.upload(lightsOut);
+    if (!mounted) return;
+    setState(() => _upload = upload);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -1235,6 +1252,63 @@ class _ReportScreenState extends State<ReportScreen>
               fontSize: 9,
               height: 1.4,
             ),
+          ),
+          _buildAdherenceLine(),
+        ],
+      ),
+    );
+  }
+
+  /// 後端算出來的就寢達成度。
+  ///
+  /// ⚠️ **這一行的數字全部來自 `POST /nightly` 的回應，沒有一個是 Dart 算的。**
+  /// 跨午夜正規化（目標 23:30、實際 02:15，直覺相減會得到「提早 21 小時」）
+  /// 與「幾分鐘算熬夜」的門檻都在 `behavior/adherence.py`。在這裡重算會有
+  /// 第二個定義處，而兩份漂移時不會有任何錯誤訊息——與「不要在 Dart 從
+  /// final_quality 推 pet_mood」是同一條紀律。
+  ///
+  /// 上傳失敗**刻意不在這裡報錯**：那一晚的資料還在手機裡，下次開 App 會再試，
+  /// 而上面那個時刻已經算出來了，不該被後端連不上連帶擋掉。
+  Widget _buildAdherenceLine() {
+    final upload = _upload;
+    if (upload == null || upload.status != NightlyUploadStatus.ok) {
+      return const SizedBox.shrink();
+    }
+
+    final minutes = upload.adherenceMinutes;
+    if (minutes == null) return const SizedBox.shrink();
+
+    final late = upload.isLate ?? false;
+    final early = minutes < 0;
+    final magnitude = _formatQuiet(minutes.abs());
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Row(
+        children: [
+          Icon(
+            late ? Icons.trending_up_rounded : Icons.check_circle_outline_rounded,
+            size: 13,
+            color: late ? const Color(0xFFFFC83D) : const Color(0xFF7ED957),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              minutes == 0
+                  ? 'Exactly on your target bedtime.'
+                  : early
+                      ? '$magnitude earlier than your target bedtime.'
+                      : '$magnitude past your target bedtime.',
+              style: TextStyle(
+                color: late ? const Color(0xFFFFC83D) : const Color(0xFF9FB3D1),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Text(
+            'from backend',
+            style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'screens/friends_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/nightly_uploader.dart';
 import 'services/sleep_repository.dart';
 
 void main() {
@@ -59,6 +60,12 @@ class _MainPageState extends State<MainPage> {
   /// 行為與加這一層之前完全相同。
   final SleepRepository _repository = buildSleepRepository();
 
+  /// 把偵測到的就寢時刻送去後端。
+  ///
+  /// 與 [_repository] 用**同一組建置參數**：沒給 `--dart-define=SONNAP_API_BASE`
+  /// 就是 null，整條上傳路徑不存在，行為與加上它之前完全相同。
+  final NightlyUploader? _uploader = buildNightlyUploader();
+
   void _setBedtime(TimeOfDay value) {
     if (value == targetBedtime) return;
     setState(() => targetBedtime = value);
@@ -82,7 +89,7 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
       ),
       const FriendsScreen(),
-      ReportScreen(repository: _repository),
+      ReportScreen(repository: _repository, uploader: _uploader),
       AssistantScreen(repository: _repository),
       SettingsScreen(
         initialTargetBedtime: targetBedtime,

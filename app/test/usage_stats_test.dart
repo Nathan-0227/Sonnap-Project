@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/report_screen.dart';
 import 'package:app/services/lights_out.dart';
+import 'package:app/services/nightly_uploader.dart';
+import 'package:app/services/user_identity.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/usage_stats.dart';
 
@@ -27,6 +29,25 @@ class _ImmediateRepository implements SleepRepository {
 
   @override
   Future<SleepSession> load() async => session;
+}
+
+/// 固定回一個結果的 uploader。真的 HTTP 由 nightly_uploader_test.dart 測，
+/// 這裡只驗「拿到結果之後畫面怎麼顯示」。
+class _StubUploader implements NightlyUploader {
+  final NightlyUploadResult result;
+  const _StubUploader(this.result);
+
+  @override
+  Future<NightlyUploadResult> upload(LightsOutResult lightsOut) async => result;
+
+  @override
+  String get baseUrl => 'stub';
+
+  @override
+  UserIdentity get identity => const BuildTimeUserIdentity(overrideId: 'stub');
+
+  @override
+  Duration get timeout => const Duration(seconds: 1);
 }
 
 class _FakeUsageStats extends UsageStatsService {
@@ -76,7 +97,11 @@ void main() {
     sample = await const AssetSleepRepository().load();
   });
 
-  Future<void> pumpReport(WidgetTester tester, _FakeUsageStats usage) async {
+  Future<void> pumpReport(
+    WidgetTester tester,
+    _FakeUsageStats usage, {
+    NightlyUploader? uploader,
+  }) async {
     // ReportScreen 內容很長，畫布太小會滿版溢位而蓋掉真正要驗的東西
     tester.view.physicalSize = const Size(1200, 3000);
     tester.view.devicePixelRatio = 1.0;
@@ -86,6 +111,7 @@ void main() {
       home: ReportScreen(
         repository: _ImmediateRepository(sample),
         usageStats: usage,
+        uploader: uploader,
       ),
     ));
     await tester.pump();
@@ -367,11 +393,14 @@ void main() {
       expect(find.textContaining('Phone down at'), findsNothing);
     });
 
-    testWidgets('⚠️ 畫面上不得出現「比目標晚幾分鐘」', (tester) async {
+    testWidgets('⚠️ 沒有後端回應時，畫面不得出現「比目標晚幾分鐘」', (tester) async {
       // 那個數字由後端 behavior/adherence.py 算，它處理了跨午夜正規化
       // （目標 23:30、實際 02:15，直覺相減會得到「提早 21 小時」）。
       // 在 Dart 算第二份，兩邊漂移時不會有任何錯誤訊息——與「不要在
       // Dart 從 final_quality 推 pet_mood」是同一條紀律。
+      //
+      // ⚠️ 這裡刻意**不注入 uploader**：有就寢時刻、但沒有後端回應。
+      //    達成度這時候必須是「不知道」，不能自己補一個。
       final usage = _FakeUsageStats(
         const UsageStatsResult(UsageStatsStatus.empty),
         lightsOutResult: LightsOutResult(
@@ -393,6 +422,7 @@ void main() {
         'behind target',
         'ahead of target',
         'past your target',
+        'earlier than your target',
         'On time',
       ]) {
         expect(
@@ -401,6 +431,35 @@ void main() {
           reason: '出現「$phrase」代表有人在 Dart 端算了達成度',
         );
       }
+    });
+
+    testWidgets('後端算完之後才顯示達成度，而且照抄它的數字', (tester) async {
+      // 反向對照。少了這一條，把整段達成度拿掉、永遠不顯示，
+      // 上面那條測試仍然全綠。
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.empty),
+        lightsOutResult: LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 1, 3, 51),
+          quietMinutes: 248,
+          sourceType: 'keyguard_shown',
+        ),
+      );
+      await pumpReport(
+        tester,
+        usage,
+        uploader: _StubUploader(const NightlyUploadResult(
+          NightlyUploadStatus.ok,
+          date: '2026-09-01',
+          adherenceMinutes: 261,
+          isLate: true,
+        )),
+      );
+
+      // 261 分鐘 = 4h 21m。⚠️ Dart 若自己拿 03:51 減 23:30 會得到
+      // −1179（「提早 19 小時」）——出現那個數字就表示有人在這裡重算了。
+      expect(find.textContaining('4h 21m past your target'), findsOneWidget);
+      expect(find.textContaining('19h'), findsNothing);
     });
   });
 }
