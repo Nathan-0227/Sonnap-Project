@@ -12,24 +12,79 @@
 
 | 檔案 | 說明 |
 |---|---|
-| `tapo_detector.py` | **正式版偵測程式**（516 行）。監測時段 00:30–08:00 |
-| `sleep_anylzer.py` | 從 MySQL 讀資料、產生分析圖表（輸出到 `sleep_analysis_charts/`） |
-| `sleep_reports/` | **每晚的報告 JSON**，目前有 5 晚可用資料 |
+| `tapo_detector.py` | **正式版偵測程式**。預設監測時段 **01:00–08:00**（`tapo_detector.py:22-23`） |
+| `recalculate_scores_full.py` | V3 評分公式，寫好了但沒有套用到現有資料 |
+| `rebuild_reports_from_videos.py` | 從既有的 `turn_*.mp4` 重跑偵測、重建報告並寫回 MySQL |
+| `import_reports_to_mysql.py` | 把 `sleep_reports/` 底下的 JSON 匯進 MySQL |
+| `analyze_from_mysql.py` | `SleepAnalyzer` 類別：從 MySQL 讀資料、產生圖表（需 pandas / matplotlib） |
+| `sleep_anylzer.py` | 同類型的分析腳本，與上一支**不是同一份**（內容不同） |
+| `check_db_connection.py` | 20 行的連線測試：連得上就印出資料表清單 |
+| `check_backup_files.py` | 掃描 `sleep_reports/` 與 `backup_reports/`，列出有哪些 JSON |
+| `sound_test.py` | 收音測試：錄 5 秒、算 RMS |
+| `sleep_records.sql` | MySQL dump。**建表 SQL 就在這裡**（先前記的「沒有建表 SQL」已不成立） |
+| `sleep_reports/` | 每晚的報告 JSON |
 | `sleep_report.json` | 舊的單檔輸出（17:26 起、僅 29 秒的測試錄影） |
-| `sleep_analysis_charts/` | `sleep_anylzer.py` 產生的 PNG |
+| `sleep_analysis_charts/` | 分析腳本產生的 PNG |
+| `.env.example` | 設定範本，複製成 `.env` 填入攝影機網址 |
 
-⚠️ **以下四個檔案是誤建的**（有人把 `import xxx` 當成檔名存檔），
-可以直接刪除，沒有任何程式引用它們：
+### ⚠️ 更正：先前寫「以下四個檔案是誤建的、可以直接刪除」——**那是錯的**
 
-```
-import json.py        import mysql.py
-import os.py          import mysql.connector
-sleep rreport makong.py   ← 檔名有空格與兩個錯字
-```
+它們不是誤建，是**真實的程式碼被存成了錯誤的檔名**（存檔時把第一行 `import xxx`
+當成檔名了）。實際內容是 20~456 行、各有各的用途，照原本的說法刪掉會丟掉約 1400 行。
+已全部改名：
+
+| 原檔名 | 改成 | 行數 |
+|---|---|---|
+| `import json.py` | `import_reports_to_mysql.py` | 110 |
+| `import mysql.py` | `analyze_from_mysql.py` | 456 |
+| `import os.py` | `check_backup_files.py` | 34 |
+| `import mysql.connector`（連副檔名都沒有） | `check_db_connection.py` | 20 |
+| `sleep rreport makong.py` | `rebuild_reports_from_videos.py` | 340 |
+| `newsleep score count.py` | `recalculate_scores_full.py` | 451 |
+| `sound test.py` | `sound_test.py` | — |
+
+`recalculate_scores_full.py` 這個名字不是我取的——**它自己的 docstring 就寫著
+「執行方式: python recalculate_scores_full.py」**，只是存檔時沒有照做。
+
+改名不只是整齊：檔名帶空格、或叫 `import json.py` 的檔案**沒辦法被 import，
+連跑 `python -m py_compile` 都得加引號**，等於這 1400 行程式碼沒有任何工具檢查得到。
+改完之後 9 支全部通過語法檢查。
 
 > 2026-08-15 已刪除四支舊版 `motion_detector.py`（1~4），保留 `tapo_detector.py`。
 > 刪除前有五個版本、監測時段各不相同（15:13–15:14 / 22:00–23:00 / 00:30–08:00），
 > 且沒有任何說明哪支是正式的。全部保留在 git 歷史裡，需要可取回。
+
+---
+
+## ✅ RTSP 帳密已改成環境變數
+
+先前 `tapo/tapo_detector.py`、`tapo/sound test.py`、`tapo 2.0/tapo_detector.py`
+都把 RTSP 帳密**明碼寫死**，而本 repo 是公開的。
+現在全部改讀 `CAMERA_RTSP_URL`，**沒有預設值**——讀不到就中止並印出怎麼設定。
+
+**設定方式**：`cp tapo/.env.example tapo/.env`，填入攝影機網址。
+
+### ⚠️ 順手修掉一個讓「已經改成環境變數了」變成假話的 bug
+
+`tapo 2.0/sleep_monitor.py` 早就寫了 `get_env_var('CAMERA_RTSP_URL', <寫死的網址>)`，
+看起來已經處理好了。但它的 `.env` 載入寫的是 `Path('.env')`——
+**相對於當下工作目錄**。從專案根目錄執行時找不到 `tapo 2.0/.env`，
+於是安靜地退回第二個參數，也就是那組寫死的帳密。
+
+修法是改成 `Path(__file__).parent / '.env'`（`ai/env_utils.py` 一直是這樣寫的），
+並把兩處寫死的預設值拔掉。三種情境都實測過：
+
+| 情境 | 結果 |
+|---|---|
+| 同目錄沒有 `.env` | ✅ 明確中止並印出設定說明，**不再沿用任何寫死值** |
+| 同目錄有 `.env` | ✅ 讀到的值與檔案內容逐字相同（註解列會略過） |
+| 從別的工作目錄執行（先前會退回寫死值的情境） | ✅ 仍讀得到 |
+
+⚠️ 刪掉程式碼裡的帳密**不等於移除**——git 會永久保留歷史。
+真正有效的動作是**修改攝影機密碼**（2026-08-28 已經換過一次，舊值已失效）。
+
+⚠️ `.env` 不要用 GitHub 網頁「Add files via upload」上傳，那會**繞過本機 `.gitignore`**
+——`tapo 2.0/.env` 就是這樣進版控的。一律用 `git commit`。
 
 ---
 
@@ -42,8 +97,11 @@ python tapo/tapo_detector.py
 
 程式會常駐等待，每天 `START_TIME` 到了自動開始監測、`END_TIME` 停止並存檔。
 
+⚠️ 第一次跑之前要先 `cp tapo/.env.example tapo/.env` 填入攝影機網址，
+否則程式會直接中止（這是刻意的，見上一節）。
+
 ⚠️ 需要一個 MySQL 資料庫（設定在 `tapo_detector.py` 的 `DB_CONFIG`）。
-**目前沒有建表 SQL**，只有 `INSERT INTO`，換一台電腦跑會直接失敗。
+建表 SQL 在 `tapo/sleep_records.sql`。
 
 ---
 

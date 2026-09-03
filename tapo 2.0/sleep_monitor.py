@@ -18,7 +18,10 @@ import platform
 # ==================== 🌍 ENVIRONMENT CONFIGURATION ====================
 def load_env_file():
     """Load .env file if it exists"""
-    env_file = Path('.env')
+    # ⚠️ 用 __file__ 而不是 Path('.env')：後者相對於**當下工作目錄**，
+    #    從專案根目錄執行時會找不到檔案，然後安靜地退回下面寫死的預設值。
+    #    那個 fallback 讓「已經改成環境變數了」變成一句假話。
+    env_file = Path(__file__).parent / '.env'
     if env_file.exists():
         try:
             with open(env_file, 'r', encoding='utf-8') as f:
@@ -70,7 +73,7 @@ def load_config():
         "min_motion_area": int(get_env_var('MIN_MOTION_AREA', '50000')),
         "audio_silence_threshold": int(get_env_var('AUDIO_SILENCE', '30')),
         "audio_snooze_threshold": int(get_env_var('AUDIO_SNOOZE', '40')),
-        "tapo_url": get_env_var('CAMERA_RTSP_URL', 'rtsp://imqs113:Monica113@10.22.221.253:554/stream1'),
+        "tapo_url": get_env_var('CAMERA_RTSP_URL'),
         "video_min_duration": int(get_env_var('VIDEO_MIN_DURATION', '5')),
         "video_extend_duration": int(get_env_var('VIDEO_EXTEND_DURATION', '5')),
         "video_max_duration": int(get_env_var('VIDEO_MAX_DURATION', '30')),
@@ -137,7 +140,7 @@ def load_config():
         # 顯示從 .env 讀取的值
         current_start = default_config.get('start_time', '01:00:00')
         current_end = default_config.get('end_time', '08:00:00')
-        current_url = default_config.get('tapo_url', 'rtsp://imqs113:Monica113@10.22.221.253:554/stream1')
+        current_url = default_config.get('tapo_url')
         
         user_input = input(f"開始時間 (預設 {current_start}): ").strip()
         if user_input:
