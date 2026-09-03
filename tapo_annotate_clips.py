@@ -33,6 +33,9 @@ IQR 的那一段」。**逐晚套用那個做法是循環論證** —— 它會�
 
    → 要校準門檻，需要**連續錄影**加時間戳標註，樣本才不會被待評估的
      東西自己挑過。這一支的 --compare 現在會自己檢查並警告這件事。
+     ✓ 2026-09-03 已補上：tapo_metric_logger.py --save-video 錄連續影片，
+     tapo_annotate_continuous.py 標時間戳並直接對照 CSV 裡的演算法度量
+     （不必重新跑影片，vf 欄逐幀對齊），第一次能算出真正的召回率/精確率。
 
    ✓ 但有一個結論站得住：人工標成「完全沒動」的 4 支（13%），
      演算法在**每個**門檻都給 0，完全吻合。那 4 支都是 5 秒、
@@ -421,6 +424,8 @@ def _confound_check(clips_, truth, meas):
         print()
         print("  → 要校準，需要**連續錄影**加上帶時間戳的標註，")
         print("     樣本才不會被待評估的東西自己挑過。")
+        print("     用 tapo_metric_logger.py --save-video 錄一段，")
+        print("     再用 tapo_annotate_continuous.py 標註（2026-09-03 新增）。")
     else:
         print("  ✓ 控制片長之後仍有相關，這批樣本可以用。")
 
