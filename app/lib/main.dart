@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'screens/assistant_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/account_service.dart';
+import 'services/nightly_uploader.dart';
 import 'services/sleep_repository.dart';
 
 void main() {
@@ -59,6 +62,63 @@ class _MainPageState extends State<MainPage> {
   /// 行為與加這一層之前完全相同。
   final SleepRepository _repository = buildSleepRepository();
 
+  /// 這台裝置代表誰。App 啟動時解析一次。
+  ///
+  /// ⚠️ **null 不等於「沒身分」**——它代表「還在解析」。兩者混在一起的話，
+  /// 第一幀就會閃過一次問暱稱的畫面，然後在解析完成後又消失。
+  AccountStatus? _account;
+
+  late final AccountService _accounts = AccountService(
+    baseUrl: ApiSleepRepository.configuredBaseUrl,
+  );
+
+  /// 把偵測到的就寢時刻送去後端。
+  ///
+  /// ⚠️ 依 [_account] 重建：帳號是在 App 開起來之後才建立的，
+  /// uploader 若在啟動時就固定住，剛註冊完的那一次上傳會用到空的身分。
+  NightlyUploader? get _uploader {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return NightlyUploader(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAccount();
+  }
+
+  Future<void> _resolveAccount() async {
+    final status = await _accounts.resolve();
+    if (!mounted) return;
+    setState(() => _account = status);
+  }
+
+  Future<bool> _createAccount(String displayName) async {
+    final hh = targetBedtime.hour.toString().padLeft(2, '0');
+    final mm = targetBedtime.minute.toString().padLeft(2, '0');
+    final status = await _accounts.createAccount(
+      displayName: displayName,
+      targetBedtime: '$hh:$mm',
+    );
+    if (status == null) return false;
+    if (!mounted) return true;
+    setState(() => _account = status);
+    return true;
+  }
+
+  /// 跳過註冊。**不寫進儲存**——下次開 App 會再問一次。
+  ///
+  /// 刻意這樣：跳過的最常見原因是「現在連不到後端」，那是暫時的。
+  /// 記成永久決定的話，使用者之後在 WiFi 底下也永遠不會被問第二次，
+  /// 而且畫面上沒有任何地方看得出來他錯過了什麼。
+  void _skipOnboarding() {
+    setState(() => _account = const AccountStatus(AccountState.noBackend));
+  }
+
   void _setBedtime(TimeOfDay value) {
     if (value == targetBedtime) return;
     setState(() => targetBedtime = value);
@@ -72,9 +132,10 @@ class _MainPageState extends State<MainPage> {
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
   /// 新的值才傳得下去。IndexedStack 依「型別 ＋ 位置」保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
-  List<Widget> _buildPages() {
+  List<Widget> _buildPages(AccountStatus account) {
     return <Widget>[
       HomeScreen(
+        displayName: account.displayName ?? kFallbackDisplayName,
         repository: _repository,
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
@@ -82,9 +143,13 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
       ),
       const FriendsScreen(),
-      ReportScreen(repository: _repository),
-      AssistantScreen(repository: _repository),
+      ReportScreen(repository: _repository, uploader: _uploader),
+      AssistantScreen(
+        repository: _repository,
+        username: account.displayName ?? kFallbackDisplayName,
+      ),
       SettingsScreen(
+        username: account.displayName ?? kFallbackDisplayName,
         initialTargetBedtime: targetBedtime,
         initialReminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
@@ -95,12 +160,32 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final account = _account;
+
+    // 還在解析。⚠️ 這一格不能省——少了它，第一幀會閃過一次問暱稱的畫面
+    // 然後又消失，看起來像 App 在抽搐。
+    if (account == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF081326),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF7657FF)),
+        ),
+      );
+    }
+
+    if (account.state == AccountState.needsOnboarding) {
+      return OnboardingScreen(
+        onCreate: _createAccount,
+        onSkip: _skipOnboarding,
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF081326),
 
       body: IndexedStack(
         index: currentIndex,
-        children: _buildPages(),
+        children: _buildPages(account),
       ),
 
       bottomNavigationBar: Container(

@@ -29,31 +29,40 @@ python garmin/run_pipeline.py    # 約 2 秒
 
 ---
 
-## 五個分頁的真實狀態（2026-09-04）
+## 分頁的真實狀態（2026-09-04）
 
-**五頁裡有三頁接了真實資料。**
+**五個分頁裡三頁接了真實資料**，另外多了一個第一次啟動才出現的 Onboarding。
 
-| 分頁 | 檔案 | 行數 | 狀態 |
-|---|---|---|---|
-| Home | `screens/home_screen.dart` | 333 | ✅ **真實睡眠資料** |
-| Insights | `screens/report_screen.dart` | 2606 | ✅ **真實資料**（`payload.history` 30 晚 + 手機使用時間） |
-| Assistants | `screens/assistant_screen.dart` | 212 | ✅ **真實 payload**（罐頭回覆已移除） |
-| Friends | `screens/friends_screen.dart` | 303 | ❌ 四個好友寫死（Mochi/Coco/Nala/Dango）<br>**卡在社交功能還沒有後端** |
-| Settings | `screens/settings_screen.dart` | 548 | 🟡 就寢時間已與首頁同步，但**存不下來**（見下） |
+| 分頁 | 檔案 | 狀態 |
+|---|---|---|
+| Onboarding | `screens/onboarding_screen.dart` | ✅ 第一次啟動填暱稱 → `POST /users` 拿 `user_id` |
+| Home | `screens/home_screen.dart` | ✅ 真實睡眠資料 |
+| Insights | `screens/report_screen.dart` | ✅ `payload.history` 30 晚 + 手機使用時間 |
+| Assistants | `screens/assistant_screen.dart` | ✅ 真實 payload（罐頭回覆已移除） |
+| Friends | `screens/friends_screen.dart` | ❌ 四個好友寫死，**卡在社交功能沒有後端** |
+| Settings | `screens/settings_screen.dart` | 🟡 就寢時間兩頁同步，但 email 那一欄仍寫死（見下） |
 
-### ⚠️ Settings 的設定目前不會被記住
+### ✅ 暱稱制帳號：一支 APK 給所有人用
 
-就寢時間現在兩頁同步了（state 提到 `_MainPageState`），但：
+`services/account_service.dart` + `user_identity.dart` + `key_value_store.dart`。
+第一次啟動填暱稱 → `POST /users` → `user_id` 存在裝置上，之後所有請求都帶著它。
 
-- **沒有存到裝置**——關掉 App 就回到預設值
-- **沒有送到後端**——`users.target_bedtime` 才是 Tier A 一切計算的基準，
-  改了 UI 不影響任何計算
-- `username` / `email` 仍寫死為 `"Jeremy"` / `"jeremy@email.com"`。
-  ⚠️ 後端**刻意不收 email**（暱稱制免註冊，隱私設計），
-  所以 UI 顯示一個假 email 是在展示一個不存在的功能
+⚠️ **`user_id` 本身就是憑證**——沒有帳號密碼，誰拿到它就能讀寫那個人的資料。
+D2 那種「側載 APK、區網、十來個同學」的情境可以接受，但**同意書要寫清楚，
+日後真的要上架必須先補認證**。
 
-→ 要讓「使用者自行設定」成真，就是 `PATCH /users/{user_id}`，
-跟多使用者接線是同一條路。
+### ⚠️ Settings 還剩兩個問題
+
+1. **`email` 仍寫死為 `"jeremy@email.com"`**（`settings_screen.dart:29`）。
+   後端**刻意不收 email**（暱稱制免註冊，隱私設計就是「沒有可識別個人的欄位」），
+   所以 UI 顯示一個假 email 是在展示一個不存在的功能。**建議直接把那一列移除。**
+2. **就寢時間沒有送到後端**。兩頁同步了，但 `users.target_bedtime` 才是
+   Tier A 一切計算的基準——改了 UI 不影響任何計算。要讓「使用者自行設定」成真，
+   就是 `PATCH /users/{user_id}`。
+
+（`username` 已經不寫死了——`account_service` 會拿註冊時填的暱稱。
+先前三個畫面各自寫死 "Jeremy"，實機上用「Nathan」註冊完首頁還是說
+「Good morning Jeremy」。）
 
 ### ⚠️ 睡眠助理是「路由器」不是「生成器」
 
@@ -97,7 +106,12 @@ lib/
 ├── services/              「資料從哪裡來」
 │   ├── sleep_repository.dart    asset / API / 失敗退回，三種實作
 │   ├── assistant_answers.dart   睡眠助理的查表路由（不是生成器）
-│   └── usage_stats.dart         Android 手機使用時間（UsageStats）
+│   ├── account_service.dart     暱稱制帳號：註冊、取暱稱
+│   ├── user_identity.dart       user_id 的持有者
+│   ├── key_value_store.dart     裝置端儲存（走原生 KeyValueStore.kt）
+│   ├── usage_stats.dart         Android 手機使用時間（UsageStats）
+│   ├── lights_out.dart          從手機事件推出 lights_out_at
+│   └── nightly_uploader.dart    把行為資料送去 POST /nightly
 │
 ├── screens/               五個分頁，一頁一個檔
 └── widgets/               14 個可重用元件（卡片、按鈕、寵物動畫…）
@@ -163,20 +177,23 @@ intl              # 日期格式
 
 ```bash
 flutter analyze     # 目前 3 個 warning（report_screen 未使用的顏色常數）
-flutter test        # 實測 72 個測試全過
+flutter test        # 實測 120 個測試全過
 ```
 
 | 檔案 | 測什麼 | 條數 |
 |---|---|---|
-| `test/widget_test.dart` | App 起得來、五個分頁都在、首頁顯示真值、讀不到資料時顯示錯誤狀態 | 3 |
-| `test/sleep_repository_test.dart` | 讀**真實的** asset，驗證整條解析路徑 | 1 |
-| `test/sleep_repository_fallback_test.dart` | 成功走 api、失敗退 asset 且 `lastSource` 要跟著改、失敗原因不能吞掉 | 6 |
-| `test/pet_mood_animation_test.dart` | 四種心情各自對到自己的資產，資產缺席時退到濾鏡版 | 7 |
-| `test/assistant_answers_test.dart` | 12 個主題的路由；問不出來的要老實說沒有，**不得自己編建議** | 17 |
-| `test/wall_clock_test.dart` | `+08:00` 解析成牆鐘時刻，不轉 UTC 也不跟著手機時區跑 | 8 |
-| `test/bedtime_sync_test.dart` | 兩頁初始值一致、雙向同步，且要走到 `HeaderCard` 那一層 | 5 |
+| `test/lights_out_test.dart` | 從手機事件推 `lights_out_at`（Tier A 的入口） | 18 |
+| `test/assistant_answers_test.dart` | 12 個主題的路由；問不出來要老實說，**不得自己編建議** | 17 |
+| `test/usage_stats_test.dart` | 手機使用時間的解析與彙總 | 17 |
+| `test/account_test.dart` | 暱稱制註冊、`user_id` 的持久化 | 14 |
 | `test/history_pet_test.dart` | 點趨勢圖某一晚，寵物跟著那一晚變 | 13 |
-| `test/usage_stats_test.dart` | 手機使用時間的解析與彙總 | 12 |
+| `test/nightly_uploader_test.dart` | 行為資料上傳，失敗不能吞掉 | 11 |
+| `test/wall_clock_test.dart` | `+08:00` 解析成牆鐘時刻，不轉 UTC 也不跟手機時區跑 | 8 |
+| `test/pet_mood_animation_test.dart` | 四種心情各自對到自己的資產，缺席時退到濾鏡版 | 7 |
+| `test/sleep_repository_fallback_test.dart` | 成功走 api、失敗退 asset 且 `lastSource` 要跟著改 | 6 |
+| `test/bedtime_sync_test.dart` | 兩頁初始值一致、雙向同步，且要走到 `HeaderCard` 那一層 | 5 |
+| `test/widget_test.dart` | App 起得來、分頁都在、首頁顯示真值、缺資料時顯示錯誤狀態 | 3 |
+| `test/sleep_repository_test.dart` | 讀**真實的** asset，驗證整條解析路徑 | 1 |
 
 ### 寫測試踩過的三個坑（留著避免有人改回去）
 
@@ -192,19 +209,13 @@ flutter test        # 實測 72 個測試全過
 
 ## 待處理
 
-依「投報比」排序：
-
-1. **Settings 存下來** — 就寢時間要 (a) 存到裝置、(b) `PATCH /users/{id}` 送到後端。
-   目前改了只在這次開 App 期間有效
-2. **使用者名稱去寫死** — `username` / `email` 拿掉硬編碼；email 那一列**直接移除**
-   （後端刻意不收 email）
-3. **多使用者接線** — 首次啟動 `POST /users` 拿 `user_id` 並存住，資料改走
-   `GET /home?user_id=`。後端 11 個端點已就緒且結構相容，`models/` 一行都不用改。
-   ⚠️ `user_id` 本身就是憑證（沒有密碼），同意書要寫清楚
-4. **Friends** — 卡在社交功能沒有後端，那是全隊決策
+1. **Settings 的 email 那一列移除** — 後端刻意不收 email，顯示假值是在展示不存在的功能
+2. **就寢時間送到後端** — `PATCH /users/{user_id}`，否則 `users.target_bedtime`
+   永遠是註冊時那個值，而那是 Tier A 一切計算的基準
+3. **Friends** — 卡在社交功能沒有後端，那是全隊決策
 
 ✅ 已完成（先前排在這張表上的）：Insights 接 `payload.history`、Assistants 接真實
 payload、寵物動畫四態化、就寢時間兩頁同步、`ApiSleepRepository` + 失敗退回、
-手機使用時間（UsageStats）。
+手機使用時間、**暱稱制多使用者帳號**、`lights_out_at` 送後端。
 
 完整的優先順序與理由見 [`../docs/PROJECT_STATUS.md`](../docs/PROJECT_STATUS.md) 第七節。

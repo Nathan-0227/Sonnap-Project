@@ -17,9 +17,9 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 | ✅ | AI 夢境生成 | 57 晚全數由 Claude 生成（`claude-sonnet-5`），**0 晚退回規則式** |
 | ✅ | UI 原型設計 (Figma) | 五個分頁已實作 |
 | ✅ | 後端多使用者 API | 11 個端點、七張表、暱稱制免註冊，含行為介入迴圈 |
-| ✅ | Flutter APK | 能自己建置並裝進實體 Android 手機；已用實機連後端實測通過 |
+| ✅ | Flutter APK | 能自己建置並裝進實體手機；**暱稱制帳號已實作**，一支 APK 給所有人用 |
 | 🟡 | 攝影機影像串流 | 20 晚原始資料已進 `tapo_index.py`，19 晚通過有效性判準。**但還不能計分**，見下 |
-| 🟡 | 系統整合與 Demo | 五頁**三頁接了真資料**（Home / Insights / Assistants）；Friends 與 Settings 仍是寫死內容 |
+| 🟡 | 系統整合與 Demo | 五頁**三頁接了真資料**（Home / Insights / Assistants）；Friends 仍是寫死內容 |
 
 ### ⚠️ 這 57 晚不是同一個人
 
@@ -47,9 +47,9 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 `Research-Background/攝影機分數.md`（專案紅線 2：要計分，先有文獻依據）。
 問題清單與偵測層規格：[`docs/TAPO_HANDOFF.md`](docs/TAPO_HANDOFF.md)。
 
-**2. 設定存不下來。** Settings 頁的就寢時間現在兩頁同步了，但**沒有存到裝置、
-也沒有送到後端**（`users.target_bedtime` 才是 Tier A 一切計算的基準）。
-關掉 App 就忘記。
+**2. 就寢時間改了不影響計算。** Settings 頁的就寢時間兩頁同步了，
+但**沒有送到後端**——`users.target_bedtime` 才是 Tier A 一切計算的基準，
+所以它永遠停在註冊時填的那個值。缺的是 `PATCH /users/{user_id}`。
 
 完整盤點與優先順序見 **[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)**。
 
