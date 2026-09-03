@@ -5,7 +5,7 @@
 >
 > ⚠️ **不要照著這份檔案做事。** 裡面的「下一步」「待辦」都是寫下當時的狀態，
 > 現在極可能已經過期。現行的規則、語意與下一步一律以
-> [CLAUDE.md](CLAUDE.md) 為準；這裡只用來回答「當初為什麼這樣決定」。
+> [CLAUDE.md](../CLAUDE.md) 為準；這裡只用來回答「當初為什麼這樣決定」。
 >
 > 從 CLAUDE.md 搬過來的內容**逐字未改**（2026-08-26 拆分）。
 
@@ -633,7 +633,7 @@ Android Studio 安裝檔（1.4GB）winget 斷在 136MB、curl 第一次斷在 69
 
 使用者決定「輸出一律以英文為主」。範圍：**後端 + `ai/`，不含 Flutter**
 （`app/lib` 那 14 個 .dart 檔沒動——Jeremy 正在改 `report_screen.dart`，同時改會衝突）。
-規則與實測結果已寫進 [CLAUDE.md](CLAUDE.md) 的「輸出語言」節，這裡只留過程。
+規則與實測結果已寫進 [CLAUDE.md](../CLAUDE.md) 的「輸出語言」節，這裡只留過程。
 
 ### 範圍判斷：只改輸出字串，註解維持中文
 
@@ -1251,7 +1251,7 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 ## 📌 2026-07-20 這一輪
 
 1. ⚠️→✅ **文獻查證與後續逐項核對，最終合併成單一文件**——正式且唯一的成果是
-   [`Research-Background/Garmin手錶分數.md`](Research-Background/Garmin手錶分數.md)
+   [`Research-Background/Garmin手錶分數.md`](../Research-Background/Garmin手錶分數.md)
    （A–M 共 13 節完整學術論述 + 附錄「文獻門檻 × 程式碼對照表」+ 修訂記錄 + Sonnap 章節樹狀架構）。
    演變過程：`_Perplexity_文獻查證交接.md` 是查證草稿、不是待辦事項；Claude 一度誤判成
    「還沒查證」而用 WebSearch 重查一次，另存成 `睡眠品質評分文獻依據.md`；後來逐項核對兩份文件，

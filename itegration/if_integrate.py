@@ -377,7 +377,9 @@ class ReportGenerator:
             return
         
         if output_dir is None:
-            output_dir = "garmin_camera_analysis"
+            # 圖表輸出跟著 docs/images 走（整理根目錄時搬的）。
+            # 改回 "garmin_camera_analysis" 會在根目錄長出第二份，不要改回去。
+            output_dir = "docs/images"
         
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)

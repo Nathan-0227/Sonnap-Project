@@ -4,12 +4,12 @@
 
 | 這裡有什麼 | 這裡沒有什麼 |
 |---|---|
-| **現行的規則、語意、下一步** | 逐輪的過程記錄 → [DEVLOG.md](DEVLOG.md) |
-| 動評分／遊戲化之前必讀的紅線 | 「當初為什麼這樣決定」的完整推理 → [DEVLOG.md](DEVLOG.md) |
+| **現行的規則、語意、下一步** | 逐輪的過程記錄 → [DEVLOG.md](docs/DEVLOG.md) |
+| 動評分／遊戲化之前必讀的紅線 | 「當初為什麼這樣決定」的完整推理 → [DEVLOG.md](docs/DEVLOG.md) |
 
 > ⚠️ **這份檔案只寫現在為真的事。** 發現哪一段過期了，請**改掉或刪掉**，
 > 不要在旁邊加一句「這段已過期」——同一份檔案裡的兩種說法，讀的人無從判斷哪個新，
-> 而警語只在讀者剛好讀到警語時有效。過程記錄要留就留進 [DEVLOG.md](DEVLOG.md)。
+> 而警語只在讀者剛好讀到警語時有效。過程記錄要留就留進 [DEVLOG.md](docs/DEVLOG.md)。
 >
 > （2026-08-26 拆分。拆分前這裡有 1016 行，其中「`main.py` 仍回傳寫死 mock_data」
 > 這種**早已完成卻還寫著「尚未完成」**的段落至少兩處。）
@@ -64,7 +64,7 @@ NightlyUpload: ok date=2026-09-02 adherence=189m late=true
 ```
 
 （這一段由 PR #30 帶進來。過程記錄——包含三個只有實機看得到的錯——見
-[DEVLOG.md](DEVLOG.md) 2026-09-02~03 那則。）
+[DEVLOG.md](docs/DEVLOG.md) 2026-09-02~03 那則。）
 
 ### ⚠️ 就寢時刻偵測的三條規則（`app/lib/services/lights_out.dart`）
 
@@ -213,7 +213,7 @@ Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 （**不會報錯**——不補的話只有 Health Connect 來源的使用者缺值、
 Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難查）。
 
-（08-28 那一輪九個 commit 的逐項實測數字見 [DEVLOG.md](DEVLOG.md)。）
+（08-28 那一輪九個 commit 的逐項實測數字見 [DEVLOG.md](docs/DEVLOG.md)。）
 
 ### ⏭️ 這一輪之後，還沒做的
 
@@ -221,7 +221,7 @@ Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難�
 |---|---|
 | **合併 PR #30**（Tier A 行為迴圈） | 使用者。已合過 `origin/main` 重跑，120 條全過 |
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
-| **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現 |
+| **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現 |
 | `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
 | id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19；細節見 TAPO_HANDOFF #8(b) |
 | 要不要跑 `--ai` 重生所有夜晚 | 使用者（會花 API 額度；**目前沒必要**，2026-09-03 核對 57/57 全是 llm） |
@@ -590,7 +590,7 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
   ⚠️ **這個數字每次重抓 Garmin 都會變**，寫進報告前跑一次上面那段確認。
   ⚠️ `wearer_c` 只有 5 晚，而 `MIN_BASELINE_NIGHTS = 14`，所以**本人的
   Tier3 還在冷啟動、不產生修正值**。
-  ⚠️ 報告怎麼寫才誠實，見 [REPORT_CAVEATS.md](REPORT_CAVEATS.md)
+  ⚠️ 報告怎麼寫才誠實，見 [REPORT_CAVEATS.md](docs/REPORT_CAVEATS.md)
 - Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
   + SRI（呈現不計分）
 - 完整文獻依據：`Research-Background/Garmin手錶分數.md`
@@ -607,7 +607,7 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 4 stars／34 commits／**最後一次 push 是 2024-11-02**，停更約 21 個月
 （2026-08-28 用 GitHub API 複查，仍是最新版本；為什麼要複查見方法論第 2 點）。
 ⚠️ **授權不明**：README 宣稱 MIT，但 repo 裡沒有 LICENSE 檔（見方法論第 1 點）。
-**完整證據與行號在 [PROJECT_STATUS.md](PROJECT_STATUS.md) 第八節**，這裡只留規則。
+**完整證據與行號在 [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) 第八節**，這裡只留規則。
 
 分寸先講清楚：對方是小型學生專案，**「它有問題」不能反過來證明我們是對的**。
 留這一節是因為它的每個問題剛好對應到我們刻意做過的取捨，可以當成回歸測試用的反例。
@@ -733,7 +733,7 @@ python garmin/run_pipeline.py          # 再跑後四步
 | 分數 | 位置 | 狀態 |
 |---|---|---|
 | `final_score` | `garmin/apply_recovery_modifier.py` | ✅ 文獻加權，主線 |
-| `sleep_quality_score` | `tapo/tapo_detector.py:486`（V1，另有 V2/V2.5/V3 三代） | ⚠️ 扣分制，影像組的。**量的是 timeline 長度不是睡眠**——同一晚跨來源差 80 分。再往下一層：timeline 長度取決於**當晚的偵測門檻**，而門檻逐晚變過至少四組且沒記在任何欄位裡 → **跨夜比較在原理上不成立，不是調係數能修的**。見 [TAPO_HANDOFF.md](TAPO_HANDOFF.md) |
+| `sleep_quality_score` | `tapo/tapo_detector.py:486`（V1，另有 V2/V2.5/V3 三代） | ⚠️ 扣分制，影像組的。**量的是 timeline 長度不是睡眠**——同一晚跨來源差 80 分。再往下一層：timeline 長度取決於**當晚的偵測門檻**，而門檻逐晚變過至少四組且沒記在任何欄位裡 → **跨夜比較在原理上不成立，不是調係數能修的**。見 [TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md) |
 | `integrated_score` | `itegration/if_integrate.py` | ⚠️ `0.6×garmin + 0.4×tapo`，**權重無依據**，輸出已標成 PROVISIONAL |
 | ~~`calculate_camera_score()`~~ | — | ✅ **已刪除**（2026-08-30） |
 | ~~`calculate_garmin_score_from_features()`~~ | — | ✅ **已刪除**（2026-08-30） |
