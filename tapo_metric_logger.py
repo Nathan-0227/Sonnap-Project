@@ -85,7 +85,25 @@ MOG2_HISTORY = 500
 MOG2_VAR_THRESHOLD = 16
 LEARNING_RATE = 1.0 / MOG2_HISTORY   # 明確寫出來，不用預設的 -1
 OPEN_KERNEL_SIZE = 5         # 開運算：孤立雜訊點消失、大區塊保留
-ILLUM_JUMP = 4.0             # 平均亮度跳這麼多 = 紅外燈切換／自動曝光，不是動作
+# ⚠️ 照明否決的判準（2026-09-04 換掉，舊的那版是這支最嚴重的 bug）
+#
+# 舊做法：整幀平均亮度變化 > 4.0 就否決。**那是錯的**——大幅度翻身在
+# 紅外線畫面下本來就會改變整幀平均亮度（身體與被子反光不同），
+# 所以它把「正在發生動作」的幀當成燈光變化丟掉。
+#
+# 實測（20260903 那 75 分鐘、22 個人工標記）：
+#   標記附近 ±3 秒被否決 36.2%，其餘時間 1.7% —— 21 倍的偏誤。
+#   而且調高門檻救不了：被擋掉的幀裡「使用者在動」的比例反而升高
+#   （門檻 4 是 48%、門檻 25 是 100%），亮度變化最劇烈的前 15 幀
+#   有 11 幀是真的翻身。
+#   每觸發一次還會連帶丟掉後面 RELEARN 幀，141 次觸發吃掉約 1550 幀。
+#
+# 新做法：看**空間分布**。全域燈光變化會讓大部分像素往同一方向變；
+# 身體動作只影響少數像素、而且雙向都有。
+#   實測同一份資料：動作中被誤殺 36.2% → 2.2%，平常 1.7% → 0.03%。
+#   對事件偵測的影響：F1 0.50 → 0.77（召回 55%→91%、精確 45%→67%）。
+PIXEL_DELTA = 3              # 單一像素要變這麼多才算「變了」
+ILLUM_DOMINANT_FRAC = 0.5    # 同向變化的像素超過這個比例 = 全域照明事件
 RELEARN_FRAMES = 10          # 照明變化後讓背景重學幾幀
 RECONNECT_BACKOFF_MAX = 15   # 重連間隔上限（秒）
 GIVE_UP_AFTER = 40           # 連續失敗這麼多次就收工 —— 空轉 4 小時不如乾淨結束
@@ -240,7 +258,7 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
     deadline = time.time() + selftest_seconds if selftest_seconds else None
     interval = 1.0 / TARGET_FPS
 
-    mean_prev = None
+    prev_blur = None
     relearn = 0
     rows = 0
     skipped_illum = 0
@@ -270,7 +288,7 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
         fh.write(f"# size={WIDTH}x{HEIGHT} fps={TARGET_FPS} blur={BLUR_KERNEL[0]} "
                  f"mog2_history={MOG2_HISTORY} var={MOG2_VAR_THRESHOLD} "
                  f"lr={LEARNING_RATE:.6f} open={OPEN_KERNEL_SIZE} "
-                 f"illum_jump={ILLUM_JUMP} min_blob_px={MIN_BLOB_PX} warmup_s={WARMUP_SECONDS}\n")
+                 f"illum_dom={ILLUM_DOMINANT_FRAC} px_delta={PIXEL_DELTA} min_blob_px={MIN_BLOB_PX} warmup_s={WARMUP_SECONDS}\n")
         fh.write(f"# source={describe(url)}\n")
         writer = csv.writer(fh)
         writer.writerow([
@@ -323,7 +341,7 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
                 cap = open_capture(url)
                 if not cap.isOpened():
                     continue
-                mean_prev, relearn = None, RELEARN_FRAMES
+                prev_blur, relearn = None, RELEARN_FRAMES
                 warm_from = time.time()
                 continue
             consecutive_fail = 0
@@ -353,13 +371,19 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
 
             warming = 1 if (now - warm_from) < WARMUP_SECONDS else 0
 
-            # ── 照明變化否決 ──
+            # ── 照明變化否決（看空間分布，不看整幀平均）──
             illum_skip = 0
-            if mean_prev is not None and abs(mean_now - mean_prev) > ILLUM_JUMP:
-                fgbg.apply(blur, learningRate=0.2)     # 讓背景快速重學
-                relearn = RELEARN_FRAMES
-                illum_skip = 1
-            mean_prev = mean_now
+            if prev_blur is not None:
+                diff = blur.astype(np.int16) - prev_blur
+                # 往同一方向變化的像素佔比。全域燈光變化會很高（實測 0.65~0.79），
+                # 身體動作只有少數像素且雙向都有（動作中中位數 0.14）。
+                dominant = max(float((diff > PIXEL_DELTA).mean()),
+                               float((diff < -PIXEL_DELTA).mean()))
+                if dominant > ILLUM_DOMINANT_FRAC:
+                    fgbg.apply(blur, learningRate=0.2)   # 讓背景快速重學
+                    relearn = RELEARN_FRAMES
+                    illum_skip = 1
+            prev_blur = blur
 
             if illum_skip or relearn > 0:
                 if relearn > 0 and not illum_skip:
