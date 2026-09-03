@@ -2,9 +2,22 @@ import subprocess
 import numpy as np
 import time
 import sys
+import os
+from pathlib import Path
 
 FFMPEG_PATH = r"C:\Users\USER\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe"
-tapo_url = "rtsp://imqs113:Monica113@10.22.221.253:554/stream1"
+# ⚠️ 帳密不寫死（本 repo 公開）。從同目錄 .env 或環境變數讀。
+_env = Path(__file__).parent / ".env"
+if _env.exists():
+    for _raw in _env.read_text(encoding="utf-8").splitlines():
+        _line = _raw.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
+tapo_url = os.environ.get("CAMERA_RTSP_URL", "").strip()
+if not tapo_url:
+    sys.exit("找不到 CAMERA_RTSP_URL，請複製 .env.example 成 .env 並填入攝影機網址。")
 
 print("=" * 60)
 print("🎤 RECORDING AUDIO TEST")

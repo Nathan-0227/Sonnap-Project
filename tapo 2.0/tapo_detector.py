@@ -12,6 +12,45 @@ import subprocess
 import threading
 import queue
 import argparse
+from pathlib import Path
+
+# ==================== 🔴 攝影機帳密（絕不寫死）====================
+# RTSP 網址內含攝影機帳密，而本 repo 是公開的。寫死等於把密碼推上 GitHub，
+# 而且 git 歷史會永久保留——刪掉程式碼裡那一行也救不回來，只能去改攝影機密碼
+# （2026-08-28 已經因此換過一次）。
+#
+# ⚠️ 這裡刻意用 Path(__file__).parent 而不是 Path('.env')：
+#    後者是相對於**當下工作目錄**，從專案根目錄執行時會找不到檔案、
+#    然後安靜地退回寫死的預設值——那個 fallback 正是這次要拔掉的東西。
+#    （同樣的寫法見 ai/env_utils.py，那支是刻意的複製，理由寫在檔案裡。）
+def load_env_file():
+    """把同目錄 .env 的 KEY=VALUE 讀進環境變數。已存在的環境變數不覆蓋。"""
+    env_file = Path(__file__).parent / ".env"
+    if not env_file.exists():
+        return False
+    for raw in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip())
+    return True
+
+
+def require_rtsp_url():
+    """取得 CAMERA_RTSP_URL。**沒有預設值**——讀不到就明確失敗，不要安靜地跑下去。"""
+    load_env_file()
+    url = os.environ.get("CAMERA_RTSP_URL", "").strip()
+    if not url:
+        sys.exit("""
+❌ 找不到 CAMERA_RTSP_URL。
+   請在這支程式的同目錄建立 .env（可從 .env.example 複製）並填入：
+     CAMERA_RTSP_URL=rtsp://<帳號>:<密碼>@<相機IP>:554/stream1
+   或先設環境變數：  set CAMERA_RTSP_URL=rtsp://...
+   ⚠️ .env 永遠不要進版控，也不要用 GitHub 網頁上傳（會繞過 .gitignore）。
+""")
+    return url
+
 
 # ==================== 🛠️ 設定區 ====================
 def load_config():
@@ -26,7 +65,7 @@ def load_config():
         "min_motion_area": 50000,
         "audio_silence_threshold": 30,
         "audio_snooze_threshold": 40,
-        "tapo_url": "rtsp://imqs113:Monica113@10.22.221.253:554/stream1",
+        "tapo_url": require_rtsp_url(),
         "video_min_duration": 5,
         "video_extend_duration": 5,
         "video_max_duration": 30,
