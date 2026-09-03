@@ -1,6 +1,7 @@
 package com.example.app
 
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -114,6 +115,108 @@ class UsageStatsService(private val context: Context) {
             .sortedByDescending {
                 it["usage_minutes"] as Int
             }
+    }
+
+    /**
+     * 區間內的「互動事件」逐筆流，時間遞增。
+     *
+     * ## 為什麼需要這個，getUsage 不夠嗎
+     *
+     * `getUsage()` 給的是**日彙總**——「昨天抖音 2h28m」。它沒有時間軸，
+     * 所以答不出 `lights_out_at`（最後一次放下手機的時刻），而那是
+     * `POST /nightly` 的必填欄位、整個 Tier A 行為層的入口。
+     *
+     * ## ⚠️ 這裡只回事實，不回結論
+     *
+     * 本方法**不判斷哪一刻是就寢**。它回傳原始事件，讓 Dart 端做
+     * 「哪一段安靜長到像睡覺」的推論。理由同 `is_launcher`：原生端提供
+     * 事實，產品判斷留在一個看得到、改得動、測得到的地方。
+     * 把門檻寫進 Kotlin 的話，每次調整都要重編 APK 才驗得了。
+     *
+     * ## 為什麼 RESUMED 也要回，不是只回 PAUSED
+     *
+     * 直覺是「只要最後一筆 ACTIVITY_PAUSED 就好」。那會錯，因為
+     * **連續使用同一個 App 期間一個事件都不會產生**：
+     *
+     *     23:05 RESUMED（打開 YouTube）
+     *     …看了兩小時，中間沒有任何事件…
+     *     01:00 PAUSED（螢幕關掉）
+     *
+     * 只看 PAUSED 的話，23:05 與 01:00 之間看起來是「兩小時沒動手機」，
+     * 會被誤判成睡著。要有 RESUMED 才知道那兩小時是**在用**不是安靜。
+     *
+     * ## 事件型別
+     *
+     * `ACTIVITY_RESUMED` / `ACTIVITY_PAUSED` 是各家 ROM 都給的。
+     * `SCREEN_NON_INTERACTIVE` 與 `KEYGUARD_SHOWN` 更貼近「放下手機」，
+     * 但**不保證拿得到**（部分 ROM 只發給系統 App）。所以兩者都收，
+     * 有就更準、沒有也不會失效，並在每一筆標上 type 讓上層看得出來源。
+     *
+     * ## ⚠️ limit 訂太小會安靜地給出錯的答案
+     *
+     * 第一版是 2000。實機上 24 小時有 **4057 筆**事件（三星 One UI，
+     * 通知多），於是視窗被砍掉一半——而且砍掉的是**舊的那半**，
+     * 也就是昨晚睡覺的那段。畫面顯示「偵測不到就寢時刻」，看起來完全
+     * 正常，實際上是資料被截斷了。
+     *
+     * 現在的值有 5 倍餘裕。呼叫端另外會用「筆數剛好等於上限」判斷是不是
+     * 被截斷，是的話把視窗起點夾到第一筆事件——寧可少報一晚，
+     * 也不要拿半截資料算出一個看起來像真的答案。
+     *
+     * @param limit 上限筆數，超過時保留**最新的**。
+     */
+    fun getInteractionEvents(
+        startTime: Long,
+        endTime: Long,
+        limit: Int = 20000,
+    ): List<Map<String, Any>> {
+
+        if (!hasUsageAccess()) {
+            return emptyList()
+        }
+
+        val usageStatsManager =
+            context.getSystemService(
+                Context.USAGE_STATS_SERVICE
+            ) as UsageStatsManager
+
+        val events = usageStatsManager.queryEvents(startTime, endTime)
+        val collected = ArrayList<Map<String, Any>>()
+        val event = UsageEvents.Event()
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+
+            val type = when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> "resumed"
+                UsageEvents.Event.ACTIVITY_PAUSED -> "paused"
+                UsageEvents.Event.SCREEN_NON_INTERACTIVE -> "screen_off"
+                UsageEvents.Event.SCREEN_INTERACTIVE -> "screen_on"
+                UsageEvents.Event.KEYGUARD_SHOWN -> "keyguard_shown"
+                UsageEvents.Event.KEYGUARD_HIDDEN -> "keyguard_hidden"
+                else -> null
+            } ?: continue
+
+            collected.add(
+                mapOf(
+                    "timestamp" to event.timeStamp,
+                    "type" to type,
+                    // ⚠️ 螢幕與鎖定畫面事件的 packageName 可能是 null 或
+                    //    "android"，那不是錯誤——那些事件本來就不屬於某個 App。
+                    "package_name" to (event.packageName ?: ""),
+                )
+            )
+        }
+
+        // queryEvents 已經是時間遞增，但那是文件沒有明講的實作行為，
+        // 而下游的間隔分析完全建立在順序上，所以自己排一次。
+        collected.sortBy { it["timestamp"] as Long }
+
+        return if (collected.size > limit) {
+            collected.subList(collected.size - limit, collected.size)
+        } else {
+            collected
+        }
     }
 
     /**

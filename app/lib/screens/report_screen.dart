@@ -4,6 +4,8 @@ import 'package:lottie/lottie.dart';
 
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
+import '../services/lights_out.dart';
+import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
 import '../widgets/pet_mood_animation.dart';
@@ -14,10 +16,14 @@ class ReportScreen extends StatefulWidget {
   /// 手機使用時間的來源。可以注入，測試才不必依賴真的原生 channel。
   final UsageStatsService usageStats;
 
+  /// 把偵測到的就寢時刻送去後端。null = 這支 build 沒設定後端，不上傳。
+  final NightlyUploader? uploader;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
+    this.uploader,
   });
 
   @override
@@ -77,6 +83,13 @@ class _ReportScreenState extends State<ReportScreen>
   /// 但那不該影響整頁的其他區塊，所以不併進 `_sessionFuture`。
   UsageStatsResult? _usage;
 
+  /// 上一次放下手機的時刻。與 [_usage] 同一個權限、同一次重查，
+  /// 但**是兩個不同的量**：一個是整天的總量，一個是一個時刻。
+  LightsOutResult? _lightsOut;
+
+  /// 把 [_lightsOut] 送去後端的結果。**達成度的數字來自這裡而不是 Dart。**
+  NightlyUploadResult? _upload;
+
   @override
   void initState() {
     super.initState();
@@ -112,8 +125,21 @@ class _ReportScreenState extends State<ReportScreen>
 
   Future<void> _loadUsage() async {
     final result = await widget.usageStats.queryYesterday();
+    final lightsOut = await widget.usageStats.lightsOut();
     if (!mounted) return;
-    setState(() => _usage = result);
+    setState(() {
+      _usage = result;
+      _lightsOut = lightsOut;
+    });
+
+    // ⚠️ 上傳放在畫面更新**之後**，而且失敗不影響上面任何一格。
+    //    後端沒開是 demo 的常態（見 FallbackSleepRepository 的理由），
+    //    不能讓它把已經算出來的就寢時刻連帶擋掉。
+    final uploader = widget.uploader;
+    if (uploader == null) return;
+    final upload = await uploader.upload(lightsOut);
+    if (!mounted) return;
+    setState(() => _upload = upload);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -1124,10 +1150,177 @@ class _ReportScreenState extends State<ReportScreen>
 
           const SizedBox(height: 12),
 
+          _buildLightsOutRow(),
+
           _buildUsageBody(),
         ],
       ),
     );
+  }
+
+  /// 「你幾點放下手機」——`lights_out_at`，Tier A 行為層的入口。
+  ///
+  /// ⚠️ 這裡刻意**不算**「比目標晚了幾分鐘」。跨午夜的正規化
+  /// （目標 23:30、實際 02:15 直覺相減會得到「提早 21 小時」）已經寫在
+  /// 後端 `behavior/adherence.py`；在 Dart 再寫一份就會有第二個定義處。
+  /// 這張卡只呈現量到的事實。
+  Widget _buildLightsOutRow() {
+    final result = _lightsOut;
+
+    // 沒授權／非 Android／還在讀——底下的 _buildUsageBody 已經在講同一件事了，
+    // 這裡再講一次只會變成兩段重複的錯誤訊息。
+    if (result == null ||
+        result.status == LightsOutStatus.permissionRequired ||
+        result.status == LightsOutStatus.unsupported ||
+        result.status == LightsOutStatus.failed) {
+      return const SizedBox.shrink();
+    }
+
+    late final String value;
+    late final String caption;
+
+    switch (result.status) {
+      case LightsOutStatus.ok:
+        final at = result.at!;
+        final hh = at.hour.toString().padLeft(2, '0');
+        final mm = at.minute.toString().padLeft(2, '0');
+        value = 'Phone down at $hh:$mm';
+        caption =
+            'A proxy for bedtime, not sleep onset - people often lie down for '
+            'another half hour. Quiet for ${_formatQuiet(result.quietMinutes)} '
+            'afterwards.';
+        break;
+
+      case LightsOutStatus.noQuietGap:
+        value = 'No clear wind-down';
+        caption =
+            'The phone was picked up at least every three hours over the last '
+            'day, so there is no single moment worth calling bedtime.';
+        break;
+
+      case LightsOutStatus.noEvents:
+        value = 'No phone events yet';
+        caption =
+            'Android only starts recording these after Usage Access is granted. '
+            'Check back tomorrow.';
+        break;
+
+      // 上面已經提早 return 了，這幾個到不了。
+      case LightsOutStatus.permissionRequired:
+      case LightsOutStatus.unsupported:
+      case LightsOutStatus.failed:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: purpleColor.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.bedtime_outlined,
+                color: purpleColor,
+                size: 15,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            caption,
+            style: const TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+              height: 1.4,
+            ),
+          ),
+          _buildAdherenceLine(),
+        ],
+      ),
+    );
+  }
+
+  /// 後端算出來的就寢達成度。
+  ///
+  /// ⚠️ **這一行的數字全部來自 `POST /nightly` 的回應，沒有一個是 Dart 算的。**
+  /// 跨午夜正規化（目標 23:30、實際 02:15，直覺相減會得到「提早 21 小時」）
+  /// 與「幾分鐘算熬夜」的門檻都在 `behavior/adherence.py`。在這裡重算會有
+  /// 第二個定義處，而兩份漂移時不會有任何錯誤訊息——與「不要在 Dart 從
+  /// final_quality 推 pet_mood」是同一條紀律。
+  ///
+  /// 上傳失敗**刻意不在這裡報錯**：那一晚的資料還在手機裡，下次開 App 會再試，
+  /// 而上面那個時刻已經算出來了，不該被後端連不上連帶擋掉。
+  Widget _buildAdherenceLine() {
+    final upload = _upload;
+    if (upload == null || upload.status != NightlyUploadStatus.ok) {
+      return const SizedBox.shrink();
+    }
+
+    final minutes = upload.adherenceMinutes;
+    if (minutes == null) return const SizedBox.shrink();
+
+    final late = upload.isLate ?? false;
+    final early = minutes < 0;
+    final magnitude = _formatQuiet(minutes.abs());
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Row(
+        children: [
+          Icon(
+            late ? Icons.trending_up_rounded : Icons.check_circle_outline_rounded,
+            size: 13,
+            color: late ? const Color(0xFFFFC83D) : const Color(0xFF7ED957),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              minutes == 0
+                  ? 'Exactly on your target bedtime.'
+                  : early
+                      ? '$magnitude earlier than your target bedtime.'
+                      : '$magnitude past your target bedtime.',
+              style: TextStyle(
+                color: late ? const Color(0xFFFFC83D) : const Color(0xFF9FB3D1),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Text(
+            'from backend',
+            style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatQuiet(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
   }
 
   Widget _buildUsageBody() {
