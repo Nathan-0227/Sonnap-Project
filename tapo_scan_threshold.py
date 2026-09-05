@@ -64,9 +64,18 @@ END_FRAMES = 15      # 連續幾幀安靜才算結束（同一次翻身不被切
 
 FRAME_AREA = 640 * 360
 
+# 分母（整畫面 vs ROI）的解讀只有一份，在 logger 那邊 —— 它寫的格式它負責解讀。
+from tapo_metric_logger import read_roi, row_frac
+
 
 def load(path):
-    """讀 CSV，回傳按時間排序的 (時刻, 最大區塊佔比, 可用嗎)。"""
+    """
+    讀 CSV，回傳 (按時間排序的 [(時刻, 佔比, 可用嗎)], roi)。
+
+    佔比的**分母**由檔頭決定：用 --roi 錄的就是 ROI 面積，否則是整個畫面。
+    解讀集中在 tapo_metric_logger.read_roi/row_frac，這裡不自己判斷。
+    """
+    roi, _ = read_roi(path)
     with path.open(encoding="utf-8") as fh:
         rows = list(csv.DictReader(l for l in fh if not l.startswith("#")))
     out = []
@@ -74,11 +83,12 @@ def load(path):
         if r["warmup"] == "1":
             continue                      # 背景模型還沒建好，整段丟掉
         t = datetime.fromisoformat(r["t"])
-        if r["illum_skip"] == "1" or not r["max_px"]:
+        frac = row_frac(r, roi)
+        if frac is None:
             out.append((t, 0.0, False))   # 照明否決：保留時間軸，但不算在動
         else:
-            out.append((t, int(r["max_px"]) / FRAME_AREA, True))
-    return out
+            out.append((t, frac, True))
+    return out, roi
 
 
 def episodes(samples, threshold, start_frames=START_FRAMES, end_frames=END_FRAMES):
@@ -128,7 +138,7 @@ def main():
             sys.exit("✗ tapo_metrics/ 裡沒有 CSV。先跑 tapo_metric_logger.py。")
         path = files[-1]
 
-    samples = load(path)
+    samples, roi = load(path)
     if len(samples) < 100:
         sys.exit("✗ 有效樣本太少。")
     hours = (samples[-1][0] - samples[0][0]).total_seconds() / 3600
@@ -136,6 +146,11 @@ def main():
 
     print("=" * 92)
     print(f"門檻掃描：{path.name}")
+    if roi:
+        print(f"⚠️ 這份是用 ROI {roi} 錄的 —— 底下每個「門檻」都是"
+              f"**佔 ROI**（{roi[2] * roi[3]} px）的比例，不是佔整個畫面。")
+    else:
+        print("分母：整個畫面（這份沒有用 --roi 錄）")
     print(f"樣本 {len(samples)} 幀 / {hours:.2f} 小時（實際 {fps:.2f} 幀/秒）")
     print(f"事件定義：連續 {START_FRAMES} 幀超過門檻開始、"
           f"連續 {END_FRAMES} 幀（≈{END_FRAMES / fps:.1f} 秒）安靜結束")
@@ -177,7 +192,7 @@ def main():
               f"的門檻有 {len(hits)} 個：")
         for pct, rate, med, n in hits:
             dur_ok = "✓" if 2 <= med <= 8 else "✗"
-            print(f"    {pct:>5.2f}% 畫面 → {rate:>5.1f} 次/小時、{n} 個事件、"
+            print(f"    {pct:>5.2f}% {unit[1:]} → {rate:>5.1f} 次/小時、{n} 個事件、"
                   f"時長中位數 {med:.1f} 秒 {dur_ok}（Montini 是 "
                   f"{MONTINI_DURATION_MEDIAN} 秒）")
         print("""
@@ -188,7 +203,9 @@ def main():
      再用影片人工標註驗一次準確率。""")
     else:
         print("\n⚠️ 沒有任何門檻落進 Montini 的 IQR。可能的原因：")
-        print("   - 相機視野裡床佔太小（現在分母是整個畫面，還沒有 ROI）")
+        print("   - 相機視野裡床佔太小（分母是整個畫面時最明顯，"
+              "用 --roi 錄可以換掉分母）" if not roi else
+              "   - ROI 可能框錯了，回去看 tapo_roi_experiment.py 的熱區圖")
         print("   - END_FRAMES 太長或太短，把動作黏成一段或切成好幾段")
         print("   - 這一晚本身不典型")
 
@@ -196,7 +213,7 @@ def main():
     print(f"\n\n【敏感度】END_FRAMES 對事件數的影響（固定門檻）")
     rule()
     anchor = hits[len(hits) // 2][0] / 100 if hits else 0.02
-    print(f"門檻固定在 {anchor * 100:.2f}% 畫面")
+    print(f"門檻固定在 {anchor * 100:.2f}% {unit[1:]}")
     print(f"\n{'END_FRAMES':<12}{'≈秒':>7}{'事件數':>8}{'次/小時':>9}{'時長中位數':>12}")
     rule()
     for ef in (5, 10, 15, 20, 30, 45, 60):
@@ -216,8 +233,9 @@ def main():
     print("""下一步
 
   1. 再錄幾晚，看落進 IQR 的門檻穩不穩定（現在 n=1）
-  2. 推 ROI（tapo_derive_roi.py），把分母從整個畫面換成床
-     —— 現在的百分比會被「床只佔畫面一部分」稀釋
+  2. 推 ROI（tapo_roi_experiment.py），把分母從整個畫面換成床。
+     ⚠️ 推完一定要**跨晚驗**再用：實測拿受污染那一晚推出來的框，
+        套到另一晚會讓 F1 從 0.92 掉到 0.87。
   3. 用 tapo 2.0/sleep_videos/ 的片段人工標註，驗準確率
   4. 三者都過了，才談要不要計分 —— 而計分門檻要另外找文獻
      （Research-Background/攝影機分數.md，還沒寫）""")

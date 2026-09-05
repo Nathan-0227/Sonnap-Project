@@ -72,7 +72,14 @@ def truth_path_for(csv_path: Path) -> Path:
 
 
 def load_vf_fracs(csv_path: Path):
-    """回傳 dict：vf(int) -> (timestamp_str, frac 或 None)。"""
+    """
+    回傳 dict：vf(int) -> (timestamp_str, frac 或 None)。
+
+    分母跟著檔頭走：用 --roi 錄的就是 ROI 面積。解讀在 tapo_metric_logger，
+    這裡不自己判斷（判準只有一份，漂移時才有人發現）。
+    """
+    from tapo_metric_logger import read_roi, row_frac
+    roi, _ = read_roi(csv_path)
     out = {}
     with csv_path.open(encoding="utf-8") as fh:
         for row in csv.DictReader(l for l in fh if not l.startswith("#")):
@@ -82,8 +89,7 @@ def load_vf_fracs(csv_path: Path):
                 vf = int(row["vf"])
             except ValueError:
                 continue
-            frac = int(row["max_px"]) / FRAME_AREA if row.get("max_px") else None
-            out[vf] = (row.get("t", ""), frac)
+            out[vf] = (row.get("t", ""), row_frac(row, roi))
     return out
 
 

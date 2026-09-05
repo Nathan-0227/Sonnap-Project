@@ -898,6 +898,7 @@ python tests/test_healthconnect_adapter.py
 python tests/test_scoring_guards.py      # 2026-08-28 新增
 python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
+python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
 ```
 
 Flutter（在 `app/` 底下跑，**120 條全過**）：
@@ -924,6 +925,11 @@ flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色
 錯誤訊息完全不會指向 `HttpOverrides`。要打真的 local server 就在該 group 的
 `setUp` 裡 `HttpOverrides.global = null`，`tearDown` 還原
 （`account_test.dart` 有現成的寫法）。
+
+⚠️ `test_tapo_roi_csv.py` 守的是 `tapo_metric_logger --roi` 的**分母**。
+換分母不會拋例外也不會有空值，只會讓門檻整個差一個數量級而數字看起來正常
+（第 4 晚的 ROI 只佔畫面 28.9%，用錯分母時「0.75%」會變成「2.6%」）。
+四條都用「把 bug 重新引入、確認測試會紅」驗證過。
 
 ⚠️ `test_tapo_index.py` 守的是 TAPO 資料那五個**壞掉時不會報錯**的機制
 （日期取自檔名而非 `report_date`、壞掉的時間戳要能還原、橫跨兩夜的紀錄要切開、

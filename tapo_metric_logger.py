@@ -34,6 +34,17 @@ tapo_metric_logger.py — 只記錄原始度量，不判事件、不設門檻、
   python tapo_metric_logger.py --selftest 60      # 先跑 60 秒確認接得上
   python tapo_metric_logger.py                    # 整晚跑，Ctrl+C 結束
   python tapo_metric_logger.py --save-video 60    # 順便存前 60 分鐘的影片
+  python tapo_metric_logger.py --roi 34,129,288,231   # 只看床（多記 roi_* 五欄）
+
+⚠️ `--roi` 是**加五個欄位**，不是改 `max_px`。整畫面的度量照樣記，
+   所以「這個框是不是框對了」事後仍然驗得出來 —— 套上去就回不去的設計
+   會讓框錯這件事變成永久且無聲的。框寫進 CSV 檔頭（`# roi=`），
+   讀的工具用 `read_roi()` / `row_frac()` 解讀，不要各自再寫一份。
+
+⚠️ **框不可以用眼睛挑，也不可以只用同一晚的資料挑。**
+   實測拿有室友那一晚的熱區推出來的框，套到另一晚會讓 F1 從 0.92 掉到 0.87；
+   反過來（用乾淨那晚推的框）套到有室友那晚是 0.73 → 0.86。
+   → 定框一律走 `tapo_roi_experiment.py`，它強制跨晚驗證。
 
 ⚠️ `--save-video` 存的影片與 CSV **逐幀對齊**（影片第 N 幀 == CSV 裡 vf==N
    那一列）。這是校準偵測門檻唯一可靠的樣本來源：
@@ -239,7 +250,18 @@ def open_capture(url):
     return cap
 
 
-def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
+def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
+    # ROI 是**額外一組欄位**，不取代 max_px。理由：套上去就再也回不去了，
+    # 而「這個框是不是框對了」只有拿整畫面的資料才驗得出來。
+    # 兩組並存，事後才有辦法比較，熱區圖也仍然照整畫面累積。
+    roi_mask = None
+    roi_area = 0
+    if roi:
+        rx, ry, rw, rh = roi
+        roi_mask = np.zeros((HEIGHT, WIDTH), np.uint8)
+        roi_mask[max(ry, 0):ry + rh, max(rx, 0):rx + rw] = 255
+        roi_area = int(cv2.countNonZero(roi_mask))
+
     fgbg = cv2.createBackgroundSubtractorMOG2(
         history=MOG2_HISTORY, varThreshold=MOG2_VAR_THRESHOLD, detectShadows=False
     )
@@ -296,6 +318,11 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
                  f"mog2_history={MOG2_HISTORY} var={MOG2_VAR_THRESHOLD} "
                  f"lr={LEARNING_RATE:.6f} open={OPEN_KERNEL_SIZE} "
                  f"illum_dom={ILLUM_DOMINANT_FRAC} px_delta={PIXEL_DELTA} min_blob_px={MIN_BLOB_PX} warmup_s={WARMUP_SECONDS}\n")
+        # ROI 也寫進檔頭。⚠️ 沒有這一行，「roi_px 佔多少」就沒有分母，
+        # 而那正是 TAPO_HANDOFF #1「門檻沒記錄」那個坑的同一種形狀。
+        fh.write(f"# roi={roi[0]},{roi[1]},{roi[2]},{roi[3]} roi_area={roi_area}"
+                 if roi else "# roi=full")
+        fh.write("\n")
         fh.write(f"# source={describe(url)}\n")
         writer = csv.writer(fh)
         writer.writerow([
@@ -309,6 +336,9 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
             "illum_skip", # 這一幀是否因照明變化被否決
             "warmup",     # 背景模型還沒建好，這一幀不可用
             "vf",         # 對應到影片的第幾幀（--save-video 時才有值）
+            # 以下五欄只有 --roi 時才有值：把遮罩套在前景圖上之後重新找的最大區塊。
+            # 分母是 ROI 面積不是畫面面積 —— 那才是能跨房間帶著走的比例。
+            "roi_px", "roi_x", "roi_y", "roi_w", "roi_h",
         ])
 
         print(f"● 連上 {describe(url)}")
@@ -398,7 +428,8 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
                     fgbg.apply(blur, learningRate=0.2)
                 skipped_illum += 1
                 writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
-                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming, vf_now])
+                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming, vf_now,
+                                 "", "", "", "", ""])
                 rows += 1
                 continue
 
@@ -430,9 +461,25 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
                 heat[labels == max_label] += 1.0
                 heat_frames += 1
 
+            roi_cols = ["", "", "", "", ""]
+            if roi_mask is not None:
+                rmask = cv2.bitwise_and(mask, roi_mask)
+                rn, _, rstats, _ = cv2.connectedComponentsWithStats(rmask)
+                rbest = 0
+                rbox = (0, 0, 0, 0)
+                for i in range(1, rn):
+                    area = int(rstats[i, cv2.CC_STAT_AREA])
+                    if area < MIN_BLOB_PX or area <= rbest:
+                        continue
+                    rbest = area
+                    rbox = (int(rstats[i, cv2.CC_STAT_LEFT]), int(rstats[i, cv2.CC_STAT_TOP]),
+                            int(rstats[i, cv2.CC_STAT_WIDTH]), int(rstats[i, cv2.CC_STAT_HEIGHT]))
+                roi_cols = [rbest, rbox[0], rbox[1], rbox[2], rbox[3]]
+
             writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
                              f"{mean_now:.2f}", raw_px, fg_px, blobs,
-                             max_px, max_x, max_y, max_w, max_h, 0, warming, vf_now])
+                             max_px, max_x, max_y, max_w, max_h, 0, warming, vf_now,
+                             *roi_cols])
             rows += 1
             if rows % FLUSH_EVERY == 0:
                 fh.flush()
@@ -452,6 +499,50 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
           f"（照明否決 {skipped_illum} 列、重連 {reconnects} 次）")
     print(f"● {out_path}")
     return out_path
+
+
+def read_roi(csv_path):
+    """
+    從 CSV 檔頭讀出這份資料是用哪個 ROI 錄的。回傳 (roi 或 None, 分母面積)。
+
+    ⚠️ 這個函式是**唯一**的解讀處，讀 CSV 的工具一律 import 它，不要各自再寫。
+       理由與 tapo_index.sleep_recording_problem() 一樣：判準只有一份，
+       漂移的時候才會有人發現。
+    """
+    with Path(csv_path).open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.startswith("#"):
+                break
+            if line.startswith("# roi="):
+                spec = line[len("# roi="):].split()[0].strip()
+                if spec == "full":
+                    return None, WIDTH * HEIGHT
+                try:
+                    roi = tuple(int(v) for v in spec.split(","))
+                except ValueError:
+                    break
+                if len(roi) == 4:
+                    return roi, roi[2] * roi[3]
+                break
+    # 檔頭沒有這一行 = --roi 之前錄的舊資料，那時候分母就是整個畫面
+    return None, WIDTH * HEIGHT
+
+
+def row_frac(row, roi):
+    """
+    一列 → 「最大區塊佔分母的比例」。不可用的列（照明否決、暖機、空值）回 None。
+
+    有 ROI 就用 roi_px/ROI 面積，沒有就用 max_px/畫面面積 —— 呼叫端不必分辨，
+    這也是為什麼 --roi 是**加欄位**而不是改 max_px 的意思：
+    舊 CSV 走同一條路徑，不需要特例。
+    """
+    if row.get("warmup") == "1" or row.get("illum_skip") == "1":
+        return None
+    if roi:
+        v = row.get("roi_px", "")
+        return int(v) / (roi[2] * roi[3]) if v != "" else None
+    v = row.get("max_px", "")
+    return int(v) / (WIDTH * HEIGHT) if v != "" else None
 
 
 def preview(csv_path):
@@ -503,7 +594,19 @@ def main():
     ap.add_argument("--out", type=Path, help="輸出 CSV 路徑")
     ap.add_argument("--save-video", type=float, metavar="分鐘", default=0,
                     help="同時存一份降取樣的連續影片，供人工標註校準門檻。給幾分鐘就只錄前幾分鐘（實測真實紅外線畫面約 70 MB/小時，整夜約 0.5 GB。給大一點的數字就整夜錄）")
+    ap.add_argument("--roi", metavar="X,Y,W,H",
+                    help="只看這個矩形（床）。額外記 roi_* 五欄，max_px 照舊。"
+                         "框從 tapo_roi_experiment.py 推、而且要跨晚驗過才用。")
     args = ap.parse_args()
+
+    roi = None
+    if args.roi:
+        try:
+            roi = tuple(int(v) for v in args.roi.split(","))
+            if len(roi) != 4 or roi[2] <= 0 or roi[3] <= 0:
+                raise ValueError
+        except ValueError:
+            sys.exit("✗ --roi 要給 X,Y,W,H 四個正整數，例如 --roi 34,129,288,231")
 
     signal.signal(signal.SIGINT, _handle_stop)
     signal.signal(signal.SIGTERM, _handle_stop)
@@ -516,7 +619,7 @@ def main():
         datetime.now().strftime("%Y%m%d_%H%M%S")
         + ("_selftest" if args.selftest else "") + ".csv"
     )
-    path = run(url, out, args.selftest, args.save_video)
+    path = run(url, out, args.selftest, args.save_video, roi)
     preview(path)
 
 
