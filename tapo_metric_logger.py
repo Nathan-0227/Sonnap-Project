@@ -33,6 +33,13 @@ tapo_metric_logger.py — 只記錄原始度量，不判事件、不設門檻、
 ────
   python tapo_metric_logger.py --selftest 60      # 先跑 60 秒確認接得上
   python tapo_metric_logger.py                    # 整晚跑，Ctrl+C 結束
+  python tapo_metric_logger.py --save-video 60    # 順便存前 60 分鐘的影片
+
+⚠️ `--save-video` 存的影片與 CSV **逐幀對齊**（影片第 N 幀 == CSV 裡 vf==N
+   那一列）。這是校準偵測門檻唯一可靠的樣本來源：
+   `tapo 2.0/sleep_videos/` 那些片段是舊偵測器自己挑的，有選擇偏誤
+   —— 實測片長與人工標註次數 r=0.84，控制掉片長之後什麼都不剩
+   （見 tapo_annotate_clips.py 的檔頭）。
 
 ⚠️ RTSP 網址從 `tapo 2.0/.env` 的 CAMERA_RTSP_URL 讀，**永遠不印出來**
    （那是帳密，這個 repo 為此外洩過兩次）。
@@ -44,6 +51,19 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+import os
+
+# ⚠️ 必須在 import cv2 之前設，之後才會生效。
+#    UDP 的 RTSP 在 Wi-Fi 上很脆弱：第二晚實測 04:09 之後串流永久掛掉，
+#    連續 257 次重連每次都在 30 秒逾時，一列資料都沒再寫進去。
+#    影像組的音訊路徑（tapo 2.0/tapo_detector.py）本來就用 -rtsp_transport tcp，
+#    所以這台相機吃 TCP 是已知可行的。
+os.environ.setdefault(
+    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+    "rtsp_transport;tcp|stimeout;15000000|max_delay;500000",
+)
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")   # 別讓逾時警告洗版
 
 import cv2
 import numpy as np
@@ -65,8 +85,35 @@ MOG2_HISTORY = 500
 MOG2_VAR_THRESHOLD = 16
 LEARNING_RATE = 1.0 / MOG2_HISTORY   # 明確寫出來，不用預設的 -1
 OPEN_KERNEL_SIZE = 5         # 開運算：孤立雜訊點消失、大區塊保留
-ILLUM_JUMP = 4.0             # 平均亮度跳這麼多 = 紅外燈切換／自動曝光，不是動作
-RELEARN_FRAMES = 10          # 照明變化後讓背景重學幾幀
+# ⚠️ 照明否決的判準（2026-09-04 換掉，舊的那版是這支最嚴重的 bug）
+#
+# 舊做法：整幀平均亮度變化 > 4.0 就否決。**那是錯的**——大幅度翻身在
+# 紅外線畫面下本來就會改變整幀平均亮度（身體與被子反光不同），
+# 所以它把「正在發生動作」的幀當成燈光變化丟掉。
+#
+# 實測（20260903 那 75 分鐘、22 個人工標記）：
+#   標記附近 ±3 秒被否決 36.2%，其餘時間 1.7% —— 21 倍的偏誤。
+#   而且調高門檻救不了：被擋掉的幀裡「使用者在動」的比例反而升高
+#   （門檻 4 是 48%、門檻 25 是 100%），亮度變化最劇烈的前 15 幀
+#   有 11 幀是真的翻身。
+#   每觸發一次還會連帶丟掉後面 RELEARN 幀，141 次觸發吃掉約 1550 幀。
+#
+# 新做法：看**空間分布**。全域燈光變化會讓大部分像素往同一方向變；
+# 身體動作只影響少數像素、而且雙向都有。
+#   實測同一份資料：動作中被誤殺 36.2% → 2.2%，平常 1.7% → 0.03%。
+#   對事件偵測的影響：F1 0.50 → 0.77（召回 55%→91%、精確 45%→67%）。
+PIXEL_DELTA = 3              # 單一像素要變這麼多才算「變了」
+ILLUM_DOMINANT_FRAC = 0.5    # 同向變化的像素超過這個比例 = 全域照明事件
+# 照明事件後讓背景重學幾幀。這段期間的幀一律不採計 —— 模型是髒的。
+# ⚠️ 這個值不是越大越安全：實測（20260903，22 個標記）掃過 0/2/3/5/10，
+#    0 → F1 0.74（精確 75% 但召回只有 73%，背景還髒就開始採計）
+#    5 → F1 0.79（召回 86%、精確 72%）← 最佳
+#   10 → F1 0.71（召回 86% 但精確掉到 60%，丟太多幀反而吃掉真動作）
+#    5 也剛好等於 MOG2 在 learningRate=0.2 下的收斂時間常數（1/0.2），
+#    所以不是純粹湊出來的數字。
+RELEARN_FRAMES = 5
+RECONNECT_BACKOFF_MAX = 15   # 重連間隔上限（秒）
+GIVE_UP_AFTER = 40           # 連續失敗這麼多次就收工 —— 空轉 4 小時不如乾淨結束
 MIN_BLOB_PX = 4              # 小於這個不算一「塊」（純粹避免數到單點）
 # MOG2 一開始沒有背景模型，整幀都會被判成前景（實測第 0 幀 = 100% 畫面）。
 # 這段時間照樣記錄，但標成 warmup，事後一律排除。
@@ -76,6 +123,11 @@ WARMUP_SECONDS = 90
 # 所以另外在記憶體裡累積**真正的遮罩**，結束時存成 .npy。
 # 每幀成本是一次陣列加法，CSV 大小完全不受影響。
 HEAT_MIN_FRAC = 0.01         # 最大區塊要 ≥ 這個比例才進熱區圖（雜訊不算）
+# 連續錄影（--save-video）。存的是**降取樣後、實際拿去分析的那些幀**，
+# 所以影片第 N 幀 == CSV 裡 vf==N 的那一列，逐幀對齊。
+# 這是校準門檻唯一可靠的樣本來源：detector-triggered 的片段有選擇偏誤
+# （片長由偵測器自己決定，實測與人工次數 r=0.84，控制掉之後什麼都不剩）。
+VIDEO_FOURCC = "mp4v"
 
 FLUSH_EVERY = 100            # 每幾列 flush 一次，斷電時損失有限
 
@@ -117,6 +169,67 @@ def describe(url):
     return f"rtsp://…@{tail}"
 
 
+def local_ipv4():
+    """本機對外那張介面的 IPv4。用 UDP connect 找，不會真的送封包。"""
+    import socket as _s
+    sock = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
+def discover_camera(timeout=1.5, workers=160):
+    """
+    在本機所在的 /24 掃 RTSP 埠，回傳找到的第一台。
+
+    ⚠️ 為什麼需要這個：這台相機在校園 Wi-Fi 上拿 DHCP，**網路前綴會變**。
+       09-01 是 10.204.162.253、09-03 變成 10.91.117.253（主機碼沒變，
+       前綴整個換掉）。09-02 那一夜就是因此在 04:09 斷掉，
+       之後空轉 4 小時什麼都沒錄到。
+    """
+    import socket as _s
+    import concurrent.futures as _cf
+    me = local_ipv4()
+    if not me:
+        return None
+    prefix = me.rsplit(".", 1)[0]
+
+    def probe(i):
+        ip = f"{prefix}.{i}"
+        if ip == me:
+            return None
+        sock = _s.socket()
+        sock.settimeout(timeout)
+        try:
+            sock.connect((ip, 554))
+            return ip
+        except OSError:
+            return None
+        finally:
+            sock.close()
+
+    with _cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        for hit in ex.map(probe, range(1, 255)):
+            if hit:
+                return hit
+    return None
+
+
+def swap_host(url, new_ip):
+    """把 URL 裡的主機換掉，帳密原封不動。⚠️ 回傳值不得印出。"""
+    head, sep, tail = url.rpartition("@")
+    if not sep:
+        return url
+    rest = tail.split("/", 1)
+    port = ":" + rest[0].split(":", 1)[1] if ":" in rest[0] else ""
+    path = "/" + rest[1] if len(rest) > 1 else ""
+    return f"{head}@{new_ip}{port}{path}"
+
+
 def open_capture(url):
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     try:
@@ -126,7 +239,7 @@ def open_capture(url):
     return cap
 
 
-def run(url, out_path, selftest_seconds=None):
+def run(url, out_path, selftest_seconds=None, save_video_minutes=0):
     fgbg = cv2.createBackgroundSubtractorMOG2(
         history=MOG2_HISTORY, varThreshold=MOG2_VAR_THRESHOLD, detectShadows=False
     )
@@ -136,6 +249,14 @@ def run(url, out_path, selftest_seconds=None):
 
     cap = open_capture(url)
     if not cap.isOpened():
+        print(f"⚠ 連不上 {describe(url)}，掃描本機網段找相機…")
+        found = discover_camera()
+        if found:
+            url = swap_host(url, found)
+            print(f"● 找到 {describe(url)}，改用這個位址")
+            print("  ⚠️ .env 裡的位址已經過期，記得更新，否則下次還要再掃一次")
+            cap = open_capture(url)
+    if not cap.isOpened():
         sys.exit(f"✗ 連不上 {describe(url)}\n"
                  "   檢查：相機開著嗎？在同一個網段嗎？.env 的密碼是換過之後的嗎？")
 
@@ -144,15 +265,28 @@ def run(url, out_path, selftest_seconds=None):
     deadline = time.time() + selftest_seconds if selftest_seconds else None
     interval = 1.0 / TARGET_FPS
 
-    mean_prev = None
+    prev_blur = None
     relearn = 0
     rows = 0
     skipped_illum = 0
     reconnects = 0
+    consecutive_fail = 0
     next_due = time.time()
     warm_from = time.time()      # 重連之後背景模型要重建，這個會跟著重設
     heat = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
     heat_frames = 0
+    writer_v = None
+    video_path = None
+    vf = 0
+    video_until = time.time() + save_video_minutes * 60 if save_video_minutes else 0
+    if save_video_minutes:
+        video_path = out_path.with_suffix(".mp4")
+        writer_v = cv2.VideoWriter(str(video_path),
+                                   cv2.VideoWriter_fourcc(*VIDEO_FOURCC),
+                                   TARGET_FPS, (WIDTH, HEIGHT), False)
+        if not writer_v.isOpened():
+            print("⚠ 影片編碼器開不起來，這一次不存影片（度量照常）")
+            writer_v = None
 
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         # 檔頭把參數寫進去——這樣這份 CSV 自己就說得出它是怎麼產生的，
@@ -161,7 +295,7 @@ def run(url, out_path, selftest_seconds=None):
         fh.write(f"# size={WIDTH}x{HEIGHT} fps={TARGET_FPS} blur={BLUR_KERNEL[0]} "
                  f"mog2_history={MOG2_HISTORY} var={MOG2_VAR_THRESHOLD} "
                  f"lr={LEARNING_RATE:.6f} open={OPEN_KERNEL_SIZE} "
-                 f"illum_jump={ILLUM_JUMP} min_blob_px={MIN_BLOB_PX} warmup_s={WARMUP_SECONDS}\n")
+                 f"illum_dom={ILLUM_DOMINANT_FRAC} px_delta={PIXEL_DELTA} min_blob_px={MIN_BLOB_PX} warmup_s={WARMUP_SECONDS}\n")
         fh.write(f"# source={describe(url)}\n")
         writer = csv.writer(fh)
         writer.writerow([
@@ -174,6 +308,7 @@ def run(url, out_path, selftest_seconds=None):
             "max_x", "max_y", "max_w", "max_h",   # 最大區塊的 bbox（事後推 ROI 用）
             "illum_skip", # 這一幀是否因照明變化被否決
             "warmup",     # 背景模型還沒建好，這一幀不可用
+            "vf",         # 對應到影片的第幾幀（--save-video 時才有值）
         ])
 
         print(f"● 連上 {describe(url)}")
@@ -188,15 +323,35 @@ def run(url, out_path, selftest_seconds=None):
             ok, frame = cap.read()
             if not ok or frame is None:
                 reconnects += 1
-                print(f"⚠ 串流中斷，第 {reconnects} 次重連…")
+                consecutive_fail += 1
+                if consecutive_fail == 1:
+                    # 在 CSV 裡留一個洞的標記，事後才看得出這裡斷過，
+                    # 而不是以為那段時間「什麼都沒發生」。
+                    writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
+                                     "", "", "", "", "", "", "", "", "", 1, 1, ""])
+                    rows += 1
+                    fh.flush()
+                if consecutive_fail <= 3 or consecutive_fail % 10 == 0:
+                    print(f"⚠ 串流中斷（第 {reconnects} 次，連續失敗 {consecutive_fail}）")
+                if consecutive_fail >= GIVE_UP_AFTER:
+                    print(f"✗ 連續失敗 {consecutive_fail} 次，收工。"
+                          "已寫下的資料都在，不會白費。")
+                    break
                 cap.release()
-                time.sleep(min(2 * reconnects, 30))
+                time.sleep(min(2 * consecutive_fail, RECONNECT_BACKOFF_MAX))
+                # 斷了一陣子還連不回來，多半是 DHCP 換了位址而不是相機關機
+                if consecutive_fail in (10, 25):
+                    found = discover_camera(timeout=1.0)
+                    if found and found not in url:
+                        url = swap_host(url, found)
+                        print(f"● 相機換位址了，改連 {describe(url)}")
                 cap = open_capture(url)
                 if not cap.isOpened():
                     continue
-                mean_prev, relearn = None, RELEARN_FRAMES
+                prev_blur, relearn = None, RELEARN_FRAMES
                 warm_from = time.time()
                 continue
+            consecutive_fail = 0
 
             now = time.time()
             if now < next_due:          # 依牆鐘節流，不依幀數（RTSP 幀率會浮動）
@@ -209,15 +364,33 @@ def run(url, out_path, selftest_seconds=None):
             blur = cv2.GaussianBlur(gray, BLUR_KERNEL, 0)
             mean_now = float(blur.mean())
 
+            # 影片與 CSV 逐幀對齊：只要這一幀有被處理，就同時寫影片與 vf
+            vf_now = ""
+            if writer_v is not None:
+                if now <= video_until:
+                    writer_v.write(gray)   # 存未模糊的，人眼比較好判讀
+                    vf_now = vf
+                    vf += 1
+                else:
+                    writer_v.release()
+                    writer_v = None
+                    print(f"● 影片錄滿 {save_video_minutes:.0f} 分鐘（{vf} 幀），度量繼續")
+
             warming = 1 if (now - warm_from) < WARMUP_SECONDS else 0
 
-            # ── 照明變化否決 ──
+            # ── 照明變化否決（看空間分布，不看整幀平均）──
             illum_skip = 0
-            if mean_prev is not None and abs(mean_now - mean_prev) > ILLUM_JUMP:
-                fgbg.apply(blur, learningRate=0.2)     # 讓背景快速重學
-                relearn = RELEARN_FRAMES
-                illum_skip = 1
-            mean_prev = mean_now
+            if prev_blur is not None:
+                diff = blur.astype(np.int16) - prev_blur
+                # 往同一方向變化的像素佔比。全域燈光變化會很高（實測 0.65~0.79），
+                # 身體動作只有少數像素且雙向都有（動作中中位數 0.14）。
+                dominant = max(float((diff > PIXEL_DELTA).mean()),
+                               float((diff < -PIXEL_DELTA).mean()))
+                if dominant > ILLUM_DOMINANT_FRAC:
+                    fgbg.apply(blur, learningRate=0.2)   # 讓背景快速重學
+                    relearn = RELEARN_FRAMES
+                    illum_skip = 1
+            prev_blur = blur
 
             if illum_skip or relearn > 0:
                 if relearn > 0 and not illum_skip:
@@ -225,7 +398,7 @@ def run(url, out_path, selftest_seconds=None):
                     fgbg.apply(blur, learningRate=0.2)
                 skipped_illum += 1
                 writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
-                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming])
+                                 f"{mean_now:.2f}", "", "", "", "", "", "", "", "", 1, warming, vf_now])
                 rows += 1
                 continue
 
@@ -259,12 +432,17 @@ def run(url, out_path, selftest_seconds=None):
 
             writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
                              f"{mean_now:.2f}", raw_px, fg_px, blobs,
-                             max_px, max_x, max_y, max_w, max_h, 0, warming])
+                             max_px, max_x, max_y, max_w, max_h, 0, warming, vf_now])
             rows += 1
             if rows % FLUSH_EVERY == 0:
                 fh.flush()
 
     cap.release()
+    if writer_v is not None:
+        writer_v.release()
+    if video_path and video_path.exists():
+        mb = video_path.stat().st_size / 1e6
+        print(f"● 影片 {video_path.name}（{vf} 幀、{mb:.0f} MB）← 標註用這個，與 CSV 的 vf 欄逐幀對齊")
     if heat_frames:
         heat_path = out_path.with_name(out_path.stem + "_heat.npy")
         np.save(heat_path, heat)
@@ -323,6 +501,8 @@ def main():
     ap.add_argument("--stream1", action="store_true",
                     help="用主碼流。預設走 stream2，才不會跟現行偵測器搶")
     ap.add_argument("--out", type=Path, help="輸出 CSV 路徑")
+    ap.add_argument("--save-video", type=float, metavar="分鐘", default=0,
+                    help="同時存一份降取樣的連續影片，供人工標註校準門檻。給幾分鐘就只錄前幾分鐘（實測真實紅外線畫面約 70 MB/小時，整夜約 0.5 GB。給大一點的數字就整夜錄）")
     args = ap.parse_args()
 
     signal.signal(signal.SIGINT, _handle_stop)
@@ -336,7 +516,7 @@ def main():
         datetime.now().strftime("%Y%m%d_%H%M%S")
         + ("_selftest" if args.selftest else "") + ".csv"
     )
-    path = run(url, out, args.selftest)
+    path = run(url, out, args.selftest, args.save_video)
     preview(path)
 
 

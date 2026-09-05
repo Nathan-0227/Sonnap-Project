@@ -322,16 +322,20 @@ small = cv2.resize(frame, (640, 360))            # ① 降取樣
 gray  = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
 blur  = cv2.GaussianBlur(gray, (7, 7), 0)        # 核心隨解析度縮小
 
-# ② 照明變化否決
-mean_now = blur.mean()
-if abs(mean_now - mean_prev) > ILLUM_JUMP:       # 紅外燈切換／自動曝光／開燈
-    fgbg.apply(blur, learningRate=0.2)           # 讓背景快速重學
-    skip = RELEARN_FRAMES
-    mean_prev = mean_now
-    continue
-mean_prev = mean_now
+# ② 照明變化否決 —— ⚠️ 看空間分布，**不要**看整幀平均亮度
+#    整幀平均亮度會被身體動作帶動（見下方「這一條踩過坑」），
+#    全域照明事件的特徵是「大部分像素往同一方向變」。
+if prev_blur is not None:
+    diff = blur.astype(np.int16) - prev_blur
+    dominant = max((diff > PIXEL_DELTA).mean(), (diff < -PIXEL_DELTA).mean())
+    if dominant > ILLUM_DOMINANT_FRAC:           # 紅外燈切換／自動曝光／開燈
+        fgbg.apply(blur, learningRate=0.2)       # 讓背景快速重學
+        skip = RELEARN_FRAMES
+        prev_blur = blur
+        continue
+prev_blur = blur
 if skip > 0:
-    skip -= 1; fgbg.apply(blur); continue
+    skip -= 1; fgbg.apply(blur, learningRate=0.2); continue
 
 mask = fgbg.apply(blur, learningRate=LEARNING_RATE)          # ③ 背景相減
 mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, KERNEL)        # ④ 開運算
@@ -432,12 +436,43 @@ else:
 |---|---|---|
 | 解析度 | 640×360 | 偵測不需要 1080p，縮圖順便降噪 |
 | 處理幀率 | 5 fps | 動作中位數 4 秒 → 20 幀，綽綽有餘 |
-| `ILLUM_JUMP` | 平均亮度變化 3–5 階 | 看實際錄影的亮度曲線抓 |
+| `ILLUM_DOMINANT_FRAC` | **0.5**（同向變化的像素佔比） | ⚠️ 不要用整幀平均亮度，見下方 |
+| `PIXEL_DELTA` | 3（單一像素要變這麼多才算變了） | 低於這個是感光雜訊 |
+| `RELEARN_FRAMES` | **5** | 實測 0→F1 0.74、5→0.79、10→0.71。5 也等於 `learningRate=0.2` 的收斂時間常數 |
 | `KERNEL` | 5×5 橢圓（在 360p 下） | 剛好吃掉單點雜訊 |
 | `MIN_BLOB_FRACTION` | ROI 的 5% | 起點，一定要用影片驗 |
 | `START_FRAMES` | 3（≈0.6 秒） | 濾掉瞬間閃動 |
 | `END_FRAMES` | 15（≈3 秒） | 同一次翻身不會被切成兩段 |
 | `LEARNING_RATE` | **明確指定**，不要用預設 `-1` | 預設是 `1/history`，不寫出來沒人知道背景多久會忘記 |
+
+#### ⚠️ 這一條我們踩過坑，請不要重蹈覆轍
+
+我們自己的實作原本用「整幀平均亮度變化 > 4.0」當照明否決的判準。
+**那是錯的**：大幅度翻身在紅外線畫面下本來就會改變整幀平均亮度
+（身體與被子的反光不同），所以它會系統性地把**正在發生動作的那些幀**
+當成燈光變化丟掉。
+
+實測（2026-09-03，75 分鐘連續錄影 + 22 個人工標記）：
+
+| | 標記附近 ±3 秒 | 其餘時間 |
+|---|---|---|
+| 被照明否決的比例 | **36.2%** | 1.7% |
+
+**21 倍的偏誤，而且調高門檻救不了** —— 被擋掉的幀裡「使用者在動」的比例
+反而越來越高（門檻 4 是 48%、門檻 25 是 100%）；亮度變化最劇烈的前 15 幀
+有 11 幀是真的翻身。每觸發一次還連帶丟掉後面 `RELEARN_FRAMES` 幀。
+
+改成看空間分布之後（同一份資料、同一組標記）：
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| 動作中被誤殺 | 36.2% | **2.2%** |
+| 事件偵測 F1 | 0.50 | **0.79** |
+| 召回率 | 55% | **86%** |
+| 精確率 | 45% | **72%** |
+
+判準：全域照明事件會讓大部分像素往**同一方向**變（實測 0.65–0.79），
+身體動作只影響少數像素、而且雙向都有（動作中中位數 0.14）。
 
 ---
 
