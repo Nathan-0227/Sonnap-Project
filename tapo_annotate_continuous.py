@@ -79,6 +79,8 @@ def load_vf_fracs(csv_path: Path):
     這裡不自己判斷（判準只有一份，漂移時才有人發現）。
     """
     from tapo_metric_logger import read_roi, row_frac
+    if not csv_path.exists():
+        return {}          # 只有影片也要能標註，見 main()
     roi, _ = read_roi(csv_path)
     out = {}
     with csv_path.open(encoding="utf-8") as fh:
@@ -439,8 +441,18 @@ def main():
     ap.add_argument("--compare", action="store_true", help="對照人工標記與 CSV 裡的演算法度量")
     args = ap.parse_args()
 
+    # CSV 不在也要能標註 —— 標註只需要影片。2026-09-06 第 4 晚的 CSV 被
+    # 誤刪（worktree 收掉時連未追蹤檔一起帶走），影片還在卻標不了，
+    # 那個限制是這支自己加的、沒有必要。
     if not args.csv.exists():
-        sys.exit(f"✗ 找不到 {args.csv}")
+        if not video_path_for(args.csv).exists():
+            sys.exit(f"✗ 找不到 {args.csv}，也找不到 {video_path_for(args.csv)}")
+        if args.compare:
+            sys.exit(f"✗ 找不到 {args.csv} —— --compare 要讀 CSV 裡的演算法度量。\n"
+                     "   影片還在的話改用 tapo_roi_experiment.py，"
+                     "它從影片重跑管線，不需要 CSV。")
+        print(f"⚠ 找不到 {args.csv.name}，只用影片標註。")
+        print("  影響：標記存下來時沒有 t 欄（時刻），vf 照舊 —— 對照分析用的是 vf，不受影響。")
 
     if args.compare:
         cmd_compare(args.csv)
