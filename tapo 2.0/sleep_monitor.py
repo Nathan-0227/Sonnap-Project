@@ -66,7 +66,12 @@ def load_config():
     
     # 1. 預設值 (從 .env 或硬編碼)
     default_config = {
-        "start_time": get_env_var('SLEEP_START', '01:00:00'),
+        # 預設值 2026-09-04 從 01:00 改成 22:00。實測 57 個 Garmin 夜晚
+        # （SLEEP_END 固定 08:00）：01:00 有 7 晚(12%)的入睡時刻落在開機之前、
+        # 結構上錄不到；22:00 涵蓋 57/57，代價只是多錄 3 小時。
+        # 21:00 / 20:00 一樣是 57/57，再往前沒有額外好處。
+        # ⚠️ .env 會蓋過這個預設值，改預設不等於改到正在跑的設定。
+        "start_time": get_env_var('SLEEP_START', '22:00:00'),
         "end_time": get_env_var('SLEEP_END', '08:00:00'),
         "motion_large": int(get_env_var('MOTION_LARGE', '350000')),
         "motion_micro": int(get_env_var('MOTION_MICRO', '250000')),
