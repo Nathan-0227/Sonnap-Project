@@ -153,10 +153,31 @@ def _is_warmup_artifact(clip_events):
     return bool(clip_events) and clip_events[0][1] == FULL_FRAME_INTENSITY
 
 
-def _record(source_id, kind, report_date, stored_score, timeline):
+def _record(source_id, kind, report_date, stored_score, timeline,
+            declared_events=None):
+    """
+    `declared_events` 是來源自己宣稱的事件數（SQL 的 `total_events` 欄位、
+    JSON 的 `summary.total_events`），**不是**我們數出來的。
+
+    ⚠️ 兩者可以不一致，而且真的發生過：`sql#117`（08-19）宣稱 73 筆，
+       `timeline` 欄位卻是字面上的 `'[]'`。查證過**不是**我們解析失敗
+       （原始 SQL 就是 `'[]'`），也不是欄位截斷（`timeline` 是 longtext，
+       同一份 dump 裡 id 344 存了 121KB 沒問題）。影像組兩支程式的所有
+       寫入路徑都用 `len(cleaned)` 當 total_events、且都有 `if sleep_timeline:`
+       保護，寫不出這種組合——`updated_at` 比 `created_at` 晚 5.5 小時、
+       計數欄位卻保留，最可能是有人在 phpMyAdmin 裡手動清掉那一格。
+
+       我們一律以**數出來的**為準（`total_events` 欄位），所以壞資料不會流進
+       下游。但差異要留著、要看得見：靜靜地自我修復，等於把來源端的資料
+       損毀藏起來，下次就不會有人發現。
+    """
     large, micro, snore, decibels = _count_levels(timeline)
     clip_events = _clip_events(timeline)
+    counted = len(timeline or [])
     return {
+        "declared_events": declared_events,
+        "count_mismatch": (declared_events is not None
+                           and declared_events != counted),
         "first_is_warmup": _is_warmup_artifact(clip_events),
         "source_id": source_id,
         "source_kind": kind,             # "sql" | "json"
@@ -186,13 +207,14 @@ def parse_dump(path):
     sql = io.open(path, encoding="utf-8", errors="replace").read()
     out = []
     for m in SQL_ROW_RE.finditer(sql):
-        rid, rdate, _events, _large, _snore, score, raw, _c, _u = m.groups()
+        rid, rdate, declared, _large, _snore, score, raw, _c, _u = m.groups()
         try:
             timeline = json.loads(raw.replace('\\"', '"'))
         except (ValueError, TypeError):
             timeline = []
         out.append(_record(f"{path.parent.name}/sql#{rid}", "sql",
-                           rdate, int(score), timeline))
+                           rdate, int(score), timeline,
+                           declared_events=int(declared)))
     return out
 
 
@@ -208,7 +230,8 @@ def parse_reports(pattern=REPORT_GLOB):
         rel = Path(path).relative_to(ROOT).as_posix()
         out.append(_record(rel, "json", data.get("report_date"),
                            summary.get("sleep_quality_score"),
-                           data.get("timeline")))
+                           data.get("timeline"),
+                           declared_events=summary.get("total_events")))
     return out
 
 

@@ -221,9 +221,9 @@ Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難�
 |---|---|
 | **合併 PR #30**（Tier A 行為迴圈） | 使用者。已合過 `origin/main` 重跑，120 條全過 |
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
-| **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現 |
-| `SLEEP_START=01:00` 太晚，14% 的夜晚結構上錄不到 | 使用者已決定改成「App 點『開始睡眠』才開攝影機」→ 需要影像組 × Jeremy 對接介面（`.env` 是靜態值，App 觸發要有訊號通道） |
-| id 117（08-19）`total_events=73` 但 `timeline=[]` | 影像組，含在 Issue #19；細節見 TAPO_HANDOFF #8(b) |
+| **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現。⚠️ **調 `.env` 救不回歷史資料**：實測 99.3% 的 micro_motion 強度低於現行 `MOTION_MICRO`，那批資料是用另一組沒記錄的門檻寫的 |
+| ~~`SLEEP_START=01:00` 太晚~~ | ✅ **已改成 `22:00`**（2026-09-04）。57 晚實測：01:00 錄不到 7 晚（12%），22:00 涵蓋 57/57、只多錄 3 小時，再往前沒有額外好處。改了 `.env`／`.env.example`／程式預設三處。長期仍朝「App 點開始睡眠」走（那對 D2 受測者才通用） |
+| id 117（08-19）`total_events=73` 但 `timeline=[]` | ⚠️ **2026-09-04 追過：不是程式 bug。** 解析、截斷、兩條寫入路徑全部排除，且所有存檔點都有 `if sleep_timeline:` 保護。`updated_at` 晚 5.5 小時而計數保留 → 最可能是有人在 phpMyAdmin 手動清掉。我方已加 `count_mismatch` 防護（測試【6】） |
 | 要不要跑 `--ai` 重生所有夜晚 | 使用者（會花 API 額度；**目前沒必要**，2026-09-03 核對 57/57 全是 llm） |
 
 **刻意不做**（09-09 之前）：

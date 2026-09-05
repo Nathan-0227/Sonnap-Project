@@ -188,6 +188,29 @@ check_true(f"至少有一晚的首事件被認出是暖機假影（實際 {len(w
 
 
 # ═══════════════════════════════════════════════════════════════════
+print("\n【6】來源宣稱的事件數與實際數不符時，要看得見")
+# ───────────────────────────────────────────────────────────────────
+# sql#117（08-19）宣稱 total_events=73，timeline 欄位卻是字面上的 '[]'。
+# 我們一律以數出來的為準，所以壞資料不會流進下游——但如果只是靜靜地
+# 自我修復，就等於把來源端的資料損毀藏起來，下次不會有人發現。
+mismatched_records = [r for r in records if r["count_mismatch"]]
+check_true(f"偵測得到宣稱數與實際數不符的紀錄（實際 {len(mismatched_records)} 筆）",
+           len(mismatched_records) >= 1)
+
+_117 = next((r for r in records if r["source_id"].endswith("sql#117")), None)
+if _117:
+    check("sql#117 宣稱的事件數", _117["declared_events"], 73)
+    check("sql#117 實際數到的事件數", _117["total_events"], 0)
+    check_true("sql#117 被標記為不符", _117["count_mismatch"])
+
+# 反向對照：正常的紀錄**不可以**被誤標。沒有這一條，把 count_mismatch
+# 寫成恆為 True 也會通過上面每一條。
+clean_records = [r for r in records if not r["count_mismatch"]]
+check_true(f"絕大多數紀錄沒有被誤標（{len(clean_records)}/{len(records)} 正常）",
+           len(clean_records) > len(mismatched_records))
+
+
+# ═══════════════════════════════════════════════════════════════════
 print()
 if fails:
     print(f"✗ {len(fails)} 條未通過：")
