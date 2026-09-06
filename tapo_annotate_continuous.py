@@ -376,6 +376,11 @@ def cmd_compare(csv_path: Path):
         sys.exit(f"✗ {truth_path} 沒有已審視的範圍。先跑標註（不加 --compare）。")
 
     vf_map = load_vf_fracs(csv_path)
+    # 分母跟著檔頭走，表格的單位標籤也要跟著 —— 標錯的話「0.5%」會被當成
+    # 佔畫面 0.5%，而這份其實是佔 ROI 0.5%（差 3.5 倍）。
+    from tapo_metric_logger import read_roi
+    roi, _ = read_roi(csv_path)
+    unit = "佔 ROI" if roi else "佔畫面"
     fps = 5.0
     tol = int(TOLERANCE_SECONDS * fps)
     reviewed_frames = sum(e - s + 1 for s, e in reviewed)
@@ -395,7 +400,10 @@ def cmd_compare(csv_path: Path):
           f"（Montini 2024 常模：{MONTINI_MI_MEDIAN} 次/小時，"
           f"IQR {MONTINI_MI_IQR[0]}–{MONTINI_MI_IQR[1]}）")
 
-    print(f"\n{'門檻':>8}{'演算法事件':>11}{'次/小時':>9}{'召回率':>8}{'精確率':>8}"
+    if roi:
+        print(f"\n⚠️ 這份是用 ROI {roi} 錄的 —— 門檻是**佔 ROI**"
+              f"（{roi[2] * roi[3]} px）的比例，不是佔整個畫面。")
+    print(f"\n{'門檻(' + unit + ')':>13}{'演算法事件':>11}{'次/小時':>9}{'召回率':>8}{'精確率':>8}"
           f"{'F1':>7}{'誤報/小時':>10}  判讀")
     rule()
 
