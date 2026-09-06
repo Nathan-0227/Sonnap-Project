@@ -943,6 +943,14 @@ python tests/test_sleep_efficiency.py    # 2026-09-06 新增
 python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
 ```
 
+⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
+**四個時刻**擺在一起（開錄／按按鈕／`lights_out`／攝影機測到的入睡），
+算出 **D2 唯一用得上的那個數字：手機代理值比實際上床晚多少**（2026-09-06 首測 +3.4 分，n=1）。
+
+```bash
+SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
+```
+
 Flutter（在 `app/` 底下跑，**153 條全過**）：
 
 ```bash
