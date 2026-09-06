@@ -5,6 +5,8 @@ import 'package:lottie/lottie.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
+import '../services/bed_marks.dart';
+import '../services/key_value_store.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/pre_bed_apps.dart';
@@ -20,11 +22,18 @@ class ReportScreen extends StatefulWidget {
   /// 把偵測到的就寢時刻送去後端。null = 這支 build 沒設定後端，不上傳。
   final NightlyUploader? uploader;
 
+  /// 使用者自己按的上床／下床時刻。
+  ///
+  /// ⚠️ **加分項不是取代品**：沒按的夜晚照樣走被動偵測的 `lights_out_at`，
+  /// 只是少了臥床時間。見 `bed_marks.dart`。
+  final BedMarkStore bedMarks;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
     this.uploader,
+    this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
   });
 
   @override
@@ -96,6 +105,9 @@ class _ReportScreenState extends State<ReportScreen>
   /// 前者管不著、後者可以改。偵測不到上床時刻時 hasData 是 false。
   PreBedResult? _preBed;
 
+  /// 使用者按過的上床／下床時刻。
+  BedMarks _marks = BedMarks.none;
+
   @override
   void initState() {
     super.initState();
@@ -138,11 +150,13 @@ class _ReportScreenState extends State<ReportScreen>
     };
     final preBed = await widget.usageStats
         .preBed(lightsOut: lightsOut, labels: labels);
+    final marks = await widget.bedMarks.read();
     if (!mounted) return;
     setState(() {
       _usage = result;
       _lightsOut = lightsOut;
       _preBed = preBed;
+      _marks = marks;
     });
 
     // ⚠️ 上傳放在畫面更新**之後**，而且失敗不影響上面任何一格。
@@ -150,9 +164,18 @@ class _ReportScreenState extends State<ReportScreen>
     //    不能讓它把已經算出來的就寢時刻連帶擋掉。
     final uploader = widget.uploader;
     if (uploader == null) return;
-    final upload = await uploader.upload(lightsOut);
+    final upload = await uploader.upload(lightsOut, marks: marks);
     if (!mounted) return;
     setState(() => _upload = upload);
+
+    // 上傳成功才清掉標記，否則同一對會被算進第二晚。
+    // ⚠️ 失敗**不要**清 —— 後端沒開是 demo 的常態，清掉等於把使用者
+    //    今天早上按的那一下弄丟。
+    if (upload.status == NightlyUploadStatus.ok && marks.isComplete) {
+      await widget.bedMarks.clear();
+      if (!mounted) return;
+      setState(() => _marks = BedMarks.none);
+    }
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -1181,6 +1204,8 @@ class _ReportScreenState extends State<ReportScreen>
 
           _buildLightsOutRow(),
 
+          _buildBedMarkButtons(),
+
           _buildPreBedBody(),
 
           _buildUsageBody(),
@@ -1352,6 +1377,68 @@ class _ReportScreenState extends State<ReportScreen>
     if (h == 0) return '${m}m';
     if (m == 0) return '${h}h';
     return '${h}h ${m}m';
+  }
+
+  /// 使用者自己宣告上床／下床的兩個按鈕。
+  ///
+  /// ⚠️ **這是加分項。** 沒按照樣有 `lights_out_at`（被動偵測，
+  /// 早上開 App 就回推得到昨晚）。按了才多出臥床時間與行為版效率。
+  /// 所以這兩個按鈕**不可以**做成「不按就沒有資料」的樣子。
+  Widget _buildBedMarkButtons() {
+    final started = _marks.hasStart;
+    final label = started
+        ? 'In bed since ${_hhmm(_marks.startAt!)}'
+        : 'Start sleep';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _mark(start: true),
+              icon: Icon(started ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+                  size: 15),
+              label: Text(label, style: const TextStyle(fontSize: 11)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: started ? purpleColor : Colors.white,
+                side: const BorderSide(color: purpleColor),
+                padding: const EdgeInsets.symmetric(vertical: 9),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              // 沒有起點的結束算不出任何東西，所以先按開始才能按結束。
+              onPressed: started ? () => _mark(start: false) : null,
+              icon: const Icon(Icons.wb_sunny_outlined, size: 15),
+              label: const Text('Out of bed', style: TextStyle(fontSize: 11)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFF3A4A63)),
+                padding: const EdgeInsets.symmetric(vertical: 9),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _hhmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _mark({required bool start}) async {
+    final now = DateTime.now();
+    if (start) {
+      await widget.bedMarks.markStart(now);
+    } else {
+      await widget.bedMarks.markEnd(now);
+    }
+    final marks = await widget.bedMarks.read();
+    if (!mounted) return;
+    setState(() => _marks = marks);
   }
 
   /// 睡前那一段。沒有資料就整塊不顯示——**不要用整天的彙總填空**，

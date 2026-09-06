@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'bed_marks.dart';
 import 'lights_out.dart';
 import 'sleep_repository.dart';
 import 'user_identity.dart';
@@ -97,7 +98,16 @@ class NightlyUploader {
     this.timeout = const Duration(seconds: 3),
   });
 
-  Future<NightlyUploadResult> upload(LightsOutResult lightsOut) async {
+  /// [marks] 是使用者自己按的上床／下床時刻（可選）。
+  ///
+  /// ⚠️ **它是加分項不是取代品。** 沒按的夜晚照樣上傳，只是後端算不出
+  /// 臥床時間與行為版效率（那兩個欄位會是 null，不是 0）。
+  /// 絕對不要因為「沒有標記」就跳過上傳 —— 那會讓忘記按按鈕變成
+  /// 「這一晚沒有資料」。
+  Future<NightlyUploadResult> upload(
+    LightsOutResult lightsOut, {
+    BedMarks marks = BedMarks.none,
+  }) async {
     if (baseUrl.trim().isEmpty) {
       return const NightlyUploadResult(NightlyUploadStatus.noBackend);
     }
@@ -124,6 +134,10 @@ class NightlyUploader {
       request.write(jsonEncode({
         'user_id': userId,
         'lights_out_at': iso,
+        // 兩個都是**自述**的時刻。後端只在兩者都有時才算得出臥床時間，
+        // 少一個就整組是 null（見 behavior/sleep_efficiency.py）。
+        if (marks.startIso != null) 'bed_start_at': marks.startIso,
+        if (marks.endIso != null) 'bed_end_at': marks.endIso,
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
