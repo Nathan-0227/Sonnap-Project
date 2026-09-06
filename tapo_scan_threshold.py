@@ -161,7 +161,9 @@ def main():
           f"{MONTINI_DURATION_MEDIAN} 秒")
     print(f"基準線② De Koninck 1992（18–24 歲體位改變）：{DEKONINCK_SHIFTS} 次/小時")
 
-    print(f"\n{'門檻(佔畫面)':<14}{'事件數':>7}{'次/小時':>9}{'vs Montini':>12}"
+    unit = "佔 ROI" if roi else "佔畫面"
+    unit_bare = "ROI" if roi else "畫面"
+    print(f"\n{'門檻(' + unit + ')':<14}{'事件數':>7}{'次/小時':>9}{'vs Montini':>12}"
           f"{'時長中位數':>11}{'時長p90':>9}{'峰值中位數':>11}  判讀")
     rule()
 
@@ -192,7 +194,7 @@ def main():
               f"的門檻有 {len(hits)} 個：")
         for pct, rate, med, n in hits:
             dur_ok = "✓" if 2 <= med <= 8 else "✗"
-            print(f"    {pct:>5.2f}% {unit[1:]} → {rate:>5.1f} 次/小時、{n} 個事件、"
+            print(f"    {pct:>5.2f}% {unit_bare} → {rate:>5.1f} 次/小時、{n} 個事件、"
                   f"時長中位數 {med:.1f} 秒 {dur_ok}（Montini 是 "
                   f"{MONTINI_DURATION_MEDIAN} 秒）")
         print("""
@@ -213,7 +215,7 @@ def main():
     print(f"\n\n【敏感度】END_FRAMES 對事件數的影響（固定門檻）")
     rule()
     anchor = hits[len(hits) // 2][0] / 100 if hits else 0.02
-    print(f"門檻固定在 {anchor * 100:.2f}% {unit[1:]}")
+    print(f"門檻固定在 {anchor * 100:.2f}% {unit_bare}")
     print(f"\n{'END_FRAMES':<12}{'≈秒':>7}{'事件數':>8}{'次/小時':>9}{'時長中位數':>12}")
     rule()
     for ef in (5, 10, 15, 20, 30, 45, 60):
