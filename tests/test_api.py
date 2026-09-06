@@ -232,6 +232,71 @@ check("mood_driver", h6["status"]["mood_driver"], "wearable")
 
 print()
 print("=" * 78)
+print("【額外】行為版睡眠效率：兩個 sleep_efficiency 不可混淆")
+print("=" * 78)
+# ⚠️ 這一組守的是一個**壞掉時不會報錯**的情況：behavior.sleep_efficiency
+#    與 metrics.sleep_efficiency（Garmin）是不同的量，卻同時出現在同一個
+#    回應裡。少了 basis／note，前端拿到數字無從分辨是哪一種。
+u7 = client.post("/users", json={"display_name": "效率", "study_cohort": "L1"}).json()["user_id"]
+r7 = client.post("/nightly", json={
+    "user_id": u7,
+    "lights_out_at": "2026-09-06T23:30:00+08:00",
+    "bed_start_at": "2026-09-06T23:00:00+08:00",
+    "bed_end_at": "2026-09-07T07:00:00+08:00",
+}).json()
+check("POST 回應的效率（臥床 480 分、滑 30 分）", r7["sleep_efficiency"], 93.8)
+check("臥床時間", r7["time_in_bed_minutes"], 480.0)
+check("上床後滑手機", r7["phone_in_bed_minutes"], 30.0)
+
+ins7 = client.get(f"/insights?user_id={u7}").json()["behavior"]
+n7 = ins7["history"][-1]
+check("/insights 讀得回同一個值（DB 欄位有真的存進去）",
+      n7["sleep_efficiency"], r7["sleep_efficiency"])
+ok("逐夜都帶 efficiency_basis", bool(n7["efficiency_basis"]), n7["efficiency_basis"])
+ok("behavior 層帶 efficiency_note（這是它唯一隨身的限制說明）",
+   bool(ins7["efficiency_note"]))
+ok("note 明說它不是穿戴的那個效率、不可比臨床門檻",
+   "NOT the same quantity" in ins7["efficiency_note"]
+   and "clinical" in ins7["efficiency_note"])
+ok("basis 說得出兩個假設",
+   "lights_out" in n7["efficiency_basis"] and "waso" in n7["efficiency_basis"])
+
+# 沒按按鈕的一晚：必須是 null，不是 0
+u8 = client.post("/users", json={"display_name": "沒按", "study_cohort": "L1"}).json()["user_id"]
+r8 = client.post("/nightly", json={
+    "user_id": u8, "lights_out_at": "2026-09-06T23:30:00+08:00"}).json()
+check("沒按開始／結束睡覺 → 效率是 null 不是 0", r8["sleep_efficiency"], None)
+check("臥床時間也是 null", r8["time_in_bed_minutes"], None)
+ins8 = client.get(f"/insights?user_id={u8}").json()["behavior"]
+check("/insights 也是 null", ins8["history"][-1]["sleep_efficiency"], None)
+
+# ── 挑戰讀「滑手機分鐘數」，不讀「效率」 ──
+# 同一份資料的兩種寫法，但回饋迴圈只能掛在使用者控制得了的那一端。
+# 反向對照：兩者數值本來就不同（30.0 vs 93.8），所以讀錯就會被抓到。
+ch7 = [x for x in client.get(f"/challenges?user_id={u7}").json()["challenges"]
+       if x["challenge_id"] == "phone_in_bed_tonight"][0]
+check("挑戰的 current_value 是滑手機分鐘數", ch7["current_value"], 30.0)
+ok("**不是**效率（30.0 ≠ 93.8，讀錯就會被這條抓到）",
+   ch7["current_value"] != r7["sleep_efficiency"])
+check("越小越好", ch7["lower_is_better"], True)
+check("30 分鐘剛好達標（target=30）", ch7["completed"], True)
+
+# 沒按按鈕 → 是「資料不足」不是「沒達成」。兩者混在一起，
+# 使用者會因為沒按按鈕而被判定失敗。
+ch8 = [x for x in client.get(f"/challenges?user_id={u8}").json()["challenges"]
+       if x["challenge_id"] == "phone_in_bed_tonight"][0]
+check("沒按按鈕 → insufficient_data", ch8["status"], "insufficient_data")
+check("沒按按鈕 → current_value 是 null 不是 0", ch8["current_value"], None)
+ok("detail 要說得出「去按開始睡覺」", "Start sleep" in ch8["detail"], ch8["detail"])
+
+# 反向對照：這個效率**不得**進 final_score / energy_level。
+# 沒有這一條，把它加進評分也不會有任何測試變紅。
+h7 = client.get(f"/home?user_id={u7}").json()
+ok("沒有穿戴資料時 energy_level 仍是 null（行為效率不得冒充分數）",
+   h7["status"]["energy_level"] is None, repr(h7["status"]["energy_level"]))
+
+print()
+print("=" * 78)
 print("【驗收 5】舊端點 /get-sleep-data 行為完全不變")
 print("=" * 78)
 old = client.get("/get-sleep-data")

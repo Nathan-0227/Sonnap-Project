@@ -136,6 +136,23 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     adherence_minutes REAL,
     is_late           INTEGER,                -- 0/1，門檻見 behavior/adherence.py
 
+    -- ── 行為版睡眠效率（2026-09-06）──────────────────────────────
+    -- 使用者在畫面上按「開始／結束睡覺」的時刻。⚠️ 是**自述**的上床與
+    -- 下床，不是量到的入睡與醒來。沒按就是 NULL（不是 0）。
+    bed_start_at      TEXT,
+    bed_end_at        TEXT,
+    time_in_bed_minutes   REAL,             -- bed_end − bed_start
+    phone_in_bed_minutes  REAL,             -- lights_out − bed_start（下界，見下）
+    assumed_sleep_minutes REAL,             -- 臥床 − 滑手機 − WASO(=0)
+    --
+    -- ⚠️ **這個 sleep_efficiency 與 wearable_nightly.efficiency 是不同的量。**
+    --    這裡的分子是**假定**的（假設放下手機就睡著、且整夜沒醒），
+    --    在代數上等於「臥床時間裡沒在滑手機的比例」——睡眠本身不影響它。
+    --    因此它**絕不進 final_score**，且一定要跟 efficiency_basis 一起讀。
+    --    完整的反向判讀說明在 behavior/sleep_efficiency.py 的檔頭。
+    sleep_efficiency  REAL,
+    efficiency_basis  TEXT,                 -- 例：phone_lights_out__waso_assumed_zero
+
     -- 'phone'       = Android UsageStats 推得
     -- 'self_report' = 使用者自己填（Android 端還沒做時的過渡，或授權被拒時）
     source            TEXT NOT NULL DEFAULT 'phone',
@@ -373,6 +390,17 @@ COLUMN_MIGRATIONS = [
     #             ⚠️ 是「睡著」不是「上床」，語意見 SCHEMA 裡的說明。
     ("wearable_nightly", "sleep_start_time", "TEXT"),
     ("wearable_nightly", "wake_time", "TEXT"),
+    # 2026-09-06：行為版睡眠效率（behavior/sleep_efficiency.py）。
+    # ⚠️ 這是 nightly_behavior 不是 wearable_nightly —— 兩張表各有一個
+    #    叫 sleep_efficiency 的欄位，而它們是**不同的量**。讀的時候要看
+    #    efficiency_basis，不要只看欄位名。
+    ("nightly_behavior", "bed_start_at", "TEXT"),
+    ("nightly_behavior", "bed_end_at", "TEXT"),
+    ("nightly_behavior", "time_in_bed_minutes", "REAL"),
+    ("nightly_behavior", "phone_in_bed_minutes", "REAL"),
+    ("nightly_behavior", "assumed_sleep_minutes", "REAL"),
+    ("nightly_behavior", "sleep_efficiency", "REAL"),
+    ("nightly_behavior", "efficiency_basis", "TEXT"),
 ]
 
 
@@ -600,30 +628,49 @@ def delete_user(user_id, db_path=None):
 
 def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
-                            db_path=None):
+                            db_path=None, efficiency=None):
     """
     寫入或覆寫某一晚的行為資料。
 
     用 upsert 而不是 insert：App 可能重送（網路不穩時的重試），
     也可能先送一個粗略值、稍後補上更準的。重送不該變成兩筆或直接失敗。
+
+    efficiency：behavior.sleep_efficiency.evaluate_efficiency() 的回傳值，
+    可以是 None（使用者沒按開始／結束睡覺）。⚠️ 沒給的時候寫進去的是
+    NULL 不是 0 —— 「沒測到」與「效率 0%」是兩件事。
     """
+    eff = efficiency or {}
     conn = connect(db_path)
     try:
         conn.execute(
             """
             INSERT INTO nightly_behavior
                 (user_id, date, target_bedtime, lights_out_at,
-                 adherence_minutes, is_late, source, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 adherence_minutes, is_late, source, created_at,
+                 bed_start_at, bed_end_at, time_in_bed_minutes,
+                 phone_in_bed_minutes, assumed_sleep_minutes,
+                 sleep_efficiency, efficiency_basis)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 target_bedtime    = excluded.target_bedtime,
                 lights_out_at     = excluded.lights_out_at,
                 adherence_minutes = excluded.adherence_minutes,
                 is_late           = excluded.is_late,
-                source            = excluded.source
+                source            = excluded.source,
+                bed_start_at          = excluded.bed_start_at,
+                bed_end_at            = excluded.bed_end_at,
+                time_in_bed_minutes   = excluded.time_in_bed_minutes,
+                phone_in_bed_minutes  = excluded.phone_in_bed_minutes,
+                assumed_sleep_minutes = excluded.assumed_sleep_minutes,
+                sleep_efficiency      = excluded.sleep_efficiency,
+                efficiency_basis      = excluded.efficiency_basis
             """,
             (user_id, date, target_bedtime, lights_out_at,
-             adherence_minutes, 1 if is_late else 0, source, now_iso()),
+             adherence_minutes, 1 if is_late else 0, source, now_iso(),
+             eff.get("bed_start_at"), eff.get("bed_end_at"),
+             eff.get("time_in_bed_minutes"), eff.get("phone_in_bed_minutes"),
+             eff.get("assumed_sleep_minutes"), eff.get("sleep_efficiency"),
+             eff.get("efficiency_basis")),
         )
         conn.commit()
     finally:
@@ -855,6 +902,37 @@ DEFAULT_CHALLENGES = [
         #    保留這個統計量是因為它跟描述文字完全一致（「都落在 ±X 內」），
         #    使用者看得懂自己為什麼沒達成。若 D2 顯示太多人卡在這裡，
         #    改用標準差是第一個該試的方向。
+    },
+    {
+        "challenge_id": "phone_in_bed_tonight",
+        "kind": "phone_in_bed",
+        "title": "Phone down once you're in bed",
+        "description": "Spend under 30 minutes on your phone after getting into bed.",
+        "target_value": 30.0,       # 允許的最大分鐘數（越小越好）
+        "window_days": 1,
+        "literature_ref": (
+            "⚠ No literature threshold. The 30-minute target is a product decision, "
+            "not a cited cutpoint - the same status as LATE_THRESHOLD_MINUTES in "
+            "behavior/adherence.py. It is admissible because the challenge layer never "
+            "scores (design red line 4). The construct is adjacent to Kroese et al. (2014) "
+            "bedtime procrastination but is NOT the same thing: Kroese defines it as "
+            "failing to GO to bed at the intended time, whereas this measures what happens "
+            "AFTER getting into bed. Do not cite Kroese for this target."
+        ),
+        # ── 這個門檻**還沒有校準過**（2026-09-06）────────────────────
+        # 另外三個挑戰的門檻都是拿 46 晚實測資料調出來的（見上方各自的註記）。
+        # 這一個不行，因為它需要的量（上床 → 放下手機）**目前一晚都沒有**：
+        # 它要使用者按「開始睡覺」，而那個按鈕還沒做。
+        #
+        # 手上唯一沾得上邊的是攝影機那三晚的「開錄影 → 睡著」：
+        #     第 3 晚 11 分、第 4 晚 28 分、第 6 晚 5 分
+        # ⚠️ 但那**不是同一個量**（分母的起點是開錄影不是按按鈕，
+        #    終點是睡著不是放下手機），而且 n=3 全是同一個人。
+        #    寫在這裡只是說明 30 這個數字的量級從哪裡來的，
+        #    **不能拿它當校準依據**。
+        #
+        # → D2 收到真實資料之後，照另外三個挑戰的作法重新校準：
+        #   看達成率分布，選一個「最不規律的人也還有兩成機會達成」的值。
     },
 ]
 
