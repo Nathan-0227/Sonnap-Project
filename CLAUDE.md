@@ -695,7 +695,25 @@ Closet／Rewards」全在這個風險區——**加任何獎勵機制時，第�
 | `movement_sample_minutes` | 不是動作量／翻身次數 | 取樣分鐘數（每分鐘一筆，99.98% 間隔正好 60 秒）。與睡眠時長 r=+0.929、與 WASO r=−0.138 |
 | `avg_stress_score` | 不是睡眠期間的壓力 | 該**日曆日白天**的平均（11439 筆讀數中僅 8.6% 落在睡眠期間）。**已不計分**，保留只因 `itegration/if_integrate.py` 的相關性分析還在讀 |
 | `presleep_stress_score` | — | 「上一次起床 → 這一次入睡」整段清醒時段。Tier3 壓力修正值用這個 |
-| `sleep_efficiency` | 不是臨床睡眠效率 | 分母是（起床 − 入睡），**不含入睡潛伏期**。報告中須誠實標註 |
+| `sleep_efficiency` | 不是臨床睡眠效率 | 分母是（起床 − 入睡），**不含入睡潛伏期**。報告中須誠實標註。⚠️ 而且**現在有三個東西叫這個名字**，見下 |
+
+### ⚠️ 三個「睡眠效率」，讀的時候一定要看 `efficiency_basis`
+
+| 欄位 | 分子 | 分母 | 有文獻 | 進 `final_score` |
+|---|---|---|---|---|
+| `wearable_nightly.efficiency` | 手錶量的總睡眠 | 起床 − **入睡** | ✅ | ✅ |
+| `wearable_nightly.clinical_efficiency` | 手錶量的總睡眠 | 起床 − **上床**（只有 Health Connect 給得出） | ✅ | ❌ 只供呈現 |
+| **`nightly_behavior.sleep_efficiency`**（2026-09-06 新增） | **假定**睡眠（放下手機就算睡著、且整夜沒醒） | 結束 − 開始（**自述**） | ❌ | ❌ **絕不** |
+
+第三個在代數上等於「臥床時間裡沒在滑手機的比例」——**睡眠本身不影響它**，
+所以會出現方向相反的誤判（半夜醒著兩小時但沒碰手機 → 99%「良好」；
+睡得好但睡前滑兩小時 → 75%「不良」）。使用者 2026-09-06 知悉後仍決定
+沿用這個名稱，完整說明與那張反向判讀表在 `behavior/sleep_efficiency.py` 檔頭。
+
+→ **API 回應裡三個可能同時出現**，所以每一列都帶 `efficiency_basis`
+  （`phone_lights_out__waso_assumed_zero`）。只讀數字不讀 basis 就會混淆。
+→ 行為迴圈（挑戰、寵物）應該讀 `phone_in_bed_minutes` 而不是效率：
+  使用者控制得了「躺下後少滑 20 分鐘」，控制不了「今晚別醒來」。
 
 ### 三條計分紀律
 
@@ -904,6 +922,7 @@ python tests/test_scoring_guards.py      # 2026-08-28 新增
 python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
+python tests/test_sleep_efficiency.py    # 2026-09-06 新增
 ```
 
 Flutter（在 `app/` 底下跑，**120 條全過**）：
