@@ -21,6 +21,7 @@ import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/services/pre_bed_apps.dart';
 import 'package:app/services/usage_stats.dart';
 
 class _ImmediateRepository implements SleepRepository {
@@ -58,12 +59,18 @@ class _FakeUsageStats extends UsageStatsService {
   /// usage...」，而失敗訊息看起來像是「找不到 App 名稱」，指向錯的地方。
   LightsOutResult lightsOutResult;
 
+  /// ⚠️ 這個也要一起攔，理由同上 —— 少了它，`_loadUsage()` 會多一次
+  /// 真的 MethodChannel 往返，而症狀是**整張卡片不顯示**
+  /// （測試訊息會說「找不到 Phone down at 23:12」，指向錯的地方）。
+  PreBedResult preBedResult;
+
   int openSettingsCalls = 0;
   int queryCalls = 0;
 
   _FakeUsageStats(
     this.result, {
     this.lightsOutResult = const LightsOutResult(LightsOutStatus.noEvents),
+    this.preBedResult = const PreBedResult(),
   });
 
   @override
@@ -82,6 +89,14 @@ class _FakeUsageStats extends UsageStatsService {
     DateTime? now,
   }) async =>
       lightsOutResult;
+
+  @override
+  Future<PreBedResult> preBed({
+    required LightsOutResult lightsOut,
+    Map<String, String> labels = const {},
+    Duration window = kPreBedWindow,
+  }) async =>
+      preBedResult;
 
   @override
   Future<void> openSettings() async => openSettingsCalls++;
@@ -116,6 +131,10 @@ void main() {
     ));
     await tester.pump();
     await tester.pump();
+    // ⚠️ 三次不是隨便加的：_loadUsage() 裡有幾個 await 就要 pump 幾次。
+    //    少一次的症狀是「卡片停在 Reading phone usage...」，而失敗訊息
+    //    會說找不到某個文字，看起來像版面壞了。
+    await tester.pump();
   }
 
   group('語意：標題不能把整天的數字說成睡前', () {
@@ -145,10 +164,48 @@ void main() {
       );
       expect(find.text('Phone Use Yesterday'), findsOneWidget);
       expect(
-        find.textContaining('Not yet narrowed to the hour before bed'),
+        find.textContaining('not narrowed to the hour before bed'),
         findsOneWidget,
         reason: '限制要寫在畫面上，不是只寫在程式註解裡',
       );
+    });
+
+    // 反向對照：**有**睡前資料時，標題與說明都要跟著換。
+    // 沒有這一條，把標題寫死成 'Phone Use Yesterday' 也會通過上面那條，
+    // 而睡前歸因就永遠顯示不出來。
+    testWidgets('有睡前資料時，標題與說明都要換成睡前', (tester) async {
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(
+          UsageStatsStatus.ok,
+          apps: [AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95)],
+        ),
+        lightsOutResult: LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 6, 23, 30),
+          quietMinutes: 400,
+        ),
+        preBedResult: PreBedResult(
+          lightsOutAt: DateTime(2026, 9, 6, 23, 30),
+          apps: const [
+            AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 22),
+          ],
+        ),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.text('Phone Use Before Bed'), findsOneWidget);
+      expect(find.text('Phone Use Yesterday'), findsNothing);
+      expect(
+        find.textContaining('The hour before you put your phone down'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('not narrowed to the hour before bed'),
+        findsNothing,
+        reason: '有睡前資料了，還說「還沒切出來」就是錯的',
+      );
+      // 睡前那 22 分鐘與整天的 95 分鐘是兩個量，畫面上要同時看得到
+      expect(find.textContaining('22m on screen'), findsOneWidget);
     });
   });
 
