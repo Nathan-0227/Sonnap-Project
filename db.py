@@ -903,6 +903,37 @@ DEFAULT_CHALLENGES = [
         #    使用者看得懂自己為什麼沒達成。若 D2 顯示太多人卡在這裡，
         #    改用標準差是第一個該試的方向。
     },
+    {
+        "challenge_id": "phone_in_bed_tonight",
+        "kind": "phone_in_bed",
+        "title": "Phone down once you're in bed",
+        "description": "Spend under 30 minutes on your phone after getting into bed.",
+        "target_value": 30.0,       # 允許的最大分鐘數（越小越好）
+        "window_days": 1,
+        "literature_ref": (
+            "⚠ No literature threshold. The 30-minute target is a product decision, "
+            "not a cited cutpoint - the same status as LATE_THRESHOLD_MINUTES in "
+            "behavior/adherence.py. It is admissible because the challenge layer never "
+            "scores (design red line 4). The construct is adjacent to Kroese et al. (2014) "
+            "bedtime procrastination but is NOT the same thing: Kroese defines it as "
+            "failing to GO to bed at the intended time, whereas this measures what happens "
+            "AFTER getting into bed. Do not cite Kroese for this target."
+        ),
+        # ── 這個門檻**還沒有校準過**（2026-09-06）────────────────────
+        # 另外三個挑戰的門檻都是拿 46 晚實測資料調出來的（見上方各自的註記）。
+        # 這一個不行，因為它需要的量（上床 → 放下手機）**目前一晚都沒有**：
+        # 它要使用者按「開始睡覺」，而那個按鈕還沒做。
+        #
+        # 手上唯一沾得上邊的是攝影機那三晚的「開錄影 → 睡著」：
+        #     第 3 晚 11 分、第 4 晚 28 分、第 6 晚 5 分
+        # ⚠️ 但那**不是同一個量**（分母的起點是開錄影不是按按鈕，
+        #    終點是睡著不是放下手機），而且 n=3 全是同一個人。
+        #    寫在這裡只是說明 30 這個數字的量級從哪裡來的，
+        #    **不能拿它當校準依據**。
+        #
+        # → D2 收到真實資料之後，照另外三個挑戰的作法重新校準：
+        #   看達成率分布，選一個「最不規律的人也還有兩成機會達成」的值。
+    },
 ]
 
 

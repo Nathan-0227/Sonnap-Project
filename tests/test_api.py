@@ -270,6 +270,25 @@ check("臥床時間也是 null", r8["time_in_bed_minutes"], None)
 ins8 = client.get(f"/insights?user_id={u8}").json()["behavior"]
 check("/insights 也是 null", ins8["history"][-1]["sleep_efficiency"], None)
 
+# ── 挑戰讀「滑手機分鐘數」，不讀「效率」 ──
+# 同一份資料的兩種寫法，但回饋迴圈只能掛在使用者控制得了的那一端。
+# 反向對照：兩者數值本來就不同（30.0 vs 93.8），所以讀錯就會被抓到。
+ch7 = [x for x in client.get(f"/challenges?user_id={u7}").json()["challenges"]
+       if x["challenge_id"] == "phone_in_bed_tonight"][0]
+check("挑戰的 current_value 是滑手機分鐘數", ch7["current_value"], 30.0)
+ok("**不是**效率（30.0 ≠ 93.8，讀錯就會被這條抓到）",
+   ch7["current_value"] != r7["sleep_efficiency"])
+check("越小越好", ch7["lower_is_better"], True)
+check("30 分鐘剛好達標（target=30）", ch7["completed"], True)
+
+# 沒按按鈕 → 是「資料不足」不是「沒達成」。兩者混在一起，
+# 使用者會因為沒按按鈕而被判定失敗。
+ch8 = [x for x in client.get(f"/challenges?user_id={u8}").json()["challenges"]
+       if x["challenge_id"] == "phone_in_bed_tonight"][0]
+check("沒按按鈕 → insufficient_data", ch8["status"], "insufficient_data")
+check("沒按按鈕 → current_value 是 null 不是 0", ch8["current_value"], None)
+ok("detail 要說得出「去按開始睡覺」", "Start sleep" in ch8["detail"], ch8["detail"])
+
 # 反向對照：這個效率**不得**進 final_score / energy_level。
 # 沒有這一條，把它加進評分也不會有任何測試變紅。
 h7 = client.get(f"/home?user_id={u7}").json()
