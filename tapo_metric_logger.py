@@ -528,6 +528,29 @@ def read_roi(csv_path):
     return None, WIDTH * HEIGHT
 
 
+def read_started(csv_path):
+    """
+    從檔頭讀出**開始錄影**的時刻，回傳 datetime 或 None。
+
+    ⚠️ 這與「第一列可用資料的時刻」不是同一件事：暖機那 90 秒會被
+       事後排除，但那段時間人已經躺在床上了。要算臥床時間就得用這個，
+       用第一列可用資料會少算 90 秒，而且那個誤差會直接吃進入睡潛伏期
+       （SOL 本身可能才幾分鐘）。
+    """
+    from datetime import datetime as _dt
+    with Path(csv_path).open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.startswith("#"):
+                break
+            if "started=" in line:
+                raw = line.split("started=", 1)[1].split()[0].strip()
+                try:
+                    return _dt.fromisoformat(raw)
+                except ValueError:
+                    return None
+    return None
+
+
 def row_frac(row, roi):
     """
     一列 → 「最大區塊佔分母的比例」。不可用的列（照明否決、暖機、空值）回 None。

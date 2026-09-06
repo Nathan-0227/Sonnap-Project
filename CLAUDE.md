@@ -923,6 +923,7 @@ python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
 python tests/test_sleep_efficiency.py    # 2026-09-06 新增
+python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
 ```
 
 Flutter（在 `app/` 底下跑，**120 條全過**）：
