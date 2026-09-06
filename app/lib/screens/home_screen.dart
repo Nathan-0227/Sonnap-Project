@@ -4,6 +4,9 @@ import '../services/account_service.dart';
 import '../models/sleep_session.dart';
 import '../services/sleep_repository.dart';
 import '../widgets/feature_card.dart';
+import '../services/bed_marks.dart';
+import '../services/key_value_store.dart';
+import '../widgets/bed_mark_buttons.dart';
 import '../widgets/header_card.dart';
 import '../widgets/pet_card.dart';
 import '../widgets/pet_mood_animation.dart';
@@ -32,8 +35,12 @@ class HomeScreen extends StatefulWidget {
   final ValueChanged<TimeOfDay>? onBedtimeChanged;
   final ValueChanged<bool>? onReminderChanged;
 
+  /// 上床／下床標記的儲存。可注入，測試才不必依賴真的原生 channel。
+  final BedMarkStore bedMarks;
+
   const HomeScreen({
     super.key,
+    this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
     this.targetBedtime = const TimeOfDay(hour: 23, minute: 30),
@@ -212,6 +219,10 @@ class _HomeScreenState extends State<HomeScreen> {
             onReminderChanged: widget.onReminderChanged,
             onBedtimeChanged: widget.onBedtimeChanged,
           ),
+
+          // 放在最上面：人是在首頁準備睡覺的。
+          // ⚠️ 加分項——沒按照樣有 lights_out_at，見 BedMarkButtons 的說明。
+          BedMarkButtons(store: widget.bedMarks),
 
           SleepStreakCard(
             streakDays: session.streak.streakDays,

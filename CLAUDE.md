@@ -926,7 +926,7 @@ python tests/test_sleep_efficiency.py    # 2026-09-06 新增
 python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
 ```
 
-Flutter（在 `app/` 底下跑，**148 條全過**）：
+Flutter（在 `app/` 底下跑，**153 條全過**）：
 
 ```bash
 flutter test
@@ -944,6 +944,7 @@ flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色
 | `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚） |
 | `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用（**含反面**：有睡前資料時標題與說明都要換）；沒有後端回應時不得顯示達成度；上床／下床按鈕是**加分項不是取代品**（沒按不得擋住上傳） |
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
+| `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
 
 ⚠️ **`TestWidgetsFlutterBinding` 會把全域 `HttpClient` 換成「一律回 400」的假實作**，

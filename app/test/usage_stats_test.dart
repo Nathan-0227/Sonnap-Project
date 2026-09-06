@@ -536,7 +536,7 @@ void main() {
     });
   });
 
-  group('上床／下床按鈕（加分項，不是取代品）', () {
+  group('上床／下床標記會影響上傳（按鈕本身在 bed_mark_buttons_test）', () {
     _FakeUsageStats detected() => _FakeUsageStats(
           const UsageStatsResult(UsageStatsStatus.ok, apps: [
             AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95),
@@ -547,33 +547,6 @@ void main() {
             quietMinutes: 400,
           ),
         );
-
-    testWidgets('按了開始睡覺 → 存下來，而且標題換成時刻', (tester) async {
-      final kv = InMemoryKeyValueStore();
-      await pumpReport(tester, detected(), bedMarks: BedMarkStore(kv));
-
-      expect(find.text('Start sleep'), findsOneWidget);
-      await tester.tap(find.text('Start sleep'));
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Start sleep'), findsNothing);
-      expect(find.textContaining('In bed since'), findsOneWidget);
-      expect(await kv.getString(kBedStartKey), isNotNull,
-          reason: '一定要存下來 —— 只改畫面的話關掉 App 就沒了');
-    });
-
-    testWidgets('沒按開始之前，「下床」是停用的', (tester) async {
-      await pumpReport(tester, detected());
-      final btn = tester.widget<OutlinedButton>(
-        find.ancestor(
-          of: find.text('Out of bed'),
-          matching: find.byType(OutlinedButton),
-        ),
-      );
-      expect(btn.onPressed, isNull,
-          reason: '沒有起點的結束算不出任何東西');
-    });
 
     testWidgets('按過的標記要送給後端', (tester) async {
       final kv = InMemoryKeyValueStore();
