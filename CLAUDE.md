@@ -408,9 +408,26 @@ area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。�
 ⚠️ worktree **不需要自己的 venv**，直接用主目錄那個：
 `C:\Users\user\Projects\Sonnap-Project\.venv\Scripts\python.exe`
 （腳本用 `Path(__file__).parent` 定位，資料路徑會正確落在 worktree 內）。
-但 **`data/sonnap.db` 不會跟過去**（它是未追蹤的），要在 worktree 裡跑
-`/home`、`/insights` 之前得先 `python db.py --init && python db.py --seed`
-再 `python migrate_garmin_to_db.py`。
+⚠️ **`data/sonnap.db` 預設跟著 `db.py` 的目錄走，所以每個 worktree 各有一份、
+互不相通。** 2026-09-07 為此踩過坑：手機建的帳號只存在於某一個 worktree 的
+DB 裡，換個目錄啟動後端就變成「查無此使用者」——症狀是上傳 404，看起來像
+App 壞了。
+
+→ 多個 worktree 同時在用時，用 **`SONNAP_DB`** 指到同一個絕對路徑，
+  而且那個路徑要**放在所有 worktree 之外**（放在 worktree 裡的話，
+  `git worktree remove` 會把它一起帶走——2026-09-06 的錄影檔就是這樣沒的）：
+
+```bash
+# 現行的正式位置（不在任何 worktree 裡）
+SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+⚠️ 這是**啟動時決定一次**的；跑到一半改環境變數不會生效。
+⚠️ 測試刻意**不看**這個變數（直接指派 `db.DB_PATH`），
+   免得被開發機上剛好設了什麼影響。`tests/test_api.py` 有兩條互為反面的測試守著。
+
+第一次在新位置建 DB：`python db.py --init && python db.py --seed`
+再 `python migrate_garmin_to_db.py`（都要帶著同一個 `SONNAP_DB`）。
 
 桌面上那份 `OneDrive\桌面\Sonnap-Project-main\Sonnap-舊工作副本_勿用\` 是最初下載的 zip，
 **沒有版控、已停用**。它裡面只剩三樣東西沒被搬過來，都是刻意的：`garmin/.env`（帳密）、
