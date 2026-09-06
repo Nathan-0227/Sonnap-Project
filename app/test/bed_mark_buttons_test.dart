@@ -91,6 +91,25 @@ void main() {
     expect(find.text('Start sleep'), findsOneWidget, reason: '過期就當作沒按過');
   });
 
+  testWidgets('⚠️ 按下下床之後，畫面一定要看得出來變了', (tester) async {
+    // 第一版沒有這一段：按完 started 仍然是 true，卡片長得**一模一樣**，
+    // 使用者按了以為沒反應（2026-09-07 實機回報）。
+    // 沒有回饋的按鈕，使用者會一直按或以為壞了。
+    await store.markStart(DateTime(2026, 9, 7, 3, 20));
+    await pump(tester, store);
+    expect(find.textContaining('Saved'), findsNothing, reason: '還沒按下床');
+
+    await tester.tap(find.text('Out of bed'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+
+    expect(find.text('Out of bed'), findsNothing, reason: '按鈕文字要換掉');
+    expect(find.textContaining('Up at'), findsOneWidget);
+    expect(find.textContaining('Saved'), findsOneWidget,
+        reason: '說明文字也要換 —— 那是「有記到」唯一的證據');
+  });
+
   testWidgets('按下下床之後，兩個時刻都在本機', (tester) async {
     await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
     await pump(tester, store);

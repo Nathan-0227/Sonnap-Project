@@ -73,6 +73,7 @@ class _BedMarkButtonsState extends State<BedMarkButtons> {
   @override
   Widget build(BuildContext context) {
     final started = _marks.hasStart;
+    final done = _marks.isComplete;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -95,12 +96,21 @@ class _BedMarkButtonsState extends State<BedMarkButtons> {
           const SizedBox(height: 3),
           // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
           //    少了它，忘記按的人會以為那一晚白過了。
+          // ⚠️ 按下「下床」之後**畫面一定要看得出來變了**。
+          //    第一版沒有：按完 started 仍然是 true，卡片長得一模一樣，
+          //    使用者按了以為沒反應。實機才發現（2026-09-07）。
           Text(
-            started
-                ? 'Tap "Out of bed" when you get up.'
-                : 'Optional - bedtime is detected anyway. Tapping just adds '
-                    'how long you were in bed.',
-            style: const TextStyle(color: _muted, fontSize: 10),
+            done
+                ? 'Saved. It uploads next time you open the app.'
+                : started
+                    ? 'Tap "Out of bed" when you get up.'
+                    : 'Optional - bedtime is detected anyway. Tapping just adds '
+                        'how long you were in bed.',
+            style: TextStyle(
+              color: done ? _purple : _muted,
+              fontSize: 10,
+              fontWeight: done ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -130,12 +140,20 @@ class _BedMarkButtonsState extends State<BedMarkButtons> {
                 child: OutlinedButton.icon(
                   // 沒有起點的結束算不出任何東西，所以先按開始才能按結束。
                   onPressed: started ? () => _mark(start: false) : null,
-                  icon: const Icon(Icons.wb_sunny_outlined, size: 16),
-                  label: const Text('Out of bed',
-                      style: TextStyle(fontSize: 12)),
+                  icon: Icon(
+                    done ? Icons.check_circle_rounded : Icons.wb_sunny_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    done ? 'Up at ${_hhmm(_marks.endAt!)}' : 'Out of bed',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF3A4A63)),
+                    // 完成之後換成強調色，跟左邊那顆一樣 —— 這是「有記到」
+                    // 唯一的視覺回饋。
+                    foregroundColor: done ? _purple : Colors.white,
+                    side: BorderSide(
+                        color: done ? _purple : const Color(0xFF3A4A63)),
                     padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
                 ),
