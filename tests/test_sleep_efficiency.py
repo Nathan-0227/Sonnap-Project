@@ -97,7 +97,7 @@ for label, args in (
     r = evaluate_efficiency(*args)
     nums = [r["sleep_efficiency"], r["time_in_bed_minutes"],
             r["phone_in_bed_minutes"], r["assumed_sleep_minutes"]]
-    check(f"{label}：四個數值欄位都是 None", nums, [None] * 4)
+    check(f"{label}：四個**推導**欄位都是 None", nums, [None] * 4)
     check_true(f"{label}：efficiency_note 說得出原因",
                bool(r["efficiency_note"]) and r["efficiency_note"] != "")
 
@@ -128,6 +128,22 @@ check("低於下限 → None", short["sleep_efficiency"], None)
 just_ok = evaluate_efficiency(t, t + timedelta(minutes=5),
                               t + timedelta(minutes=MIN_TIME_IN_BED_MINUTES))
 check_true("剛好等於下限 → 算得出來", just_ok["sleep_efficiency"] is not None)
+
+# ⚠️ 2026-09-07 實機測到的：使用者按了「開始睡覺」卻忘了按「下床」，
+#    結果連 bed_start_at 都沒存進去。算不出效率 ≠ 沒有資料 ——
+#    「幾點上床」本身就有用（拿它跟攝影機的開錄時刻對照，是目前唯一
+#    量得到「手機代理值偏多少」的方法）。
+print()
+print("【2b】算不出效率時，使用者按過的時刻仍要原樣留著")
+only_start = evaluate_efficiency(t, t + timedelta(minutes=30), None)
+check("只按開始 → bed_start_at 留著", only_start["bed_start_at"], t.isoformat())
+check("只按開始 → 效率仍是 None", only_start["sleep_efficiency"], None)
+too_short = evaluate_efficiency(t, t + timedelta(minutes=1),
+                                t + timedelta(minutes=5))
+check("臥床過短 → 兩個時刻都留著",
+      [too_short["bed_start_at"], too_short["bed_end_at"]],
+      [t.isoformat(), (t + timedelta(minutes=5)).isoformat()])
+check("臥床過短 → 效率仍是 None", too_short["sleep_efficiency"], None)
 
 print()
 print("【附】bed_start_at / bed_end_at 要原樣回傳（DB 要存）")

@@ -169,9 +169,18 @@ class NightlyUploader {
         isLate: decoded['is_late'] as bool?,
       );
       // ⚠️ 不印 user_id（它是憑證），只印結果。
+      // ⚠️ 只印**有沒有**標記，不印時刻本身也不印 user_id。
+      //    這一行是實機 debug 用的：先前查不出「按了按鈕卻沒進 DB」
+      //    是 App 沒送還是後端沒存，就是因為兩邊都看不到這件事。
+      final marksState = marks.isComplete
+          ? 'complete'
+          : marks.hasStart
+              ? 'start-only'
+              : 'none';
       debugPrint(
         'NightlyUpload: ok date=${result.date} '
-        'adherence=${result.adherenceMinutes}m late=${result.isLate}',
+        'adherence=${result.adherenceMinutes}m late=${result.isLate} '
+        'marks=$marksState',
       );
       return result;
     } catch (error) {
