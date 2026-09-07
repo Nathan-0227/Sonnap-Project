@@ -91,17 +91,23 @@ def _parse(value):
     return datetime.fromisoformat(value)
 
 
-def _blank(source, reason):
+def _blank(source, reason, bed_start=None, bed_end=None):
     """
-    沒算出來的時候回這個。
+    算不出效率的時候回這個。
 
-    ⚠️ 每個數值欄位都是 None **不是 0**：「沒測到」與「效率 0%」是完全
-       不同的兩件事，混在一起就再也分不開了。與 adherence.evaluate_night()
-       同一個原則。
+    ⚠️ 每個**推導出來的**數值欄位都是 None **不是 0**：「沒測到」與
+       「效率 0%」是完全不同的兩件事，混在一起就再也分不開了。
+       與 adherence.evaluate_night() 同一個原則。
+
+    ⚠️ **但使用者按過的時刻要原樣留著。** 2026-09-07 實機測到的：使用者
+       按了「開始睡覺」卻忘了按「下床」，結果連 bed_start_at 都沒存進去——
+       而「幾點上床」本身就是有用的資料（拿它跟攝影機的開錄時刻對照，
+       就是目前唯一量得到「手機代理值偏多少」的方法）。
+       算不出效率 ≠ 沒有資料。
     """
     return {
-        "bed_start_at": None,
-        "bed_end_at": None,
+        "bed_start_at": bed_start.isoformat() if bed_start else None,
+        "bed_end_at": bed_end.isoformat() if bed_end else None,
         "time_in_bed_minutes": None,
         "phone_in_bed_minutes": None,
         "assumed_sleep_minutes": None,
@@ -130,18 +136,22 @@ def evaluate_efficiency(bed_start_at, lights_out_at, bed_end_at, source="phone")
 
     if bed_start is None or bed_end is None:
         return _blank(source, "no bed_start/bed_end: the user did not mark "
-                              "getting into or out of bed")
+                              "getting into or out of bed",
+                      bed_start, bed_end)
     if lights_out is None:
-        return _blank(source, "no lights_out_at: last phone interaction unknown")
+        return _blank(source, "no lights_out_at: last phone interaction unknown",
+                      bed_start, bed_end)
 
     tib = (bed_end - bed_start).total_seconds() / 60
     if tib < MIN_TIME_IN_BED_MINUTES:
         return _blank(source, f"time in bed {tib:.0f} min is under the "
-                              f"{MIN_TIME_IN_BED_MINUTES} min floor")
+                              f"{MIN_TIME_IN_BED_MINUTES} min floor",
+                      bed_start, bed_end)
 
     # 放下手機的時刻晚於起床時刻 —— 這是資料錯誤，不是一個 0% 的夜晚。
     if lights_out > bed_end:
-        return _blank(source, "lights_out_at is after bed_end_at")
+        return _blank(source, "lights_out_at is after bed_end_at",
+                      bed_start, bed_end)
 
     # 放下手機**早於**上床：代表上床之後就沒再碰手機。
     # 這是合理的一晚，不是錯誤 —— 滑手機時間記 0。

@@ -39,7 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import json
-from datetime import date as date_cls
+from datetime import date as date_cls, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -396,9 +396,30 @@ async def post_nightly(req: NightlyRequest):
     # 行為版睡眠效率。⚠️ 與 wearable_nightly.efficiency 是**不同的量**，
     #    限制與反向判讀的完整說明在 behavior/sleep_efficiency.py 的檔頭。
     #    沒按開始／結束睡覺時每個欄位都是 None，不是 0。
+    # ⚠️ 這一列的日期來自 lights_out_at，但按鈕的時刻是**它自己那一晚**的。
+    #    兩者不一致時把標記掛上去就是張冠李戴——實測 2026-09-07 早上，
+    #    App 在新的安靜期還不是最長之前先上傳了一次，於是 09-07 03:36 的
+    #    「開始睡覺」被寫進了 09-06 那一列（算出 −1282 分鐘的荒謬差值）。
+    #
+    #    不一致就整組不收。等 lights_out 追上那一晚，App 下次上傳自然會
+    #    掛對——實測就是這樣自己修好的，09-07 那一列完全正確。
+    bed_start_dt = None
+    if req.bed_start_at:
+        try:
+            bed_start_dt = datetime.fromisoformat(req.bed_start_at)
+        except ValueError:
+            bed_start_dt = None
+    same_night = (
+        bed_start_dt is not None
+        and adherence.night_date(bed_start_dt).isoformat() == night["date"]
+    )
+
     try:
         eff = sleep_efficiency.evaluate_efficiency(
-            req.bed_start_at, req.lights_out_at, req.bed_end_at, source=req.source
+            req.bed_start_at if same_night else None,
+            req.lights_out_at,
+            req.bed_end_at if same_night else None,
+            source=req.source,
         )
     except ValueError as exc:
         raise HTTPException(

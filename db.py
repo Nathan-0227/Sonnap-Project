@@ -43,6 +43,7 @@ AI 功能用標準庫 `urllib.request` 打 API 而不裝 SDK，理由完全相�
 """
 
 import argparse
+import os
 import sqlite3
 import sys
 import uuid
@@ -62,7 +63,19 @@ ROOT = Path(__file__).parent
 #    跟 garmin/.env 是同一個等級的東西。
 #    schema 就在本檔案裡，任何人 clone 下來跑 `python db.py --init` 就能重建，
 #    所以不進版控不會有人少了東西。
-DB_PATH = ROOT / "data" / "sonnap.db"
+# ⚠️ **預設路徑跟著這個檔案的目錄走**（Path(__file__).parent），
+#    所以每個 git worktree 各有一份、互不相通。2026-09-07 為此踩過坑：
+#    手機建的帳號只存在於某一個 worktree 的 DB 裡，換一個目錄啟動後端
+#    就變成「查無此使用者」——而症狀是上傳 404，看起來像 App 壞了。
+#
+#    → 多個 worktree 同時在用的時候，用 SONNAP_DB 指到同一個絕對路徑：
+#        set SONNAP_DB=C:/Users/.../data/sonnap.db        (Windows)
+#        export SONNAP_DB=/c/Users/.../data/sonnap.db     (bash)
+#
+#    ⚠️ 這是**啟動時決定一次**的。跑到一半改環境變數不會生效；
+#       而 tests 是直接指派 db.DB_PATH（不經過環境變數），那是刻意的：
+#       測試不該被開發機上剛好設了什麼環境變數影響。
+DB_PATH = Path(os.environ.get("SONNAP_DB") or (ROOT / "data" / "sonnap.db"))
 
 TZ_TAIPEI = timezone(timedelta(hours=8))  # 專案規範：時間一律 ISO8601 (+08:00)
 

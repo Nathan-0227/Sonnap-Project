@@ -297,6 +297,36 @@ ok("沒有穿戴資料時 energy_level 仍是 null（行為效率不得冒充分
 
 print()
 print("=" * 78)
+print("【額外】SONNAP_DB 環境變數")
+print("=" * 78)
+# 2026-09-07 加的。預設路徑跟著 db.py 的目錄走，所以每個 worktree
+# 各有一份 DB——手機建的帳號只存在於其中一個裡，換個目錄啟動後端
+# 就 404。這一條守的是「設了環境變數就要真的跟著走」。
+import importlib  # noqa: E402
+import os as _os  # noqa: E402
+
+_saved = _os.environ.get("SONNAP_DB")
+try:
+    _os.environ["SONNAP_DB"] = str(Path(tempfile.mkdtemp()) / "env.db")
+    _fresh = importlib.reload(db)
+    check("設了 SONNAP_DB 就跟著走",
+          str(_fresh.DB_PATH), _os.environ["SONNAP_DB"].replace("/", _os.sep))
+    # 反向對照：沒設的時候必須退回預設。少了這一條，
+    # 把預設寫死成某個固定路徑也會讓上面那條通過。
+    _os.environ.pop("SONNAP_DB")
+    _fresh = importlib.reload(db)
+    check("沒設就退回 db.py 旁邊的 data/sonnap.db",
+          _fresh.DB_PATH, _fresh.ROOT / "data" / "sonnap.db")
+finally:
+    if _saved is not None:
+        _os.environ["SONNAP_DB"] = _saved
+    else:
+        _os.environ.pop("SONNAP_DB", None)
+    importlib.reload(db)
+    db.DB_PATH = TMP          # 後面還有測試要用暑存 DB
+
+print()
+print("=" * 78)
 print("【驗收 5】舊端點 /get-sleep-data 行為完全不變")
 print("=" * 78)
 old = client.get("/get-sleep-data")

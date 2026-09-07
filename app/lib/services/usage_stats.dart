@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'lights_out.dart';
+import 'pre_bed_apps.dart';
 
 /// 一個 App 在某段期間的前景使用時間。
 ///
@@ -260,6 +261,44 @@ class UsageStatsService {
         .whereType<Map<Object?, Object?>>()
         .map(InteractionEvent.fromMap)
         .toList();
+  }
+
+  /// 上床前那一段每個 App 各佔多久。
+  ///
+  /// 要先有 [lightsOut] 的結果才問得出來——沒有上床時刻就沒有「之前」。
+  /// 偵測不到就回一個空的 [PreBedResult]（`hasData == false`），
+  /// **不要退回整天的彙總冒充** ——那是兩個不同的量，混在一起就再也分不開。
+  ///
+  /// labels 從日彙總那條路來（事件流只有 package name，沒有顯示名稱）。
+  /// 查不到的就顯示 package name，見 [preBedApps]。
+  Future<PreBedResult> preBed({
+    required LightsOutResult lightsOut,
+    Map<String, String> labels = const {},
+    Duration window = kPreBedWindow,
+  }) async {
+    final bed = lightsOut.at;
+    if (!isSupported || bed == null) return const PreBedResult();
+
+    try {
+      final events = await interactionEvents(
+        start: bed.subtract(window),
+        end: bed,
+      );
+      return PreBedResult(
+        lightsOutAt: bed,
+        window: window,
+        apps: preBedApps(events,
+            lightsOutAt: bed, window: window, labels: labels),
+      );
+    } on PlatformException {
+      return const PreBedResult();
+    } on MissingPluginException {
+      // ⚠️ MissingPluginException **不是** PlatformException 的子類，
+      //    要另外攔。漏掉的話 widget test（沒有註冊 channel）會讓整個
+      //    _loadUsage() 拋出去 —— 症狀是卡片完全不顯示，而錯誤訊息
+      //    指向「找不到某個文字」，看起來像版面壞了。
+      return const PreBedResult();
+    }
   }
 
   /// 上一次放下手機的時刻。

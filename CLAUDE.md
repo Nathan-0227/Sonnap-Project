@@ -408,9 +408,26 @@ area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。�
 ⚠️ worktree **不需要自己的 venv**，直接用主目錄那個：
 `C:\Users\user\Projects\Sonnap-Project\.venv\Scripts\python.exe`
 （腳本用 `Path(__file__).parent` 定位，資料路徑會正確落在 worktree 內）。
-但 **`data/sonnap.db` 不會跟過去**（它是未追蹤的），要在 worktree 裡跑
-`/home`、`/insights` 之前得先 `python db.py --init && python db.py --seed`
-再 `python migrate_garmin_to_db.py`。
+⚠️ **`data/sonnap.db` 預設跟著 `db.py` 的目錄走，所以每個 worktree 各有一份、
+互不相通。** 2026-09-07 為此踩過坑：手機建的帳號只存在於某一個 worktree 的
+DB 裡，換個目錄啟動後端就變成「查無此使用者」——症狀是上傳 404，看起來像
+App 壞了。
+
+→ 多個 worktree 同時在用時，用 **`SONNAP_DB`** 指到同一個絕對路徑，
+  而且那個路徑要**放在所有 worktree 之外**（放在 worktree 裡的話，
+  `git worktree remove` 會把它一起帶走——2026-09-06 的錄影檔就是這樣沒的）：
+
+```bash
+# 現行的正式位置（不在任何 worktree 裡）
+SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+⚠️ 這是**啟動時決定一次**的；跑到一半改環境變數不會生效。
+⚠️ 測試刻意**不看**這個變數（直接指派 `db.DB_PATH`），
+   免得被開發機上剛好設了什麼影響。`tests/test_api.py` 有兩條互為反面的測試守著。
+
+第一次在新位置建 DB：`python db.py --init && python db.py --seed`
+再 `python migrate_garmin_to_db.py`（都要帶著同一個 `SONNAP_DB`）。
 
 桌面上那份 `OneDrive\桌面\Sonnap-Project-main\Sonnap-舊工作副本_勿用\` 是最初下載的 zip，
 **沒有版控、已停用**。它裡面只剩三樣東西沒被搬過來，都是刻意的：`garmin/.env`（帳密）、
@@ -923,9 +940,18 @@ python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
 python tests/test_sleep_efficiency.py    # 2026-09-06 新增
+python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
 ```
 
-Flutter（在 `app/` 底下跑，**120 條全過**）：
+⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
+**四個時刻**擺在一起（開錄／按按鈕／`lights_out`／攝影機測到的入睡），
+算出 **D2 唯一用得上的那個數字：手機代理值比實際上床晚多少**（2026-09-06 首測 +3.4 分，n=1）。
+
+```bash
+SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
+```
+
+Flutter（在 `app/` 底下跑，**153 條全過**）：
 
 ```bash
 flutter test
@@ -941,7 +967,10 @@ flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色
 | `nightly_uploader_test.dart` | 三種「沒上傳」的原因要分得開；body 不含 `target_bedtime`；達成度照抄後端 |
 | `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
 | `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚） |
-| `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用；沒有後端回應時不得顯示達成度 |
+| `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用（**含反面**：有睡前資料時標題與說明都要換）；沒有後端回應時不得顯示達成度；上床／下床按鈕是**加分項不是取代品**（沒按不得擋住上傳） |
+| `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
+| `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
+| `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
 
 ⚠️ **`TestWidgetsFlutterBinding` 會把全域 `HttpClient` 換成「一律回 400」的假實作**，
 只要同一個檔案裡有任何一條 `testWidgets` 就會裝上。症狀是連 `127.0.0.1:1`
