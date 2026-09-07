@@ -13,25 +13,40 @@ import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
 import 'services/pending_nightly.dart';
 import 'services/sleep_repository.dart';
+import 'services/user_settings.dart';
 
 void main() {
   runApp(const SonnapApp());
 }
 
 class SonnapApp extends StatelessWidget {
-  const SonnapApp({super.key});
+  /// 測試用注入點。null = 用真的 `sonnap/store`。
+  ///
+  /// ⚠️ 這兩個參數存在的理由是**設定的持久化與後端同步只在
+  /// [MainPage] 裡接得起來**（那是 targetBedtime 的唯一擁有者）。
+  /// 沒有注入點的話，「改了目標有沒有真的告訴後端」這條就測不到，
+  /// 而它壞掉時完全沒有錯誤訊息——只是達成度拿舊目標在算。
+  final KeyValueStore? store;
+
+  /// 測試用注入點。null = 依 `SONNAP_API_BASE` 建一個真的。
+  final AccountService? accounts;
+
+  const SonnapApp({super.key, this.store, this.accounts});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(),
+      home: MainPage(store: store, accounts: accounts),
     );
   }
 }
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  final KeyValueStore? store;
+  final AccountService? accounts;
+
+  const MainPage({super.key, this.store, this.accounts});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -51,10 +66,22 @@ class _MainPageState extends State<MainPage> {
   /// callback ＋ `didUpdateWidget`），缺的只是一個共用的擁有者，就是這裡。
   /// 所以這次修正**沒有動那兩個 widget 的內部一行**。
   ///
-  /// ⚠️ 目前只存在記憶體裡，App 關掉就回到預設值。要持久化的話這裡是唯一
-  /// 該接儲存的地方——不要在 widget 裡各自存，那會把剛修好的問題再造一次。
+  /// ⚠️ **這個設定有兩份，而且會安靜地漂移。** 畫面上的倒數用這一份，
+  /// 但**達成度是後端拿 `users.target_bedtime` 算的**。改完不通知後端的話，
+  /// 首頁倒數到 01:00、後端還在用註冊當天填的 23:30，隔天早上使用者會收到
+  /// 「比目標晚了 90 分鐘」而完全不知道那個「目標」是什麼。
+  /// 所以 [_setBedtime] 一定要同時做三件事：改畫面、存本機、PATCH 後端。
+  /// 完整說明見 [UserSettingsStore]。
+  ///
+  /// 預設值只在「使用者從來沒動過」時才用得到——存過的話 [_restoreSettings]
+  /// 會蓋掉它。
   TimeOfDay targetBedtime = const TimeOfDay(hour: 23, minute: 30);
   bool reminderOn = true;
+
+  /// 設定存在哪。⚠️ 與 [AccountService] 用同一個 `sonnap/store`
+  /// （Android SharedPreferences），**不裝 shared_preferences**。
+  late final UserSettingsStore _settings =
+      UserSettingsStore(widget.store ?? const PlatformKeyValueStore());
 
   /// 三個畫面**共用同一個** repository 實例。
   ///
@@ -72,9 +99,11 @@ class _MainPageState extends State<MainPage> {
   /// 第一幀就會閃過一次問暱稱的畫面，然後在解析完成後又消失。
   AccountStatus? _account;
 
-  late final AccountService _accounts = AccountService(
-    baseUrl: ApiSleepRepository.configuredBaseUrl,
-  );
+  late final AccountService _accounts = widget.accounts ??
+      AccountService(
+        baseUrl: ApiSleepRepository.configuredBaseUrl,
+        store: widget.store ?? const PlatformKeyValueStore(),
+      );
 
   /// 把偵測到的就寢時刻送去後端。
   ///
@@ -88,7 +117,7 @@ class _MainPageState extends State<MainPage> {
       identity: ResolvedUserIdentity(_account?.userId),
       // ⚠️ 有了這個，連不到後端的那一晚才不會永久消失（偵測視窗是往回
       //    24 小時的滑動視窗，隔天就算不出來了）。理由見 PendingNightlyStore。
-      pending: const PendingNightlyStore(PlatformKeyValueStore()),
+      pending: PendingNightlyStore(widget.store ?? const PlatformKeyValueStore()),
     );
   }
 
@@ -116,7 +145,64 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    _resolveAccount();
+    _start();
+  }
+
+  /// ⚠️ **[_syncBedtime] 一定要排在 [_resolveAccount] 後面。**
+  ///
+  /// 它需要 `_account.userId` 才發得出 PATCH；排在前面的話 userId 還是
+  /// null，補送直接 return——結果是**上次沒同步成功的目標永遠補不回來**，
+  /// 而畫面上一切正常（本機那份是對的，錯的是後端在拿舊目標算達成度）。
+  ///
+  /// [_restoreSettings] 的位置則不影響正確性：[_syncBedtime] 讀的是
+  /// **儲存**而不是記憶體裡的 [targetBedtime]，所以它拿到的一定是使用者
+  /// 存下來的值。放在最前面只是為了讓畫面早一幀顯示正確的倒數。
+  /// （這一段原本寫成「順序反了會拿預設值去蓋掉使用者的設定」，
+  /// 是錯的——變異測試把它抓出來了：那個變異不會讓任何測試變紅，
+  /// 因為那條路徑根本不存在。）
+  Future<void> _start() async {
+    // ⚠️ **讀本機設定不能擋住 App 啟動。** 畫面在 `_account == null`
+    //    時只有一個轉圈圈，而 `_account` 是 [_resolveAccount] 設的。
+    //    把 [_restoreSettings] 寫成 `await` 排在它前面的話，`sonnap/store`
+    //    一旦沒有回應（原生端沒註冊、非 Android 平台、widget test），
+    //    整個 App 就永遠停在轉圈圈上——實測 widget test 裡那個
+    //    MethodChannel **從來不會完成**，症狀就是 HomeScreen 根本不存在。
+    //    這與 [PlatformKeyValueStore] 自己寫的紀律是同一條：讀不到最壞
+    //    的後果是退回預設值，不該讓整個 App 開不起來。
+    final restore = _restoreSettings();
+    await _resolveAccount();
+    await restore;
+    await _syncBedtime();
+  }
+
+  Future<void> _restoreSettings() async {
+    final stored = await _settings.load();
+    if (!mounted) return;
+    final parsed = parseBedtime(stored.targetBedtime);
+    setState(() {
+      if (parsed != null) {
+        targetBedtime = TimeOfDay(hour: parsed.hour, minute: parsed.minute);
+      }
+      reminderOn = stored.reminderOn ?? reminderOn;
+    });
+  }
+
+  /// 補送上次沒同步成功的目標就寢時間。
+  ///
+  /// ⚠️ 只在「本機存的」與「上次同步成功的」不同時才發請求——否則每次
+  /// 開 App 都會 PATCH 一次，而後端的 `update_user` 沒有任何節流。
+  Future<void> _syncBedtime() async {
+    final userId = _account?.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    final stored = await _settings.load();
+    if (!stored.needsSync) return;
+
+    final ok = await _accounts.updateTargetBedtime(
+      userId: userId,
+      targetBedtime: stored.targetBedtime!,
+    );
+    if (ok) await _settings.markSynced(stored.targetBedtime!);
   }
 
   Future<void> _resolveAccount() async {
@@ -133,6 +219,9 @@ class _MainPageState extends State<MainPage> {
       targetBedtime: '$hh:$mm',
     );
     if (status == null) return false;
+    // ⚠️ POST /users 已經把這個目標帶過去了，所以直接記成「已同步」。
+    //    少了這一行，下次開 App 會白白再 PATCH 一次同樣的值。
+    await _settings.markSynced('$hh:$mm');
     if (!mounted) return true;
     setState(() => _account = status);
     return true;
@@ -147,14 +236,25 @@ class _MainPageState extends State<MainPage> {
     setState(() => _account = const AccountStatus(AccountState.noBackend));
   }
 
-  void _setBedtime(TimeOfDay value) {
+  /// ⚠️ 三件事一起做：改畫面、存本機、告訴後端。
+  ///
+  /// 少掉第三件，達成度就會拿舊目標去算，而畫面上看不出來（見
+  /// [targetBedtime] 的說明）。PATCH 失敗**不擋使用者**——本機已經存下來，
+  /// [_syncBedtime] 下次開 App 會補送。
+  Future<void> _setBedtime(TimeOfDay value) async {
     if (value == targetBedtime) return;
     setState(() => targetBedtime = value);
+
+    final hhmm = formatBedtime(value.hour, value.minute);
+    await _settings.saveBedtime(hhmm);
+    await _syncBedtime();
   }
 
-  void _setReminder(bool value) {
+  Future<void> _setReminder(bool value) async {
     if (value == reminderOn) return;
     setState(() => reminderOn = value);
+    // 提醒開關只有本機意義，後端沒有這個欄位。
+    await _settings.saveReminder(value);
   }
 
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
