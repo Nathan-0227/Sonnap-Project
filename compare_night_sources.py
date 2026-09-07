@@ -20,13 +20,28 @@ D2 的受測者只有手機，所以 `lights_out_at`（最後一次放下手機�
 
 | 比什麼 | 量到的是 | 有用嗎 |
 |---|---|---|
-| 自述上床 vs **lights_out_at** | **手機代理值的偏差** | ✅ 這才是 D2 用得上的 |
+| 自述上床 vs **lights_out_at** | **上床後滑手機多久**（不是量測誤差） | ✅ 見下 |
 | 自述上床 vs 攝影機測到的入睡 | 入睡潛伏期 SOL | ✅ |
 | 開始錄影 vs 按開始睡覺 | **你自己按得一不一致** | ⚠️ 只是資料品質檢查 |
 
 最後一列特別要小心：兩邊**都是同一個人的自述**，只是兩種按法。
 拿它們互比量到的不是儀器準不準，是使用者的操作一致性。
 本支會把它標成「自述 vs 自述」，不要拿去當效標。
+
+🔴 **第一列也要小心，而且原因不一樣**（2026-09-07 實測後修正的認知）：
+
+    自述上床 → lights_out  ==  上床後滑手機的時間  ==  phone_in_bed_minutes
+
+三者在代數上是**同一個數字**（實測 09-07：兩邊都是 48.4 分）。所以：
+
+  · 它**不是量測誤差**。`lights_out_at` 不是「上床時刻的雜訊估計」，
+    它是另一個構念：「你停止用手機的時刻」。兩者的差是**行為**，不是誤差。
+  · 因此**不能拿它當固定偏移去校正 D2 的上床時刻**——實測兩晚是
+    +3.4 與 +48.4 分鐘，差一個數量級，因為那本來就是每晚不同的行為。
+
+→ D2 那條線真正該講的是：**只有 lights_out 的人，臥床時間會少算掉
+  自己睡前滑手機的那一段，而那一段每晚都不一樣。** 這是限制的陳述，
+  不是可以修正的偏差。
 
 ═══════════════════════════════════════════════════════════════════
 ⚠️ 這支**只讀不寫**
@@ -121,10 +136,32 @@ def delta_minutes(a, b):
     return (b - a).total_seconds() / 60
 
 
+def is_logger_csv(path):
+    """
+    這份 CSV 是 tapo_metric_logger 的輸出嗎？
+
+    ⚠️ **看欄位，不要猜檔名。** tapo_metrics/ 裡還有標註檔、片段度量檔，
+       它們也叫 .csv。先前是用檔名與檔案大小過濾，結果把 2026-09-07
+       那晚（只錄到 25 分鐘）整個濾掉——而那正是最需要看的一晚。
+    """
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("#"):
+                    continue
+                cols = {c.strip() for c in line.split(",")}
+                return {"t", "max_px", "warmup"} <= cols
+    except OSError:
+        return False
+    return False
+
+
 def camera_nights(csv_paths):
     """跑 tapo_sleep_onset，回傳 {日期字串: 結果}。"""
     out = {}
     for p in csv_paths:
+        if not is_logger_csv(p):
+            continue
         r = onset.analyse(p)
         if "error" in r:
             continue
@@ -158,7 +195,7 @@ def report(nights, behavior):
     print("同一晚的四個時刻")
     print("=" * 96)
 
-    biases = []          # 自述上床 → lights_out（手機代理值的偏差）
+    biases = []          # 自述上床 → lights_out（== 上床後滑手機，不是誤差）
     sols = []            # 自述上床 → 攝影機測到的入睡
     consistency = []     # 開始錄影 → 按開始睡覺（自述 vs 自述）
 
@@ -195,7 +232,7 @@ def report(nights, behavior):
         if b is not None:
             biases.append(b)
             print(f"  {pad(f'自述上床({declared_src}) → lights_out', 34)}"
-                  f"{fmt_delta(b)} 分   ← **手機代理值的偏差**")
+                  f"{fmt_delta(b)} 分   ← 上床後滑手機（不是量測誤差）")
         s = delta_minutes(declared, cam_onset) if cam_onset else None
         if s is not None:
             sols.append(s)
@@ -225,8 +262,9 @@ def report(nights, behavior):
               f"（{lo:+.1f} ~ {hi:+.1f}）")
         print(f"  {' ' * 26}{note}")
 
-    summarise("手機代理值的偏差", biases,
-              "← 這是 D2 唯一用得上的數字：lights_out 比實際上床晚這麼多")
+    summarise("上床後滑手機", biases,
+              "== phone_in_bed_minutes。**不是量測誤差，是行為**——"
+              "每晚不同，不能當固定偏移去校正 D2 的上床時刻")
     summarise("入睡潛伏期", sols, "← 自述上床到攝影機測到入睡")
     summarise("按法的一致性", consistency,
               "⚠️ 兩邊都是自述，不是效標")
@@ -262,8 +300,11 @@ def main():
     paths = args.csv or [
         p for p in sorted(args.metrics_dir.glob("*.csv"))
         if "selftest" not in p.name and "_truth" not in p.name
-        and p.stat().st_size > 500_000
     ]
+    # ⚠️ 不用檔案大小過濾。先前用 >500KB 擋掉短檔，結果把 2026-09-07
+    #    那晚（串流 25 分鐘後斷掉）整個濾掉了——而那正是最需要看的一晚。
+    #    短不短交給 analyse() 判（它要求 ≥100 個可用樣本），
+    #    那是「資料夠不夠」的判準，檔案大小不是。
     if not paths:
         sys.exit(
             "✗ " + str(args.metrics_dir) + " 裡找不到整夜錄影 CSV。 "
