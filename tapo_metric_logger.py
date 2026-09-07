@@ -83,7 +83,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).parent
-ENV_PATH = ROOT / "tapo 2.0" / ".env"
+# ⚠️ worktree 裡**沒有** `tapo 2.0/.env`（三個 .env 都是未追蹤的，只存在於
+#    主 clone）——那是刻意的安全設計，不要把 .env 複製進 worktree。
+#    但這代表 worktree 裡跑不了錄影，於是錄影只能在主 clone 做，而主 clone
+#    可能正被另一個 session 佔用，改動就會變成「掛在別人分支上的未 commit
+#    變更」等著被 `git add -A` 掃走。2026-09-08 真的發生了。
+#    → 給一個環境變數指到主 clone 的 .env（比照 db.py 的 SONNAP_DB）：
+#      SONNAP_TAPO_ENV="C:/Users/user/Projects/Sonnap-Project/tapo 2.0/.env"
+ENV_PATH = Path(os.environ.get("SONNAP_TAPO_ENV") or (ROOT / "tapo 2.0" / ".env"))
 OUT_DIR = ROOT / "tapo_metrics"
 
 # ─── 管線參數 ────────────────────────────────────────────────────
@@ -134,6 +141,8 @@ RECONNECT_BACKOFF_MAX = 60   # 重連間隔上限（秒）
 #    重試的成本幾乎是零（一個 sleep 迴圈），放棄的成本是整晚的資料。
 #    改成以**時間**為準：「40 次」這個數字本身沒有意義，它取決於
 #    timeout 多長；「斷了三小時」才是人看得懂、也才是真正的判準。
+#    （保留上限而不是無限重試，是因為斷了三小時那一晚本來就沒了，
+#      繼續空轉只會讓人以為還在錄。）
 GIVE_UP_AFTER_HOURS = 3.0
 MIN_BLOB_PX = 4              # 小於這個不算一「塊」（純粹避免數到單點）
 # MOG2 一開始沒有背景模型，整幀都會被判成前景（實測第 0 幀 = 100% 畫面）。
