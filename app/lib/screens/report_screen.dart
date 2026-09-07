@@ -87,8 +87,14 @@ class _ReportScreenState extends State<ReportScreen>
   /// 但**是兩個不同的量**：一個是整天的總量，一個是一個時刻。
   LightsOutResult? _lightsOut;
 
-  /// 把 [_lightsOut] 送去後端的結果。**達成度的數字來自這裡而不是 Dart。**
-  NightlyUploadResult? _upload;
+  /// 把 [_lightsOut] 送去後端的結果，含這一次補送掉的舊夜晚。
+  /// **達成度的數字來自這裡而不是 Dart。**
+  NightlyUploadBatch? _batch;
+
+  /// 這一晚的結果。⚠️ 只看 [NightlyUploadBatch.current]——補送的舊夜晚
+  /// 不能混進來，否則畫面上顯示的會是三天前那一晚的達成度，
+  /// 而且看不出來講的是哪一天。
+  NightlyUploadResult? get _upload => _batch?.current;
 
   @override
   void initState() {
@@ -137,9 +143,11 @@ class _ReportScreenState extends State<ReportScreen>
     //    不能讓它把已經算出來的就寢時刻連帶擋掉。
     final uploader = widget.uploader;
     if (uploader == null) return;
-    final upload = await uploader.upload(lightsOut);
+    // ⚠️ sync() 而不是 upload()：它會先把之前連不到後端那幾晚補送掉。
+    //    偵測視窗是往回 24 小時的滑動視窗，沒有這一步那些夜晚就永久消失了。
+    final batch = await uploader.sync(lightsOut);
     if (!mounted) return;
-    setState(() => _upload = upload);
+    setState(() => _batch = batch);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -1254,6 +1262,45 @@ class _ReportScreenState extends State<ReportScreen>
             ),
           ),
           _buildAdherenceLine(),
+          _buildBackfillLine(),
+        ],
+      ),
+    );
+  }
+
+  /// 「這次順便補送了幾晚」。
+  ///
+  /// ⚠️ 只講**晚數**，不講任何一晚的達成度。補送的是舊夜晚，把它們的數字
+  /// 混進上面那一行就會變成「畫面上顯示的達成度不知道是哪一天的」——
+  /// 那正是 [NightlyUploadBatch] 把兩者分開的理由。
+  Widget _buildBackfillLine() {
+    final batch = _batch;
+    if (batch == null || batch.replayed.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final n = batch.replayed.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.cloud_done_outlined,
+            size: 13,
+            color: Color(0xFF8498B7),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              n == 1
+                  ? 'Also synced 1 earlier night that could not reach the backend.'
+                  : 'Also synced $n earlier nights that could not reach the backend.',
+              style: const TextStyle(
+                color: Color(0xFF8498B7),
+                fontSize: 9,
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1267,8 +1314,13 @@ class _ReportScreenState extends State<ReportScreen>
   /// 第二個定義處，而兩份漂移時不會有任何錯誤訊息——與「不要在 Dart 從
   /// final_quality 推 pet_mood」是同一條紀律。
   ///
-  /// 上傳失敗**刻意不在這裡報錯**：那一晚的資料還在手機裡，下次開 App 會再試，
-  /// 而上面那個時刻已經算出來了，不該被後端連不上連帶擋掉。
+  /// 上傳失敗**刻意不在這裡報錯**：上面那個時刻已經算出來了，不該被
+  /// 後端連不上連帶擋掉，而那一晚也不會不見——[NightlyUploader.sync] 已經
+  /// 把它存進手機，下次開 App 補送。
+  ///
+  /// ⚠️ 這段註解原本寫的是「那一晚的資料還在手機裡，下次開 App 會再試」，
+  /// 而在 [PendingNightlyStore] 之前那是**假的**：偵測視窗是往回 24 小時的
+  /// 滑動視窗，隔天再開 App 的視窗裡已經沒有那一晚了。
   Widget _buildAdherenceLine() {
     final upload = _upload;
     if (upload == null || upload.status != NightlyUploadStatus.ok) {

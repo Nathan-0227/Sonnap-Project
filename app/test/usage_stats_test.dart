@@ -19,6 +19,7 @@ import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/report_screen.dart';
 import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
+import 'package:app/services/pending_nightly.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/usage_stats.dart';
@@ -39,6 +40,15 @@ class _StubUploader implements NightlyUploader {
 
   @override
   Future<NightlyUploadResult> upload(LightsOutResult lightsOut) async => result;
+
+  /// 畫面走的是這一條（[NightlyUploader.sync]）。補送的舊夜晚固定為空——
+  /// 佇列本身由 nightly_uploader_test.dart 測，這裡只驗顯示。
+  @override
+  Future<NightlyUploadBatch> sync(LightsOutResult lightsOut) async =>
+      NightlyUploadBatch(current: result);
+
+  @override
+  PendingNightlyStore? get pending => null;
 
   @override
   String get baseUrl => 'stub';

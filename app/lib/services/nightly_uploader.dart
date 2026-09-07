@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'key_value_store.dart';
 import 'lights_out.dart';
+import 'pending_nightly.dart';
 import 'sleep_repository.dart';
 import 'user_identity.dart';
 
@@ -57,6 +59,30 @@ class NightlyUploadResult {
   });
 }
 
+/// 一次同步的結果：這一晚，加上補送掉的舊夜晚。
+///
+/// ⚠️ **[current] 與 [replayed] 一定要分開。** 畫面上的達成度只能講
+/// [current]——把補送的夜晚混進去，使用者早上看到的會是三天前那一晚的
+/// 數字，而畫面上完全看不出來講的是哪一天。這就是「補送不得重複計算」
+/// 具體長什麼樣子。
+@immutable
+class NightlyUploadBatch {
+  /// 這一次偵測到的那一晚。沒偵測到時 status 是 nothingDetected。
+  final NightlyUploadResult current;
+
+  /// 這一次順便補送成功的**舊**夜晚，不含 [current]。
+  final List<NightlyUploadResult> replayed;
+
+  /// 補送完之後還留在手機裡沒送出去的夜晚數。
+  final int stillPending;
+
+  const NightlyUploadBatch({
+    required this.current,
+    this.replayed = const <NightlyUploadResult>[],
+    this.stillPending = 0,
+  });
+}
+
 /// 把偵測到的就寢時刻送去後端 `POST /nightly`。
 ///
 /// ═══════════════════════════════════════════════════════════════════
@@ -91,11 +117,82 @@ class NightlyUploader {
   /// 上傳失敗不該讓畫面卡住——那一晚的資料還在手機裡，下次開 App 會再試。
   final Duration timeout;
 
+  /// 上傳失敗的夜晚存在哪裡。null = 不留存（舊行為）。
+  ///
+  /// ⚠️ 給了它才有 [sync]，而**只有 [sync] 補得回連不到後端的那一晚**。
+  /// 見 [PendingNightlyStore] 的檔頭：偵測視窗是往回 24 小時的滑動視窗，
+  /// 隔天再開一次 App 是救不回來的。
+  final PendingNightlyStore? pending;
+
   const NightlyUploader({
     required this.baseUrl,
     required this.identity,
+    this.pending,
     this.timeout = const Duration(seconds: 3),
   });
+
+  /// 送這一晚，順便把之前沒送成功的補送掉。
+  ///
+  /// 順序是**先補舊的、再送今晚**：畫面上顯示的是今晚，所以它要是最後
+  /// 拿到的那一份。
+  ///
+  /// ⚠️ 沒有 [pending] 時退化成單純的 [upload]，行為與加這一層之前
+  /// 完全相同——與 `buildSleepRepository()` 的「什麼都沒設定仍然跑得起來」
+  /// 是同一個原則。
+  Future<NightlyUploadBatch> sync(LightsOutResult lightsOut) async {
+    final queue = pending;
+    if (queue == null) {
+      return NightlyUploadBatch(current: await upload(lightsOut));
+    }
+
+    final todayIso =
+        lightsOut.status == LightsOutStatus.ok ? lightsOut.iso8601 : null;
+
+    final stored = await queue.load();
+    // ⚠️ 今晚這一筆如果已經在佇列裡就先拿掉。24 小時的視窗會連續兩天算出
+    //    **同一個時刻**，不拿掉的話同一晚會被送兩次、畫面上也會算兩次。
+    stored.removeWhere((iso) => iso == todayIso);
+
+    final replayed = <NightlyUploadResult>[];
+    final remaining = <String>[];
+    for (final iso in stored) {
+      final result = await _post(iso);
+      if (result.status == NightlyUploadStatus.ok) {
+        replayed.add(result);
+      } else if (_worthKeeping(result.status)) {
+        remaining.add(iso);
+      }
+      // 其餘狀態代表「這筆補不回來了」（例如後端回 400 說時刻壞掉），
+      // 留著只會每天重試一次同一個失敗。
+    }
+
+    final current = await upload(lightsOut);
+    if (todayIso != null && _worthKeeping(current.status)) {
+      remaining.add(todayIso);
+    }
+
+    await queue.save(remaining);
+    return NightlyUploadBatch(
+      current: current,
+      replayed: replayed,
+      stillPending: remaining.length,
+    );
+  }
+
+  /// 這種失敗值不值得留下來下次再試。
+  ///
+  /// ⚠️ 只有這兩種：
+  ///   - [NightlyUploadStatus.failed]：連不上／逾時／後端回錯。**這是
+  ///     這整個機制存在的理由**（受測者早上不在同一個 Wi-Fi 底下）。
+  ///   - [NightlyUploadStatus.noUser]：還沒建帳號。跳過註冊是刻意不寫進
+  ///     儲存的（見 `main.dart` 的 `_skipOnboarding`），所以之後一定還會
+  ///     被問一次；那時候這幾晚要補得回來。
+  ///
+  /// `noBackend` 不留：那支 build 根本沒有 `--dart-define=SONNAP_API_BASE`，
+  /// 留著也永遠送不出去。`nothingDetected` 不留：沒有東西可留。
+  static bool _worthKeeping(NightlyUploadStatus status) =>
+      status == NightlyUploadStatus.failed ||
+      status == NightlyUploadStatus.noUser;
 
   Future<NightlyUploadResult> upload(LightsOutResult lightsOut) async {
     if (baseUrl.trim().isEmpty) {
@@ -110,6 +207,13 @@ class NightlyUploader {
       return const NightlyUploadResult(NightlyUploadStatus.nothingDetected);
     }
 
+    return _post(iso);
+  }
+
+  /// 真正發出請求的那一段。吃 ISO8601 字串而不是 [LightsOutResult]，
+  /// 因為補送時手上只剩存下來的那個字串——**存的就只有它**，達成度那三個
+  /// 欄位刻意不存（理由見 [PendingNightlyStore]）。
+  Future<NightlyUploadResult> _post(String iso) async {
     final userId = await identity.currentUserId();
     if (userId == null) {
       return const NightlyUploadResult(NightlyUploadStatus.noUser);
@@ -185,11 +289,13 @@ class NightlyUploader {
 NightlyUploader? buildNightlyUploader({
   String? baseUrlOverride,
   String? userIdOverride,
+  KeyValueStore? store,
 }) {
   final baseUrl = (baseUrlOverride ?? ApiSleepRepository.configuredBaseUrl).trim();
   if (baseUrl.isEmpty) return null;
   return NightlyUploader(
     baseUrl: baseUrl,
     identity: buildUserIdentity(userIdOverride: userIdOverride),
+    pending: PendingNightlyStore(store ?? const PlatformKeyValueStore()),
   );
 }
