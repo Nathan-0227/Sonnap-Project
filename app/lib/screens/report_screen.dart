@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
+import '../services/challenges_service.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
@@ -19,11 +20,15 @@ class ReportScreen extends StatefulWidget {
   /// 把偵測到的就寢時刻送去後端。null = 這支 build 沒設定後端，不上傳。
   final NightlyUploader? uploader;
 
+  /// 挑戰進度的來源。null = 這支 build 沒有後端，整張卡不顯示。
+  final ChallengesService? challenges;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
     this.uploader,
+    this.challenges,
   });
 
   @override
@@ -96,6 +101,10 @@ class _ReportScreenState extends State<ReportScreen>
   /// 而且看不出來講的是哪一天。
   NightlyUploadResult? get _upload => _batch?.current;
 
+  /// `GET /challenges` 的結果。**每一格數字都是後端算的**，
+  /// 這個畫面一個都不重算。
+  ChallengesResult? _challenges;
+
   @override
   void initState() {
     super.initState();
@@ -142,12 +151,28 @@ class _ReportScreenState extends State<ReportScreen>
     //    後端沒開是 demo 的常態（見 FallbackSleepRepository 的理由），
     //    不能讓它把已經算出來的就寢時刻連帶擋掉。
     final uploader = widget.uploader;
-    if (uploader == null) return;
-    // ⚠️ sync() 而不是 upload()：它會先把之前連不到後端那幾晚補送掉。
-    //    偵測視窗是往回 24 小時的滑動視窗，沒有這一步那些夜晚就永久消失了。
-    final batch = await uploader.sync(lightsOut);
+    if (uploader != null) {
+      // ⚠️ sync() 而不是 upload()：它會先把之前連不到後端那幾晚補送掉。
+      //    偵測視窗是往回 24 小時的滑動視窗，沒有這一步那些夜晚就永久消失了。
+      final batch = await uploader.sync(lightsOut);
+      if (!mounted) return;
+      setState(() => _batch = batch);
+    }
+
+    // ⚠️ 挑戰進度一定要在上傳**之後**問，而且**不能寫在
+    //    `if (uploader == null) return;` 後面**——沒有 uploader 的 build
+    //    照樣要看得到挑戰卡。後端是每次即時重算的（main.py 的
+    //    /challenges），順序反了就會少算今晚這一筆，使用者看到的是
+    //    「昨天的進度」而畫面上完全看不出來。
+    await _loadChallenges();
+  }
+
+  Future<void> _loadChallenges() async {
+    final service = widget.challenges;
+    if (service == null) return;
+    final result = await service.fetch();
     if (!mounted) return;
-    setState(() => _batch = batch);
+    setState(() => _challenges = result);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -257,6 +282,10 @@ class _ReportScreenState extends State<ReportScreen>
                       );
                     },
                   ),
+
+                  const SizedBox(height: 14),
+
+                  _buildChallengesCard(),
                 ],
               ),
             );
@@ -1751,6 +1780,204 @@ class _ReportScreenState extends State<ReportScreen>
   // ============================================================
   // CARD
   // ============================================================
+
+  // ============================================================
+  // CHALLENGES
+  // ============================================================
+
+  /// 挑戰進度。`GET /challenges`。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 三條紅線，違反了都不會報錯，只會安靜地講錯話
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  ///   1. **這裡一格數字都不算。** 進度、達成與否、那句 detail，全部是
+  ///      `behavior/challenges.py` 算好回來的。在 Dart 重算就有第二個
+  ///      定義處——尤其 consistency 的進度是 `目標 ÷ 實際`（比值，不是
+  ///      線性遞減），照直覺重寫一定會不一樣。
+  ///   2. **insufficient_data 是第三種狀態，不是 0%。** 畫成一條空的
+  ///      進度條，使用者會以為自己表現很差，而事實是我們還沒收到他的
+  ///      資料。後端刻意把兩者分開（`challenges.py` 的 `evaluate_challenge`）。
+  ///   3. **一定要顯示 recorded_nights 當分母。** `challenges.py:400`
+  ///      明寫理由：沒有它，「達成 3 晚」看不出是 3/3 還是 3/14。
+  ///
+  /// ⚠️ 拿不到（後端沒開、還沒建帳號、連不上）就整張卡不出現。
+  /// 顯示一張空的或上次的，比不顯示更糟——那會讓人以為那是今天的進度。
+  Widget _buildChallengesCard() {
+    final result = _challenges;
+    if (result == null ||
+        result.status != ChallengesStatus.ok ||
+        result.challenges.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.flag_rounded,
+                color: purpleColor,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Challenges',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Text(
+                'from backend',
+                style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Every target here is a behaviour you control - when you put the '
+            'phone down - never a sleep outcome.',
+            style: TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final challenge in result.challenges) ...[
+            _buildChallengeRow(challenge),
+            if (challenge != result.challenges.last)
+              const SizedBox(height: 13),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChallengeRow(ChallengeProgress challenge) {
+    final enough = challenge.state != ChallengeState.insufficientData;
+    final done = challenge.state == ChallengeState.completed;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              done
+                  ? Icons.check_circle_rounded
+                  : enough
+                      ? Icons.radio_button_unchecked_rounded
+                      : Icons.help_outline_rounded,
+              size: 13,
+              color: done
+                  ? greenColor
+                  : enough
+                      ? yellowColor
+                      : const Color(0xFF5B6E8C),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                challenge.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            // ⚠️ 分母。沒有它，「達成 3 晚」看不出是 3/3 還是 3/14。
+            Text(
+              '${challenge.recordedNights}/${challenge.windowDays} nights',
+              style: const TextStyle(
+                color: Color(0xFF5B6E8C),
+                fontSize: 8,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        _buildChallengeBar(challenge),
+        const SizedBox(height: 5),
+        Text(
+          // ⚠️ 整句都是後端寫的，不要在這裡重組。
+          challenge.detail,
+          style: TextStyle(
+            color: enough ? const Color(0xFF9FB3D1) : const Color(0xFF6B7F9E),
+            fontSize: 9,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 進度條。
+  ///
+  /// ⚠️ 資料不足時**不畫進度條**，改畫一條虛的底線加一句話。畫成 0% 的
+  /// 條子跟「你表現很差」長得一模一樣，而這兩件事要講的話完全相反。
+  ///
+  /// ⚠️ 不需要為 `lower_is_better`（作息收斂那一項的離散度）做任何反轉：
+  /// 後端回的 `progress` 已經是「越高越好」（consistency 用的是
+  /// `目標 ÷ 實際`）。在這裡再反轉一次就會把它倒過來。
+  Widget _buildChallengeBar(ChallengeProgress challenge) {
+    final progress = challenge.progress;
+    if (progress == null) {
+      return Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFF12325A),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'not enough data yet',
+            style: TextStyle(color: Color(0xFF6B7F9E), fontSize: 8),
+          ),
+        ],
+      );
+    }
+
+    final done = challenge.state == ChallengeState.completed;
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 5,
+              backgroundColor: const Color(0xFF12325A),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                done ? greenColor : purpleColor,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${(progress * 100).round()}%',
+          style: TextStyle(
+            color: done ? greenColor : const Color(0xFF9FB3D1),
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _insightCard({
     required Widget child,
