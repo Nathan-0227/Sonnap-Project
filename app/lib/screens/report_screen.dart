@@ -6,6 +6,7 @@ import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
 import '../services/challenges_service.dart';
+import '../services/home_service.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/usage_stats.dart';
@@ -23,12 +24,16 @@ class ReportScreen extends StatefulWidget {
   /// 挑戰進度的來源。null = 這支 build 沒有後端，整張卡不顯示。
   final ChallengesService? challenges;
 
+  /// 熬夜比率的來源（`GET /home` 的 behavior 區塊）。
+  final HomeService? home;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
     this.uploader,
     this.challenges,
+    this.home,
   });
 
   @override
@@ -105,6 +110,11 @@ class _ReportScreenState extends State<ReportScreen>
   /// 這個畫面一個都不重算。
   ChallengesResult? _challenges;
 
+  /// `GET /home` 的結果。⚠️ **只用它的 behavior 區塊**——
+  /// 心情的唯一來源是 repository 的 payload，多一個來源就會出現
+  /// 首頁與 Insights 顯示兩隻不同寵物的情況。
+  HomeResult? _home;
+
   @override
   void initState() {
     super.initState();
@@ -165,6 +175,7 @@ class _ReportScreenState extends State<ReportScreen>
     //    /challenges），順序反了就會少算今晚這一筆，使用者看到的是
     //    「昨天的進度」而畫面上完全看不出來。
     await _loadChallenges();
+    await _loadHome();
   }
 
   Future<void> _loadChallenges() async {
@@ -173,6 +184,14 @@ class _ReportScreenState extends State<ReportScreen>
     final result = await service.fetch();
     if (!mounted) return;
     setState(() => _challenges = result);
+  }
+
+  Future<void> _loadHome() async {
+    final service = widget.home;
+    if (service == null) return;
+    final result = await service.fetch();
+    if (!mounted) return;
+    setState(() => _home = result);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -284,6 +303,11 @@ class _ReportScreenState extends State<ReportScreen>
                   ),
 
                   const SizedBox(height: 14),
+
+                  _buildLateNightsCard(),
+
+                  if (_home?.behavior != null)
+                    const SizedBox(height: 14),
 
                   _buildChallengesCard(),
                 ],
@@ -1780,6 +1804,115 @@ class _ReportScreenState extends State<ReportScreen>
   // ============================================================
   // CARD
   // ============================================================
+
+  // ============================================================
+  // LATE NIGHTS
+  // ============================================================
+
+  /// 熬夜比率。`GET /home` 的 `behavior.late_night_ratio`。
+  ///
+  /// ⚠️ **這個數字不是 Dart 算的，分母也不是日曆天。**
+  /// `behavior/adherence.py` 的 `late_night_ratio()` 刻意用「有測到資料的
+  /// 夜數」當分母：把沒資料的日子當成「沒熬夜」數字會好看但沒有意義，
+  /// 當成「熬夜」則是憑空捏造。所以畫面上**一定要把分母講出來**，
+  /// 不然 40% 看起來像「30 天裡有 12 天」，實際上可能是「5 晚裡有 2 晚」。
+  ///
+  /// ⚠️ `ratio == null` 是「還沒有任何一晚有記錄」，不是 0%。
+  /// 畫成 0% 等於恭喜一個我們根本沒測到的人。
+  Widget _buildLateNightsCard() {
+    final result = _home;
+    final summary = result?.behavior;
+    if (result == null || result.status != HomeStatus.ok || summary == null) {
+      return const SizedBox.shrink();
+    }
+
+    final ratio = summary.lateNightRatio;
+    final hasData = ratio != null && summary.recordedNights > 0;
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.nightlight_round,
+                color: purpleColor,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Late Nights',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Text(
+                'from backend',
+                style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!hasData)
+            const Text(
+              'No nights recorded yet, so there is nothing to compare.',
+              style: TextStyle(
+                color: Color(0xFF6B7F9E),
+                fontSize: 10,
+                height: 1.4,
+              ),
+            )
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  '${(ratio * 100).round()}%',
+                  style: TextStyle(
+                    color: ratio >= 0.5 ? yellowColor : greenColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // ⚠️ 分母。沒有它，「40%」看起來像「30 天裡有 12 天」，
+                //    但它可能是「5 晚裡有 2 晚」——樣本大小完全不同。
+                Expanded(
+                  child: Text(
+                    'late on ${summary.lateNights} of '
+                    '${summary.recordedNights} recorded nights',
+                    style: const TextStyle(
+                      color: Color(0xFF9FB3D1),
+                      fontSize: 10,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              // ⚠️ 「有記錄的夜晚」不等於「過去 N 天」。這一句把兩者的差別
+              //    講清楚——分母的意義本身就是這張卡最容易被誤讀的地方。
+              'Counted over nights that were actually measured in the last '
+              '${summary.windowDays} days, not over calendar days.',
+              style: const TextStyle(
+                color: Color(0xFF8498B7),
+                fontSize: 9,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   // ============================================================
   // CHALLENGES

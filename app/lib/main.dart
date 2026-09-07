@@ -8,6 +8,7 @@ import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/challenges_service.dart';
+import 'services/home_service.dart';
 import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
 import 'services/pending_nightly.dart';
@@ -102,6 +103,16 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  /// 熬夜比率的來源。與 [_challenges] 一樣依 [_account] 重建。
+  HomeService? get _home {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return HomeService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -164,6 +175,7 @@ class _MainPageState extends State<MainPage> {
         repository: _repository,
         uploader: _uploader,
         challenges: _challenges,
+        home: _home,
       ),
       AssistantScreen(
         repository: _repository,
