@@ -8,7 +8,13 @@ from typing import Any, Dict, Iterable, List, Optional
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，讓 garmin/ 目錄下只留程式碼。
 # 用 Path(__file__).parent 而非相對路徑字串，這樣不管從哪個工作目錄執行都能正確定位。
 DATA_DIR = Path(__file__).parent / "data"
-ENV_FILE = Path(__file__).parent / ".env"
+# ⚠️ worktree 裡沒有 garmin/.env（未追蹤，只存在於主 clone），所以
+#    重抓資料原本只能在主 clone 做——而那會在別人的分支上留下一堆
+#    未 commit 的 garmin/data/*（那些是**有版控**的檔案）。
+#    比照 tapo_metric_logger.py 的 SONNAP_TAPO_ENV 與 db.py 的 SONNAP_DB：
+#      SONNAP_GARMIN_ENV=C:/Users/user/Projects/Sonnap-Project/garmin/.env
+#    .env 本身不複製、不進版控。
+ENV_FILE = Path(os.environ.get("SONNAP_GARMIN_ENV") or (Path(__file__).parent / ".env"))
 
 
 def _load_env_file(path: Path = ENV_FILE) -> None:
