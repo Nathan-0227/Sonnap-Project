@@ -123,8 +123,18 @@ ILLUM_DOMINANT_FRAC = 0.5    # 同向變化的像素超過這個比例 = 全域�
 #    5 也剛好等於 MOG2 在 learningRate=0.2 下的收斂時間常數（1/0.2），
 #    所以不是純粹湊出來的數字。
 RELEARN_FRAMES = 5
-RECONNECT_BACKOFF_MAX = 15   # 重連間隔上限（秒）
-GIVE_UP_AFTER = 40           # 連續失敗這麼多次就收工 —— 空轉 4 小時不如乾淨結束
+RECONNECT_BACKOFF_MAX = 60   # 重連間隔上限（秒）
+# 連續斷線超過這麼久就收工。
+#
+# ⚠️ 這個先前是「連續失敗 40 **次**」，而每次失敗要卡 30 秒的
+#    ffmpeg timeout —— 算下來只忍耐約 **30 分鐘**。
+#    2026-09-07 實機：03:37 開錄、04:00 斷線、重試 30 分鐘後放棄；
+#    而 08:21 再測相機完全正常（0 次重連）。**整晚就這樣沒了。**
+#
+#    重試的成本幾乎是零（一個 sleep 迴圈），放棄的成本是整晚的資料。
+#    改成以**時間**為準：「40 次」這個數字本身沒有意義，它取決於
+#    timeout 多長；「斷了三小時」才是人看得懂、也才是真正的判準。
+GIVE_UP_AFTER_HOURS = 3.0
 MIN_BLOB_PX = 4              # 小於這個不算一「塊」（純粹避免數到單點）
 # MOG2 一開始沒有背景模型，整幀都會被判成前景（實測第 0 幀 = 100% 畫面）。
 # 這段時間照樣記錄，但標成 warmup，事後一律排除。
@@ -293,6 +303,7 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
     skipped_illum = 0
     reconnects = 0
     consecutive_fail = 0
+    outage_since = None      # 這一次斷線是什麼時候開始的
     next_due = time.time()
     warm_from = time.time()      # 重連之後背景模型要重建，這個會跟著重設
     heat = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
@@ -354,7 +365,9 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
             if not ok or frame is None:
                 reconnects += 1
                 consecutive_fail += 1
-                if consecutive_fail == 1:
+                if outage_since is None:
+                    outage_since = time.time()
+                if consecutive_fail == 1 or consecutive_fail % 10 == 0:
                     # 在 CSV 裡留一個洞的標記，事後才看得出這裡斷過，
                     # 而不是以為那段時間「什麼都沒發生」。
                     writer.writerow([datetime.now().isoformat(timespec="milliseconds"),
@@ -363,8 +376,9 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
                     fh.flush()
                 if consecutive_fail <= 3 or consecutive_fail % 10 == 0:
                     print(f"⚠ 串流中斷（第 {reconnects} 次，連續失敗 {consecutive_fail}）")
-                if consecutive_fail >= GIVE_UP_AFTER:
-                    print(f"✗ 連續失敗 {consecutive_fail} 次，收工。"
+                down_h = (time.time() - outage_since) / 3600
+                if down_h >= GIVE_UP_AFTER_HOURS:
+                    print(f"✗ 連續斷線 {down_h:.1f} 小時（{consecutive_fail} 次重試），收工。"
                           "已寫下的資料都在，不會白費。")
                     break
                 cap.release()
@@ -382,6 +396,7 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
                 warm_from = time.time()
                 continue
             consecutive_fail = 0
+            outage_since = None
 
             now = time.time()
             if now < next_due:          # 依牆鐘節流，不依幀數（RTSP 幀率會浮動）
