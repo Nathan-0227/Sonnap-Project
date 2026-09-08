@@ -169,11 +169,16 @@ def _handle_stop(signum, frame):
     _stop = True
 
 
-def read_rtsp_url():
+def read_rtsp_url(env_path=None):
     """從 .env 取 CAMERA_RTSP_URL。⚠️ 呼叫端不得印出回傳值。"""
-    if not ENV_PATH.exists():
-        sys.exit(f"✗ 找不到 {ENV_PATH}（那份不在版控裡，要自己放）")
-    for line in ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
+    env_path = Path(env_path) if env_path else ENV_PATH
+    if not env_path.exists():
+        sys.exit("\n".join([
+            f"✗ 找不到 {env_path}（那份不在版控裡，只存在於主 clone）",
+            "   worktree 裡跑的話要指過去：",
+            '     --env-file "C:/Users/user/Projects/Sonnap-Project/tapo 2.0/.env"',
+        ]))
+    for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
         if line.startswith("CAMERA_RTSP_URL"):
             _, _, value = line.partition("=")
@@ -655,6 +660,11 @@ def main():
     ap.add_argument("--stream1", action="store_true",
                     help="用主碼流。預設走 stream2，才不會跟現行偵測器搶")
     ap.add_argument("--out", type=Path, help="輸出 CSV 路徑")
+    # ⚠️ .env 的位置也能用 SONNAP_TAPO_ENV 環境變數給，但**設環境變數的語法
+    #    每個 shell 都不一樣**（bash 的 `VAR=x cmd` 在 PowerShell 直接報錯，
+    #    2026-09-08 實際踩到）。這個參數在哪個 shell 都一樣，優先於環境變數。
+    ap.add_argument("--env-file", metavar="路徑", default=None,
+                    help="含 CAMERA_RTSP_URL 的 .env（worktree 裡要指到主 clone）")
     ap.add_argument("--save-video", type=float, metavar="分鐘", default=0,
                     help="同時存一份降取樣的連續影片，供人工標註校準門檻。給幾分鐘就只錄前幾分鐘（實測真實紅外線畫面約 70 MB/小時，整夜約 0.5 GB。給大一點的數字就整夜錄）")
     ap.add_argument("--roi", metavar="X,Y,W,H",
@@ -674,7 +684,7 @@ def main():
     signal.signal(signal.SIGINT, _handle_stop)
     signal.signal(signal.SIGTERM, _handle_stop)
 
-    url = read_rtsp_url()
+    url = read_rtsp_url(args.env_file)
     if not args.stream1:
         url = to_substream(url)
 

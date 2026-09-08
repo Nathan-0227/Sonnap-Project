@@ -6,8 +6,16 @@
 //
 //   1. **anxious 的夜晚會被畫成 happy。** anxious 是 Tier3 生理修正值
 //      （壓力、心率相對個人 baseline）的覆寫，那幾個欄位根本不在 history 裡。
-//      實測 payload 裡 07-06 與 07-07 都是 `final_quality=Good` 但
-//      `pet_mood=anxious`——照品質推，這兩晚會顯示成快樂的狗。
+//      實測 payload 裡有四晚這種反例：07-06 / 07-07 是 `final_quality=Good`
+//      但 `pet_mood=anxious`，07-09 / 07-12 是 Poor 但 anxious——
+//      照品質推，這四晚全會被畫錯。
+//
+// ⚠️ history 曾經只帶**最近 30 晚**，重跑 pipeline 就整個往後滑。
+//    2026-09-07 窗格裡只剩 07-12 一晚 anxious，隔天補抓一晚就把它擠掉了：
+//    anxious 從 App 裡整個消失，payload 產得出來、使用者永遠選不到，
+//    而且沒有任何錯誤訊息。下面那條「至少還有一晚 anxious」就是抓到它的。
+//    → 已改成 `HISTORY_NIGHTS = 90`（一晚 247 bytes，64 晚才 23 KB），
+//      「全部」這個期間選項現在名副其實。
 //
 //   2. `QUALITY_TO_MOOD` 會有第二個定義處，違反「Python 判斷、Dart 只負責畫」。
 //      兩份定義漂移時不會有任何錯誤訊息。
@@ -68,15 +76,29 @@ void main() {
   });
 
   group('⚠️ 心情不可以從 final_quality 推出來', () {
-    test('實測資料裡存在「Good 但 anxious」的夜晚', () {
+    test('實測資料裡存在「照 quality 查表就會畫錯」的夜晚', () {
       // 這條測試本身就是證據：只要這種夜晚存在，
       // 任何「照 quality 查表」的實作都一定會畫錯。
-      final overridden = sample.history
-          .where((e) => e.finalQuality == 'Good' && e.petMood == 'anxious')
-          .toList();
+      //
+      // ⚠️ 原本寫死成「Good 但 anxious」，2026-09-08 補抓資料之後那種
+      //    夜晚滑出了 30 晚窗格，測試就紅了——但規則本身沒有失效，
+      //    只是反例換成了「Poor 但 anxious」。改成不綁特定 quality：
+      //    找一晚，它的心情不是同 quality 的多數心情。
+      final byQuality = <String, List<String>>{};
+      for (final e in sample.history) {
+        if (e.finalQuality == null || e.petMood == null) continue;
+        byQuality.putIfAbsent(e.finalQuality!, () => <String>[]).add(e.petMood!);
+      }
+
+      final counterexamples = sample.history.where((e) {
+        final peers = byQuality[e.finalQuality];
+        if (peers == null || e.petMood == null) return false;
+        final mine = peers.where((m) => m == e.petMood).length;
+        return peers.any((m) => peers.where((x) => x == m).length > mine);
+      }).toList();
 
       expect(
-        overridden,
+        counterexamples,
         isNotEmpty,
         reason: '找不到反例的話，這條測試就失去意義了——'
             '要嘛資料換了，要嘛 anxious 覆寫沒有生效。'
@@ -205,18 +227,38 @@ void main() {
       expect(night.finalQuality, 'Good');
     });
 
-    test('07-06 / 07-07 是 anxious，而且品質是 Good', () {
-      for (final date in ['2026-07-06', '2026-07-07']) {
-        final night = nightOf(date);
-        expect(night, isNotNull, reason: '$date 不在 history 裡');
-        expect(night!.petMood, 'anxious', reason: date);
-        expect(
-          night.finalQuality,
-          'Good',
-          reason: '$date 正是「分數不低但生理偏離」的例子，'
-              '拿掉的話上面那條反例測試就沒有素材了',
-        );
-      }
+    // 釘住日期的測試在 `HISTORY_NIGHTS = 90` 之後才安全：窗格是 30 晚的
+    // 時候，補抓幾晚就會把舊夜晚推出去，這種測試會無預警地紅。
+    test('07-12 是 anxious，而且品質不是最差的那一級', () {
+      final night = nightOf('2026-07-12');
+      expect(night, isNotNull, reason: '07-12 不在 history 裡——窗格又滑了');
+      expect(night!.petMood, 'anxious');
+      expect(
+        night.finalQuality,
+        'Poor',
+        reason: '這一晚正是「同樣是 Poor，別晚是 tired 而它是 anxious」的例子，'
+            '拿掉的話上面那條反例測試就沒有素材了',
+      );
+    });
+
+    test('⚠️ history 裡至少還有一晚 anxious', () {
+      // 這條不是在測程式，是在**盯資料**。
+      //
+      // anxious 由 Tier3 生理修正值決定，很稀有；而 history 只留最近
+      // 30 晚。2026-09-08 當下窗格裡只剩 07-12 一晚，而且它就是窗格的
+      // 第一晚——再補抓任何一晚，anxious 就會從 App 裡整個消失，
+      // 使用者永遠選不到那隻寵物，而且不會有任何錯誤訊息。
+      //
+      // 這條紅了不代表程式壞了，代表**要決定 history 要不要留超過 30 晚**。
+      final anxiousNights =
+          sample.history.where((e) => e.petMood == 'anxious').toList();
+      expect(
+        anxiousNights,
+        isNotEmpty,
+        reason: 'anxious 已經被 30 晚截斷擠出 history。'
+            'payload 產得出來、App 卻永遠顯示不到——'
+            '要嘛加大窗格，要嘛承認「全部」那個選項已經沒有理由存在',
+      );
     });
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -231,121 +232,146 @@ class _HeaderCardState extends State<HeaderCard> {
 
           const SizedBox(height: 24),
 
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentTime,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 52,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+          // ⚠️ 這一段原本是「Expanded(flex:3) + 寫死 150×150 的圓環」。
+          //    圓環不會縮，所以畫面一窄，左邊剩下的空間就不夠放 52px 的時鐘：
+          //    360dp 折成 3 行、320dp 折成 5 行（一行一個字），還會噴出兩處
+          //    RenderFlex 溢位。使用者把系統字級調大時更早發生。
+          //    → 圓環改成跟著寬度縮，時鐘與底下那行改用 FittedBox 等比縮小
+          //      而不是折行。`header_card_test.dart` 有四條守著。
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // 圓環最多 150，但不吃掉超過一半的寬度。
+              final ring = math.min(150.0, constraints.maxWidth * 0.42);
 
-                    const SizedBox(height: 6),
-
-                    InkWell(
-                      onTap: _pickBedtime,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 5,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                "Target bedtime $targetBedtimeText",
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.edit,
-                              color: Color(0xFFFFD96A),
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 24),
-
-              SizedBox(
-                width: 150,
-                height: 150,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      height: 150,
-                      child: CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 12,
-                        backgroundColor: Colors.white24,
-                        color: const Color(0xFF8B6DFF),
-                      ),
-                    ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.access_time,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          "Time Left",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                        // 倒數字串較長時（例如 "23h 42m"）在 30px 字級下會
-                        // 換行，把 150×150 的圓環撐破、出現黃黑斜線。
-                        // 因為長度隨當下時間變化，這個問題只在某些時段出現。
-                        // FittedBox 讓它需要時等比縮小而不是換行。
                         FittedBox(
                           fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
                           child: Text(
-                            timeLeft,
+                            currentTime,
                             maxLines: 1,
+                            softWrap: false,
                             style: const TextStyle(
-                              color: Color(0xFFFFD96A),
-                              fontSize: 30,
+                              color: Colors.white,
+                              fontSize: 52,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                        const Text(
-                          "to bedtime",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+
+                        const SizedBox(height: 6),
+
+                        InkWell(
+                          onTap: _pickBedtime,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 5,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "Target bedtime $targetBedtimeText",
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.edit,
+                                    color: Color(0xFFFFD96A),
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+
+                  const SizedBox(width: 24),
+
+                  SizedBox(
+                    width: ring,
+                    height: ring,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: ring,
+                          height: ring,
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 12,
+                            backgroundColor: Colors.white24,
+                            color: const Color(0xFF8B6DFF),
+                          ),
+                        ),
+                        // 圓環裡的字也要跟著縮——不然系統字級一調大就從
+                        // 圓環下緣溢位（實測 textScale 1.3 溢出 25px）。
+                        Padding(
+                          padding: EdgeInsets.all(ring * 0.16),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.access_time,
+                                  color: Colors.white,
+                                  size: 30,
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  "Time Left",
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  timeLeft,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFD96A),
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  "to bedtime",
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 18),
@@ -362,27 +388,35 @@ class _HeaderCardState extends State<HeaderCard> {
                 color: const Color(0xFF233A73),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    reminderOn
-                        ? Icons.notifications_active
-                        : Icons.notifications_off,
-                    color: const Color(0xFFFFD96A),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    reminderOn
-                        ? "Bedtime reminder ON"
-                        : "Bedtime reminder OFF",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
+              // 同一個毛病的第三處：這顆藥丸在 320dp + 字級 1.3 下
+              // 往右溢出 99px。ON/OFF 是這行唯一的資訊，不能用
+              // ellipsis 截掉，所以整排等比縮。
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      reminderOn
+                          ? Icons.notifications_active
+                          : Icons.notifications_off,
+                      color: const Color(0xFFFFD96A),
+                      size: 16,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      reminderOn
+                          ? "Bedtime reminder ON"
+                          : "Bedtime reminder OFF",
+                      maxLines: 1,
+                      softWrap: false,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
