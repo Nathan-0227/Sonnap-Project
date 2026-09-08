@@ -102,7 +102,15 @@ void main() {
     // 第一版沒有這一段：按完 started 仍然是 true，卡片長得**一模一樣**，
     // 使用者按了以為沒反應（2026-09-07 實機回報）。
     // 沒有回饋的按鈕，使用者會一直按或以為壞了。
-    await store.markStart(DateTime(2026, 9, 7, 3, 20));
+    //
+    // ⚠️ 這裡原本寫死 DateTime(2026, 9, 7, 3, 20)。kBedMarkMaxAge 是相對於
+    //    「現在」算的，所以 2026-09-09 跑就過期了，畫面退回 "Start sleep"，
+    //    測試無預警地紅而程式一行都沒改。
+    //    這是這個檔案裡**第二顆**同型的定時炸彈（第一顆在上面那條
+    //    「一進畫面就顯示時刻」，2026-09-08 拆掉）。
+    //    → 這個 widget 讀本機儲存時不傳 now，一律用真實時間，
+    //      所以凡是要「還沒過期」的測試都必須用相對於 now 的偏移。
+    await store.markStart(DateTime.now().subtract(const Duration(hours: 6)));
     await pump(tester, store);
     expect(find.textContaining('Saved'), findsNothing, reason: '還沒按下床');
 
