@@ -31,7 +31,7 @@ tapo_metric_logger.py — 只記錄原始度量，不判事件、不設門檻、
 
 用法
 ────
-  python tapo_metric_logger.py --selftest 60      # 先跑 60 秒確認接得上
+  python tapo_metric_logger.py --selftest 120     # 先跑 120 秒確認接得上
   python tapo_metric_logger.py                    # 整晚跑，Ctrl+C 結束
   python tapo_metric_logger.py --save-video 60    # 順便存前 60 分鐘的影片
   python tapo_metric_logger.py --roi 34,129,288,231   # 只看床（多記 roi_* 五欄）
@@ -603,7 +603,22 @@ def preview(csv_path):
     usable = [r for r in rows
               if r["illum_skip"] == "0" and r.get("warmup") == "0" and r["max_px"]]
     if len(usable) < 10:
-        print("⚠ 有效幀太少，先確認相機畫面是不是黑的。")
+        # ⚠️ 先分辨「跑太短」與「畫面真的有問題」——這兩者的處置完全不同，
+        #    而先前一律印同一句「相機畫面是不是黑的」。
+        #    最糟的是那句對**工具自己建議的用法**必然會亮：--selftest 60
+        #    比 WARMUP_SECONDS(90) 短，所以每一列都是 warmup、usable 恆為 0。
+        #    固定誤報的檢查會訓練人忽略警告，那比沒有警告更糟。
+        span = 0.0
+        if rows:
+            span = (datetime.fromisoformat(rows[-1]["t"])
+                    - datetime.fromisoformat(rows[0]["t"])).total_seconds()
+        if span < WARMUP_SECONDS:
+            print(f"● 跑了 {span:.0f} 秒，還沒過暖機（{WARMUP_SECONDS} 秒），"
+                  f"所以沒有有效幀 —— 這是正常的。")
+            print(f"  接上了、寫得出檔就算通過。要看到真的度量請跑久一點"
+                  f"（至少 {WARMUP_SECONDS + 30} 秒）。")
+        else:
+            print("⚠ 有效幀太少，先確認相機畫面是不是黑的。")
         return
 
     frame_area = WIDTH * HEIGHT
@@ -635,7 +650,8 @@ def preview(csv_path):
 def main():
     ap = argparse.ArgumentParser(description="TAPO 原始度量記錄器（不評分）")
     ap.add_argument("--selftest", type=int, metavar="秒",
-                    help="只跑這麼多秒，用來確認接得上（建議睡前先跑 60）")
+                    help="只跑這麼多秒，用來確認接得上（建議睡前先跑 120 —— "
+                         f"要比暖機的 {WARMUP_SECONDS} 秒長才看得到度量）")
     ap.add_argument("--stream1", action="store_true",
                     help="用主碼流。預設走 stream2，才不會跟現行偵測器搶")
     ap.add_argument("--out", type=Path, help="輸出 CSV 路徑")
