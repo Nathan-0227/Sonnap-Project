@@ -43,10 +43,17 @@
   python tapo_waso_annotate.py --score tapo_metrics/20260909_0230.csv \
       --worksheet tapo_metrics/20260909_0230_waso.csv
 
-工作單的 `video_at` 是影片裡的秒數（不是牆鐘），可以直接拖到那個位置。
+工作單的 `video_at_seconds` 是影片裡的秒數（不是牆鐘），直接拖到那個位置，
+看**那之後約 30 秒**再填。
+
+⚠️ WASO 是**抽樣估計**不是量到的：`grid` 那些點是每 10 分鐘一次的系統抽樣，
+   `--score` 拿「標成 awake 的比例 × 臥床時間」估 WASO，並附 95% 信賴區間。
+   `proposed` 的點是挑事件率高的地方放的，**不進估計**（進去會系統性高估），
+   只當定性佐證。
 """
 import argparse
 import csv
+import math
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -69,6 +76,16 @@ CALIBRATION_ROI = (34, 129, 288, 231)
 # ⚠️ 這個間隔決定了 WASO 的**解析度下限**：抽樣間隔 10 分鐘，就不要宣稱
 #    量得到 5 分鐘的清醒。
 GRID_MINUTES = 10
+
+# 每個取樣點要看影片的多長一段。
+#
+# ⚠️ **看的是一小段，不是那一幀。** 單一幀分不出「躺著睡著」與「躺著醒著」——
+#    兩者的畫面幾乎一樣。要靠的是那幾十秒裡有沒有微動作、有沒有螢幕光、
+#    呼吸起伏規不規律。
+# ⚠️ 但也**不是**看到下一個取樣點為止。看完 10 分鐘 × 40 格 = 6.7 小時，
+#    等於把整夜重看一遍，沒有人做得完；做不完就會亂填，那比抽樣更糟。
+# 30 秒是取捨：足以看出微動作，40 格總共只要 20 分鐘。
+OBSERVE_SECONDS = 30
 
 # 提示用的門檻：連續這麼久的高事件率當成「可能醒著」。
 # ⚠️ 這只是**導覽**，不是判定。判定一律以人看到的畫面為準。
@@ -184,9 +201,13 @@ def plan(path):
     no_frame = 0
     with out.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["# 每一列看影片的那個位置，填 state：" + " / ".join(STATES)])
+        w.writerow([f"# 把播放器拖到 video_at_seconds，看**那之後約 {OBSERVE_SECONDS} 秒**，"
+                    f"填 state：" + " / ".join(STATES)])
+        w.writerow([f"# ⚠️ 看的是一小段不是一幀——單一幀分不出「躺著睡著」與"
+                    f"「躺著醒著」。也不要看到下一格為止，那等於整夜重看一遍"])
         w.writerow(["# ⚠️ 先填完再跑 --score。看不清楚就填 unclear，不要猜"])
-        w.writerow(["# ⚠️ grid 那些列**不可以跳過**——安靜的清醒只有它們抓得到"])
+        w.writerow(["# ⚠️ grid 那些列**不可以跳過**——安靜的清醒只有它們抓得到，"
+                    "而且 WASO 是拿 grid 的比例估出來的，跳過就是把樣本挖洞"])
         w.writerow(["at", "video_at_seconds", "source", "state", "note"])
         for at, src, note in checks:
             vs, _ = video_seconds(rows, at)
@@ -267,52 +288,94 @@ def score(csv_path, worksheet):
                  "   而那正是手機那條路也漏掉的同一種清醒，兩邊會一起錯。\n"
                  "   請用 --plan 重出工作單。")
 
-    # 每一個標記代表它到下一個標記之間那段時間。
-    total = timedelta()
-    awake = timedelta()
-    unclear = timedelta()
-    awake_grid = timedelta()
-    end = rows[-1][0]
-    for i, (at, src, st) in enumerate(marks):
-        nxt = marks[i + 1][0] if i + 1 < len(marks) else end
-        span = nxt - at
-        if span.total_seconds() <= 0:
-            continue
-        total += span
-        if st == "awake":
-            awake += span
-            if src == "grid":
-                awake_grid += span
-        elif st == "unclear":
-            unclear += span
+    # ═══════════════════════════════════════════════════════════════
+    # ⚠️ 這是**抽樣估計**，不是把每個標記外推成一整段
+    # ═══════════════════════════════════════════════════════════════
+    # 第一版寫成「每個標記代表它到下一個標記之間那段時間」。那等於假裝
+    # 我們知道清醒的**起訖邊界**，但標註的人只看了一個取樣點——一眼就
+    # 決定了 10 分鐘。而且更糟：`proposed` 那些列是挑**事件率高**的地方
+    # 放的，把它們混進來等於在容易醒著的時段多放權重，WASO 會系統性高估。
+    #
+    # 正確做法是把 grid 當成**系統抽樣**：
+    #     醒著的比例 p̂ = grid 裡標 awake 的列 / grid 裡有明確標籤的列
+    #     WASO ≈ p̂ × 臥床時間
+    # 並且給出信賴區間——40 個取樣點估出來的比例，區間寬得值得寫出來，
+    # 不寫的話「39 分鐘」會被當成量到的數字引用。
+    #
+    # `proposed` 的列不進估計，但單獨列出來：它們能顯示 grid 漏掉的
+    # 清醒段落，是定性的佐證。
+    span_start, span_end = rows[0][0], rows[-1][0]
+    total_min = (span_end - span_start).total_seconds() / 60
 
-    mins = lambda d: d.total_seconds() / 60
-    print(f"標註涵蓋      {mins(total):7.1f} 分（{mins(total)/60:.2f} 小時）")
-    print(f"標成 awake    {mins(awake):7.1f} 分  ← 這就是 WASO")
-    print(f"標成 unclear  {mins(unclear):7.1f} 分")
+    sample = [m for m in marks if m[1] in ("grid", "both")]
+    n_awake = sum(1 for m in sample if m[2] == "awake")
+    n_asleep = sum(1 for m in sample if m[2] == "asleep")
+    n_unclear = sum(1 for m in sample if m[2] == "unclear")
+    n_def = n_awake + n_asleep
+
+    print(f"臥床（錄影）時間   {total_min:7.1f} 分（{total_min/60:.2f} 小時）")
+    print(f"系統抽樣點         {len(sample)} 個（每 {GRID_MINUTES} 分鐘一個）")
+    print(f"  awake {n_awake} / asleep {n_asleep} / unclear {n_unclear}")
     print()
-    print(f"其中由**均勻抽樣**（不是偵測器提示）抓到的 awake：{mins(awake_grid):7.1f} 分")
-    if awake.total_seconds() > 0:
-        share = awake_grid / awake
-        print(f"  佔全部 WASO 的 {share:.0%}")
-        if share > 0.3:
-            print("  → 偵測器提示漏掉的清醒佔比不小，"
-                  "『用動作找清醒』這條路本身就有系統性偏誤")
+
+    if n_def == 0:
+        print("✗ 沒有任何明確標籤（全部是 unclear），估不出 WASO。")
+        return
+
+    p = n_awake / n_def
+    lo, hi = _wilson(n_awake, n_def)
+    print("─" * 74)
+    print("WASO 估計（抽樣估計，不是量到的）")
+    print("─" * 74)
+    print(f"  醒著的比例  {p:6.1%}   95% 信賴區間 {lo:.1%} ~ {hi:.1%}")
+    print(f"  WASO       {p*total_min:6.1f} 分   95% 信賴區間 "
+          f"{lo*total_min:.0f} ~ {hi*total_min:.0f} 分")
+    if n_unclear:
+        p_lo = n_awake / len(sample)                       # unclear 全算睡著
+        p_hi = (n_awake + n_unclear) / len(sample)         # unclear 全算醒著
+        print(f"  unclear 的影響：{p_lo*total_min:.0f} ~ {p_hi*total_min:.0f} 分"
+              f"（{n_unclear} 個點看不出來）")
+    print()
+    print(f"  ⚠️ 抽樣間隔 {GRID_MINUTES} 分鐘 → **短於 {GRID_MINUTES} 分鐘的清醒段落**"
+          f"很可能整段漏掉。")
+    print("     這是解析度下限，不是誤差——不要宣稱量得到 5 分鐘的清醒。")
+
+    # proposed 的列：定性佐證，不進估計
+    prop = [m for m in marks if m[1] == "proposed"]
+    if prop:
+        pa = sum(1 for m in prop if m[2] == "awake")
+        print()
+        print(f"  偵測器提示的 {len(prop)} 個時段裡，{pa} 個標成 awake"
+              f"（**不進上面的估計**，那些點不是隨機取樣的）")
+        if pa and n_awake == 0:
+            print("  ⚠️ 提示抓到了清醒，均勻抽樣一個都沒抓到 →"
+                  "清醒段落比抽樣間隔短，上面的估計會低估")
+
     print()
     print("─" * 74)
     print("對 behavior/sleep_efficiency.py 的 WASO=0 假設，誤差有多大")
     print("─" * 74)
-    if total.total_seconds() > 0:
-        err = mins(awake) / mins(total) * 100
-        print(f"  假設 WASO=0 會把睡眠效率**高估 {err:.1f} 個百分點**")
-        print(f"  （臥床 {mins(total):.0f} 分裡有 {mins(awake):.0f} 分是醒著的）")
-        if unclear.total_seconds() > 0:
-            hi = (mins(awake) + mins(unclear)) / mins(total) * 100
-            print(f"  把 unclear 全算成醒著的話是 {hi:.1f} 個百分點（上界）")
+    print(f"  假設 WASO=0 會把睡眠效率**高估 {p*100:.1f} 個百分點**"
+          f"（區間 {lo*100:.1f} ~ {hi*100:.1f}）")
     print()
-    print("  ⚠️ 這是**一晚**的誤差，不是常態。要寫進報告需要多晚。")
+    print("  ⚠️ 這是**一晚**的估計，不是常態。要寫進報告需要多晚。")
     print("  ⚠️ 這個數字不進任何評分，也不用來『修正』睡眠效率——")
     print("     WASO=0 是使用者知情後的決定，這裡量的是那個決定的代價。")
+
+
+def _wilson(k, n, z=1.96):
+    """比例的 Wilson 信賴區間。
+
+    ⚠️ 不用 p ± 1.96·√(p(1−p)/n)：n 只有幾十、而 p 往往接近 0，
+       那個公式會給出負的下界，看起來像「WASO 可能是 −8 分鐘」。
+    """
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def main():

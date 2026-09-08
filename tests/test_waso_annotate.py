@@ -147,6 +147,56 @@ def main():
                                           for x in has_frame),
               f"有畫面的 {len(has_frame)} 列")
 
+        print("\n【8】⚠️ proposed 的列不可以影響 WASO 估計")
+        # 這是 2026-09-08 修掉的統計錯誤：第一版把每個標記外推成
+        # 「到下一個標記為止」，於是 proposed 的列（挑事件率高的地方放的）
+        # 會在容易醒著的時段多放權重，WASO 系統性高估。
+        # 正確做法是只拿 grid 當系統抽樣。
+        #
+        # ⚠️ 均勻抽樣覆蓋整段時，兩種算法會給出**同一個答案**——所以
+        #    【5】那條抓不到這個 bug。要抓到就必須多放幾個非 grid 的點。
+        def write_ws(path, with_proposed):
+            with path.open("w", encoding="utf-8", newline="") as fh:
+                w = csv.writer(fh)
+                w.writerow(["at", "video_at_seconds", "source", "state", "note"])
+                for i in range(7):
+                    t = datetime(2026, 9, 9, 2, 0) + timedelta(minutes=10 * i)
+                    w.writerow([t.isoformat(), i * 3000, "grid",
+                                "awake" if i in (1, 2) else "asleep", ""])
+                    if with_proposed and i < 3:
+                        t2 = t + timedelta(minutes=3)
+                        w.writerow([t2.isoformat(), i * 3000 + 900,
+                                    "proposed", "awake", ""])
+
+        base = d / "prop_base_waso.csv"
+        biased = d / "prop_biased_waso.csv"
+        write_ws(base, False)
+        write_ws(biased, True)
+        r1 = run("--score", src, "--worksheet", base)
+        r2 = run("--score", src, "--worksheet", biased)
+
+        def waso_line(out):
+            # ⚠️ 不能只認開頭的 "WASO"——標題列是「WASO 人工標註 <檔名>」，
+            #    兩份的檔名不同，就會永遠不相等而讓這條假性失敗。
+            for ln in out.splitlines():
+                t = ln.strip()
+                if t.startswith("WASO") and "信賴區間" in t:
+                    return t
+            return ""
+
+        check("同一份 grid 標註，多了 proposed 的點也不會改變估計",
+              waso_line(r1.stdout) == waso_line(r2.stdout) != "",
+              f"只有 grid：{waso_line(r1.stdout)} / "
+              f"多了提示點：{waso_line(r2.stdout)}")
+        check("提示點另外列出來（定性佐證，不進估計）",
+              "不進上面的估計" in r2.stdout, r2.stdout[-400:])
+
+        print("\n【9】估計要附信賴區間與解析度下限")
+        # 40 個取樣點估出來的比例，區間寬得值得寫出來。不附區間的話
+        # 「39 分鐘」會被當成量到的數字引用。
+        check("有 95% 信賴區間", "95% 信賴區間" in r1.stdout, r1.stdout[-400:])
+        check("有講解析度下限", "解析度下限" in r1.stdout)
+
         print("\n【7】不覆寫已經標好的工作單")
         r = run("--plan", src2)
         check("第二次 --plan 退回", r.returncode != 0)
