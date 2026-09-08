@@ -125,6 +125,14 @@ class NightlyUploader {
       return const NightlyUploadResult(NightlyUploadStatus.noUser);
     }
 
+    // ⚠️ 按「下床」按得太晚時，那個時刻不是下床時刻，是「想起來要按」的
+    //    時刻（2026-09-08 實測：08:20 起床、12:11 才按）。照送會算出一個
+    //    錯得很合理的臥床時間與效率。判準見 `bedEndIsPlausible`。
+    //    ⚠️ 只丟掉 end，**start 照送**——那一半仍然是有效的自述。
+    final endIsStale = marks.endAt != null &&
+        !bedEndIsPlausible(marks.endAt!, lightsOut.at, lightsOut.quietMinutes);
+    final endIso = endIsStale ? null : marks.endIso;
+
     final uri = Uri.parse('$baseUrl/nightly');
     final client = HttpClient()..connectionTimeout = timeout;
 
@@ -137,7 +145,7 @@ class NightlyUploader {
         // 兩個都是**自述**的時刻。後端只在兩者都有時才算得出臥床時間，
         // 少一個就整組是 null（見 behavior/sleep_efficiency.py）。
         if (marks.startIso != null) 'bed_start_at': marks.startIso,
-        if (marks.endIso != null) 'bed_end_at': marks.endIso,
+        if (endIso case final String v) 'bed_end_at': v,
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
@@ -172,11 +180,13 @@ class NightlyUploader {
       // ⚠️ 只印**有沒有**標記，不印時刻本身也不印 user_id。
       //    這一行是實機 debug 用的：先前查不出「按了按鈕卻沒進 DB」
       //    是 App 沒送還是後端沒存，就是因為兩邊都看不到這件事。
-      final marksState = marks.isComplete
-          ? 'complete'
-          : marks.hasStart
-              ? 'start-only'
-              : 'none';
+      final marksState = endIsStale
+          ? 'end-dropped(stale)'
+          : marks.isComplete
+              ? 'complete'
+              : marks.hasStart
+                  ? 'start-only'
+                  : 'none';
       debugPrint(
         'NightlyUpload: ok date=${result.date} '
         'adherence=${result.adherenceMinutes}m late=${result.isLate} '

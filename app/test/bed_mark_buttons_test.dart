@@ -79,9 +79,16 @@ void main() {
 
   testWidgets('已經有標記時，一進畫面就顯示時刻（不是等使用者再按一次）',
       (tester) async {
-    await store.markStart(DateTime(2026, 9, 6, 23, 5));
+    // ⚠️ **不可以釘死一個絕對時刻。** 第一版寫 DateTime(2026, 9, 6, 23, 5)，
+    //    而 kBedMarkMaxAge 是相對於「現在」算的——2026-09-08 中午跑就過期了，
+    //    測試無預警地紅，而程式一行都沒改。
+    //    時間相關的測試一律用相對於 now 的偏移。
+    final at = DateTime.now().subtract(const Duration(hours: 8));
+    final hhmm = '${at.hour.toString().padLeft(2, '0')}:'
+        '${at.minute.toString().padLeft(2, '0')}';
+    await store.markStart(at);
     await pump(tester, store);
-    expect(find.text('In bed since 23:05'), findsOneWidget);
+    expect(find.text('In bed since $hhmm'), findsOneWidget);
   });
 
   testWidgets('過期的標記不顯示 —— 上禮拜按的不算今晚', (tester) async {

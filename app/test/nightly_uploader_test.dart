@@ -21,6 +21,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/services/bed_marks.dart';
 import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
 import 'package:app/services/user_identity.dart';
@@ -158,6 +159,62 @@ void main() {
         reason: 'nightly_behavior 存的是當晚的快照——使用者改目標不該追溯性地'
             '改寫歷史達成度。那個欄位是留給補填歷史夜晚的',
       );
+    });
+
+    test('⚠️ 按太晚的「下床」不送，但上床照送', () async {
+      // 2026-09-08 實測：08:20 起床、12:11 才想起來按。照送上去，後端會
+      // 算出多 3 小時 51 分的臥床時間，而且那段時間的手機使用會被算成
+      // 「躺床上滑手機」——效率與臥床時間兩個都錯，而且錯得很合理。
+      //
+      // ⚠️ 只丟掉 end。start 仍然是有效的自述，丟掉它等於懲罰使用者忘記按。
+      final uploader = NightlyUploader(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+      );
+      await uploader.upload(
+        // 安靜期 02:30 起 248 分鐘 → 手機第一次被碰是 06:38
+        LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 8, 2, 30),
+          quietMinutes: 248,
+          sourceType: 'keyguard_shown',
+          eventCount: 443,
+        ),
+        marks: BedMarks(
+          startAt: DateTime(2026, 9, 8, 1, 53),
+          endAt: DateTime(2026, 9, 8, 12, 11),
+        ),
+      );
+
+      final body = backend.received.single['body'] as Map<String, dynamic>;
+      expect(body.containsKey('bed_end_at'), isFalse,
+          reason: '算不出效率，好過算出一個錯的效率');
+      expect(body['bed_start_at'], isNotNull,
+          reason: '上床那一半仍然有效——丟掉它等於懲罰使用者忘記按');
+    });
+
+    test('反向對照：按得及時的「下床」照送', () async {
+      // 沒有這一條，把 bed_end_at 無條件拿掉也會讓上一條通過。
+      final uploader = NightlyUploader(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+      );
+      await uploader.upload(
+        LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 8, 2, 30),
+          quietMinutes: 248,
+          sourceType: 'keyguard_shown',
+          eventCount: 443,
+        ),
+        marks: BedMarks(
+          startAt: DateTime(2026, 9, 8, 1, 53),
+          endAt: DateTime(2026, 9, 8, 7, 5),   // 手機被碰之後半小時
+        ),
+      );
+
+      final body = backend.received.single['body'] as Map<String, dynamic>;
+      expect(body['bed_end_at'], isNotNull);
     });
 
     test('送出去的時刻不是 UTC', () async {
