@@ -126,7 +126,7 @@ def main():
         r = run("--score", src, "--worksheet", ws)
         out = r.stdout + r.stderr
         check("跑得完", r.returncode == 0, out)
-        check("WASO = 20 分", "20.0 分" in out, out)
+        check("醒著的時間 = 20 分", "20.0 分" in out, out)
 
         print("\n【6】⚠️ 影片沒錄到的時段要標出來，不能默默當成睡著")
         src2 = make_csv(d, "20260909_030000", minutes=70, with_video_until=20)
@@ -178,9 +178,11 @@ def main():
         def waso_line(out):
             # ⚠️ 不能只認開頭的 "WASO"——標題列是「WASO 人工標註 <檔名>」，
             #    兩份的檔名不同，就會永遠不相等而讓這條假性失敗。
+            #    2026-09-09 那個量改名成「臥床期間醒著的時間」（它含入睡
+            #    潛伏期，不是臨床 WASO），這裡跟著改。
             for ln in out.splitlines():
                 t = ln.strip()
-                if t.startswith("WASO") and "信賴區間" in t:
+                if t.startswith("醒著的時間") and "信賴區間" in t:
                     return t
             return ""
 

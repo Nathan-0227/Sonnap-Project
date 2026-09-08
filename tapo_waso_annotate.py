@@ -359,11 +359,22 @@ def score(csv_path, worksheet):
     p = n_awake / n_def
     lo, hi = _wilson(n_awake, n_def)
     print("─" * 74)
-    print("WASO 估計（抽樣估計，而且是**下界**）")
+    print("臥床期間醒著的時間（抽樣估計，而且是**下界**）")
     print("─" * 74)
+    # ⚠️ 這**不是**臨床的 WASO。臨床 WASO 只算「入睡之後」的清醒，
+    #    而這裡的取樣點涵蓋整段臥床時間，所以它等於
+    #        入睡潛伏期 + WASO + 醒來後還沒下床那段
+    #    實測 09-08：第一格（01:55，剛躺下還沒睡著）與最後一格（08:25，
+    #    已經醒了還沒起床）都被標成 awake——兩格都不是 WASO。
+    #
+    #    ⚠️ 但**這正是這裡要的量**：`behavior/sleep_efficiency.py` 假設
+    #    臥床時間裡沒滑手機的部分全部是睡眠，那個假設對上面三段一視同仁
+    #    地錯。要量那個假設的代價，就得算整段臥床期間醒著的時間。
+    #    → 檔名仍叫 waso 是為了不動既有路徑，但**報告裡不要寫 WASO**。
     print(f"  醒著的比例  {p:6.1%}   95% 信賴區間 {lo:.1%} ~ {hi:.1%}")
-    print(f"  WASO       {p*total_min:6.1f} 分   95% 信賴區間 "
+    print(f"  醒著的時間  {p*total_min:6.1f} 分   95% 信賴區間 "
           f"{lo*total_min:.0f} ~ {hi*total_min:.0f} 分")
+    print("             （= 入睡潛伏期 + WASO + 醒後賴床，不是臨床的 WASO）")
     if n_unclear:
         p_lo = n_awake / len(sample)                       # unclear 全算睡著
         p_hi = (n_awake + n_unclear) / len(sample)         # unclear 全算醒著
