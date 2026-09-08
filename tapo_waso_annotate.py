@@ -336,9 +336,13 @@ def score(csv_path, worksheet):
         print(f"  unclear 的影響：{p_lo*total_min:.0f} ~ {p_hi*total_min:.0f} 分"
               f"（{n_unclear} 個點看不出來）")
     print()
-    print(f"  ⚠️ 抽樣間隔 {GRID_MINUTES} 分鐘 → **短於 {GRID_MINUTES} 分鐘的清醒段落**"
-          f"很可能整段漏掉。")
-    print("     這是解析度下限，不是誤差——不要宣稱量得到 5 分鐘的清醒。")
+    print(f"  ⚠️ 抽樣間隔 {GRID_MINUTES} 分鐘：一段長 d 分鐘的清醒被抽中的機率約 "
+          f"d/{GRID_MINUTES}（5 分鐘的只有 50%）。")
+    print("     → **總時數**這個估計仍然是不偏的（抽中時會被記上整格的份，"
+          "平均起來補得回來）；")
+    print("     → 但**「醒了幾次」「哪一段醒著」答不出來**，那需要逐幀看完整夜。")
+    print("     兩者不要混為一談：可以說『這一晚估計醒著 N 分鐘』，"
+          "不能說『這一晚醒了 3 次』。")
 
     # proposed 的列：定性佐證，不進估計
     prop = [m for m in marks if m[1] == "proposed"]
