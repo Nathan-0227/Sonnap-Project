@@ -163,6 +163,11 @@ class NightlyUploader {
     final todayIso =
         lightsOut.status == LightsOutStatus.ok ? lightsOut.iso8601 : null;
 
+    // ⚠️ 濾一次，**送出與存進佇列用的是同一組**。分兩次算的話，
+    //    「送出去的」與「存起來的」有可能不一樣，而那種不一致只會在
+    //    補送成功之後才看得到。
+    final usable = _usableMarks(lightsOut, marks);
+
     final stored = await queue.load();
     // ⚠️ 今晚這一筆如果已經在佇列裡就先拿掉。24 小時的視窗會連續兩天算出
     //    **同一個時刻**，不拿掉的話同一晚會被送兩次、畫面上也會算兩次。
@@ -183,10 +188,10 @@ class NightlyUploader {
       // 留著只會每天重試一次同一個失敗。
     }
 
-    final current = await upload(lightsOut, marks: marks);
+    final current = await upload(lightsOut, marks: usable);
     final queuedToday = todayIso != null && _worthKeeping(current.status);
     if (queuedToday) {
-      remaining.add(PendingNight(todayIso, marks: marks));
+      remaining.add(PendingNight(todayIso, marks: usable));
     }
 
     await queue.save(remaining);
@@ -213,6 +218,33 @@ class NightlyUploader {
       status == NightlyUploadStatus.failed ||
       status == NightlyUploadStatus.noUser;
 
+  /// 把「按太晚的下床」濾掉，回一組可以照送的標記。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 這一步必須在**送出與存進佇列之前**做，不能放在 [_post] 裡
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  /// 判準（`bedEndIsPlausible`）要 `lights_out_at` 與 `quietMinutes`
+  /// 兩個輸入，而**佇列裡只存前者**——補送的時候已經沒有材料重算了。
+  /// 放在 [_post] 裡的話，今晚那一筆判得出來、補送那幾筆判不出來，
+  /// 於是同一個規則對不同的夜晚有不同的結果，而且不會有任何錯誤訊息。
+  ///
+  /// 濾在這裡還有第二個好處：**存進佇列的就已經是乾淨的**，
+  /// 不會有一個「按太晚的 end」躺在手機裡等著哪天被送出去。
+  ///
+  /// ⚠️ 只丟掉 end，**start 照送**——那一半仍然是有效的自述。
+  /// 丟掉整組等於懲罰使用者忘記按。
+  BedMarks _usableMarks(LightsOutResult lightsOut, BedMarks marks) {
+    if (marks.endAt == null) return marks;
+    if (bedEndIsPlausible(marks.endAt!, lightsOut.at, lightsOut.quietMinutes)) {
+      return marks;
+    }
+    // ⚠️ 這裡**不是**改用推算的時刻。那會把自述欄位偷偷換成偵測值，
+    //    而「使用者說的」與「手機測的」是兩個不同的量。
+    debugPrint('NightlyUpload: bed_end_at 按得太晚，這一晚不送 end');
+    return BedMarks(startAt: marks.startAt);
+  }
+
   /// [marks] 是使用者自己按的上床／下床時刻（可選）。
   ///
   /// ⚠️ **它是加分項不是取代品。** 沒按的夜晚照樣上傳，只是後端算不出
@@ -235,7 +267,7 @@ class NightlyUploader {
       return const NightlyUploadResult(NightlyUploadStatus.nothingDetected);
     }
 
-    return _post(iso, marks);
+    return _post(iso, _usableMarks(lightsOut, marks));
   }
 
   /// 真正發出請求的那一段。吃 ISO8601 字串而不是 [LightsOutResult]，
@@ -259,7 +291,7 @@ class NightlyUploader {
         // 兩個都是**自述**的時刻。後端只在兩者都有時才算得出臥床時間，
         // 少一個就整組是 null（見 behavior/sleep_efficiency.py）。
         if (marks.startIso != null) 'bed_start_at': marks.startIso,
-        if (marks.endIso != null) 'bed_end_at': marks.endIso,
+        if (marks.endIso case final String v) 'bed_end_at': v,
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。

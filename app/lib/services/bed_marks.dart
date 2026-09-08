@@ -16,6 +16,37 @@ const String kBedEndKey = 'bed_end_at';
 /// 36 小時涵蓋得到「昨晚按的、今晚才上傳」，又擋得掉更久以前的。
 const Duration kBedMarkMaxAge = Duration(hours: 36);
 
+/// 「下床」按得比實際起床晚多久，還算說得通。
+///
+/// ⚠️ **忘記按是常態，不是例外。** 2026-09-08 實測：08:20 起床、12:11 才
+/// 想起來按。那個 12:11 不是下床時刻，是「想起來要按」的時刻——中間 3 小時
+/// 51 分會被算成躺在床上，而且那段時間的手機使用會被算成「躺床上滑手機」。
+/// 臥床時間與行為版睡眠效率**兩個都會錯，而且錯得看起來很合理**。
+///
+/// 判準用現成的東西：`lights_out_at + quietMinutes` 就是安靜期結束、也就是
+/// **手機第一次被碰**的時刻。人起床後不一定馬上碰手機，碰了也可能再賴床，
+/// 所以給兩小時寬限；但差到三小時以上就不是賴床了。
+///
+/// ⚠️ 超過寬限時**不是**改用推算的時刻——那會把自述欄位偷偷換成偵測值，
+/// 而「使用者說的」與「手機測的」是兩個不同的量，混起來之後誰也分不出
+/// 哪個數字是誰的。做法是**不送 `bed_end_at`**：算不出效率，
+/// 好過算出一個錯的效率。
+const Duration kBedEndGrace = Duration(hours: 2);
+
+/// 這個「下床」時刻相對於手機的動靜還說得通嗎。
+///
+/// [lightsOutAt] 與 [quietMinutes] 來自 `LightsOutResult`。任何一個缺了就
+/// 沒有參考點，一律回 true——**寧可放行，也不要因為量不到而丟掉使用者的輸入**。
+bool bedEndIsPlausible(
+  DateTime bedEnd,
+  DateTime? lightsOutAt,
+  int quietMinutes,
+) {
+  if (lightsOutAt == null || quietMinutes <= 0) return true;
+  final firstTouch = lightsOutAt.add(Duration(minutes: quietMinutes));
+  return !bedEnd.isAfter(firstTouch.add(kBedEndGrace));
+}
+
 /// 使用者自己按的「上床 / 下床」時刻。
 ///
 /// ⚠️ **這是自述，不是量到的。** 它與 `lights_out_at`（手機事件推出來的

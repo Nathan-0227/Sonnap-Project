@@ -104,14 +104,11 @@ void main() {
       ));
       await tester.pump();
 
-      // 倒數是唯一用 FittedBox 包起來的那個 Text（註解寫在 header_card 裡：
-      // 字串變長時會撐破圓環，所以只有它需要縮放）。
-      final text = tester.widget<Text>(
-        find.descendant(
-          of: find.byType(FittedBox),
-          matching: find.byType(Text),
-        ),
-      );
+      // ⚠️ 用 key 定位，不要用結構（「FittedBox 底下的 Text」那種）。
+      //    版面改過一次之後畫面上有好幾個 FittedBox，結構型的 finder
+      //    會一次抓到多個 Text 而爆掉——而那與這條測試要驗的事無關。
+      final text =
+          tester.widget<Text>(find.byKey(const Key('bedtime-countdown')));
       return text.style!.color!;
     }
 
@@ -133,6 +130,25 @@ void main() {
         await countdownColor(tester, const Duration(minutes: 60)),
         bedtimeUrgencyColor(BedtimeUrgency.approaching),
       );
+    });
+
+    testWidgets('倒數圓環也要跟著變色，不是只有數字', (tester) async {
+      // ⚠️ 這一條是變異測試補出來的：只驗數字的話，把圓環改回寫死的紫色
+      //    不會有任何一條測試變紅——而圓環比數字更顯眼。
+      await countdownColor(tester, const Duration(minutes: 10));
+      final ring = tester.widget<CircularProgressIndicator>(
+        find.byType(CircularProgressIndicator),
+      );
+      expect(ring.color, bedtimeUrgencyColor(BedtimeUrgency.imminent));
+    });
+
+    testWidgets('反向對照：還早的時候圓環不是紅的', (tester) async {
+      await countdownColor(tester, const Duration(hours: 5));
+      final ring = tester.widget<CircularProgressIndicator>(
+        find.byType(CircularProgressIndicator),
+      );
+      expect(ring.color, bedtimeUrgencyColor(BedtimeUrgency.relaxed));
+      expect(ring.color, isNot(bedtimeUrgencyColor(BedtimeUrgency.imminent)));
     });
   });
 
