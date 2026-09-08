@@ -22,6 +22,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/bed_marks.dart';
 import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
 import 'package:app/services/pending_nightly.dart';
@@ -263,7 +264,7 @@ void main() {
       final saved = await PendingNightlyStore(store).load();
       expect(saved, hasLength(1));
       expect(
-        saved.single,
+        saved.single.lightsOutIso,
         startsWith('2026-09-01T03:51:16'),
         reason: '存的是 lights_out_at 本身。達成度那三個欄位刻意不存——'
             '那是後端算的，存下來就有第二個定義處',
@@ -320,8 +321,8 @@ void main() {
     test('補送成功之後佇列要空，不能每天重送', () async {
       final store = InMemoryKeyValueStore();
       await PendingNightlyStore(store).save([
-        '2026-08-30T02:10:00.000',
-        '2026-08-31T01:05:00.000',
+        const PendingNight('2026-08-30T02:10:00.000'),
+        const PendingNight('2026-08-31T01:05:00.000'),
       ]);
 
       final uploader = NightlyUploader(
@@ -343,7 +344,7 @@ void main() {
 
     test('先補舊的、再送今晚——畫面顯示的要是最新那一份', () async {
       final store = InMemoryKeyValueStore();
-      await PendingNightlyStore(store).save(['2026-08-30T02:10:00.000']);
+      await PendingNightlyStore(store).save([const PendingNight('2026-08-30T02:10:00.000')]);
 
       backend.responder = (body) => {
             'date': (body['lights_out_at'] as String).substring(0, 10),
@@ -370,8 +371,8 @@ void main() {
     test('補回來的舊夜晚不混進 current——那才是「不重複計算」', () async {
       final store = InMemoryKeyValueStore();
       await PendingNightlyStore(store).save([
-        '2026-08-30T02:10:00.000',
-        '2026-08-31T01:05:00.000',
+        const PendingNight('2026-08-30T02:10:00.000'),
+        const PendingNight('2026-08-31T01:05:00.000'),
       ]);
       backend.responder = (body) => {
             'date': (body['lights_out_at'] as String).substring(0, 10),
@@ -406,7 +407,7 @@ void main() {
 
       final store = InMemoryKeyValueStore();
       final sameNight = DateTime(2026, 9, 1, 3, 51, 16);
-      await PendingNightlyStore(store).save([sameNight.toIso8601String()]);
+      await PendingNightlyStore(store).save([PendingNight(sameNight.toIso8601String())]);
 
       final uploader = NightlyUploader(
         baseUrl: baseUrl,
@@ -423,10 +424,10 @@ void main() {
     test('同一晚存兩次也只留一筆', () async {
       final store = InMemoryKeyValueStore();
       final queue = PendingNightlyStore(store);
-      await queue.save([
-        '2026-09-01T03:51:16.000',
-        '2026-09-01T03:51:16.000',
-        '2026-08-31T01:05:00.000',
+      await queue.save(const [
+        PendingNight('2026-09-01T03:51:16.000'),
+        PendingNight('2026-09-01T03:51:16.000'),
+        PendingNight('2026-08-31T01:05:00.000'),
       ]);
       expect(await queue.load(), hasLength(2));
     });
@@ -436,15 +437,16 @@ void main() {
       final queue = PendingNightlyStore(store);
       final many = List.generate(
         PendingNightlyStore.maxEntries + 5,
-        (i) => DateTime(2026, 8, 1).add(Duration(days: i)).toIso8601String(),
+        (i) => PendingNight(
+            DateTime(2026, 8, 1).add(Duration(days: i)).toIso8601String()),
       );
       await queue.save(many);
 
       final saved = await queue.load();
       expect(saved, hasLength(PendingNightlyStore.maxEntries));
       expect(
-        saved.last,
-        many.last,
+        saved.last.lightsOutIso,
+        many.last.lightsOutIso,
         reason: '滿了要丟最舊的，不是丟最新的——最新那晚才是使用者剛量到的',
       );
     });
@@ -454,6 +456,122 @@ void main() {
         PendingNightlyStore.storageKey: 'not json at all',
       });
       expect(await PendingNightlyStore(store).load(), isEmpty);
+    });
+  });
+
+  group('離線佇列：上床標記要跟著一起存', () {
+    // ⚠️ 少了這一段，補送回去的夜晚會缺臥床時間與行為版效率——
+    //    使用者明明按了按鈕，資料卻在補送的過程中掉了，而畫面上
+    //    不會有任何跡象。
+
+    BedMarks marksAt(DateTime start, DateTime end) =>
+        BedMarks(startAt: start, endAt: end);
+
+    test('上傳失敗時，標記跟著那一晚一起存進佇列', () async {
+      final store = InMemoryKeyValueStore();
+      final uploader = NightlyUploader(
+        baseUrl: 'http://127.0.0.1:1',
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        timeout: const Duration(milliseconds: 300),
+        pending: PendingNightlyStore(store),
+      );
+
+      final batch = await uploader.sync(
+        detected(DateTime(2026, 9, 1, 3, 51)),
+        marks: marksAt(DateTime(2026, 8, 31, 23, 40), DateTime(2026, 9, 1, 8, 5)),
+      );
+
+      expect(batch.currentQueued, isTrue);
+      final saved = (await PendingNightlyStore(store).load()).single;
+      expect(saved.marks.isComplete, isTrue);
+      expect(saved.marks.startIso, startsWith('2026-08-31T23:40'));
+      expect(saved.marks.endIso, startsWith('2026-09-01T08:05'));
+    });
+
+    test('補送帶的是**那一晚自己的**標記，不是現在手機裡的那一組', () async {
+      // 拿今天的標記去補三天前那一晚，算出來的臥床時間是假的。
+      final backend = _FakeBackend();
+      final baseUrl = await backend.start();
+      addTearDown(backend.stop);
+
+      final store = InMemoryKeyValueStore();
+      await PendingNightlyStore(store).save([
+        PendingNight(
+          '2026-08-30T02:10:00.000',
+          marks: marksAt(DateTime(2026, 8, 29, 23, 0), DateTime(2026, 8, 30, 7, 0)),
+        ),
+      ]);
+
+      final uploader = NightlyUploader(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        pending: PendingNightlyStore(store),
+      );
+      await uploader.sync(
+        detected(DateTime(2026, 9, 1, 3, 51)),
+        marks: marksAt(DateTime(2026, 8, 31, 23, 40), DateTime(2026, 9, 1, 8, 5)),
+      );
+
+      final bodies = backend.received
+          .map((r) => r['body'] as Map<String, dynamic>)
+          .toList();
+      expect(bodies, hasLength(2));
+      expect(
+        bodies.first['bed_start_at'],
+        startsWith('2026-08-29T23:00'),
+        reason: '補送那一筆要用它自己存下來的標記',
+      );
+      expect(bodies.last['bed_start_at'], startsWith('2026-08-31T23:40'));
+    });
+
+    test('沒按按鈕的夜晚照樣進佇列，只是沒有標記', () async {
+      final store = InMemoryKeyValueStore();
+      final uploader = NightlyUploader(
+        baseUrl: 'http://127.0.0.1:1',
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        timeout: const Duration(milliseconds: 300),
+        pending: PendingNightlyStore(store),
+      );
+
+      await uploader.sync(detected(DateTime(2026, 9, 1, 3, 51)));
+
+      final saved = (await PendingNightlyStore(store).load()).single;
+      expect(saved.lightsOutIso, isNotEmpty);
+      expect(
+        saved.marks.hasStart,
+        isFalse,
+        reason: '忘記按按鈕只該少掉臥床時間，不該讓整晚補送不了',
+      );
+    });
+
+    test('同一晚存兩次，留下**後面**那筆（標記比較新）', () async {
+      // 使用者可能在第二次開 App 之前才按下「下床」。
+      final store = InMemoryKeyValueStore();
+      final queue = PendingNightlyStore(store);
+      await queue.save([
+        const PendingNight('2026-09-01T03:51:16.000'),
+        PendingNight(
+          '2026-09-01T03:51:16.000',
+          marks: marksAt(DateTime(2026, 8, 31, 23, 40), DateTime(2026, 9, 1, 8, 5)),
+        ),
+      ]);
+
+      final saved = await queue.load();
+      expect(saved, hasLength(1));
+      expect(saved.single.marks.isComplete, isTrue);
+    });
+
+    test('舊格式（只有一個字串）也讀得回來', () async {
+      // 這個佇列存在使用者的手機上，換格式時舊資料還在——
+      // 直接丟掉就等於把那幾晚弄丟一次。
+      final store = InMemoryKeyValueStore({
+        PendingNightlyStore.storageKey:
+            '["2026-08-30T02:10:00.000","2026-08-31T01:05:00.000"]',
+      });
+      final saved = await PendingNightlyStore(store).load();
+      expect(saved, hasLength(2));
+      expect(saved.first.lightsOutIso, '2026-08-30T02:10:00.000');
+      expect(saved.first.marks.hasStart, isFalse);
     });
   });
 

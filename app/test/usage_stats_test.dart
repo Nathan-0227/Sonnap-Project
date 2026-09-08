@@ -22,6 +22,9 @@ import 'package:app/services/nightly_uploader.dart';
 import 'package:app/services/pending_nightly.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/services/bed_marks.dart';
+import 'package:app/services/key_value_store.dart';
+import 'package:app/services/pre_bed_apps.dart';
 import 'package:app/services/usage_stats.dart';
 
 class _ImmediateRepository implements SleepRepository {
@@ -36,16 +39,37 @@ class _ImmediateRepository implements SleepRepository {
 /// 這裡只驗「拿到結果之後畫面怎麼顯示」。
 class _StubUploader implements NightlyUploader {
   final NightlyUploadResult result;
-  const _StubUploader(this.result);
+
+  /// 上傳時實際收到的標記。用來驗「按了按鈕就要送上去」。
+  ///
+  /// ⚠️ 畫面走的是 [sync] 不是 [upload]，所以兩條都要記——只記 upload
+  /// 的話這個欄位永遠是 null，而測試會以為「按了卻沒送上去」。
+  BedMarks? received;
+
+  /// 這一晚有沒有被存進離線佇列（上傳失敗但留得住）。
+  final bool queued;
+
+  _StubUploader(this.result, {this.queued = false});
 
   @override
-  Future<NightlyUploadResult> upload(LightsOutResult lightsOut) async => result;
+  Future<NightlyUploadResult> upload(
+    LightsOutResult lightsOut, {
+    BedMarks marks = BedMarks.none,
+  }) async {
+    received = marks;
+    return result;
+  }
 
   /// 畫面走的是這一條（[NightlyUploader.sync]）。補送的舊夜晚固定為空——
   /// 佇列本身由 nightly_uploader_test.dart 測，這裡只驗顯示。
   @override
-  Future<NightlyUploadBatch> sync(LightsOutResult lightsOut) async =>
-      NightlyUploadBatch(current: result);
+  Future<NightlyUploadBatch> sync(
+    LightsOutResult lightsOut, {
+    BedMarks marks = BedMarks.none,
+  }) async {
+    received = marks;
+    return NightlyUploadBatch(current: result, currentQueued: queued);
+  }
 
   @override
   PendingNightlyStore? get pending => null;
@@ -68,12 +92,18 @@ class _FakeUsageStats extends UsageStatsService {
   /// usage...」，而失敗訊息看起來像是「找不到 App 名稱」，指向錯的地方。
   LightsOutResult lightsOutResult;
 
+  /// ⚠️ 這個也要一起攔，理由同上 —— 少了它，`_loadUsage()` 會多一次
+  /// 真的 MethodChannel 往返，而症狀是**整張卡片不顯示**
+  /// （測試訊息會說「找不到 Phone down at 23:12」，指向錯的地方）。
+  PreBedResult preBedResult;
+
   int openSettingsCalls = 0;
   int queryCalls = 0;
 
   _FakeUsageStats(
     this.result, {
     this.lightsOutResult = const LightsOutResult(LightsOutStatus.noEvents),
+    this.preBedResult = const PreBedResult(),
   });
 
   @override
@@ -94,6 +124,14 @@ class _FakeUsageStats extends UsageStatsService {
       lightsOutResult;
 
   @override
+  Future<PreBedResult> preBed({
+    required LightsOutResult lightsOut,
+    Map<String, String> labels = const {},
+    Duration window = kPreBedWindow,
+  }) async =>
+      preBedResult;
+
+  @override
   Future<void> openSettings() async => openSettingsCalls++;
 }
 
@@ -111,6 +149,7 @@ void main() {
     WidgetTester tester,
     _FakeUsageStats usage, {
     NightlyUploader? uploader,
+    BedMarkStore? bedMarks,
   }) async {
     // ReportScreen 內容很長，畫布太小會滿版溢位而蓋掉真正要驗的東西
     tester.view.physicalSize = const Size(1200, 3000);
@@ -122,10 +161,17 @@ void main() {
         repository: _ImmediateRepository(sample),
         usageStats: usage,
         uploader: uploader,
+        bedMarks: bedMarks ?? BedMarkStore(InMemoryKeyValueStore()),
       ),
     ));
-    await tester.pump();
-    await tester.pump();
+    // ⚠️ `_loadUsage()` 裡**有幾個 await 就要 pump 幾次**。少一次的症狀是
+    //    「卡片停在 Reading phone usage...」，而失敗訊息會說找不到某段
+    //    文字，看起來像版面壞了 —— 已經為此debug過兩次。
+    //    用迴圈而不是寫死次數，之後多一個 await 才不會又踩一次。
+    //    （不能用 pumpAndSettle：頁面上有 Lottie 動畫，永遠不會 settle。）
+    for (var i = 0; i < 8; i++) {
+      await tester.pump();
+    }
   }
 
   group('語意：標題不能把整天的數字說成睡前', () {
@@ -155,10 +201,48 @@ void main() {
       );
       expect(find.text('Phone Use Yesterday'), findsOneWidget);
       expect(
-        find.textContaining('Not yet narrowed to the hour before bed'),
+        find.textContaining('not narrowed to the hour before bed'),
         findsOneWidget,
         reason: '限制要寫在畫面上，不是只寫在程式註解裡',
       );
+    });
+
+    // 反向對照：**有**睡前資料時，標題與說明都要跟著換。
+    // 沒有這一條，把標題寫死成 'Phone Use Yesterday' 也會通過上面那條，
+    // 而睡前歸因就永遠顯示不出來。
+    testWidgets('有睡前資料時，標題與說明都要換成睡前', (tester) async {
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(
+          UsageStatsStatus.ok,
+          apps: [AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95)],
+        ),
+        lightsOutResult: LightsOutResult(
+          LightsOutStatus.ok,
+          at: DateTime(2026, 9, 6, 23, 30),
+          quietMinutes: 400,
+        ),
+        preBedResult: PreBedResult(
+          lightsOutAt: DateTime(2026, 9, 6, 23, 30),
+          apps: const [
+            AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 22),
+          ],
+        ),
+      );
+      await pumpReport(tester, usage);
+
+      expect(find.text('Phone Use Before Bed'), findsOneWidget);
+      expect(find.text('Phone Use Yesterday'), findsNothing);
+      expect(
+        find.textContaining('The hour before you put your phone down'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('not narrowed to the hour before bed'),
+        findsNothing,
+        reason: '有睡前資料了，還說「還沒切出來」就是錯的',
+      );
+      // 睡前那 22 分鐘與整天的 95 分鐘是兩個量，畫面上要同時看得到
+      expect(find.textContaining('22m on screen'), findsOneWidget);
     });
   });
 
@@ -470,6 +554,94 @@ void main() {
       // −1179（「提早 19 小時」）——出現那個數字就表示有人在這裡重算了。
       expect(find.textContaining('4h 21m past your target'), findsOneWidget);
       expect(find.textContaining('19h'), findsNothing);
+    });
+  });
+
+  group('上床／下床標記會影響上傳（按鈕本身在 bed_mark_buttons_test）', () {
+    _FakeUsageStats detected() => _FakeUsageStats(
+          const UsageStatsResult(UsageStatsStatus.ok, apps: [
+            AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95),
+          ]),
+          lightsOutResult: LightsOutResult(
+            LightsOutStatus.ok,
+            at: DateTime(2026, 9, 6, 23, 30),
+            quietMinutes: 400,
+          ),
+        );
+
+    testWidgets('按過的標記要送給後端', (tester) async {
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(const NightlyUploadResult(
+        NightlyUploadStatus.ok,
+        date: '2026-09-07',
+        adherenceMinutes: 0,
+        isLate: false,
+      ));
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue,
+          reason: '按了卻沒送上去，後端就算不出臥床時間');
+      // 上傳成功之後要清掉，否則同一對會被算進第二晚
+      expect(await kv.getString(kBedStartKey), isNull);
+    });
+
+    testWidgets('⚠️ 反向對照：沒按按鈕**不得**擋住上傳', (tester) async {
+      // 這一條擋的是「不按就沒有資料」那種實作。忘記按按鈕只該少掉
+      // 臥床時間，不該讓整晚的 lights_out_at 也上傳不了。
+      final stub = _StubUploader(const NightlyUploadResult(
+        NightlyUploadStatus.ok,
+        date: '2026-09-07',
+        adherenceMinutes: 12,
+        isLate: false,
+      ));
+      await pumpReport(tester, detected(), uploader: stub);
+
+      expect(stub.received, isNotNull, reason: '照樣要上傳');
+      expect(stub.received!.hasStart, isFalse, reason: '只是沒有標記而已');
+      expect(find.textContaining('12m past your target'), findsOneWidget,
+          reason: '達成度照樣算得出來');
+    });
+
+    testWidgets('上傳失敗、又沒進佇列 → **不要**清掉標記', (tester) async {
+      // 後端沒開是 demo 的常態。清掉等於把使用者早上按的那一下弄丟。
+      // ⚠️ 判準是「這一晚有沒有安全落地」，不是「上傳成功了沒」——
+      //    下一條測的就是落地的另一種方式。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(
+          const NightlyUploadResult(NightlyUploadStatus.failed, error: 'boom'));
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(await kv.getString(kBedStartKey), isNotNull);
+      expect(await kv.getString(kBedEndKey), isNotNull);
+    });
+
+    testWidgets('上傳失敗但已進佇列 → 要清掉，否則明天會再算一次', (tester) async {
+      // ⚠️ 這是離線佇列帶來的差別。標記已經跟著那一晚一起存進佇列，
+      //    留在 BedMarkStore 裡反而有害：kBedMarkMaxAge 是 36 小時，
+      //    明天那一晚會**再讀到同一對標記**，於是一對標記配到兩個不同
+      //    的夜晚，而且不會有任何錯誤訊息。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(
+        const NightlyUploadResult(NightlyUploadStatus.failed, error: 'boom'),
+        queued: true,
+      );
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '標記要跟著進佇列');
+      expect(await kv.getString(kBedStartKey), isNull);
+      expect(await kv.getString(kBedEndKey), isNull);
     });
   });
 }

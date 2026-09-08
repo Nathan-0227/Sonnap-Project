@@ -72,7 +72,16 @@ def truth_path_for(csv_path: Path) -> Path:
 
 
 def load_vf_fracs(csv_path: Path):
-    """回傳 dict：vf(int) -> (timestamp_str, frac 或 None)。"""
+    """
+    回傳 dict：vf(int) -> (timestamp_str, frac 或 None)。
+
+    分母跟著檔頭走：用 --roi 錄的就是 ROI 面積。解讀在 tapo_metric_logger，
+    這裡不自己判斷（判準只有一份，漂移時才有人發現）。
+    """
+    from tapo_metric_logger import read_roi, row_frac
+    if not csv_path.exists():
+        return {}          # 只有影片也要能標註，見 main()
+    roi, _ = read_roi(csv_path)
     out = {}
     with csv_path.open(encoding="utf-8") as fh:
         for row in csv.DictReader(l for l in fh if not l.startswith("#")):
@@ -82,8 +91,7 @@ def load_vf_fracs(csv_path: Path):
                 vf = int(row["vf"])
             except ValueError:
                 continue
-            frac = int(row["max_px"]) / FRAME_AREA if row.get("max_px") else None
-            out[vf] = (row.get("t", ""), frac)
+            out[vf] = (row.get("t", ""), row_frac(row, roi))
     return out
 
 
@@ -368,6 +376,11 @@ def cmd_compare(csv_path: Path):
         sys.exit(f"✗ {truth_path} 沒有已審視的範圍。先跑標註（不加 --compare）。")
 
     vf_map = load_vf_fracs(csv_path)
+    # 分母跟著檔頭走，表格的單位標籤也要跟著 —— 標錯的話「0.5%」會被當成
+    # 佔畫面 0.5%，而這份其實是佔 ROI 0.5%（差 3.5 倍）。
+    from tapo_metric_logger import read_roi
+    roi, _ = read_roi(csv_path)
+    unit = "佔 ROI" if roi else "佔畫面"
     fps = 5.0
     tol = int(TOLERANCE_SECONDS * fps)
     reviewed_frames = sum(e - s + 1 for s, e in reviewed)
@@ -387,7 +400,10 @@ def cmd_compare(csv_path: Path):
           f"（Montini 2024 常模：{MONTINI_MI_MEDIAN} 次/小時，"
           f"IQR {MONTINI_MI_IQR[0]}–{MONTINI_MI_IQR[1]}）")
 
-    print(f"\n{'門檻':>8}{'演算法事件':>11}{'次/小時':>9}{'召回率':>8}{'精確率':>8}"
+    if roi:
+        print(f"\n⚠️ 這份是用 ROI {roi} 錄的 —— 門檻是**佔 ROI**"
+              f"（{roi[2] * roi[3]} px）的比例，不是佔整個畫面。")
+    print(f"\n{'門檻(' + unit + ')':>13}{'演算法事件':>11}{'次/小時':>9}{'召回率':>8}{'精確率':>8}"
           f"{'F1':>7}{'誤報/小時':>10}  判讀")
     rule()
 
@@ -433,8 +449,18 @@ def main():
     ap.add_argument("--compare", action="store_true", help="對照人工標記與 CSV 裡的演算法度量")
     args = ap.parse_args()
 
+    # CSV 不在也要能標註 —— 標註只需要影片。2026-09-06 第 4 晚的 CSV 被
+    # 誤刪（worktree 收掉時連未追蹤檔一起帶走），影片還在卻標不了，
+    # 那個限制是這支自己加的、沒有必要。
     if not args.csv.exists():
-        sys.exit(f"✗ 找不到 {args.csv}")
+        if not video_path_for(args.csv).exists():
+            sys.exit(f"✗ 找不到 {args.csv}，也找不到 {video_path_for(args.csv)}")
+        if args.compare:
+            sys.exit(f"✗ 找不到 {args.csv} —— --compare 要讀 CSV 裡的演算法度量。\n"
+                     "   影片還在的話改用 tapo_roi_experiment.py，"
+                     "它從影片重跑管線，不需要 CSV。")
+        print(f"⚠ 找不到 {args.csv.name}，只用影片標註。")
+        print("  影響：標記存下來時沒有 t 欄（時刻），vf 照舊 —— 對照分析用的是 vf，不受影響。")
 
     if args.compare:
         cmd_compare(args.csv)

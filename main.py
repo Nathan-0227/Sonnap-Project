@@ -39,7 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import json
-from datetime import date as date_cls
+from datetime import date as date_cls, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -48,7 +48,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import db
-from behavior import adherence, challenges as challenge_engine, pet_state
+from behavior import (adherence, challenges as challenge_engine, pet_state,
+                      sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
@@ -171,6 +172,15 @@ class NightlyRequest(BaseModel):
     #    可能跟現在的設定不同，而 nightly_behavior 存的是**當晚的快照**
     #    （見 db.py schema：使用者改目標不該追溯性地改寫歷史達成度）。
     target_bedtime: Optional[str] = None
+    # 使用者在畫面上按「開始／結束睡覺」的時刻（ISO8601）。兩個都給才算得出
+    # 行為版睡眠效率；沒給就是 null（不是 0 —— 沒按與效率 0% 是兩件事）。
+    # ⚠️ 這是**自述**的上床／下床，不是量到的入睡／醒來。
+    bed_start_at: Optional[str] = Field(
+        None, description="When the user marked getting into bed (self-reported)."
+    )
+    bed_end_at: Optional[str] = Field(
+        None, description="When the user marked getting out of bed (self-reported)."
+    )
     source: str = Field("phone", description="phone | self_report")
 
 
@@ -383,6 +393,40 @@ async def post_nightly(req: NightlyRequest):
                    "do not upload nights that were not measured.",
         )
 
+    # 行為版睡眠效率。⚠️ 與 wearable_nightly.efficiency 是**不同的量**，
+    #    限制與反向判讀的完整說明在 behavior/sleep_efficiency.py 的檔頭。
+    #    沒按開始／結束睡覺時每個欄位都是 None，不是 0。
+    # ⚠️ 這一列的日期來自 lights_out_at，但按鈕的時刻是**它自己那一晚**的。
+    #    兩者不一致時把標記掛上去就是張冠李戴——實測 2026-09-07 早上，
+    #    App 在新的安靜期還不是最長之前先上傳了一次，於是 09-07 03:36 的
+    #    「開始睡覺」被寫進了 09-06 那一列（算出 −1282 分鐘的荒謬差值）。
+    #
+    #    不一致就整組不收。等 lights_out 追上那一晚，App 下次上傳自然會
+    #    掛對——實測就是這樣自己修好的，09-07 那一列完全正確。
+    bed_start_dt = None
+    if req.bed_start_at:
+        try:
+            bed_start_dt = datetime.fromisoformat(req.bed_start_at)
+        except ValueError:
+            bed_start_dt = None
+    same_night = (
+        bed_start_dt is not None
+        and adherence.night_date(bed_start_dt).isoformat() == night["date"]
+    )
+
+    try:
+        eff = sleep_efficiency.evaluate_efficiency(
+            req.bed_start_at if same_night else None,
+            req.lights_out_at,
+            req.bed_end_at if same_night else None,
+            source=req.source,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not parse bed_start_at / bed_end_at: {exc}",
+        ) from exc
+
     db.upsert_nightly_behavior(
         user_id=req.user_id,
         date=night["date"],
@@ -391,8 +435,11 @@ async def post_nightly(req: NightlyRequest):
         adherence_minutes=night["adherence_minutes"],
         is_late=night["is_late"],
         source=night["source"],
+        efficiency=eff,
     )
-    return night
+    # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
+    #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
+    return {**night, **{k: v for k, v in eff.items() if k != "source"}}
 
 
 @app.post("/wearable", status_code=201)
@@ -518,6 +565,23 @@ async def get_home(
             "adherence_minutes": b_row["adherence_minutes"] if b_row else None,
             "is_late": bool(b_row["is_late"]) if b_row and b_row["is_late"] is not None else None,
             "source": b_row["source"] if b_row else None,
+            # ── 行為版睡眠效率 ──
+            # ⚠️ 這個 sleep_efficiency 與底下 metrics.sleep_efficiency
+            #    （Garmin 的）是**不同的量**：那個分子是手錶量的總睡眠、
+            #    有文獻、進 final_score；這個分子是**假定**的、不進任何分數。
+            #    兩者同時出現在這個回應裡，所以 basis 與 note 一定要一起給
+            #    —— 少了它們，前端無從分辨自己拿到的是哪一個。
+            "bed_start_at": b_row["bed_start_at"] if b_row else None,
+            "bed_end_at": b_row["bed_end_at"] if b_row else None,
+            "time_in_bed_minutes": b_row["time_in_bed_minutes"] if b_row else None,
+            "phone_in_bed_minutes": b_row["phone_in_bed_minutes"] if b_row else None,
+            "sleep_efficiency": b_row["sleep_efficiency"] if b_row else None,
+            "efficiency_basis": b_row["efficiency_basis"] if b_row else None,
+            "efficiency_note": (
+                "Assumes sleep begins when the phone is put down and that there "
+                "are no awakenings. Not comparable with clinical sleep efficiency."
+                if b_row and b_row["sleep_efficiency"] is not None else None
+            ),
             "late_night_ratio": ratio,
             "late_nights": late_nights,
             "recorded_nights": recorded,
@@ -638,12 +702,28 @@ async def get_insights(
             "recorded_nights": recorded,
             "bedtime_spread_minutes": spread,
             "bedtime_spread_sample": spread_n,
+            # ⚠️ history 裡那個 sleep_efficiency 與 wearable.history 裡的
+            #    **不是同一個量**（見 behavior/sleep_efficiency.py 檔頭）。
+            #    這句說明放在這裡一次，逐夜的 efficiency_basis 則跟著每一列走
+            #    —— 之後 WASO 有來源時 basis 會換值，舊夜晚要保留舊的那個。
+            "efficiency_note": (
+                "behavior.*.sleep_efficiency assumes sleep begins when the phone "
+                "is put down and that there are no awakenings. It is NOT the same "
+                "quantity as wearable sleep efficiency and must not be compared "
+                "with clinical thresholds."
+            ),
             "history": [
                 {
                     "date": r["date"],
                     "lights_out_at": r["lights_out_at"],
                     "adherence_minutes": r["adherence_minutes"],
                     "is_late": bool(r["is_late"]) if r["is_late"] is not None else None,
+                    "bed_start_at": r["bed_start_at"],
+                    "bed_end_at": r["bed_end_at"],
+                    "time_in_bed_minutes": r["time_in_bed_minutes"],
+                    "phone_in_bed_minutes": r["phone_in_bed_minutes"],
+                    "sleep_efficiency": r["sleep_efficiency"],
+                    "efficiency_basis": r["efficiency_basis"],
                 }
                 for r in behavior_rows
             ],

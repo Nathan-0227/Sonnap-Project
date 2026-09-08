@@ -28,6 +28,10 @@ import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/report_screen.dart';
 import 'package:app/services/challenges_service.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/services/bed_marks.dart';
+import 'package:app/services/key_value_store.dart';
+import 'package:app/services/lights_out.dart';
+import 'package:app/services/pre_bed_apps.dart';
 import 'package:app/services/usage_stats.dart';
 import 'package:app/services/user_identity.dart';
 
@@ -167,13 +171,34 @@ class _StubChallenges implements ChallengesService {
   Duration get timeout => const Duration(seconds: 1);
 }
 
-/// 不授權、什麼都不回的使用時間服務——這一組不驗那張卡。
+/// 什麼都不回的使用時間服務——這兩組不驗那張卡。
+///
+/// ⚠️ **三個方法都要攔。** 少攔任何一個，widget test 就會打到真的
+/// MethodChannel，而它在測試環境裡**永遠不會完成**——`_loadUsage()`
+/// 整個卡在那個 await 上，後面的 `_loadChallenges()` / `_loadHome()`
+/// 根本不會跑。症狀是「卡片整張不見」，錯誤訊息完全不指向這裡。
 class _SilentUsageStats extends UsageStatsService {
   const _SilentUsageStats();
 
   @override
   Future<UsageStatsResult> queryYesterday({int limit = 5}) async =>
       const UsageStatsResult(UsageStatsStatus.unsupported);
+
+  @override
+  Future<LightsOutResult> lightsOut({
+    Duration window = kLightsOutWindow,
+    int minQuietMinutes = kMinQuietMinutes,
+    DateTime? now,
+  }) async =>
+      const LightsOutResult(LightsOutStatus.unsupported);
+
+  @override
+  Future<PreBedResult> preBed({
+    required LightsOutResult lightsOut,
+    Map<String, String> labels = const {},
+    Duration window = kPreBedWindow,
+  }) async =>
+      const PreBedResult();
 }
 
 ChallengesResult _parsed([Map<String, dynamic> source = kSampleResponse]) =>
@@ -339,6 +364,8 @@ void main() {
         home: ReportScreen(
           repository: _ImmediateRepository(sample),
           usageStats: const _SilentUsageStats(),
+          // ⚠️ 預設是 PlatformKeyValueStore，在 widget test 裡永遠不回應。
+          bedMarks: BedMarkStore(InMemoryKeyValueStore()),
           challenges: challenges,
         ),
       ));

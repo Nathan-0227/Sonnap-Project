@@ -5,10 +5,13 @@ import 'package:lottie/lottie.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
+import '../services/bed_marks.dart';
 import '../services/challenges_service.dart';
 import '../services/home_service.dart';
+import '../services/key_value_store.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
+import '../services/pre_bed_apps.dart';
 import '../services/usage_stats.dart';
 import '../widgets/pet_mood_animation.dart';
 
@@ -27,6 +30,12 @@ class ReportScreen extends StatefulWidget {
   /// 熬夜比率的來源（`GET /home` 的 behavior 區塊）。
   final HomeService? home;
 
+  /// 使用者自己按的上床／下床時刻。
+  ///
+  /// ⚠️ **加分項不是取代品**：沒按的夜晚照樣走被動偵測的 `lights_out_at`，
+  /// 只是少了臥床時間。見 `bed_marks.dart`。
+  final BedMarkStore bedMarks;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
@@ -34,6 +43,7 @@ class ReportScreen extends StatefulWidget {
     this.uploader,
     this.challenges,
     this.home,
+    this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
   });
 
   @override
@@ -115,6 +125,12 @@ class _ReportScreenState extends State<ReportScreen>
   /// 首頁與 Insights 顯示兩隻不同寵物的情況。
   HomeResult? _home;
 
+  /// 上床前那一小時每個 App 各佔多久。與 [_usage]（整天彙總）是
+  /// **兩個不同的量**——整天用了三小時 IG，跟躺下前那一小時都在滑 IG，
+  /// 前者管不著、後者可以改。偵測不到上床時刻時 hasData 是 false。
+  PreBedResult? _preBed;
+
+
   @override
   void initState() {
     super.initState();
@@ -151,10 +167,18 @@ class _ReportScreenState extends State<ReportScreen>
   Future<void> _loadUsage() async {
     final result = await widget.usageStats.queryYesterday();
     final lightsOut = await widget.usageStats.lightsOut();
+    // 事件流只有 package name，顯示名稱要跟日彙總借。
+    final labels = {
+      for (final a in result.apps) a.packageName: a.appName,
+    };
+    final preBed = await widget.usageStats
+        .preBed(lightsOut: lightsOut, labels: labels);
+    final marks = await widget.bedMarks.read();
     if (!mounted) return;
     setState(() {
       _usage = result;
       _lightsOut = lightsOut;
+      _preBed = preBed;
     });
 
     // ⚠️ 上傳放在畫面更新**之後**，而且失敗不影響上面任何一格。
@@ -164,9 +188,23 @@ class _ReportScreenState extends State<ReportScreen>
     if (uploader != null) {
       // ⚠️ sync() 而不是 upload()：它會先把之前連不到後端那幾晚補送掉。
       //    偵測視窗是往回 24 小時的滑動視窗，沒有這一步那些夜晚就永久消失了。
-      final batch = await uploader.sync(lightsOut);
+      final batch = await uploader.sync(lightsOut, marks: marks);
       if (!mounted) return;
       setState(() => _batch = batch);
+
+      // 清掉本機的上床標記，免得同一對被算進第二晚。
+      //
+      // ⚠️ **條件是「這一晚已經安全落地」，不是「上傳成功」。**
+      //    在有離線佇列之前，這裡只能在 ok 時清——失敗時清掉等於把使用者
+      //    按的那一下弄丟。有了佇列之後那個取捨不存在了：標記已經跟著
+      //    那一晚一起存進佇列，而留在 BedMarkStore 裡反而有害——
+      //    kBedMarkMaxAge 是 36 小時，明天那一晚會**再讀到同一對標記**，
+      //    於是一對標記配到兩個不同的夜晚，而且不會有任何錯誤訊息。
+      final landed = batch.current.status == NightlyUploadStatus.ok ||
+          batch.currentQueued;
+      if (landed && marks.isComplete) {
+        await widget.bedMarks.clear();
+      }
     }
 
     // ⚠️ 挑戰進度一定要在上傳**之後**問，而且**不能寫在
@@ -1160,15 +1198,18 @@ class _ReportScreenState extends State<ReportScreen>
   // DISTRACTIONS
   // ============================================================
 
-  /// 手機使用時間。
+  /// 手機使用時間。上下兩段是**兩個不同的量**：
   ///
-  /// ⚠️ **標題刻意不寫「Sleep Distractions」。** 原生端用的是
-  /// `queryUsageStats(INTERVAL_DAILY)`，拿到的是**整天的前景總時間**，
-  /// 不是睡前那一小時——日彙總沒有時間軸，切不出來。把整天的數字放在
-  /// 「睡前分心」的標題底下，就是拿一個量去冒充另一個量。
+  ///   · 上半：上床前 60 分鐘每個 App 各佔多久（`preBedApps`，走 `queryEvents`）
+  ///   · 下半：整個日曆日的前景總時間（`queryUsageStats`，沒有時間軸）
   ///
-  /// 要真的做到睡前歸因得改用 `queryEvents()` 讀逐筆事件（那同時也是
-  /// `lights_out_at` 的來源）。在那之前，這張卡誠實地講它是什麼。
+  /// ⚠️ **標題與說明文字必須跟著「有沒有睡前資料」一起變。** 偵測不到
+  /// 就寢時刻時卡片裡只有整天的彙總，這時候標題若寫「Before Bed」
+  /// 就是拿一個量冒充另一個量。`usage_stats_test` 有兩條互為反面的
+  /// 測試守著這件事。
+  ///
+  /// ⚠️ 標題也刻意不寫「Sleep Distractions」——「分心」是價值判斷，
+  /// 我們量到的只是前景時間。
   Widget _buildDistractionsCard(
     SleepSession session,
   ) {
@@ -1177,18 +1218,25 @@ class _ReportScreenState extends State<ReportScreen>
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.phone_iphone_rounded,
                 color: purpleColor,
                 size: 19,
               ),
-              SizedBox(width: 7),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Phone Use Yesterday',
-                  style: TextStyle(
+                  // ⚠️ 標題與下面那句說明要**一起**跟著狀態走。
+                  //    無條件寫「Before Bed」的話，偵測不到就寢時刻時
+                  //    卡片裡是整天的彙總，標題卻宣稱是睡前 —— 那正是
+                  //    usage_stats_test「標題不能把整天的數字說成睡前」
+                  //    那一條在擋的事。
+                  _preBed?.hasData == true
+                      ? 'Phone Use Before Bed'
+                      : 'Phone Use Yesterday',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                     fontWeight:
@@ -1201,9 +1249,15 @@ class _ReportScreenState extends State<ReportScreen>
 
           const SizedBox(height: 3),
 
-          const Text(
-            'Daily totals. Not yet narrowed to the hour before bed.',
-            style: TextStyle(
+          // ⚠️ 這句話會隨著有沒有睡前資料而變。**不要寫死成其中一種** ——
+          //    先前寫死「Daily totals」，等睡前那一段做出來之後，
+          //    畫面就會把睡前的數字說成整天的彙總。
+          Text(
+            _preBed?.hasData == true
+                ? 'The hour before you put your phone down.'
+                : 'Daily totals - no bedtime detected yet, so this is not '
+                    'narrowed to the hour before bed.',
+            style: const TextStyle(
               color: Color(0xFF8498B7),
               fontSize: 9,
             ),
@@ -1212,6 +1266,8 @@ class _ReportScreenState extends State<ReportScreen>
           const SizedBox(height: 12),
 
           _buildLightsOutRow(),
+
+          _buildPreBedBody(),
 
           _buildUsageBody(),
         ],
@@ -1426,6 +1482,40 @@ class _ReportScreenState extends State<ReportScreen>
     if (h == 0) return '${m}m';
     if (m == 0) return '${h}h';
     return '${h}h ${m}m';
+  }
+
+  /// 睡前那一段。沒有資料就整塊不顯示——**不要用整天的彙總填空**，
+  /// 那會讓使用者以為自己睡前滑了三小時。
+  Widget _buildPreBedBody() {
+    final pre = _preBed;
+    if (pre == null || !pre.hasData) return const SizedBox.shrink();
+
+    final busiest = pre.apps.first.minutes;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            'Last ${pre.window.inMinutes} min before lights out '
+            '- ${_formatQuiet(pre.totalMinutes)} on screen',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        for (final app in pre.apps)
+          _UsageRow(app: app, busiestMinutes: busiest),
+        const SizedBox(height: 14),
+        const Text(
+          'Daily totals below',
+          style: TextStyle(color: Color(0xFF8498B7), fontSize: 9),
+        ),
+        const SizedBox(height: 6),
+      ],
+    );
   }
 
   Widget _buildUsageBody() {

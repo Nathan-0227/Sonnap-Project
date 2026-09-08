@@ -308,16 +308,56 @@ def _progress_consistency(rows, challenge, as_of):
     return spread, n, n, completed, detail
 
 
+def _progress_phone_in_bed(rows, challenge, as_of):
+    """
+    phone_in_bed：上床之後滑了多久手機。**數字越小越好。**
+
+    ⚠️ 為什麼挑戰讀這個而不是讀 nightly_behavior.sleep_efficiency——
+       兩者是同一份資料的兩種寫法（效率 = 100 − 滑手機佔比），但
+       **回饋迴圈只能掛在使用者控制得了的那一端**。
+       「今晚躺下後少滑 20 分鐘」做得到；「今晚睡好一點」做不到。
+       這是本專案既有的紀律：挑戰標的必須是行為，不能是生理結果。
+       （而且那個效率在代數上量到的本來就是手機時間，見
+        behavior/sleep_efficiency.py 檔頭。）
+
+    需要使用者按過「開始睡覺」才有值。沒按的夜晚是 None **不是 0**——
+    「沒測到」與「一分鐘都沒滑」是完全不同的兩件事。
+    """
+    scoped, _ = window_rows(rows, challenge["window_days"], as_of)
+    measured = [r for r in scoped if r.get("phone_in_bed_minutes") is not None]
+
+    if not measured:
+        return None, 0, len(scoped), False, (
+            "No night in this window has a bed-time mark; tap Start sleep "
+            "when you get into bed so this can be measured."
+        )
+
+    # 視窗內取平均。window_days=1 時就是當晚本身。
+    minutes = sum(r["phone_in_bed_minutes"] for r in measured) / len(measured)
+    target = challenge["target_value"]
+    completed = minutes <= target
+
+    if completed:
+        detail = (f"You spent {minutes:.0f} min on your phone after getting into bed "
+                  f"- under the {target:.0f} min target.")
+    else:
+        detail = (f"You spent {minutes:.0f} min on your phone after getting into bed; "
+                  f"the target is {target:.0f} min or less.")
+
+    return round(minutes, 1), len(measured), len(measured), completed, detail
+
+
 # 型別 → 計算函式。用查表而不是 if/elif 串，是為了讓「新增一種挑戰型別」
 # 變成「加一列」而不是「改一段控制流程」。
 PROGRESS_FUNCS = {
     "time": _progress_time,
     "streak": _progress_streak,
     "consistency": _progress_consistency,
+    "phone_in_bed": _progress_phone_in_bed,
 }
 
 # 哪些型別是「數字越小越好」。UI 畫進度條要用。
-LOWER_IS_BETTER = {"consistency"}
+LOWER_IS_BETTER = {"consistency", "phone_in_bed"}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -350,6 +390,11 @@ def _progress_ratio(kind, current_value, target_value, completed):
         if target_value <= 0:
             return None
         return round(min(current_value / target_value, 1.0), 3)
+    if kind == "phone_in_bed":
+        # 與 consistency 同樣是「越小越好」：target ÷ current，並夾在 1.0
+        if current_value is None or current_value <= 0:
+            return 1.0 if completed else None
+        return round(min(target_value / current_value, 1.0), 3)
     if kind == "consistency":
         if current_value <= 0:
             return 1.0            # 離散度 0（只可能是所有夜晚同一時刻）
