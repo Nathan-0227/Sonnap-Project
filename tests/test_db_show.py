@@ -46,10 +46,10 @@ def make_db(path):
     conn.close()
 
 
-def run(*args):
+def run(*args, stdin=None):
     return subprocess.run(
         [sys.executable, str(ROOT / "db_show.py"), *map(str, args)],
-        capture_output=True, text=True, encoding="utf-8",
+        input=stdin, capture_output=True, text=True, encoding="utf-8",
         env={**os.environ, "PYTHONIOENCODING": "utf-8"})
 
 
@@ -96,6 +96,26 @@ def main():
         n = conn.execute("SELECT COUNT(*) FROM nightly_behavior").fetchone()[0]
         conn.close()
         check("跑完之後資料還在", n == 1, f"剩 {n} 列")
+
+        print("\n【6】互動式 shell")
+        # ⚠️ shell 與 --sql 共用同一個印表函式。兩份各自實作的話，遮蔽
+        #    user_id 的邏輯會有兩個定義處——改一邊忘另一邊不會有錯誤訊息。
+        script = (
+            ".tables\n"
+            "SELECT date, user_id FROM nightly_behavior;\n"
+            "DELETE FROM nightly_behavior;\n"
+            "SELECT * FROM nosuch;\n"
+            "SELECT date\nFROM nightly_behavior;\n"
+            ".quit\n"
+        )
+        r8 = run("--db", db, "--shell", stdin=script)
+        out8 = r8.stdout
+        check("跑得完且沒有例外", r8.returncode == 0, r8.stderr[-300:])
+        check(".tables 列得出表", "nightly_behavior" in out8)
+        check("⚠️ shell 裡也不外流 user_id", USER_ID not in out8, out8[:400])
+        check("寫入被擋", "只接受 SELECT" in out8)
+        check("SQL 錯誤不會中斷 shell", "no such table" in out8)
+        check("跨行 SQL 要能執行", out8.count("2026-09-08") >= 2, out8[-400:])
 
         print("\n【4】查不到的日期要說有哪些日期，不是空白")
         r6 = run("2020-01-01", "--db", db)

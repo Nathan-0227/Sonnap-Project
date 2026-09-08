@@ -143,18 +143,114 @@ def run_sql(conn, sql, show_user_id):
         rows = conn.execute(sql).fetchall()
     except sqlite3.Error as exc:
         sys.exit(f"✗ SQL 錯誤：{exc}")
+    # ⚠️ 與 shell 共用同一個印表函式。兩份各自實作的話，遮蔽 user_id 的
+    #    邏輯會有兩個定義處，改一邊忘另一邊不會有任何錯誤訊息。
+    _print_rows(rows, show_user_id)
+
+
+SHELL_HELP = """  可以直接打 SQL，分號結尾（可以跨行）：
+      SELECT date, sleep_efficiency FROM nightly_behavior
+      ORDER BY date DESC;
+
+  點指令：
+      .tables            有哪些表
+      .schema <表名>     那張表的欄位
+      .dates             每張表最新的幾個日期
+      .help              這段
+      .quit / Ctrl+C     離開
+"""
+
+
+def shell(conn, show_user_id):
+    """互動式 SQL。**唯讀**——連線本身是 mode=ro 開的。
+
+    ⚠️ 沒有裝任何東西：Windows 沒有內建 sqlite3 CLI，而為了查資料去裝
+       一個會**可寫**開啟資料庫的 GUI，風險比這支高（後端正在服務同一個
+       檔案，寫入端多一個就多一種弄壞的方式）。
+    """
+    print("唯讀 SQL。輸入 .help 看說明，.quit 離開。")
+    print()
+    buf = []
+    while True:
+        try:
+            line = input("sql> " if not buf else "  ..> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+
+        stripped = line.strip()
+        if not buf and stripped.startswith("."):
+            cmd, _, arg = stripped.partition(" ")
+            arg = arg.strip()
+            if cmd in (".quit", ".exit", ".q"):
+                return
+            if cmd == ".help":
+                print(SHELL_HELP)
+            elif cmd == ".tables":
+                for n in tables(conn):
+                    cnt = conn.execute(f'SELECT COUNT(*) FROM "{n}"').fetchone()[0]
+                    print(f"  {n:24s} {cnt:>6} 列")
+            elif cmd == ".schema":
+                names = [arg] if arg else tables(conn)
+                for n in names:
+                    if n not in tables(conn):
+                        print(f"  沒有這張表：{n}")
+                        continue
+                    print(f"\n  {n}")
+                    for r in conn.execute(f'PRAGMA table_info("{n}")'):
+                        print(f"    {r[1]:24s} {r[2]}")
+            elif cmd == ".dates":
+                for n in DATE_TABLES:
+                    if n not in tables(conn):
+                        continue
+                    ds = [r[0] for r in conn.execute(
+                        f'SELECT DISTINCT date FROM "{n}" '
+                        f'ORDER BY date DESC LIMIT 5')]
+                    print(f"  {n:24s} {', '.join(ds) if ds else '（空的）'}")
+            else:
+                print(f"  不認識的指令 {cmd}，看 .help")
+            print()
+            continue
+
+        if not stripped and not buf:
+            continue
+        buf.append(line)
+        if not stripped.endswith(";"):
+            continue
+
+        sql = "\n".join(buf).strip().rstrip(";")
+        buf = []
+        low = sql.lstrip().lower()
+        if not low.startswith(("select", "with", "pragma", "explain")):
+            # ⚠️ 真正的保證是連線的 mode=ro，這層只是給比較清楚的訊息。
+            print("  ✗ 只接受 SELECT / WITH / PRAGMA / EXPLAIN。")
+            print("    （就算硬送，資料庫也是唯讀開啟的，寫不進去。）")
+            print()
+            continue
+        try:
+            rows = conn.execute(sql).fetchall()
+        except sqlite3.Error as exc:
+            print(f"  ✗ {exc}")
+            print()
+            continue
+        print()
+        _print_rows(rows, show_user_id)
+        print()
+
+
+def _print_rows(rows, show_user_id):
     if not rows:
-        print("（沒有符合的列）")
+        print("  （沒有符合的列）")
         return
     keys = rows[0].keys()
     widths = {k: max(len(str(k)), *(len(str(mask(k, r[k], show_user_id)))
                                     for r in rows)) for k in keys}
-    print("  ".join(str(k).ljust(widths[k]) for k in keys))
-    print("  ".join("-" * widths[k] for k in keys))
+    print("  " + "  ".join(str(k).ljust(widths[k]) for k in keys))
+    print("  " + "  ".join("-" * widths[k] for k in keys))
     for r in rows:
-        print("  ".join(
+        print("  " + "  ".join(
             str(mask(k, r[k], show_user_id)).ljust(widths[k]) for k in keys))
-    print(f"\n{len(rows)} 列")
+    print(f"\n  {len(rows)} 列")
 
 
 def main():
@@ -167,13 +263,17 @@ def main():
     ap.add_argument("--table", help="印出整張表")
     ap.add_argument("--limit", type=int, default=50, help="--table 最多印幾列")
     ap.add_argument("--sql", help="自己下 SELECT")
+    ap.add_argument("--shell", action="store_true",
+                    help="互動式 SQL（唯讀）。不用裝任何東西")
     ap.add_argument("--show-user-id", action="store_true",
                     help="⚠️ 印出完整 user_id。它是憑證，不要貼到會外流的地方")
     args = ap.parse_args()
 
     conn = connect(args.db)
     print(f"（{args.db}，唯讀）\n")
-    if args.sql:
+    if args.shell:
+        shell(conn, args.show_user_id)
+    elif args.sql:
         run_sql(conn, args.sql, args.show_user_id)
     elif args.table:
         show_table(conn, args.table, args.limit, args.show_user_id)
