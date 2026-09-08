@@ -203,6 +203,31 @@ def main():
         check("有講總時數仍然不偏", "不偏" in r1.stdout, r1.stdout[-500:])
         check("有講醒了幾次答不出來", "醒了幾次" in r1.stdout)
 
+        print("\n【10】⚠️ recall 欄不可以影響估計")
+        # 2026-09-09 定案：state 只填影片看得到的，記憶填 recall。
+        # recall 是第二個獨立的量測，不是效標——混進估計就不再是影片量測，
+        # 而且會變成「知道答案再去看畫面」的非盲標。
+        rec = d / "with_recall_waso.csv"
+        with rec.open("w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["at", "video_at_seconds", "source", "state",
+                        "recall", "note"])
+            for i in range(7):
+                t = datetime(2026, 9, 9, 2, 0) + timedelta(minutes=10 * i)
+                # 影片看到 2 格醒著；記憶說 5 格醒著
+                w.writerow([t.isoformat(), i * 3000, "grid",
+                            "awake" if i in (1, 2) else "asleep",
+                            "awake" if i in (1, 2, 3, 4, 5) else "asleep", ""])
+        r3 = run("--score", src, "--worksheet", rec)
+        base_line = waso_line(r1.stdout)
+        check("填了 recall，估計仍然只看 state",
+              waso_line(r3.stdout) == base_line != "",
+              f"有 recall：{waso_line(r3.stdout)} / 沒有：{base_line}")
+        check("記得醒著但影片看不出來的，要單獨列出來",
+              "記得醒著、影片看不出來" in r3.stdout, r3.stdout[-600:])
+        check("⚠️ 有講兩邊一致也不構成互相驗證",
+              "不構成互相驗證" in r3.stdout)
+
         print("\n【7】不覆寫已經標好的工作單")
         r = run("--plan", src2)
         check("第二次 --plan 退回", r.returncode != 0)

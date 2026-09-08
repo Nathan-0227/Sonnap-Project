@@ -115,12 +115,44 @@ LABEL_RULES = [
      "有**清醒的行為證據**：坐起來／下床／離開畫面、手機螢幕的光、"
      "伸手拿東西、連續且有目的的翻找。"),
     ("asleep",
-     "**看得清楚**，而且這 30 秒內沒有上面那些證據。"
-     "只有呼吸起伏或單次翻身也算。"),
+     "**看得清楚**，而且這 30 秒內沒有上面那些證據。"),
     ("unclear",
      "**看不清楚**：被子蓋住頭、太暗、人不在畫面內、"
      "或畫面被別的東西擋住。看不出來就填這個，不要猜。"),
 ]
+
+# ⚠️ 這些**不算**清醒證據（2026-09-09 定案，適用於所有夜晚）。
+#
+# 睡眠中本來就會有抓搔、揉臉、單次翻身——那是正常的睡眠行為，不是清醒。
+# 實測影響很大：09-08 那一晚把「抓眼睛」的兩格改成 awake，估計會從
+# 19.6 分變成 39.2 分（整整一倍）。
+#
+# ⚠️ 判準要**逐晚一致**，否則跨夜比較沒有意義。寫在程式裡而不是寫在
+#    對話裡，就是為了下一晚不會漂掉。
+NOT_AWAKE_EVIDENCE = (
+    "抓搔／揉眼／揉臉、單次翻身、呼吸起伏 —— 這些是正常的睡眠行為，填 asleep"
+)
+
+# ═══════════════════════════════════════════════════════════════════
+# ⚠️ state 填影片看得到的，記憶寫進 recall —— 兩欄分開（2026-09-09 定案）
+# ═══════════════════════════════════════════════════════════════════
+# 09-08 標註時，備註欄出現「0800 有醒來關閉鬧鐘繼續睡覺」這種**記憶**，
+# 而那一格的 state 是照影片填的 asleep。兩者混在一起會有三個後果：
+#
+#   ① 它就不再是影片量測了（D2 受測者沒有研究者的記憶）
+#   ② 不再是盲標——知道答案再去看畫面，看到的就會是答案
+#   ③ 沒辦法拿來驗證偵測器（拿記憶驗影片，等於換了一個效標）
+#
+# 但記憶**很有價值**：它是第二個獨立的量測。09-08 的記憶正好證明了
+# 「影片抽樣會漏掉短暫清醒」——08:00 關鬧鐘那一兩分鐘，07:55 與 08:05
+# 兩格都沒抓到。那是實證，不是推測。
+#
+# → 所以分兩欄：`state` 只填影片看得到的，`recall` 憑記憶填。
+#   **`recall` 永遠不進估計**，只在 --score 最後做對照。
+RECALL_COLUMN_NOTE = (
+    "憑記憶填（選填）。⚠️ 一定要**先填完 state 再填這欄**，"
+    "否則就不是盲標了。這欄不進估計，只做對照"
+)
 
 
 def load_rows(path):
@@ -234,6 +266,9 @@ def plan(path):
         w.writerow(["#"])
         for label, rule in LABEL_RULES:
             w.writerow([f"#   {label:8s} {rule}"])
+        w.writerow([f"#   ⚠️ 不算清醒證據：{NOT_AWAKE_EVIDENCE}"])
+        w.writerow(["#"])
+        w.writerow([f"#   recall   {RECALL_COLUMN_NOTE}"])
         w.writerow(["#"])
         w.writerow(["# ⚠️ `asleep` 的意思是「沒有清醒的證據」，不是「證明睡著」。"
                     "醒著躺著不動在紅外線影片上跟睡著幾乎一樣——這是模態的極限，"
@@ -242,7 +277,7 @@ def plan(path):
                     f"但也不要看到下一格為止，那等於整夜重看一遍"])
         w.writerow(["# ⚠️ grid 那些列**不可以跳過**——WASO 是拿 grid 的比例估出來的，"
                     "跳過就是把樣本挖洞。proposed 的列不進估計，可以跳"])
-        w.writerow(["at", "video_at_seconds", "source", "state", "note"])
+        w.writerow(["at", "video_at_seconds", "source", "state", "recall", "note"])
         for at, src, note in checks:
             vs, _ = video_seconds(rows, at)
             # ⚠️ 影片停了之後，CSV 的 vf 欄是**空字串**（不是超出範圍的數字）。
@@ -251,7 +286,7 @@ def plan(path):
                 no_frame += 1  # noqa: F823
                 note = (note + "  " if note else "") + "⚠️ 沒有畫面（影片沒錄到這段）"
             w.writerow([at.isoformat(timespec="seconds"),
-                        f"{vs:.0f}" if vs is not None else "", src, "", note])
+                        f"{vs:.0f}" if vs is not None else "", src, "", "", note])
 
     print(f"錄影   {started:%Y-%m-%d %H:%M} → {end:%H:%M}（{hours:.2f} 小時）")
     print(f"提示   {len(hot)} 段事件率偏高")
@@ -298,7 +333,8 @@ def score(csv_path, worksheet):
                 continue
             marks.append((datetime.fromisoformat(r["at"]),
                           (r.get("source") or "").strip(),
-                          (r.get("state") or "").strip().lower()))
+                          (r.get("state") or "").strip().lower(),
+                          (r.get("recall") or "").strip().lower()))
     if not marks:
         sys.exit(f"✗ {worksheet.name} 裡沒有任何列")
 
@@ -410,6 +446,36 @@ def score(csv_path, worksheet):
     print("  ⚠️ 「至少」不是客套話。`asleep` 的意思是「沒有清醒的證據」，")
     print("     而醒著躺著不動在影片上跟睡著幾乎一樣——那種清醒一格都抓不到。")
     print("     報告要寫「至少醒著 N 分鐘」，不能寫「醒著 N 分鐘」。")
+    # ── 記憶對照：**永遠不進估計**，只看兩個獨立的量測差在哪 ──
+    recalled = [m for m in marks if m[3] in STATES]
+    if recalled:
+        print()
+        print("─" * 74)
+        print("記憶 vs 影片（兩個獨立的量測，recall 不進上面的估計）")
+        print("─" * 74)
+        agree = [m for m in recalled if m[3] == m[2]]
+        missed = [m for m in recalled if m[3] == "awake" and m[2] == "asleep"]
+        extra = [m for m in recalled if m[3] == "asleep" and m[2] == "awake"]
+        print(f"  填了記憶的取樣點 {len(recalled)} 個，一致 {len(agree)} 個")
+        if missed:
+            print(f"  ⚠️ 記得醒著、影片看不出來：{len(missed)} 個")
+            for m in missed:
+                print(f"       {m[0]:%H:%M}")
+            print("     → 這就是「影片是下界」的直接證據。"
+                  "安靜的清醒在影片上看不到。")
+        if extra:
+            print(f"  影片看到醒著、自己不記得：{len(extra)} 個")
+            for m in extra:
+                print(f"       {m[0]:%H:%M}")
+            print("     → 短暫清醒常常不會留下記憶，"
+                  "所以記憶也不能當成效標。")
+        if not missed and not extra:
+            print("  兩邊完全一致——但那不代表兩邊都對，"
+                  "有可能是同一種清醒兩邊都看不到。")
+        print()
+        print("  ⚠️ 兩邊都不是真值。影片看不到安靜的清醒，記憶記不得短暫的清醒。")
+        print("     它們一致時**不構成互相驗證**——很可能只是一起漏掉同一種東西。")
+
     print()
     print("  ⚠️ 這是**一晚**的估計，不是常態。要寫進報告需要多晚。")
     print("  ⚠️ 這個數字不進任何評分，也不用來『修正』睡眠效率——")
