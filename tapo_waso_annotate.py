@@ -214,13 +214,21 @@ def plan(path):
     elif frames is None:
         print(f"影片   {mp4.name}（讀不到長度，自己確認涵蓋整夜）")
     else:
-        covered = frames / 5.0 / 3600
-        print(f"影片   {mp4.name}  {covered:.2f} 小時")
+        playback = frames / 5.0 / 3600
+        print(f"影片   {mp4.name}  {frames} 幀（以 5fps 播放約 {playback:.2f} 小時）")
+        # ⚠️ 播放長度**本來就會短於牆鐘時間**，那不是漏錄。
+        #    相機實際到幀的速率低於標稱 5fps（09-08 那晚是 3.95），
+        #    而影片是照 5fps 寫出去的，所以整段被時間壓縮。
+        #    要判斷有沒有漏錄，唯一可靠的訊號是**有幾列的 vf 是空的**，
+        #    不是「播放長度 vs 牆鐘時間」——拿後者比會嚇到標註的人，
+        #    以為有一個多小時沒錄到（09-08 就差 1.35 小時，實際 0 列漏）。
         if no_frame:
-            print(f"⚠️ 影片只涵蓋 {covered:.2f} 小時，度量卻有 {hours:.2f} 小時——"
-                  f"{len(checks)} 列裡有 {no_frame} 列沒有畫面可看。")
+            print(f"⚠️ 影片中途就停了：{len(checks)} 列裡有 {no_frame} 列沒有畫面可看。")
             print("   那些列已標註。WASO 只能算影片涵蓋的那一段，"
                   "不要把沒畫面的時間當成「睡著」。")
+        else:
+            print(f"       每一列都有對應的幀（{hours:.2f} 小時全程都看得到）")
+            print("       工作單的 video_at_seconds 就是播放器要拖到的位置")
 
 
 def score(csv_path, worksheet):

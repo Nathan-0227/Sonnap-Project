@@ -6,15 +6,16 @@
 //
 //   1. **anxious 的夜晚會被畫成 happy。** anxious 是 Tier3 生理修正值
 //      （壓力、心率相對個人 baseline）的覆寫，那幾個欄位根本不在 history 裡。
-//      實測 payload 裡就有這種反例（2026-09-08 當下是 07-12：
-//      `final_quality=Poor` 但 `pet_mood=anxious`，而同樣是 Poor 的
-//      另外三晚是 tired）——照品質推，這一晚會被畫錯。
+//      實測 payload 裡有四晚這種反例：07-06 / 07-07 是 `final_quality=Good`
+//      但 `pet_mood=anxious`，07-09 / 07-12 是 Poor 但 anxious——
+//      照品質推，這四晚全會被畫錯。
 //
-// ⚠️ history 只有**最近 30 晚**，重跑 pipeline 就會整個往後滑。
-//    2026-09-08 補抓 6 晚之後，原本釘住的 07-06 / 07-07 就掉出窗格了
-//    （它們仍在 garmin_sleep_quality_final.csv 裡，只是 App 讀不到）。
-//    → 下面凡是釘住日期的測試，重跑 pipeline 之後都要重看一次。
-//    這不是測試寫得不好，是 CLAUDE.md 早就寫明的已知取捨。
+// ⚠️ history 曾經只帶**最近 30 晚**，重跑 pipeline 就整個往後滑。
+//    2026-09-07 窗格裡只剩 07-12 一晚 anxious，隔天補抓一晚就把它擠掉了：
+//    anxious 從 App 裡整個消失，payload 產得出來、使用者永遠選不到，
+//    而且沒有任何錯誤訊息。下面那條「至少還有一晚 anxious」就是抓到它的。
+//    → 已改成 `HISTORY_NIGHTS = 90`（一晚 247 bytes，64 晚才 23 KB），
+//      「全部」這個期間選項現在名副其實。
 //
 //   2. `QUALITY_TO_MOOD` 會有第二個定義處，違反「Python 判斷、Dart 只負責畫」。
 //      兩份定義漂移時不會有任何錯誤訊息。
@@ -226,10 +227,8 @@ void main() {
       expect(night.finalQuality, 'Good');
     });
 
-    // ⚠️ 原本釘的是 07-06 / 07-07（Good 但 anxious）。2026-09-08 補抓
-    //    6 晚之後窗格從「06-24 ~ 09-01」滑到「07-12 ~ 09-07」，那兩晚
-    //    掉出去了（仍在 CSV 裡，只是 App 讀不到）。改釘窗格內僅存的
-    //    那一晚 anxious。
+    // 釘住日期的測試在 `HISTORY_NIGHTS = 90` 之後才安全：窗格是 30 晚的
+    // 時候，補抓幾晚就會把舊夜晚推出去，這種測試會無預警地紅。
     test('07-12 是 anxious，而且品質不是最差的那一級', () {
       final night = nightOf('2026-07-12');
       expect(night, isNotNull, reason: '07-12 不在 history 裡——窗格又滑了');

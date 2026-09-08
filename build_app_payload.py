@@ -66,7 +66,25 @@ import tapo_index  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAPPING_VERSION = 1  # pet_mood 映射表的版本，改映射規則時要 +1
-HISTORY_NIGHTS = 30  # history 陣列帶幾晚
+# history 陣列帶幾晚。
+#
+# ⚠️ 原本是 30。App 的期間選擇器有「7 天／30 天／全部」，而 history 只有
+#    30 晚時，「全部」跟「30 天」看到的是同一批夜晚——那個選項在騙人。
+#
+# ⚠️ 更嚴重的是它**會安靜地讓某些寵物永遠顯示不到**。anxious 由 Tier3
+#    生理修正值決定，很稀有；2026-09-07 窗格裡只剩一晚（07-12），而它
+#    就是窗格的第一晚。隔天補抓一晚資料，anxious 就從 App 裡整個消失，
+#    沒有任何錯誤訊息——payload 產得出來、使用者永遠選不到那隻寵物。
+#    `test_history_mood.py` 與 `history_pet_test.dart` 各有一條在盯這件事，
+#    2026-09-08 兩邊同時紅了，那是它們預期中的行為不是誤報。
+#
+#    一晚約 247 bytes，全部 64 晚也只有 ~21 KB，沒有理由截斷。
+#
+# ⚠️ 放大**沒有**解決另一件事：這批夜晚橫跨三個戴錶者
+#    （`WEARER_SEGMENTS`：wearer_a / unverified / wearer_c），而 history
+#    裡沒有任何欄位講這件事。30 晚的時候就已經是這樣，放大只是更明顯。
+#    要在畫面上誠實呈現得把 segment 帶進 history——那是還沒做的事。
+HISTORY_NIGHTS = 90
 
 TZ_TAIPEI = timezone(timedelta(hours=8))  # 專案規範：時間一律 ISO8601 (+08:00)
 

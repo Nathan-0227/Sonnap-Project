@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sys
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -50,9 +51,30 @@ def _load_env_file(path: Path = ENV_FILE) -> None:
             os.environ[key] = value
 
 
+def _env_file_from_argv() -> Optional[Path]:
+    """
+    在 argparse 之前先掃一次 sys.argv 找 --env-file。
+
+    ⚠️ 這個參數**不能**走正常的 argparse 流程：`_load_env_file()` 必須在
+       parse_args() 之前跑（見下面那段註解），而那時 args 還不存在。
+       所以這裡自己掃，argparse 那邊再宣告一次讓 --help 看得到。
+
+    ⚠️ 為什麼不只用 SONNAP_GARMIN_ENV 環境變數就好：**設環境變數的語法
+       每個 shell 都不一樣**。bash 的 `VAR=x cmd` 在 PowerShell 直接報
+       「不是 cmdlet」，2026-09-08 實際踩到。參數在哪個 shell 都一樣。
+    """
+    argv = sys.argv[1:]
+    for i, a in enumerate(argv):
+        if a == "--env-file" and i + 1 < len(argv):
+            return Path(argv[i + 1])
+        if a.startswith("--env-file="):
+            return Path(a.split("=", 1)[1])
+    return None
+
+
 # 一定要在 parse_args() 之前執行——argparse 的 default 是用 os.getenv() 取值，
 # 那些 default 在函式定義時就會被求值，太晚載入 .env 就來不及了。
-_load_env_file()
+_load_env_file(_env_file_from_argv() or ENV_FILE)
 
 
 def build_standard_payload(device_id: str, records: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -116,6 +138,14 @@ def gmt_to_local_iso(gmt_value, tz_hours=8):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fetch Garmin Connect data and convert to Sonnap standard JSON."
+    )
+    # ⚠️ 這一條在這裡只是為了讓 --help 看得到、也不會被 argparse 當成
+    #    未知參數擋掉。**實際生效的是 `_env_file_from_argv()`**——.env
+    #    必須在 parse_args() 之前就載入（下面每個 default 都用 os.getenv()）。
+    parser.add_argument(
+        "--env-file",
+        default="",
+        help="含 GARMIN_EMAIL / GARMIN_PASSWORD 的 .env（worktree 裡要指到主 clone）",
     )
     parser.add_argument(
         "--email",
