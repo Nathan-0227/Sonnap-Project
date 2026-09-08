@@ -148,7 +148,12 @@ class _ReportScreenState extends State<ReportScreen>
     };
     final preBed = await widget.usageStats
         .preBed(lightsOut: lightsOut, labels: labels);
-    final marks = await widget.bedMarks.read();
+    // ⚠️ 先看 pending：那是「已經按完、但還沒上傳」的一對，屬於上一晚，
+    //    正好就是這裡要上傳的那一晚。沒有 pending 才用當前的。
+    //    2026-09-09 真的掉過一晚：早上沒開 App、晚上按了下一次開始，
+    //    舊版就在那一刻把完整的一對銷毀了。見 bed_marks.dart 的 markStart。
+    final pending = await widget.bedMarks.readPending();
+    final marks = pending.isComplete ? pending : await widget.bedMarks.read();
     if (!mounted) return;
     setState(() {
       _usage = result;
@@ -168,8 +173,15 @@ class _ReportScreenState extends State<ReportScreen>
     // 上傳成功才清掉標記，否則同一對會被算進第二晚。
     // ⚠️ 失敗**不要**清 —— 後端沒開是 demo 的常態，清掉等於把使用者
     //    今天早上按的那一下弄丟。
+    // ⚠️ 清掉的必須是**送出去的那一個槽**。用 clear() 清 pending 的情況，
+    //    會把使用者今晚剛按的「開始」一起刪掉——那正是這次要修的 bug 的
+    //    反向版本。
     if (upload.status == NightlyUploadStatus.ok && marks.isComplete) {
-      await widget.bedMarks.clear();
+      if (pending.isComplete) {
+        await widget.bedMarks.clearPending();
+      } else {
+        await widget.bedMarks.clear();
+      }
     }
   }
 
