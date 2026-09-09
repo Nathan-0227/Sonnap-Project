@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
+import '../services/backfill.dart' as backfill;
 import '../services/bed_marks.dart';
 import '../services/key_value_store.dart';
 import '../services/nightly_uploader.dart';
@@ -141,7 +142,10 @@ class _ReportScreenState extends State<ReportScreen>
 
   Future<void> _loadUsage() async {
     final result = await widget.usageStats.queryYesterday();
-    final lightsOut = await widget.usageStats.lightsOut();
+    // ⚠️ 補填模式只換 `now`，其餘完全走同一條路（見 services/backfill.dart）。
+    //    正常運作時 backfill.backfillNow 是 null，行為與先前逐字相同。
+    final lightsOut =
+        await widget.usageStats.lightsOut(now: backfill.backfillNow);
     // 事件流只有 package name，顯示名稱要跟日彙總借。
     final labels = {
       for (final a in result.apps) a.packageName: a.appName,
@@ -176,7 +180,11 @@ class _ReportScreenState extends State<ReportScreen>
     // ⚠️ 清掉的必須是**送出去的那一個槽**。用 clear() 清 pending 的情況，
     //    會把使用者今晚剛按的「開始」一起刪掉——那正是這次要修的 bug 的
     //    反向版本。
-    if (upload.status == NightlyUploadStatus.ok && marks.isComplete) {
+    // ⚠️ 判準是「**後端收下了**」不是「上傳成功」。兩者會不一樣：
+    //    `main.py` 的 `same_night` 在夜份不符時靜靜丟掉整組標記，
+    //    但仍然回 201。2026-09-10 因此掉了一次資料——App 看到 201 就清掉，
+    //    而後端一列都沒存。**成功了但什麼都沒做。**
+    if (upload.status == NightlyUploadStatus.ok && upload.marksStored) {
       if (pending.isComplete) {
         await widget.bedMarks.clearPending();
       } else {
@@ -191,6 +199,46 @@ class _ReportScreenState extends State<ReportScreen>
   // ============================================================
   // BUILD
   // ============================================================
+
+  /// 補填模式的橫幅（沒開就是空 list，畫面完全不變）。
+  List<Widget> _backfillBanner() {
+    String text;
+    Color color;
+    if (backfill.isMisconfigured) {
+      // 給了值但解析不出來——這要讓人看到，不能安靜地當成沒給。
+      text = '⚠️ SONNAP_BACKFILL_NOW is not a valid timestamp '
+          '("${backfill.kBackfillNowRaw}") — ignored, using the current time.';
+      color = const Color(0xFF8A2B2B);
+    } else if (backfill.isActive) {
+      final t = backfill.backfillNow!;
+      String two(int v) => v.toString().padLeft(2, '0');
+      text = '⚠️ BACKFILL BUILD — pretending it is '
+          '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}. '
+          'Do not use this build day to day.';
+      color = const Color(0xFF7A5A12);
+    } else {
+      return const [];
+    }
+    return [
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,6 +286,12 @@ class _ReportScreenState extends State<ReportScreen>
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
+                  // ⚠️ 補填模式一定要看得出來。最危險的不是補填失敗，是
+                  //    **有人拿補填版的 APK 當日常版在用**——那樣每天上傳的
+                  //    都是同一個過去的夜晚，而畫面看起來完全正常。
+                  //    `report_screen_test.dart` 有一條守著這個橫幅。
+                  ..._backfillBanner(),
+
                   _buildHeader(session),
 
                   const SizedBox(height: 14),

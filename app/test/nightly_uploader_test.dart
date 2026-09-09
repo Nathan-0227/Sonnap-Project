@@ -193,6 +193,30 @@ void main() {
           reason: '上床那一半仍然有效——丟掉它等於懲罰使用者忘記按');
     });
 
+    test('⚠️ 後端丟掉標記時，marksStored 要是 false', () async {
+      // 2026-09-10 掉了一次資料的根因：`main.py` 的 same_night 在夜份不符時
+      // **靜靜丟掉整組標記，但仍然回 201**。App 看到 201 就清掉本機標記，
+      // 而後端一列都沒存——「成功了但什麼都沒做」。
+      //
+      // 假後端回的固定 body 不含 bed_start_at（等同後端丟掉的情形）。
+      final uploader = NightlyUploader(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+      );
+      final result = await uploader.upload(
+        detected(DateTime(2026, 9, 1, 3, 51)),
+        marks: BedMarks(
+          startAt: DateTime(2026, 9, 1, 2, 0),
+          endAt: DateTime(2026, 9, 1, 8, 0),
+        ),
+      );
+
+      expect(result.status, NightlyUploadStatus.ok);
+      expect(result.marksStored, isFalse,
+          reason: '回應裡沒有 bed_start_at = 後端沒收下；'
+              '這時清掉本機標記就會把那一晚弄丟');
+    });
+
     test('反向對照：按得及時的「下床」照送', () async {
       // 沒有這一條，把 bed_end_at 無條件拿掉也會讓上一條通過。
       final uploader = NightlyUploader(
