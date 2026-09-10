@@ -8,6 +8,7 @@ import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/challenges_service.dart';
+import 'services/game_service.dart';
 import 'services/home_service.dart';
 import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
@@ -142,6 +143,17 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  /// 遊戲化層。與 [_challenges] 一樣依 [_account] 重建——帳號是 App
+  /// 開起來之後才建立的，固定住的話剛註冊完那一次會用到空身分。
+  GameService? get _game {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return GameService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -265,6 +277,7 @@ class _MainPageState extends State<MainPage> {
       HomeScreen(
         displayName: account.displayName ?? kFallbackDisplayName,
         repository: _repository,
+        game: _game,
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
