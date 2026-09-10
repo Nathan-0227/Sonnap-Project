@@ -55,6 +55,9 @@ from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 # 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
 from game import inventory, state as game_state
 
+# 好友。⚠️ 只分享行為指標，別人的 user_id 永遠不出後端，見 social/__init__.py。
+from social import friends as social_friends
+
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
 #    pet_mood 的 Tier B 規則（QUALITY_TO_MOOD + anxious 生理覆寫）
 #    必須只有一個定義處，否則 App 的 asset 畫面與 API 回傳的心情
@@ -968,3 +971,94 @@ async def equip_item(req: EquipRequest):
         db.add_inventory_item(req.user_id, req.item_id)
     db.set_equipped_item(req.user_id, req.item_id)
     return {"user_id": req.user_id, "equipped_item_id": req.item_id}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 好友（B5）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 兩條紅線，tests/test_friends.py 都守著：
+#    1. 只分享 Tier A 行為指標（白名單在 social/friends.py 的 FRIEND_FIELDS）。
+#       不得回傳深睡／REM／心率／分數——跨裝置不能比，而且是健康資訊。
+#    2. 別人的 user_id 永遠不出後端。user_id 就是憑證；好友之間用邀請碼當名牌。
+
+FRIEND_HISTORY_DAYS = 3650
+
+
+class AddFriendRequest(BaseModel):
+    user_id: str
+    invite_code: str
+
+
+def _friend_summary(friend_id):
+    user = db.get_user(friend_id)
+    handle = db.ensure_invite_code(friend_id)
+    rows = db.get_nightly_behavior(friend_id, days=FRIEND_HISTORY_DAYS)
+    return social_friends.build_friend_summary(user, handle, rows)
+
+
+def _friend_by_handle(user_id, handle):
+    """邀請碼 → 朋友的 user_id。不是朋友一律 404（不透露那個碼存不存在）。"""
+    friend_id = db.user_for_invite_code(handle)
+    if friend_id is None or not db.are_friends(user_id, friend_id):
+        raise HTTPException(status_code=404, detail="Not in your friends.")
+    return friend_id
+
+
+@app.get("/friends")
+async def get_friends(user_id: str = Query(...)):
+    """
+    我的邀請碼、我的朋友們（行為摘要）、依連續達成的排行。
+
+    ⚠️ 第一次呼叫時會替這個人建立邀請碼（之後永遠同一個）。
+    """
+    require_user(user_id)
+    summaries = [_friend_summary(fid) for fid in db.list_friend_ids(user_id)]
+    return {
+        "my_invite_code": db.ensure_invite_code(user_id),
+        "friends": summaries,
+        "leaderboard": social_friends.leaderboard(summaries),
+        "notes": {
+            "what_is_shared": (
+                "Friends only see behaviour: when the phone was put down, streaks and late nights. "
+                "Sleep scores, sleep stages and heart rate are never shared."
+            ),
+            "streak_breaks_on_missing_nights": (
+                "A night without a record breaks the streak, so streaks cannot be built by only "
+                "recording the good nights."
+            ),
+        },
+    }
+
+
+@app.post("/friends", status_code=201)
+async def add_friend(req: AddFriendRequest):
+    """
+    用邀請碼加好友（雙向）。
+
+    404 = 沒有這個碼；422 = 那是你自己的碼；409 = 已經是朋友了。
+    """
+    require_user(req.user_id)
+    friend_id = db.user_for_invite_code(req.invite_code)
+    if friend_id is None:
+        raise HTTPException(status_code=404, detail="No one has that invite code.")
+    if friend_id == req.user_id:
+        raise HTTPException(status_code=422, detail="That is your own invite code.")
+    if not db.add_friendship(req.user_id, friend_id):
+        raise HTTPException(status_code=409, detail="You are already friends.")
+    return {"friend": _friend_summary(friend_id)}
+
+
+@app.get("/friends/{handle}")
+async def get_friend(handle: str, user_id: str = Query(...)):
+    require_user(user_id)
+    return {"friend": _friend_summary(_friend_by_handle(user_id, handle))}
+
+
+@app.delete("/friends/{handle}")
+async def remove_friend(handle: str, user_id: str = Query(...)):
+    """解除好友，兩邊一起消失。"""
+    require_user(user_id)
+    friend_id = _friend_by_handle(user_id, handle)
+    db.remove_friendship(user_id, friend_id)
+    return {"removed": handle.strip().upper()}

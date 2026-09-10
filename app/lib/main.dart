@@ -8,6 +8,7 @@ import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/challenges_service.dart';
+import 'services/friends_service.dart';
 import 'services/game_service.dart';
 import 'services/home_service.dart';
 import 'services/key_value_store.dart';
@@ -138,6 +139,16 @@ class _MainPageState extends State<MainPage> {
     final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
     if (baseUrl.isEmpty) return null;
     return HomeService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
+  /// 好友。與 [_challenges] 一樣依 [_account] 重建。
+  FriendsService? get _friends {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return FriendsService(
       baseUrl: baseUrl,
       identity: ResolvedUserIdentity(_account?.userId),
     );
@@ -283,7 +294,7 @@ class _MainPageState extends State<MainPage> {
         onBedtimeChanged: _setBedtime,
         onReminderChanged: _setReminder,
       ),
-      const FriendsScreen(),
+      FriendsScreen(service: _friends),
       ReportScreen(
         repository: _repository,
         uploader: _uploader,
