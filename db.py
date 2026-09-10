@@ -77,6 +77,13 @@ ROOT = Path(__file__).parent
 #       測試不該被開發機上剛好設了什麼環境變數影響。
 DB_PATH = Path(os.environ.get("SONNAP_DB") or (ROOT / "data" / "sonnap.db"))
 
+# ⚠️ 設了 SONNAP_DB_URL 就改用 MySQL/MariaDB，SONNAP_DB 會被忽略。
+#      SONNAP_DB_URL=mysql://root@localhost/sonnap
+#    兩個後端的結構由 db_backend 從**同一份 SCHEMA** 產生，不是兩份 DDL。
+#    測試一律走 SQLite（見 db_backend 的檔頭）。
+sys.path.insert(0, str(ROOT))
+import db_backend  # noqa: E402
+
 TZ_TAIPEI = timezone(timedelta(hours=8))  # 專案規範：時間一律 ISO8601 (+08:00)
 
 
@@ -425,6 +432,13 @@ def existing_columns(conn, table):
     後者要自己解析 SQL，而欄位名稱可能被引號、換行、註解包住，
     正則式遲早會出錯。PRAGMA 直接給結構化結果。
     """
+    if isinstance(conn, db_backend.MySQLConn):
+        # MySQL 沒有 PRAGMA。information_schema 一樣給結構化結果，
+        # 所以「不要解析建表 SQL 字串」那個理由在這邊同樣成立。
+        rows = conn.execute(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", (table,))
+        return {r[0] for r in rows}
     try:
         return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
     except sqlite3.OperationalError:
@@ -471,6 +485,16 @@ def connect(db_path=None):
       可以同時進行。預設模式下寫入會鎖住整個資料庫，
       而本專案的使用情境正好是這兩件事並行。
     """
+    # ⚠️ 明確給了 db_path 就一定是 SQLite（測試就是這樣用的）。
+    #    不這樣的話，開發機上剛好設了 SONNAP_DB_URL，測試就會跑去寫真的
+    #    MySQL——那正是「測試不該被開發機的環境變數影響」要防的事。
+    if db_path is None:
+        cfg = db_backend.mysql_config()
+        if cfg:
+            # MySQL 的外鍵預設就開著，也沒有 WAL 的問題（InnoDB 本來就是
+            # 多版本並行），所以下面那兩個 PRAGMA 在這邊不需要對應物。
+            return db_backend.MySQLConn(cfg)
+
     path = Path(db_path) if db_path else DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -497,7 +521,17 @@ def init_db(db_path=None, verbose=False):
     """
     conn = connect(db_path)
     try:
-        conn.executescript(SCHEMA)
+        if isinstance(conn, db_backend.MySQLConn):
+            # ⚠️ MySQL 的 DDL **從同一份 SCHEMA 產生**，不是另外抄一份。
+            #    理由見 db_backend 的檔頭：SCHEMA 裡大半是註解，抄兩份
+            #    就有兩個定義處，而漂移沒有錯誤訊息。
+            for stmt in db_backend.mysql_ddl(SCHEMA):
+                if stmt.lstrip().upper().startswith("CREATE INDEX"):
+                    conn.ensure_index(stmt)   # MySQL 沒有 IF NOT EXISTS
+                else:
+                    conn.execute(stmt)
+        else:
+            conn.executescript(SCHEMA)
         added = apply_column_migrations(conn, verbose=verbose)
         conn.commit()
         return added
@@ -705,7 +739,10 @@ def get_nightly_behavior(user_id, days=30, db_path=None):
                 WHERE user_id = ?
                 ORDER BY date DESC
                 LIMIT ?
-            ) ORDER BY date ASC
+            ) AS recent ORDER BY date ASC   -- ⚠️ AS recent 是給 MySQL 的：
+               -- 衍生表一定要有別名，SQLite 不要求但也接受。
+               -- 寫在這裡而不是進翻譯層——一份 SQL 兩邊都跑得動，
+               -- 比多一條轉譯規則安全。
             """,
             (user_id, days),
         ).fetchall()
@@ -795,7 +832,10 @@ def get_wearable_nightly(user_id, days=30, db_path=None):
                 WHERE user_id = ?
                 ORDER BY date DESC
                 LIMIT ?
-            ) ORDER BY date ASC
+            ) AS recent ORDER BY date ASC   -- ⚠️ AS recent 是給 MySQL 的：
+               -- 衍生表一定要有別名，SQLite 不要求但也接受。
+               -- 寫在這裡而不是進翻譯層——一份 SQL 兩邊都跑得動，
+               -- 比多一條轉譯規則安全。
             """,
             (user_id, days),
         ).fetchall()

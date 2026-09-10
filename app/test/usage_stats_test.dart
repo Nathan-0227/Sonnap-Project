@@ -39,10 +39,18 @@ class _ImmediateRepository implements SleepRepository {
 class _StubUploader implements NightlyUploader {
   final NightlyUploadResult result;
 
+  /// 假後端收不收下標記。
+  ///
+  /// ⚠️ 這個開關存在的理由：真的後端有一條 `same_night` 判斷，夜份不符時
+  /// **靜靜丟掉整組標記但仍然回 201**。2026-09-10 因此掉了一次資料——
+  /// App 看到 201 就清掉本機標記，而後端一列都沒存。
+  /// 所以 stub 必須能重現「上傳成功但沒收下」這個狀態。
+  final bool acceptsMarks;
+
   /// 上傳時實際收到的標記。用來驗「按了按鈕就要送上去」。
   BedMarks? received;
 
-  _StubUploader(this.result);
+  _StubUploader(this.result, {this.acceptsMarks = true});
 
   @override
   Future<NightlyUploadResult> upload(
@@ -50,7 +58,16 @@ class _StubUploader implements NightlyUploader {
     BedMarks marks = BedMarks.none,
   }) async {
     received = marks;
-    return result;
+    if (!acceptsMarks || !marks.isComplete) return result;
+    // 真後端回應裡會帶回**它存下來的**那兩個時刻。
+    return NightlyUploadResult(
+      result.status,
+      date: result.date,
+      adherenceMinutes: result.adherenceMinutes,
+      isLate: result.isLate,
+      storedBedStartAt: marks.startIso,
+      storedBedEndAt: marks.endIso,
+    );
   }
 
   @override
@@ -597,6 +614,42 @@ void main() {
       await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
 
       expect(await kv.getString(kBedStartKey), isNotNull);
+      expect(await kv.getString(kBedEndKey), isNotNull);
+    });
+
+    testWidgets('⚠️ 上傳成功但後端沒收下標記時，也不准清掉', (tester) async {
+      // ═══════════════════════════════════════════════════════════════
+      // 這是 2026-09-10 真的掉了一次資料的那個情境。
+      // ═══════════════════════════════════════════════════════════════
+      // `main.py` 的 `same_night` 在 bed_start 屬於的夜晚與 lights_out
+      // 判定的夜晚不一致時，**靜靜丟掉整組標記，但仍然回 201**。
+      // 那條判斷本身是對的（曾把 09-07 03:36 的標記寫進 09-06 那一列，
+      // 算出 −1282 分鐘），但它讓「上傳成功」與「標記存下來了」變成兩件事。
+      //
+      // 舊版判準是 `status == ok && marks.isComplete`——完全看不到後端
+      // 到底收了沒。結果手機上的 09-09 標記被清掉，而後端一列都沒存。
+      // **成功了但什麼都沒做**，這個專案最常見的那類 bug。
+      //
+      // → 判準必須是 `upload.marksStored`（後端回應有沒有帶回那兩個時刻）。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(
+        const NightlyUploadResult(
+          NightlyUploadStatus.ok,
+          date: '2026-09-01',
+          adherenceMinutes: 12,
+          isLate: true,
+        ),
+        acceptsMarks: false, // ← 後端丟掉了，但照樣回 201
+      );
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '有送出去');
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '後端沒收下就清掉，那一晚就永遠回不來了');
       expect(await kv.getString(kBedEndKey), isNotNull);
     });
   });
