@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
+import '../content/sleep_basics.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
@@ -411,6 +412,10 @@ class _ReportScreenState extends State<ReportScreen>
                     const SizedBox(height: 14),
 
                   _buildChallengesCard(),
+
+                  const SizedBox(height: 14),
+
+                  _buildSleepBasicsCard(),
                 ],
               ),
             );
@@ -2061,6 +2066,60 @@ class _ReportScreenState extends State<ReportScreen>
                 height: 1.4,
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // SLEEP BASICS
+  // ============================================================
+
+  /// 睡眠小知識。內容在 `content/sleep_basics.dart`。
+  ///
+  /// ⚠️ 每一條都要把出處一起顯示出來。沒有出處的「小知識」就只是一句話——
+  /// 而這個專案的立場是每個數字都要講得出從哪來。
+  Widget _buildSleepBasicsCard() {
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.menu_book_rounded, color: purpleColor, size: 19),
+              SizedBox(width: 7),
+              Text(
+                'Sleep basics',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final b in kSleepBasics) ...[
+            Text(
+              b.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              b.summary,
+              style: const TextStyle(color: Color(0xFF9FB3D1), fontSize: 11, height: 1.4),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              b.source,
+              style: const TextStyle(color: Color(0xFF5B6E8C), fontSize: 9),
+            ),
+            if (b != kSleepBasics.last) const SizedBox(height: 12),
           ],
         ],
       ),
