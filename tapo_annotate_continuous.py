@@ -503,30 +503,34 @@ def cmd_list_fp(csv_path: Path, threshold: float):
     print(f"\n影片檔：{video_path_for(csv_path).name}")
     print("⚠️ 影片的第 N 幀 == CSV 裡 vf==N 的那一列，逐幀對齊。")
     print("   「影片位置」是拖進度條要到的地方（vf ÷ fps）；「牆鐘」是那一刻的真實時間。")
+    print(f"   ⚠️ 配對的容許誤差是 ±{TOLERANCE_SECONDS:.0f} 秒，所以**前後各多看幾秒**再判斷，")
+    print("      不要只看區間內那一瞬間。")
 
     print(f"\n【A】偵測到但沒有標記 —— {len(fp)} 段（這就是那 1.4 倍的來源）")
     rule()
     if fp:
-        print(f"{'#':>3}{'起始 vf':>9}{'結束 vf':>9}{'影片位置':>11}{'牆鐘':>10}{'長度':>7}{'峰值':>8}   判斷（你來填）")
+        print(f"{'#':>3}  {'影片位置（拖到這裡）':<22}{'牆鐘':>10}{'長度':>7}{'峰值':>8}  {'vf 範圍':>14}   判斷（你來填）")
         rule()
         for n, (i, (s0, e0)) in enumerate(fp, 1):
             t = vf_map.get(s0, (None, None))[0]
             hhmmss = t[11:19] if isinstance(t, str) and len(t) > 18 else "?"
             peak = max((vf_map[v][1] or 0) for v in range(s0, e0 + 1) if v in vf_map)
-            print(f"{n:>3}{s0:>9}{e0:>9}{vf_to_clock(s0, fps):>11}{hhmmss:>10}"
-                  f"{(e0 - s0) / fps:>6.1f}s{peak * 100:>7.2f}%   [ ] 真的沒動  [ ] 有動但沒標")
+            span = f"{vf_to_clock(s0, fps)} → {vf_to_clock(e0, fps)}"
+            print(f"{n:>3}  {span:<22}{hhmmss:>10}"
+                  f"{(e0 - s0) / fps:>6.1f}s{peak * 100:>7.2f}%  {f'{s0}–{e0}':>14}"
+                  f"   [ ] 真的沒動  [ ] 有動但沒標")
     else:
         print("  （沒有）")
 
     print(f"\n【B】有標記但沒偵測到 —— {len(fn)} 段（漏掉的真動作）")
     rule()
     if fn:
-        print(f"{'#':>3}{'vf':>10}{'影片位置':>11}{'牆鐘':>10}")
+        print(f"{'#':>3}  {'影片位置':<12}{'牆鐘':>10}{'vf':>10}")
         rule()
         for n, (i, m) in enumerate(fn, 1):
             t = vf_map.get(m, (None, None))[0]
             hhmmss = t[11:19] if isinstance(t, str) and len(t) > 18 else "?"
-            print(f"{n:>3}{m:>10}{vf_to_clock(m, fps):>11}{hhmmss:>10}")
+            print(f"{n:>3}  {vf_to_clock(m, fps):<12}{hhmmss:>10}{m:>10}")
     else:
         print("  （沒有）")
 
