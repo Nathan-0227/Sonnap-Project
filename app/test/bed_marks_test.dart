@@ -150,5 +150,72 @@ void main() {
       );
     });
   });
+
+  group('⚠️ 完整的一對不可以被下一晚銷毀', () {
+    // 2026-09-09 真的掉了一晚的資料：
+    //   09-08 01:53 按開始 / 12:11 按下床（完整的一對）
+    //   整天沒開 Insights → 沒上傳
+    //   09-09 00:49 按下一晚的開始 → 舊版在這裡把 end 刪掉
+    //   上傳時只剩 start=09-09，後端 same_night 判定不同夜，整組丟掉
+    //
+    // 兩個守門都正常運作，資料是在更早一步掉的。
+
+    final n1s = DateTime(2026, 9, 8, 1, 53);
+    final n1e = DateTime(2026, 9, 8, 12, 11);
+    final n2s = DateTime(2026, 9, 9, 0, 49);
+
+    test('按下一晚的開始時，上一晚完整的一對移到 pending', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+
+      final pending = await marks.readPending(now: n2s);
+      expect(pending.isComplete, isTrue, reason: '這一對還沒上傳，不能銷毀');
+      expect(pending.startAt, n1s);
+      expect(pending.endAt, n1e);
+    });
+
+    test('而且當前那一槽是新的一晚，沒有殘留的 end', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+
+      final current = await marks.read(now: n2s);
+      expect(current.startAt, n2s);
+      expect(current.endAt, isNull,
+          reason: '留著昨天的 end 會配成錯的一對——那是本來就對的顧慮');
+    });
+
+    test('⚠️ 反向對照：只按了開始（沒按下床）就不該進 pending', () async {
+      // 沒有這一條，把「無條件搬進 pending」也會讓上面兩條通過，
+      // 而那會讓一個沒有結束的殘骸永遠卡在 pending 槽裡。
+      await marks.markStart(n1s);
+      await marks.markStart(n2s);
+      expect((await marks.readPending(now: n2s)).isComplete, isFalse);
+    });
+
+    test('clearPending() 不可以動到當前那一槽', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+      await marks.clearPending();
+
+      expect((await marks.readPending(now: n2s)).isComplete, isFalse);
+      expect((await marks.read(now: n2s)).startAt, n2s,
+          reason: '清錯槽會把使用者今晚剛按的開始刪掉');
+    });
+
+    test('過期的 pending 一樣當作沒有', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+      final late = n1s.add(kBedMarkMaxAge + const Duration(minutes: 1));
+      expect((await marks.readPending(now: late)).isComplete, isFalse);
+    });
+
+    test('沒有 pending 時回 none，不是丟例外', () async {
+      expect((await marks.readPending(now: n2s)).isComplete, isFalse);
+    });
+  });
 }
 

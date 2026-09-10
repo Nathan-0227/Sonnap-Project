@@ -984,6 +984,125 @@
       "prompt_version": "v4",
       "fingerprint": "635024740d66e086",
       "generated_at": "2026-09-02T02:00:49+08:00"
+    },
+    "2026-09-02": {
+      "date": "2026-09-02",
+      "lang": "en",
+      "trend_note": "Over the last 7 nights your median sleep-period heart rate, resting heart rate, and stress score have all risen compared to the prior 28 nights, while your sleep score has dropped.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 5.4 hours last night, below the 7.0–9.0 h target. Try heading to bed half an hour earlier tonight to start closing that gap.",
+      "dream_summary": "I dreamt of a library that would not stay still, its shelves sliding past me one after another, colors and smells shifting with each row. I tried to catch a scent of something familiar but it kept changing before I could hold it. It felt like chasing my own tail through rooms that kept turning into new rooms, until the light outside made everything soften and fade.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "0ebadf8ba76b15fc",
+      "generated_at": "2026-09-10T02:03:44+08:00"
+    },
+    "2026-09-03": {
+      "date": "2026-09-03",
+      "lang": "en",
+      "trend_note": "Your stress score and heart rate have been running higher over the last 7 nights compared to the month before, while your sleep score has dipped slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 6.5 hours, a bit under the recommended range, but efficiency was great at 99.8%. Keep tonight's routine steady and try to add a little extra time in bed if you can.",
+      "dream_summary": "I dreamt of a tree that kept growing new branches while I watched, each one unfurling out of nowhere, and every time a branch appeared another bird landed on it, wings brushing close to my nose. The bark smelled cool and green. I kept turning my head to follow the next branch before the last one had even settled, until the morning light nudged me awake.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "84ad2feeeae3851a",
+      "generated_at": "2026-09-10T02:03:50+08:00"
+    },
+    "2026-09-04": {
+      "date": "2026-09-04",
+      "lang": "en",
+      "trend_note": "Your sleep-period average heart rate and stress score have both trended upward over the last week compared to the prior month, while your sleep score has drifted a bit lower.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept only 5.4 hours last night, below the 7-9 hour goal. Try heading to bed earlier tonight so you can work toward that range.",
+      "dream_summary": "I dreamt of a door that kept opening onto somewhere new, one time a cool stone room, another time a patch of warm grass. My paws never quite touched the same ground twice, and I kept pushing my nose through just to see, sniffing the different air each time before the door swung again.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "f197681a7453100d",
+      "generated_at": "2026-09-10T02:03:58+08:00"
+    },
+    "2026-09-05": {
+      "date": "2026-09-05",
+      "lang": "en",
+      "trend_note": "Over the last week your stress score and sleep-period heart rate have both been running higher than the month before, while your sleep score has dipped slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 6.1 hours, a bit short of the 7-9 hour range, though your efficiency was great at 99.5%. Since the night overall rated good, just try to get to bed a little earlier tonight.",
+      "dream_summary": "I dreamt I was trotting through a market where the colours would not stay put. One stall's red bled into the next stall's blue before I could sniff it properly, and the ground under my paws kept warming and cooling with each stall I passed. I wanted to stop and look longer but my paws kept moving, chasing a smell that changed each time I got close.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "a189f93d6d20920b",
+      "generated_at": "2026-09-10T02:04:13+08:00"
+    },
+    "2026-09-06": {
+      "date": "2026-09-06",
+      "lang": "en",
+      "trend_note": "Over the last seven nights your stress score and heart rate have both been running higher than in the month before, while your sleep score has dipped slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "Sleep quality was good overall, though duration was 5.6 hours, below the 7-9 hour range. Keep your current routine, and try to add a bit more time in bed tonight if you can.",
+      "dream_summary": "I dreamt of a library, no - I dreamt of a door with a different room behind it every time it swung open. A garden, a kitchen, a quiet hallway, each one gone before I could sniff it properly. I kept trotting through, ears up, tail low, chasing whatever came next, and the changing never let me settle.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "2692ebcffefb4e0b",
+      "generated_at": "2026-09-10T02:04:19+08:00"
+    },
+    "2026-09-07": {
+      "date": "2026-09-07",
+      "lang": "en",
+      "trend_note": "Over the last week your stress score has been higher and your sleep score a bit lower than in the month before.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 4.0 hours last night, below the recommended 7-9 hours. Try heading to bed half an hour earlier tonight to start closing that gap.",
+      "dream_summary": "I had just curled up on a patch of cool grass, paws tucked under me, when I heard someone calling my name from far off. I lifted my head, ears pricked, the ground still damp beneath my belly, but before I could get up and go find them, the morning light was already there, and the calling faded like it had never happened.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "936c79761ee98ec2",
+      "generated_at": "2026-09-10T02:04:26+08:00"
+    },
+    "2026-09-08": {
+      "date": "2026-09-08",
+      "lang": "en",
+      "trend_note": "Your stress score has risen over the past week compared to the prior month, and your sleep-period average heart rate is a bit higher too, even though resting heart rate has dipped slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "Your sleep was good overall, but you only got 5.9 hours and deep sleep was a bit below range at 12.1%. Keep your current routine tonight, as recommended, and try to protect a slightly longer sleep window if you can.",
+      "dream_summary": "I found a picture book on the floor of my dream, and every time a page turned the whole scene changed under my paws. Warm sand became damp grass, then cool tile, each new page trading one smell for another. I kept nosing the corner to turn it again, chasing the next scent before I had even finished the last one.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "58432b0ddadfbfba",
+      "generated_at": "2026-09-10T02:04:33+08:00"
     }
   }
 }

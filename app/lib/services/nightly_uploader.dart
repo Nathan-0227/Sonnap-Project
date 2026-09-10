@@ -49,6 +49,26 @@ class NightlyUploadResult {
   /// `adherence.LATE_THRESHOLD_MINUTES`。
   final bool? isLate;
 
+  /// 後端**實際存下來**的上床標記。null = 沒存。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 這不是「我們送了什麼」，是「後端收了什麼」。兩者會不一樣。
+  /// ═══════════════════════════════════════════════════════════════
+  /// `main.py` 有一條 `same_night` 判斷：`bed_start_at` 屬於的夜晚與
+  /// `lights_out_at` 判定的夜晚不一致時，**整組標記靜靜丟掉，但仍然回 201**。
+  /// 那條判斷本身是對的（2026-09-07 曾把 09-07 03:36 的標記寫進 09-06 那一列，
+  /// 算出 −1282 分鐘），但它讓「上傳成功」與「標記存下來了」變成兩件事。
+  ///
+  /// 2026-09-10 因此掉了一次資料：App 看到 201 就把本機標記清掉，
+  /// 而後端一列都沒存。**成功了但什麼都沒做**——這個專案最常見的那類 bug。
+  ///
+  /// → 呼叫端要清本機標記時，判準是這個欄位不是 [status]。
+  final String? storedBedStartAt;
+  final String? storedBedEndAt;
+
+  /// 後端有沒有收下這組標記。
+  bool get marksStored => storedBedStartAt != null;
+
   final String? error;
 
   const NightlyUploadResult(
@@ -56,6 +76,8 @@ class NightlyUploadResult {
     this.date,
     this.adherenceMinutes,
     this.isLate,
+    this.storedBedStartAt,
+    this.storedBedEndAt,
     this.error,
   });
 }
@@ -321,6 +343,9 @@ class NightlyUploader {
         date: decoded['date'] as String?,
         adherenceMinutes: (decoded['adherence_minutes'] as num?)?.round(),
         isLate: decoded['is_late'] as bool?,
+        // ⚠️ 回應裡的是**後端存下來的**，不是我們送出去的。見欄位說明。
+        storedBedStartAt: decoded['bed_start_at'] as String?,
+        storedBedEndAt: decoded['bed_end_at'] as String?,
       );
       // ⚠️ 不印 user_id（它是憑證），只印結果。
       // ⚠️ 只印**有沒有**標記，不印時刻本身也不印 user_id。

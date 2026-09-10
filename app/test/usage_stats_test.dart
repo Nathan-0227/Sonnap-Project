@@ -40,6 +40,14 @@ class _ImmediateRepository implements SleepRepository {
 class _StubUploader implements NightlyUploader {
   final NightlyUploadResult result;
 
+  /// 假後端收不收下標記。
+  ///
+  /// ⚠️ 這個開關存在的理由：真的後端有一條 `same_night` 判斷，夜份不符時
+  /// **靜靜丟掉整組標記但仍然回 201**。2026-09-10 因此掉了一次資料——
+  /// App 看到 201 就清掉本機標記，而後端一列都沒存。
+  /// 所以 stub 必須能重現「上傳成功但沒收下」這個狀態。
+  final bool acceptsMarks;
+
   /// 上傳時實際收到的標記。用來驗「按了按鈕就要送上去」。
   ///
   /// ⚠️ 畫面走的是 [sync] 不是 [upload]，所以兩條都要記——只記 upload
@@ -49,7 +57,7 @@ class _StubUploader implements NightlyUploader {
   /// 這一晚有沒有被存進離線佇列（上傳失敗但留得住）。
   final bool queued;
 
-  _StubUploader(this.result, {this.queued = false});
+  _StubUploader(this.result, {this.acceptsMarks = true, this.queued = false});
 
   @override
   Future<NightlyUploadResult> upload(
@@ -57,7 +65,16 @@ class _StubUploader implements NightlyUploader {
     BedMarks marks = BedMarks.none,
   }) async {
     received = marks;
-    return result;
+    if (!acceptsMarks || !marks.isComplete) return result;
+    // 真後端回應裡會帶回**它存下來的**那兩個時刻。
+    return NightlyUploadResult(
+      result.status,
+      date: result.date,
+      adherenceMinutes: result.adherenceMinutes,
+      isLate: result.isLate,
+      storedBedStartAt: marks.startIso,
+      storedBedEndAt: marks.endIso,
+    );
   }
 
   /// 畫面走的是這一條（[NightlyUploader.sync]）。補送的舊夜晚固定為空——
@@ -67,8 +84,11 @@ class _StubUploader implements NightlyUploader {
     LightsOutResult lightsOut, {
     BedMarks marks = BedMarks.none,
   }) async {
-    received = marks;
-    return NightlyUploadBatch(current: result, currentQueued: queued);
+    // ⚠️ 走 upload() 那一段，不要直接回 result。畫面走的是 sync()，
+    //    直接回 result 的話 acceptsMarks 就沒有作用——「回 201 但後端沒收下」
+    //    與「收下了」會長得一模一樣，守那件事的測試就守不住任何東西。
+    final current = await upload(lightsOut, marks: marks);
+    return NightlyUploadBatch(current: current, currentQueued: queued);
   }
 
   @override
@@ -608,8 +628,8 @@ void main() {
 
     testWidgets('上傳失敗、又沒進佇列 → **不要**清掉標記', (tester) async {
       // 後端沒開是 demo 的常態。清掉等於把使用者早上按的那一下弄丟。
-      // ⚠️ 判準是「這一晚有沒有安全落地」，不是「上傳成功了沒」——
-      //    下一條測的就是落地的另一種方式。
+      // ⚠️ 判準是「後端真的收下了」。下面兩條測的是另外兩種
+      //    「看起來成功、其實還沒落地」的情況。
       final kv = InMemoryKeyValueStore();
       final store = BedMarkStore(kv);
       await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
@@ -623,11 +643,73 @@ void main() {
       expect(await kv.getString(kBedEndKey), isNotNull);
     });
 
-    testWidgets('上傳失敗但已進佇列 → 要清掉，否則明天會再算一次', (tester) async {
-      // ⚠️ 這是離線佇列帶來的差別。標記已經跟著那一晚一起存進佇列，
-      //    留在 BedMarkStore 裡反而有害：kBedMarkMaxAge 是 36 小時，
-      //    明天那一晚會**再讀到同一對標記**，於是一對標記配到兩個不同
-      //    的夜晚，而且不會有任何錯誤訊息。
+    testWidgets('⚠️ 上傳成功但後端沒收下標記時，也不准清掉', (tester) async {
+      // ═══════════════════════════════════════════════════════════════
+      // 這是 2026-09-10 真的掉了一次資料的那個情境。
+      // ═══════════════════════════════════════════════════════════════
+      // `main.py` 的 `same_night` 在 bed_start 屬於的夜晚與 lights_out
+      // 判定的夜晚不一致時，**靜靜丟掉整組標記，但仍然回 201**。
+      // 那條判斷本身是對的（曾把 09-07 03:36 的標記寫進 09-06 那一列，
+      // 算出 −1282 分鐘），但它讓「上傳成功」與「標記存下來了」變成兩件事。
+      //
+      // → 判準必須是 `marksStored`（後端回應有沒有帶回那兩個時刻）。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(
+        const NightlyUploadResult(
+          NightlyUploadStatus.ok,
+          date: '2026-09-01',
+          adherenceMinutes: 12,
+          isLate: true,
+        ),
+        acceptsMarks: false, // ← 後端丟掉了，但照樣回 201
+      );
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '有送出去');
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '後端沒收下就清掉，那一晚就永遠回不來了');
+      expect(await kv.getString(kBedEndKey), isNotNull);
+    });
+
+    testWidgets('⚠️ 送出去的是上一晚的待送那一對 → 只清待送格，今晚剛按的開始要留著', (tester) async {
+      // 情境（2026-09-09 真的發生過）：早上沒開 App、晚上又按了下一晚的
+      // 「開始」。上一晚那一對被搬進待送格，這一次上傳送的是它。
+      // 上傳成功之後**只能清待送格**——用 clear() 的話會把使用者
+      // 今晚剛按的「開始」一起刪掉，而畫面上不會有任何跡象。
+      //
+      // ⚠️ 這一條是變異測試補出來的：主線只在儲存層（bed_marks_test）
+      //    測了 clearPending 本身，畫面層「送哪一格就清哪一格」沒有人守。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      final now = DateTime.now();
+      await store.markStart(now.subtract(const Duration(hours: 20)));
+      await store.markEnd(now.subtract(const Duration(hours: 12)));
+      await store.markStart(now.subtract(const Duration(minutes: 5))); // 今晚
+
+      final stub = _StubUploader(const NightlyUploadResult(
+        NightlyUploadStatus.ok,
+        date: '2026-09-01',
+        adherenceMinutes: 12,
+        isLate: true,
+      ));
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '送的是待送格那一對');
+      expect(await kv.getString(kBedPendingStartKey), isNull,
+          reason: '後端收下了，待送格要清');
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '今晚剛按的開始不能被一起刪掉');
+    });
+
+    testWidgets('上傳失敗、這一晚進了離線佇列 → 本機標記也要**保留**', (tester) async {
+      // ⚠️ 上一版的判準是「進佇列就算安全落地、可以清」。主線補上
+      //    same_night 之後那個理由不成立了，而且會在補送被後端退回時
+      //    把那一對弄丟（佇列裡的被退回、本機的已經清掉）。
+      //    只有後端真的收下才清——這一條把它釘住。
       final kv = InMemoryKeyValueStore();
       final store = BedMarkStore(kv);
       await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
@@ -640,8 +722,9 @@ void main() {
       await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
 
       expect(stub.received?.isComplete, isTrue, reason: '標記要跟著進佇列');
-      expect(await kv.getString(kBedStartKey), isNull);
-      expect(await kv.getString(kBedEndKey), isNull);
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '還沒有任何一邊確認收下，不能清');
+      expect(await kv.getString(kBedEndKey), isNotNull);
     });
   });
 }

@@ -6,6 +6,10 @@ import 'key_value_store.dart';
 const String kBedStartKey = 'bed_start_at';
 const String kBedEndKey = 'bed_end_at';
 
+/// 已經按完、但還沒上傳的那一對（見 [BedMarkStore.markStart]）。
+const String kBedPendingStartKey = 'bed_pending_start_at';
+const String kBedPendingEndKey = 'bed_pending_end_at';
+
 /// 超過這麼久的標記就當作沒有。
 ///
 /// ⚠️ **這是防止「上禮拜按的開始睡覺」被算進今晚**。沒有這條規則，
@@ -103,9 +107,51 @@ class BedMarkStore {
     return BedMarks(startAt: start, endAt: end);
   }
 
+  /// 上一晚**已經按完、但還沒上傳**的那一對。
+  ///
+  /// 見 [markStart] 的說明：這個槽是 2026-09-09 因為真的掉了一晚的資料
+  /// 才加的。沒有 pending 時回 [BedMarks.none]。
+  Future<BedMarks> readPending({DateTime? now}) async {
+    final at = now ?? DateTime.now();
+    final start = _parse(await store.getString(kBedPendingStartKey));
+    final end = _parse(await store.getString(kBedPendingEndKey));
+    if (start == null || end == null || !end.isAfter(start)) {
+      return BedMarks.none;
+    }
+    if (at.difference(start) > kBedMarkMaxAge) return BedMarks.none;
+    return BedMarks(startAt: start, endAt: end);
+  }
+
   Future<void> markStart(DateTime at) async {
+    // ═══════════════════════════════════════════════════════════════
+    // ⚠️ 按下一晚的「開始」之前，先把**已經按完但還沒上傳**的那一對
+    //    搬到 pending 槽，不要直接銷毀。
+    // ═══════════════════════════════════════════════════════════════
+    // 2026-09-09 真的掉了一晚的資料：
+    //
+    //   09-08 01:53  按 Start sleep
+    //   09-08 12:11  按 Out of bed        ← 這時已經是完整的一對
+    //   （整天沒開 Insights，所以沒上傳）
+    //   09-09 00:49  按下一晚的 Start sleep → 舊版在這裡把 end 刪掉
+    //   09-09 00:49  開 Insights → 送出 start=09-09 00:49
+    //   後端 same_night 判定 night_date(09-09) != 09-08 → 整組丟掉
+    //
+    // 兩個守門都正常運作，資料是在更早一步掉的。原本那行註解
+    //（「重新開始一晚 → 上一晚的結束時刻不能留著」）顧慮沒錯——配成
+    // 錯的一對確實更糟——但它把**還沒上傳的完整一對**也一起銷毀了。
+    //
+    // ⚠️ 上傳只在 Insights 頁那一輪做。「早上沒開 App、晚上又按了開始」
+    //    對 D2 受測者會是常態不是例外。
+    final current = await read(now: at);
+    if (current.isComplete) {
+      await store.setString(
+          kBedPendingStartKey, current.startAt!.toIso8601String());
+      await store.setString(
+          kBedPendingEndKey, current.endAt!.toIso8601String());
+    }
+
     await store.setString(kBedStartKey, at.toIso8601String());
-    // 重新開始一晚 → 上一晚的結束時刻不能留著，否則會配成錯的一對。
+    // 重新開始一晚 → 上一晚的結束時刻不能留在這個槽，否則會配成錯的一對。
     await store.remove(kBedEndKey);
   }
 
@@ -116,6 +162,14 @@ class BedMarkStore {
   Future<void> clear() async {
     await store.remove(kBedStartKey);
     await store.remove(kBedEndKey);
+  }
+
+  /// pending 那一對上傳成功之後清掉。
+  ///
+  /// ⚠️ **不要**用 [clear] 代替：那會把使用者今晚剛按的「開始」也刪掉。
+  Future<void> clearPending() async {
+    await store.remove(kBedPendingStartKey);
+    await store.remove(kBedPendingEndKey);
   }
 
   static DateTime? _parse(String? raw) {

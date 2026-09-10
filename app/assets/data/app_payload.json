@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-09-08T08:40:22+08:00",
+  "generated_at": "2026-09-10T02:05:23+08:00",
   "session_id": "20260908_001",
   "status": {
     "pet_mood": "happy",
@@ -29,13 +29,13 @@
     "resting_heart_rate": 56
   },
   "ai_content": {
-    "advice": "Sleep quality was good. Keep your current routine. ",
-    "dream_summary": null,
-    "trend_note": null,
-    "is_ai_generated": false,
-    "content_type": "advice",
-    "source": "rule_based",
-    "model": null
+    "advice": "Your sleep was good overall, but you only got 5.9 hours and deep sleep was a bit below range at 12.1%. Keep your current routine tonight, as recommended, and try to protect a slightly longer sleep window if you can.",
+    "dream_summary": "I found a picture book on the floor of my dream, and every time a page turned the whole scene changed under my paws. Warm sand became damp grass, then cool tile, each new page trading one smell for another. I kept nosing the corner to turn it again, chasing the next scent before I had even finished the last one.",
+    "trend_note": "Your stress score has risen over the past week compared to the prior month, and your sleep-period average heart rate is a bit higher too, even though resting heart rate has dipped slightly.",
+    "is_ai_generated": true,
+    "content_type": "fiction+advice",
+    "source": "llm",
+    "model": "claude-sonnet-5"
   },
   "scoring": {
     "final_score": 82.8,
