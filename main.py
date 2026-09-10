@@ -52,6 +52,9 @@ from behavior import (adherence, challenges as challenge_engine, pet_state,
                       sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
+# 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
+from game import inventory, state as game_state
+
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
 #    pet_mood 的 Tier B 規則（QUALITY_TO_MOOD + anxious 生理覆寫）
 #    必須只有一個定義處，否則 App 的 asset 畫面與 API 回傳的心情
@@ -818,3 +821,150 @@ async def get_challenges(
             ),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 遊戲化（B2）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 設計紅線 4：這四個端點**只讀**評分層與行為層，唯一會寫的是
+#    user_game_state / user_inventory / achievements 三張遊戲表。
+#    tests/test_game_rewards.py 會在打完所有端點後比對評分表逐欄沒變。
+# ⚠️ 設計紅線 5：熬夜又睡不好的一晚是 0 XP，只是「有資料」拿不到東西。
+#    數字在 game/xp.py，這裡不重算任何一格。
+
+# XP 是累積的，要看全部夜晚。LIMIT 只是保險，十年夠用。
+GAME_HISTORY_DAYS = 3650
+
+
+class ClaimRequest(BaseModel):
+    user_id: str
+    challenge_id: str
+
+
+class EquipRequest(BaseModel):
+    user_id: str
+    item_id: Optional[str] = None     # None = 脫掉
+
+
+def _game_inputs(user_id):
+    """一次撈齊 game/state.py 要的東西。挑戰達成與否一律由挑戰引擎判定。"""
+    behavior_rows = db.get_nightly_behavior(user_id, days=GAME_HISTORY_DAYS)
+    wearable_rows = db.get_wearable_nightly(user_id, days=GAME_HISTORY_DAYS)
+    achievement_rows = db.get_achievements(user_id)
+    defs = db.get_challenges()
+    evaluated = challenge_engine.evaluate_all(defs, behavior_rows) if defs else []
+    return behavior_rows, wearable_rows, achievement_rows, evaluated, defs
+
+
+@app.get("/game")
+async def get_game(user_id: str = Query(...)):
+    """
+    XP、等級、寵物成長階段、可以領的挑戰獎勵、徽章。
+
+    ⚠️ 每一格都是即時算的，沒有任何一格存在資料庫裡（除了「領過了沒」）。
+    """
+    require_user(user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    state = game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)
+    return {
+        "user_id": user_id,
+        **state,
+        "notes": {
+            "rewards_follow_quality": (
+                "A late night with poor sleep earns 0 XP; having a record alone earns nothing."
+            ),
+            "behaviour_first": (
+                "Most XP comes from when you put the phone down, which you control; "
+                "sleep quality is a smaller bonus and only exists for nights with a watch."
+            ),
+            "not_a_score": (
+                "XP and levels are a game layer. They never feed back into the sleep score."
+            ),
+        },
+    }
+
+
+@app.post("/game/claim", status_code=201)
+async def claim_reward(req: ClaimRequest):
+    """
+    領一個已完成挑戰的獎勵。每個挑戰每個窗格一次（見 game/rewards.py）。
+
+    404 = 沒有這個挑戰；422 = 還沒完成；409 = 這個窗格已經領過了。
+    ⚠️ 422 與 409 要分開：前者是「去做」，後者是「做過了、下個窗格再來」，
+       給使用者的話完全不同。
+    """
+    require_user(req.user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, defs = _game_inputs(req.user_id)
+    if not any(d["challenge_id"] == req.challenge_id for d in defs):
+        raise HTTPException(status_code=404, detail=f"Unknown challenge {req.challenge_id!r}.")
+
+    before = game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)
+    match = next(
+        (c for c in before["claimable"] if c["challenge_id"] == req.challenge_id), None)
+    if match is None:
+        ch = next((c for c in evaluated if c["challenge_id"] == req.challenge_id), None)
+        if ch is not None and ch.get("status") == "completed":
+            raise HTTPException(
+                status_code=409,
+                detail="Already claimed for this window. Come back in the next one.")
+        raise HTTPException(status_code=422, detail="This challenge is not completed yet.")
+
+    if not db.add_achievement(req.user_id, match["achievement_id"], match["xp"]):
+        raise HTTPException(status_code=409, detail="Already claimed for this window.")
+
+    after = game_state.build_game_state(
+        behavior_rows, wearable_rows, db.get_achievements(req.user_id), evaluated)
+    return {
+        "user_id": req.user_id,
+        "claimed": match,
+        "level": after["level"],
+        "xp_total": after["xp_total"],
+        "leveled_up": after["level"] > before["level"],
+    }
+
+
+def _closet_level(user_id):
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    return game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)["level"]
+
+
+@app.get("/closet")
+async def get_closet(user_id: str = Query(...)):
+    """衣櫃：每一件衣服、幾級解鎖、解鎖了沒、現在穿哪一件。"""
+    require_user(user_id)
+    level = _closet_level(user_id)
+    gs = db.get_game_state(user_id)
+    equipped = gs["equipped_item_id"] if gs else None
+    return {
+        "user_id": user_id,
+        "level": level,
+        "equipped_item_id": equipped,
+        "items": inventory.closet_view(level, db.get_inventory(user_id), equipped),
+    }
+
+
+@app.post("/closet/equip")
+async def equip_item(req: EquipRequest):
+    """
+    換衣服。item_id=None 代表脫掉。
+
+    404 = 沒有這件衣服；403 = 還沒解鎖（訊息裡講幾級解鎖）。
+    """
+    require_user(req.user_id)
+    if req.item_id is not None:
+        item = inventory.ITEMS.get(req.item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"Unknown item {req.item_id!r}.")
+        level = _closet_level(req.user_id)
+        if not inventory.is_unlocked(req.item_id, level, db.get_inventory(req.user_id)):
+            raise HTTPException(
+                status_code=403,
+                detail=f"{item['name']} unlocks at level {item['unlock_level']} (you are level {level}).")
+        # 穿過就記下來，之後規則改了也不收回。
+        db.add_inventory_item(req.user_id, req.item_id)
+    db.set_equipped_item(req.user_id, req.item_id)
+    return {"user_id": req.user_id, "equipped_item_id": req.item_id}
