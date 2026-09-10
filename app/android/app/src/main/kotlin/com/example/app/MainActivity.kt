@@ -1,11 +1,17 @@
 package com.example.app
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class MainActivity : FlutterActivity() {
 
@@ -13,12 +19,21 @@ class MainActivity : FlutterActivity() {
     private lateinit var keyValueStore: KeyValueStore
     private lateinit var notificationService: NotificationService
     private val guardBridge by lazy { BedtimeGuardBridge(this) }
+    private val healthService by lazy { HealthConnectService(this) }
+
+    /** Health Connect 的 API 都是 suspend。Main：MethodChannel 的回覆要在主執行緒。 */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** 等授權畫面回來的那一個呼叫。 */
+    private var pendingHealthResult: MethodChannel.Result? = null
 
     companion object {
         private const val CHANNEL = "sonnap/usage"
         private const val STORE_CHANNEL = "sonnap/store"
         private const val NOTIFY_CHANNEL = "sonnap/notify"
         private const val GUARD_CHANNEL = "sonnap/guard"
+        private const val HEALTH_CHANNEL = "sonnap/health"
+        private const val HEALTH_PERMISSION_REQUEST = 4203
         private const val NOTIFY_PERMISSION_REQUEST = 4202
     }
 
@@ -221,5 +236,68 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // Health Connect。⚠️ 往回讀幾天是 Dart 傳進來的（health_connect.dart）。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            HEALTH_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "status" -> result.success(healthService.status())
+                "hasPermission" -> {
+                    if (healthService.status() != "available") {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        result.success(runCatching { healthService.hasPermission() }.getOrDefault(false))
+                    }
+                }
+                "requestPermission" -> {
+                    if (healthService.status() != "available") {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+                    // 上一個還沒回來就又按了一次：先把舊的結掉，免得它永遠等不到。
+                    pendingHealthResult?.success(false)
+                    pendingHealthResult = result
+                    startActivityForResult(healthService.permissionIntent(), HEALTH_PERMISSION_REQUEST)
+                }
+                "openProviderStore" -> {
+                    healthService.openProviderStore()
+                    result.success(null)
+                }
+                "readSleepSessions" -> {
+                    val start = call.argument<Number>("startMillis")?.toLong()
+                    val end = call.argument<Number>("endMillis")?.toLong()
+                    if (start == null || end == null) {
+                        result.error("INVALID_ARGUMENTS", "startMillis and endMillis are required.", null)
+                        return@setMethodCallHandler
+                    }
+                    scope.launch {
+                        try {
+                            result.success(healthService.readSleepSessions(start, end))
+                        } catch (e: Exception) {
+                            result.error("HEALTH_READ_FAILED", e.message, null)
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+    }
+
+    @Deprecated("FlutterActivity is a plain Activity; the result API needs ComponentActivity.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != HEALTH_PERMISSION_REQUEST) return
+        val granted = runCatching { healthService.permissionGranted(resultCode, data) }.getOrDefault(false)
+        pendingHealthResult?.success(granted)
+        pendingHealthResult = null
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 }

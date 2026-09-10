@@ -26,6 +26,9 @@ class SettingsScreen extends StatefulWidget {
   /// 打開就寢守門的設定頁（B4）。
   final VoidCallback? onBedtimeGuardTap;
 
+  /// 打開 Health Connect 的設定頁（B8）。
+  final VoidCallback? onHealthConnectTap;
+
   const SettingsScreen({
     super.key,
     this.username = kFallbackDisplayName,
@@ -48,6 +51,7 @@ class SettingsScreen extends StatefulWidget {
     this.onAboutTap,
     this.onLogout,
     this.onBedtimeGuardTap,
+    this.onHealthConnectTap,
   });
 
   @override
@@ -264,6 +268,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: "Remind or block chosen apps near bedtime",
                   onTap: widget.onBedtimeGuardTap ??
                       () => _showComingSoon("Bedtime guard"),
+                ),
+
+                const SizedBox(height: 12),
+
+                _buildSettingTile(
+                  icon: Icons.watch_rounded,
+                  title: "Health Connect",
+                  subtitle: "Import sleep from your watch or band",
+                  onTap: widget.onHealthConnectTap ??
+                      () => _showComingSoon("Health Connect"),
                 ),
 
                 const SizedBox(height: 12),

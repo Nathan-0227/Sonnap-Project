@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'screens/assistant_screen.dart';
 import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
+import 'screens/health_connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/report_screen.dart';
@@ -16,6 +17,7 @@ import 'services/challenges_service.dart';
 import 'services/chat_service.dart';
 import 'services/friends_service.dart';
 import 'services/game_service.dart';
+import 'services/health_connect.dart';
 import 'services/home_service.dart';
 import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
@@ -46,13 +48,16 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 走真的 `sonnap/guard`（無障礙服務）。
   final GuardPlatform? guard;
 
-  const SonnapApp({super.key, this.store, this.accounts, this.reminders, this.guard});
+  /// 測試用注入點。null = 走真的 `sonnap/health`（Health Connect）。
+  final HealthPlatform? health;
+
+  const SonnapApp({super.key, this.store, this.accounts, this.reminders, this.guard, this.health});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(store: store, accounts: accounts, reminders: reminders, guard: guard),
+      home: MainPage(store: store, accounts: accounts, reminders: reminders, guard: guard, health: health),
     );
   }
 }
@@ -62,8 +67,9 @@ class MainPage extends StatefulWidget {
   final AccountService? accounts;
   final ReminderScheduler? reminders;
   final GuardPlatform? guard;
+  final HealthPlatform? health;
 
-  const MainPage({super.key, this.store, this.accounts, this.reminders, this.guard});
+  const MainPage({super.key, this.store, this.accounts, this.reminders, this.guard, this.health});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -191,6 +197,25 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  /// Health Connect 同步。與 [_challenges] 一樣依 [_account] 重建。
+  /// 沒有後端時 uploader 是 null，同步什麼都不碰（見 [HealthSyncController.uploader]）。
+  HealthSyncController get _healthSync {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    return HealthSyncController(
+      platform: widget.health ?? const PlatformHealth(),
+      store: widget.store ?? const PlatformKeyValueStore(),
+      uploader: baseUrl.isEmpty
+          ? null
+          : WearableUploader(baseUrl: baseUrl, identity: ResolvedUserIdentity(_account?.userId)),
+    );
+  }
+
+  void _openHealth() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => HealthConnectScreen(controller: _healthSync),
+    ));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -222,6 +247,9 @@ class _MainPageState extends State<MainPage> {
     await _resolveAccount();
     await restore;
     await _syncBedtime();
+    // ⚠️ 排在帳號之後（要 user_id 才送得出去），而且不 await、不問授權：
+    //    沒授權就什麼都不做，授權只在設定頁使用者按了按鈕才問。
+    unawaited(_healthSync.sync());
   }
 
   Future<void> _restoreSettings() async {
@@ -386,6 +414,7 @@ class _MainPageState extends State<MainPage> {
         onBedtimeChanged: _setBedtime,
         onReminderChanged: _setReminder,
         onBedtimeGuardTap: _openGuard,
+        onHealthConnectTap: _openHealth,
       ),
     ];
   }
