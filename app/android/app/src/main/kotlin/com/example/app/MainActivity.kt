@@ -1,5 +1,7 @@
 package com.example.app
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -9,10 +11,13 @@ class MainActivity : FlutterActivity() {
 
     private lateinit var usageStatsService: UsageStatsService
     private lateinit var keyValueStore: KeyValueStore
+    private lateinit var notificationService: NotificationService
 
     companion object {
         private const val CHANNEL = "sonnap/usage"
         private const val STORE_CHANNEL = "sonnap/store"
+        private const val NOTIFY_CHANNEL = "sonnap/notify"
+        private const val NOTIFY_PERMISSION_REQUEST = 4202
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,6 +25,7 @@ class MainActivity : FlutterActivity() {
 
         usageStatsService = UsageStatsService(this)
         keyValueStore = KeyValueStore(this)
+        notificationService = NotificationService(this)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -141,5 +147,42 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+
+        // 就寢提醒。⚠️ 這裡只收「在哪個時刻、發什麼字」，提前幾分鐘由 Dart 決定
+        // （bedtime_reminder.dart）。門檻寫在這裡的話，每次調整都要重編 APK。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFY_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "schedule" -> {
+                    // Number 而不是 Long：標準 codec 把小的整數解成 Integer。
+                    val at = call.argument<Number>("triggerAtMillis")?.toLong()
+                    val title = call.argument<String>("title")
+                    val body = call.argument<String>("body") ?: ""
+                    if (at == null || title == null) {
+                        result.error("INVALID_ARGUMENTS", "triggerAtMillis and title are required.", null)
+                        return@setMethodCallHandler
+                    }
+                    result.success(notificationService.schedule(at, title, body))
+                }
+                "cancel" -> {
+                    notificationService.cancel()
+                    result.success(null)
+                }
+                "canPostNotifications" -> result.success(notificationService.canPostNotifications())
+                "requestPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33 && !notificationService.canPostNotifications()) {
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            NOTIFY_PERMISSION_REQUEST
+                        )
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
     }
 }

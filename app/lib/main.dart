@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'screens/assistant_screen.dart';
@@ -7,12 +9,14 @@ import 'screens/onboarding_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
+import 'services/bedtime_reminder.dart';
 import 'services/challenges_service.dart';
 import 'services/friends_service.dart';
 import 'services/game_service.dart';
 import 'services/home_service.dart';
 import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
+import 'services/notification_service.dart';
 import 'services/pending_nightly.dart';
 import 'services/sleep_repository.dart';
 import 'services/user_settings.dart';
@@ -33,13 +37,16 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 依 `SONNAP_API_BASE` 建一個真的。
   final AccountService? accounts;
 
-  const SonnapApp({super.key, this.store, this.accounts});
+  /// 測試用注入點。null = 走真的 `sonnap/notify`（AlarmManager）。
+  final ReminderScheduler? reminders;
+
+  const SonnapApp({super.key, this.store, this.accounts, this.reminders});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(store: store, accounts: accounts),
+      home: MainPage(store: store, accounts: accounts, reminders: reminders),
     );
   }
 }
@@ -47,8 +54,9 @@ class SonnapApp extends StatelessWidget {
 class MainPage extends StatefulWidget {
   final KeyValueStore? store;
   final AccountService? accounts;
+  final ReminderScheduler? reminders;
 
-  const MainPage({super.key, this.store, this.accounts});
+  const MainPage({super.key, this.store, this.accounts, this.reminders});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -208,6 +216,30 @@ class _MainPageState extends State<MainPage> {
       }
       reminderOn = stored.reminderOn ?? reminderOn;
     });
+    // 讀回設定之後才排提醒——排在前面的話會用預設的 23:30 排一次。
+    _syncReminder(askIfMissing: true);
+  }
+
+  /// 就寢提醒。提前幾分鐘、通知寫什麼都在 bedtime_reminder.dart（Dart 端）。
+  late final BedtimeReminderController _reminder = BedtimeReminderController(
+    scheduler: widget.reminders ?? const PlatformReminderScheduler(),
+  );
+
+  /// 依目前的開關與目標時間重排提醒。
+  ///
+  /// ⚠️ **不 await。** 通知是加分項：`sonnap/notify` 沒有回應時
+  ///    （非 Android、widget test）不能擋住任何東西——與讀本機設定
+  ///    不能擋住 App 啟動是同一條紀律。
+  /// ⚠️ askIfMissing：開 App 時如果手機沒有通知權限（Android 13+ 的預設），
+  ///    要一次。提醒開關預設是開的，不問的話大部分受測者的提醒永遠不會出現，
+  ///    而開關看起來是開著的。
+  void _syncReminder({bool askIfMissing = false}) {
+    unawaited(() async {
+      final canPost = await _reminder.sync(on: reminderOn, bedtime: targetBedtime);
+      if (askIfMissing && reminderOn && !canPost) {
+        await _reminder.scheduler.requestPermission();
+      }
+    }());
   }
 
   /// 補送上次沒同步成功的目標就寢時間。
@@ -267,6 +299,8 @@ class _MainPageState extends State<MainPage> {
   Future<void> _setBedtime(TimeOfDay value) async {
     if (value == targetBedtime) return;
     setState(() => targetBedtime = value);
+    // ⚠️ 改了目標就要重排，否則提醒還停在舊的時間。
+    _syncReminder();
 
     final hhmm = formatBedtime(value.hour, value.minute);
     await _settings.saveBedtime(hhmm);
@@ -276,6 +310,10 @@ class _MainPageState extends State<MainPage> {
   Future<void> _setReminder(bool value) async {
     if (value == reminderOn) return;
     setState(() => reminderOn = value);
+    // 使用者親手打開提醒 → 這是要權限的正確時機。
+    if (value) unawaited(_reminder.scheduler.requestPermission());
+    // ⚠️ 關掉時 sync 會 cancel——已經排好的那一則不取消的話照樣會響。
+    _syncReminder();
     // 提醒開關只有本機意義，後端沒有這個欄位。
     await _settings.saveReminder(value);
   }

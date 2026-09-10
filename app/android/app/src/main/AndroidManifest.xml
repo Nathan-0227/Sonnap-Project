@@ -17,6 +17,12 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
     <!--
+      POST_NOTIFICATIONS：就寢提醒。Android 13（API 33）起要執行時權限。
+      ⚠️ 沒有這一條，Android 13 以上的手機排了提醒也不會出現，而且沒有任何錯誤。
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
       套件可見性（Android 11 / API 30 起）。
 
       ⚠️ 沒有這一段，睡前分心分析會**安靜地少掉最重要的那幾個 App**。
@@ -71,6 +77,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 就寢提醒的鬧鐘接收器。exported=false：只有自己的 AlarmManager 叫得動它。 -->
+        <receiver
+            android:name=".BedtimeReminderReceiver"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
