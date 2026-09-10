@@ -724,6 +724,26 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
         conn.close()
 
 
+def get_bed_marks(user_id, date, db_path=None):
+    """某一晚**已經存下**的上床／下床標記 → (bed_start_at, bed_end_at)；沒有就 (None, None)。
+
+    給 POST /nightly 用。同一晚會被重傳很多次（App 每次回到前景都傳），
+    而之後那幾次通常**不帶**標記——上一次被收下後本機就清掉了。
+    upsert_nightly_behavior 是整列覆寫，不先查這一步的話，
+    重傳就會把標記與效率抹成 NULL（2026-09-11 實測 MySQL 每一晚都是這樣）。
+    """
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT bed_start_at, bed_end_at FROM nightly_behavior "
+            "WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchone()
+        return (row["bed_start_at"], row["bed_end_at"]) if row else (None, None)
+    finally:
+        conn.close()
+
+
 def get_nightly_behavior(user_id, days=30, db_path=None):
     """取最近 N 晚的行為資料，**由舊到新**排序。
 

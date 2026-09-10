@@ -414,11 +414,34 @@ async def post_nightly(req: NightlyRequest):
         and adherence.night_date(bed_start_dt).isoformat() == night["date"]
     )
 
+    # ═══ 這次請求沒有可用的同晚標記時，沿用資料庫裡已經存的那一組 ═══
+    # （2026-09-11）upsert 是整列覆寫，先前這裡直接傳 None，於是兩條路都會
+    # 把已存的標記抹成 NULL，而且都回 201：
+    #   ① App 每次回到前景都重傳同一晚；第一次收下後本機就清掉，
+    #      之後的重傳不帶標記 → 抹掉。
+    #   ② 晚上按了「開始睡覺」再切回 App，送出的是**上一晚**的 lights_out
+    #      配**今晚**的開始 → same_night 正確地拒收 → 但拒收寫進去的是 NULL。
+    # 實測 MySQL 裡每一晚的 bed_start_at 都是 NULL，包括補登時回過 84.6% 的 09-09。
+    req_start = req.bed_start_at if same_night else None
+    req_end = req.bed_end_at if same_night else None
+    stored_start, stored_end = db.get_bed_marks(req.user_id, night["date"])
+    if req_start is not None:
+        # 帶了就照帶的（更正仍然有效）。只帶上床、而且是同一次按的，
+        # 下床沿用先前存下的——上床先傳、下床後補是正常的順序。
+        use_start, use_end = req_start, req_end
+        if use_end is None and _same_instant(stored_start, req_start):
+            use_end = stored_end
+        marks_source = "request"
+    elif stored_start is not None:
+        use_start, use_end, marks_source = stored_start, stored_end, "stored"
+    else:
+        use_start = use_end = marks_source = None
+
     try:
         eff = sleep_efficiency.evaluate_efficiency(
-            req.bed_start_at if same_night else None,
+            use_start,
             req.lights_out_at,
-            req.bed_end_at if same_night else None,
+            use_end,
             source=req.source,
         )
     except ValueError as exc:
@@ -439,7 +462,31 @@ async def post_nightly(req: NightlyRequest):
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
-    return {**night, **{k: v for k, v in eff.items() if k != "source"}}
+    resp = {**night, **{k: v for k, v in eff.items() if k != "source"}}
+    # ⚠️ App 拿回應裡的 bed_start_at 判斷「我送出去的標記被收下了」，收下就清本機
+    #    （nightly_uploader.dart 的 marksStored）。沿用舊標記時若把它放進回應，
+    #    App 會以為收下的是它剛送的——上面第 ② 條路送的是**今晚**的開始，
+    #    被清掉就是今晚的標記沒了。所以這兩欄只回報**這次請求**被接受的；
+    #    效率欄位照實反映實際存下的那一組，由 bed_marks_source 說明是哪一組。
+    if marks_source != "request":
+        resp["bed_start_at"] = None
+        resp["bed_end_at"] = None
+    resp["bed_marks_source"] = marks_source
+    return resp
+
+
+def _same_instant(a, b):
+    """兩個 ISO 時刻字串是不是同一個時刻。缺值或解析不了就當作不是。
+
+    ⚠️ 不能直接比字串：存進去的是 evaluate_efficiency 正規化過的 isoformat，
+       App 送來的格式不一定逐字相同。
+    """
+    if not a or not b:
+        return False
+    try:
+        return datetime.fromisoformat(a) == datetime.fromisoformat(b)
+    except ValueError:
+        return False
 
 
 @app.post("/wearable", status_code=201)
