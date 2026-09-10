@@ -11,6 +11,7 @@ import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/bedtime_reminder.dart';
 import 'services/challenges_service.dart';
+import 'services/chat_service.dart';
 import 'services/friends_service.dart';
 import 'services/game_service.dart';
 import 'services/home_service.dart';
@@ -147,6 +148,17 @@ class _MainPageState extends State<MainPage> {
     final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
     if (baseUrl.isEmpty) return null;
     return HomeService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
+  /// 睡眠助理。與 [_challenges] 一樣依 [_account] 重建。
+  /// ⚠️ 每問一次都會花 API 額度（後端呼叫 Claude）。
+  ChatService? get _chat {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return ChatService(
       baseUrl: baseUrl,
       identity: ResolvedUserIdentity(_account?.userId),
     );
@@ -340,7 +352,7 @@ class _MainPageState extends State<MainPage> {
         home: _home,
       ),
       AssistantScreen(
-        repository: _repository,
+        chat: _chat,
         username: account.displayName ?? kFallbackDisplayName,
       ),
       SettingsScreen(

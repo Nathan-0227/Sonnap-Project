@@ -1062,3 +1062,53 @@ async def remove_friend(handle: str, user_id: str = Query(...)):
     friend_id = _friend_by_handle(user_id, handle)
     db.remove_friendship(user_id, friend_id)
     return {"removed": handle.strip().upper()}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 睡眠助理（B6）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 會花錢：每問一次就是一次 Claude API 呼叫（ai/llm_client.py，標準庫 urllib，不裝 SDK）。
+# ⚠️ 回答要通過 ai/chat.py 的四道驗證才回給 App；兩次都沒過就 503，
+#    不把沒過驗證的回答交出去。
+# ⚠️ `ai.chat` 在函式裡才 import：它會連帶 import ai/generate_advice.py，
+#    而那一支在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
+#    任何一支 import main 的測試都會帶著真的金鑰在跑。
+
+
+class ChatRequest(BaseModel):
+    user_id: str
+    message: str = Field(..., min_length=1, max_length=500)
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    """
+    問睡眠助理一個問題。答案只根據這個人自己的資料。
+
+    ⚠️ 用同步的 def 而不是 async：API 呼叫最多會等 60 秒，async 的話會卡住
+       整個事件迴圈，其他人的請求全部跟著等。同步的 def 會被丟到 threadpool。
+
+    503 = 伺服器沒設定金鑰／連不上 Claude／兩次都沒通過驗證。
+    """
+    user = require_user(req.user_id)
+    from ai import chat as chat_engine
+
+    if not chat_engine.key_available():
+        raise HTTPException(status_code=503, detail="The AI assistant is not configured on this server.")
+
+    behavior_rows = db.get_nightly_behavior(req.user_id, days=DEFAULT_HISTORY_DAYS)
+    wearable_rows = db.get_wearable_nightly(req.user_id, days=DEFAULT_HISTORY_DAYS)
+    streak, _ = challenge_engine.current_streak(behavior_rows)
+    facts = chat_engine.build_facts(
+        user,
+        behavior_rows[-1] if behavior_rows else None,
+        wearable_rows[-1] if wearable_rows else None,
+        streak,
+        adherence.late_night_ratio(behavior_rows),
+    )
+    try:
+        result = chat_engine.answer_question(req.message.strip(), facts)
+    except chat_engine.ChatUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {"answer": result["answer"], "source": "llm"}
