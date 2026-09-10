@@ -247,7 +247,8 @@ CREATE TABLE IF NOT EXISTS wearable_nightly (
     -- ── 入睡／起床時刻（兩種來源都有）──────────────────────────
     -- ⚠️ sleep_start_time 是**手錶偵測到「睡著」的時刻（生理）**，
     --    不是 nightly_behavior.lights_out_at（「放下手機」的行為時刻）。
-    --    後者一定較早，兩者不可互相代換，
+    --    後者通常較早（半夜醒來看手機時不是，見攝影機分數.md C 節），
+    --    兩者不可互相代換，
     --    完整理由見 migrate_garmin_to_db.py:24-27。
     --
     -- 存成 ISO8601 字串（+08:00），與 build_app_payload.py 的 history 同源。
