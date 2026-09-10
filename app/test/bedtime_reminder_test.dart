@@ -195,7 +195,9 @@ void main() {
       for (final name in ['NotificationService.kt', 'BedtimeReminderReceiver.kt']) {
         final src = File('$dir/$name').readAsStringSync();
         final code = src.split('\n').where((l) => !l.trimLeft().startsWith('*') && !l.trimLeft().startsWith('//')).join('\n');
-        expect(RegExp(r'\b(30|1800|1800000)\b').hasMatch(code), isFalse, reason: '$name 裡長出了提前量');
+        // ⚠️ `L?`：Kotlin 的 Long 寫成 1800000L，少了它 \b 對不上而放過去
+        //    （B4 的變異測試抓到的，同一個漏洞原本也在這裡）。
+        expect(RegExp(r'\b(30|1800|1800000)L?\b').hasMatch(code), isFalse, reason: '$name 裡長出了提前量');
         expect(code.contains('TimeUnit.MINUTES'), isFalse, reason: name);
       }
     });

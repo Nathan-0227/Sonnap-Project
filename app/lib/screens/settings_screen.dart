@@ -23,6 +23,9 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback? onAboutTap;
   final VoidCallback? onLogout;
 
+  /// 打開就寢守門的設定頁（B4）。
+  final VoidCallback? onBedtimeGuardTap;
+
   const SettingsScreen({
     super.key,
     this.username = kFallbackDisplayName,
@@ -44,6 +47,7 @@ class SettingsScreen extends StatefulWidget {
     this.onLanguageTap,
     this.onAboutTap,
     this.onLogout,
+    this.onBedtimeGuardTap,
   });
 
   @override
@@ -250,6 +254,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: "Target Bedtime",
                   subtitle: _formatTimeOfDay(targetBedtime),
                   onTap: _pickBedtime,
+                ),
+
+                const SizedBox(height: 12),
+
+                _buildSettingTile(
+                  icon: Icons.block_rounded,
+                  title: "Bedtime Guard",
+                  subtitle: "Remind or block chosen apps near bedtime",
+                  onTap: widget.onBedtimeGuardTap ??
+                      () => _showComingSoon("Bedtime guard"),
                 ),
 
                 const SizedBox(height: 12),

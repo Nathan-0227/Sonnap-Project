@@ -81,6 +81,30 @@
         <receiver
             android:name=".BedtimeReminderReceiver"
             android:exported="false" />
+        <!--
+          就寢守門的無障礙服務。
+          ⚠️ BIND_ACCESSIBILITY_SERVICE 只有系統拿得到，所以 exported=true 也只有系統叫得動。
+          ⚠️ Android 13 起側載的 App 預設不能開無障礙服務（「受限設定」），使用者要先到
+             應用程式資訊 → 右上角選單 → 允許受限設定。見 docs/BEDTIME_GUARD.md。
+        -->
+        <service
+            android:name=".BedtimeGuardService"
+            android:exported="true"
+            android:label="@string/bedtime_guard_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/bedtime_guard_config" />
+        </service>
+        <!-- 提醒模式的全螢幕提醒。不進最近使用清單，關掉就沒了。 -->
+        <activity
+            android:name=".GuardReminderActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -12,11 +12,13 @@ class MainActivity : FlutterActivity() {
     private lateinit var usageStatsService: UsageStatsService
     private lateinit var keyValueStore: KeyValueStore
     private lateinit var notificationService: NotificationService
+    private val guardBridge by lazy { BedtimeGuardBridge(this) }
 
     companion object {
         private const val CHANNEL = "sonnap/usage"
         private const val STORE_CHANNEL = "sonnap/store"
         private const val NOTIFY_CHANNEL = "sonnap/notify"
+        private const val GUARD_CHANNEL = "sonnap/guard"
         private const val NOTIFY_PERMISSION_REQUEST = 4202
     }
 
@@ -180,6 +182,41 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 就寢守門。⚠️ 從幾點守到幾點、守哪些 App 都是 Dart 算好推過來的
+        // （bedtime_guard.dart），這裡只存起來給無障礙服務讀。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            GUARD_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "configure" -> {
+                    val mode = call.argument<String>("mode")
+                    val start = call.argument<Number>("startMillis")?.toLong()
+                    val end = call.argument<Number>("endMillis")?.toLong()
+                    val packages = call.argument<List<String>>("packages") ?: emptyList()
+                    val cooldown = call.argument<Number>("cooldownMillis")?.toLong() ?: 0L
+                    if (mode == null || start == null || end == null) {
+                        result.error("INVALID_ARGUMENTS", "mode, startMillis and endMillis are required.", null)
+                        return@setMethodCallHandler
+                    }
+                    GuardConfigStore(this).save(
+                        mode, start, end, packages,
+                        call.argument<String>("title") ?: "",
+                        call.argument<String>("body") ?: "",
+                        cooldown,
+                    )
+                    result.success(null)
+                }
+                "isEnabled" -> result.success(guardBridge.isEnabled())
+                "openSettings" -> {
+                    guardBridge.openSettings()
+                    result.success(null)
+                }
+                "listApps" -> result.success(guardBridge.listApps())
                 else -> result.notImplemented()
             }
         }

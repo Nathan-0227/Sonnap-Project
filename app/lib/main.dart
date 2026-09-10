@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'screens/assistant_screen.dart';
+import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
+import 'services/bedtime_guard.dart';
 import 'services/bedtime_reminder.dart';
 import 'services/challenges_service.dart';
 import 'services/chat_service.dart';
@@ -41,13 +43,16 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 走真的 `sonnap/notify`（AlarmManager）。
   final ReminderScheduler? reminders;
 
-  const SonnapApp({super.key, this.store, this.accounts, this.reminders});
+  /// 測試用注入點。null = 走真的 `sonnap/guard`（無障礙服務）。
+  final GuardPlatform? guard;
+
+  const SonnapApp({super.key, this.store, this.accounts, this.reminders, this.guard});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(store: store, accounts: accounts, reminders: reminders),
+      home: MainPage(store: store, accounts: accounts, reminders: reminders, guard: guard),
     );
   }
 }
@@ -56,8 +61,9 @@ class MainPage extends StatefulWidget {
   final KeyValueStore? store;
   final AccountService? accounts;
   final ReminderScheduler? reminders;
+  final GuardPlatform? guard;
 
-  const MainPage({super.key, this.store, this.accounts, this.reminders});
+  const MainPage({super.key, this.store, this.accounts, this.reminders, this.guard});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -230,6 +236,22 @@ class _MainPageState extends State<MainPage> {
     });
     // 讀回設定之後才排提醒——排在前面的話會用預設的 23:30 排一次。
     _syncReminder(askIfMissing: true);
+    _syncGuard();
+  }
+
+  /// 就寢守門。時間窗、名單、模式都在 bedtime_guard.dart（Dart 端）。
+  late final BedtimeGuardController _guard = BedtimeGuardController(
+    platform: widget.guard ?? const PlatformGuard(),
+    store: widget.store ?? const PlatformKeyValueStore(),
+  );
+
+  /// 把守門的時間窗推給原生端。⚠️ 不 await，理由同 [_syncReminder]。
+  void _syncGuard() => unawaited(_guard.push(targetBedtime));
+
+  void _openGuard() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => BedtimeGuardScreen(controller: _guard, bedtime: targetBedtime),
+    ));
   }
 
   /// 就寢提醒。提前幾分鐘、通知寫什麼都在 bedtime_reminder.dart（Dart 端）。
@@ -311,8 +333,10 @@ class _MainPageState extends State<MainPage> {
   Future<void> _setBedtime(TimeOfDay value) async {
     if (value == targetBedtime) return;
     setState(() => targetBedtime = value);
-    // ⚠️ 改了目標就要重排，否則提醒還停在舊的時間。
+    // ⚠️ 改了目標就要重排，否則提醒還停在舊的時間；守門也一樣，
+    //    否則原生端還在守舊的時間窗（23:00 起擋，但目標已經改到 01:00）。
     _syncReminder();
+    _syncGuard();
 
     final hhmm = formatBedtime(value.hour, value.minute);
     await _settings.saveBedtime(hhmm);
@@ -361,6 +385,7 @@ class _MainPageState extends State<MainPage> {
         initialReminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
         onReminderChanged: _setReminder,
+        onBedtimeGuardTap: _openGuard,
       ),
     ];
   }
