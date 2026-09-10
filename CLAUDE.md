@@ -224,7 +224,7 @@ Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難�
 | **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現。⚠️ **調 `.env` 救不回歷史資料**：實測 99.3% 的 micro_motion 強度低於現行 `MOTION_MICRO`，那批資料是用另一組沒記錄的門檻寫的 |
 | ~~`SLEEP_START=01:00` 太晚~~ | ✅ **已改成 `22:00`**（2026-09-04）。57 晚實測：01:00 錄不到 7 晚（12%），22:00 涵蓋 57/57、只多錄 3 小時，再往前沒有額外好處。改了 `.env`／`.env.example`／程式預設三處。長期仍朝「App 點開始睡眠」走（那對 D2 受測者才通用） |
 | id 117（08-19）`total_events=73` 但 `timeline=[]` | ⚠️ **2026-09-04 追過：不是程式 bug。** 解析、截斷、兩條寫入路徑全部排除，且所有存檔點都有 `if sleep_timeline:` 保護。`updated_at` 晚 5.5 小時而計數保留 → 最可能是有人在 phpMyAdmin 手動清掉。我方已加 `count_mismatch` 防護（測試【6】） |
-| 要不要跑 `--ai` 重生所有夜晚 | 使用者（會花 API 額度；**目前沒必要**，2026-09-03 核對 57/57 全是 llm） |
+| ~~補生成缺的夜晚夢境~~ | ✅ **已完成**（2026-09-10）。64/64 全是 llm。⚠️ 那個旗標叫什麼名字別記錯——`generate_advice.py` **沒有 `--ai`**，只有 `--dates` / `--limit` / `--refresh-stale` / `--dry-run`。花錢之前先跑 `--dry-run`，它會列出待生成的夜晚且不呼叫 API |
 
 **刻意不做**（09-09 之前）：
 
@@ -339,8 +339,14 @@ A→B 分界處靜止心率跳 5.73~6.74、睡眠期間平均心率跳 4.13；
 
 **② AI 夢境 —— 這一條已經沒事了（2026-08-28 核對）**
 
-`ai/data/ai_advice.json` **57 晚全部 `source=llm`、0 晚 fallback**
-（2026-09-03 核對，含 Garmin 補抓進來的新夜晚）。不需要再跑 `--ai`。
+`ai/data/ai_advice.json` **64 晚全部 `source=llm`、0 晚 fallback**
+（2026-09-10 核對。Garmin 重抓到 09-08 之後多出 7 晚無夢境，當天補生成完畢）。
+
+⚠️ **重抓 Garmin 之後要順手看一眼夢境有沒有跟上。** 那 7 晚的缺口存在了兩天
+才被發現——因為「57/57 全是 llm」這句話本身沒錯，錯的是它已經不再涵蓋所有夜晚。
+
+⚠️ 補生成只會補**缺的**：`needs_generation()` 對既有紀錄回 `already present`，
+除非加 `--refresh-stale`。預設 `--limit 10`。
 
 ⚠️ 這一行的數字會隨重抓資料變動，核對指令：
 `python -c "import json,collections;e=json.load(open('ai/data/ai_advice.json',encoding='utf-8'))['entries'];print(len(e),collections.Counter(v['source'] for v in e.values()))"`
@@ -594,7 +600,7 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
 ### 已完成
 
 - Garmin pipeline 5 步驟全通，`python garmin/run_pipeline.py` 約 6 秒跑完
-- **57 晚**實測資料（**2026-05-29 ~ 09-01**，實測自
+- **64 晚**實測資料（**2026-05-29 ~ 09-08**，實測自
   `garmin_sleep_quality_final.json`），每晚 0–100 分 + Good/Normal/Poor/Bad，
   **跨 3 名戴錶者**：
 
@@ -602,11 +608,13 @@ PR #11（多使用者後端）、PR #12~15（文件與英文化）、PR #16（Je
   |---|---|---|
   | `wearer_a`（2026-05-28 ~ 07-27） | 41 | ✅ |
   | `unverified`（07-28 ~ 08-27） | 11 | ❌ 已知多人戴過 |
-  | `wearer_c`（08-28 起，負責人本人） | **5** | ✅ |
+  | `wearer_c`（08-28 起，負責人本人） | **12** | ✅ |
 
   ⚠️ **這個數字每次重抓 Garmin 都會變**，寫進報告前跑一次上面那段確認。
-  ⚠️ `wearer_c` 只有 5 晚，而 `MIN_BASELINE_NIGHTS = 14`，所以**本人的
-  Tier3 還在冷啟動、不產生修正值**。
+  ⚠️ `wearer_c` 有 12 晚，而 `MIN_BASELINE_NIGHTS = 14`，所以**本人的
+  Tier3 仍在冷啟動**——實測那 12 晚**沒有任何一晚有修正值**，
+  而有修正值的 28 晚全部落在 `wearer_a` 與 `unverified` 區段。
+  報告不能寫「三層評分全數運作」。
   ⚠️ 報告怎麼寫才誠實，見 [REPORT_CAVEATS.md](docs/REPORT_CAVEATS.md)
 - Tier1/2 基礎分數（文獻加權）+ Tier3 個人化修正值（±12，戴錶者分段後）
   + SRI（呈現不計分）
