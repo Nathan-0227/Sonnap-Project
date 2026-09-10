@@ -353,8 +353,8 @@ def detect_episodes(vf_frac_pairs, threshold,
     return eps
 
 
-def match(episodes, marks, tolerance_frames):
-    """回傳 (matched_marks, matched_eps)：各自的個數。"""
+def match_sets(episodes, marks, tolerance_frames):
+    """回傳 (matched_mark_indices, matched_episode_indices) 兩個集合。"""
     matched_marks = set()
     matched_eps = set()
     for ei, (s, e) in enumerate(episodes):
@@ -362,7 +362,13 @@ def match(episodes, marks, tolerance_frames):
             if s - tolerance_frames <= m <= e + tolerance_frames:
                 matched_eps.add(ei)
                 matched_marks.add(mi)
-    return len(matched_marks), len(matched_eps)
+    return matched_marks, matched_eps
+
+
+def match(episodes, marks, tolerance_frames):
+    """回傳 (matched_marks, matched_eps)：各自的個數。"""
+    mm, me = match_sets(episodes, marks, tolerance_frames)
+    return len(mm), len(me)
 
 
 def rule(ch="-", n=92):
@@ -443,10 +449,90 @@ def cmd_compare(csv_path: Path):
     print("=" * 92)
 
 
+def cmd_list_fp(csv_path: Path, threshold: float):
+    """
+    把「偵測到但沒有對應人工標記」的事件逐一列出來，附影片幀號。
+
+    ⚠️ 為什麼需要這支：`--compare` 只給精確率一個數字，但那個數字
+       **同時混著兩種完全不同的東西**——真的誤報（那時候沒人在動），
+       與人工標註漏標的真動作（有動，只是標的時候沒看到）。
+       兩者的處置相反：前者要調偵測、後者要補標註。
+       數字分不出來，只有回頭看影片分得出來。
+
+    ⚠️ 這支**不下判斷**，只列出要看哪幾段。判斷要人眼做。
+    """
+    truth_path = truth_path_for(csv_path)
+    marks, reviewed = load_truth(truth_path)
+    if not reviewed:
+        sys.exit(f"✗ {truth_path} 沒有已審視的範圍。先跑標註（不加旗標）。")
+
+    vf_map = load_vf_fracs(csv_path)
+    from tapo_metric_logger import read_roi
+    roi, _ = read_roi(csv_path)
+    unit = "佔 ROI" if roi else "佔畫面"
+    fps = 5.0
+    tol = int(TOLERANCE_SECONDS * fps)
+
+    eps = []
+    for s0, e0 in reviewed:
+        pairs = [(vf, vf_map[vf][1]) for vf in range(s0, e0 + 1) if vf in vf_map]
+        eps.extend(detect_episodes(pairs, threshold / 100))
+    matched_marks, matched_eps = match_sets(eps, marks, tol)
+
+    fp = [(i, eps[i]) for i in range(len(eps)) if i not in matched_eps]
+    fn = [(i, marks[i]) for i in range(len(marks)) if i not in matched_marks]
+
+    print("=" * 92)
+    print(f"要回頭看影片的片段：{csv_path.name}   門檻 {threshold}% {unit}")
+    print(f"演算法 {len(eps)} 個事件、人工 {len(marks)} 個標記、容許誤差 ±{TOLERANCE_SECONDS:.0f} 秒")
+    print("=" * 92)
+    print(f"\n影片檔：{video_path_for(csv_path).name}")
+    print("⚠️ 影片的第 N 幀 == CSV 裡 vf==N 的那一列，逐幀對齊。用播放器跳到該幀。")
+
+    print(f"\n【A】偵測到但沒有標記 —— {len(fp)} 段（這就是那 1.4 倍的來源）")
+    rule()
+    if fp:
+        print(f"{'#':>3}{'起始 vf':>10}{'結束 vf':>10}{'時刻':>10}{'長度':>8}{'峰值':>9}   判斷（你來填）")
+        rule()
+        for n, (i, (s0, e0)) in enumerate(fp, 1):
+            t = vf_map.get(s0, (None, None))[0]
+            hhmmss = t[11:19] if isinstance(t, str) and len(t) > 18 else "?"
+            peak = max((vf_map[v][1] or 0) for v in range(s0, e0 + 1) if v in vf_map)
+            print(f"{n:>3}{s0:>10}{e0:>10}{hhmmss:>10}"
+                  f"{(e0 - s0) / fps:>7.1f}s{peak * 100:>8.2f}%   [ ] 真的沒動  [ ] 有動但沒標")
+    else:
+        print("  （沒有）")
+
+    print(f"\n【B】有標記但沒偵測到 —— {len(fn)} 段（漏掉的真動作）")
+    rule()
+    if fn:
+        print(f"{'#':>3}{'vf':>10}{'時刻':>10}")
+        rule()
+        for n, (i, m) in enumerate(fn, 1):
+            t = vf_map.get(m, (None, None))[0]
+            hhmmss = t[11:19] if isinstance(t, str) and len(t) > 18 else "?"
+            print(f"{n:>3}{m:>10}{hhmmss:>10}")
+    else:
+        print("  （沒有）")
+
+    print(f"""
+怎麼判讀 A 那張表（**這是這支工具存在的唯一理由**）：
+
+  多數是「真的沒動」 → 偵測器在雜訊上誤報，門檻或形態學要調
+  多數是「有動但沒標」 → **標註才是偏低的那一方**，那麼事件率高於文獻
+                          就不是偵測器的問題，而是我們與文獻數的不是同一種東西
+
+⚠️ 不要先看數字再判斷。逐段看完再統計，否則會看到自己想看的。
+""")
+    print("=" * 92)
+
+
 def main():
     ap = argparse.ArgumentParser(description="用連續錄影 + 時間戳標註校準偵測門檻（不評分）")
     ap.add_argument("csv", type=Path, help="tapo_metric_logger.py --save-video 產生的 CSV")
     ap.add_argument("--compare", action="store_true", help="對照人工標記與 CSV 裡的演算法度量")
+    ap.add_argument("--list-fp", type=float, metavar="門檻%",
+                    help="列出「偵測到但沒被標記」的片段與影片幀號，供回頭看影片分類")
     args = ap.parse_args()
 
     # CSV 不在也要能標註 —— 標註只需要影片。2026-09-06 第 4 晚的 CSV 被
@@ -462,7 +548,9 @@ def main():
         print(f"⚠ 找不到 {args.csv.name}，只用影片標註。")
         print("  影響：標記存下來時沒有 t 欄（時刻），vf 照舊 —— 對照分析用的是 vf，不受影響。")
 
-    if args.compare:
+    if args.list_fp is not None:
+        cmd_list_fp(args.csv, args.list_fp)
+    elif args.compare:
         cmd_compare(args.csv)
     else:
         cmd_annotate(args.csv)
@@ -470,3 +558,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
