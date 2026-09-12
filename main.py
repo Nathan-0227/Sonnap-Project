@@ -52,6 +52,12 @@ from behavior import (adherence, challenges as challenge_engine, pet_state,
                       sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
+# 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
+from game import inventory, state as game_state
+
+# 好友。⚠️ 只分享行為指標，別人的 user_id 永遠不出後端，見 social/__init__.py。
+from social import friends as social_friends
+
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
 #    pet_mood 的 Tier B 規則（QUALITY_TO_MOOD + anxious 生理覆寫）
 #    必須只有一個定義處，否則 App 的 asset 畫面與 API 回傳的心情
@@ -865,3 +871,291 @@ async def get_challenges(
             ),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 遊戲化（B2）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 設計紅線 4：這四個端點**只讀**評分層與行為層，唯一會寫的是
+#    user_game_state / user_inventory / achievements 三張遊戲表。
+#    tests/test_game_rewards.py 會在打完所有端點後比對評分表逐欄沒變。
+# ⚠️ 設計紅線 5：熬夜又睡不好的一晚是 0 XP，只是「有資料」拿不到東西。
+#    數字在 game/xp.py，這裡不重算任何一格。
+
+# XP 是累積的，要看全部夜晚。LIMIT 只是保險，十年夠用。
+GAME_HISTORY_DAYS = 3650
+
+
+class ClaimRequest(BaseModel):
+    user_id: str
+    challenge_id: str
+
+
+class EquipRequest(BaseModel):
+    user_id: str
+    item_id: Optional[str] = None     # None = 脫掉
+
+
+def _game_inputs(user_id):
+    """一次撈齊 game/state.py 要的東西。挑戰達成與否一律由挑戰引擎判定。"""
+    behavior_rows = db.get_nightly_behavior(user_id, days=GAME_HISTORY_DAYS)
+    wearable_rows = db.get_wearable_nightly(user_id, days=GAME_HISTORY_DAYS)
+    achievement_rows = db.get_achievements(user_id)
+    defs = db.get_challenges()
+    evaluated = challenge_engine.evaluate_all(defs, behavior_rows) if defs else []
+    return behavior_rows, wearable_rows, achievement_rows, evaluated, defs
+
+
+@app.get("/game")
+async def get_game(user_id: str = Query(...)):
+    """
+    XP、等級、寵物成長階段、可以領的挑戰獎勵、徽章。
+
+    ⚠️ 每一格都是即時算的，沒有任何一格存在資料庫裡（除了「領過了沒」）。
+    """
+    require_user(user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    state = game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)
+    return {
+        "user_id": user_id,
+        **state,
+        "notes": {
+            "rewards_follow_quality": (
+                "A late night with poor sleep earns 0 XP; having a record alone earns nothing."
+            ),
+            "behaviour_first": (
+                "Most XP comes from when you put the phone down, which you control; "
+                "sleep quality is a smaller bonus and only exists for nights with a watch."
+            ),
+            "not_a_score": (
+                "XP and levels are a game layer. They never feed back into the sleep score."
+            ),
+        },
+    }
+
+
+@app.post("/game/claim", status_code=201)
+async def claim_reward(req: ClaimRequest):
+    """
+    領一個已完成挑戰的獎勵。每個挑戰每個窗格一次（見 game/rewards.py）。
+
+    404 = 沒有這個挑戰；422 = 還沒完成；409 = 這個窗格已經領過了。
+    ⚠️ 422 與 409 要分開：前者是「去做」，後者是「做過了、下個窗格再來」，
+       給使用者的話完全不同。
+    """
+    require_user(req.user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, defs = _game_inputs(req.user_id)
+    if not any(d["challenge_id"] == req.challenge_id for d in defs):
+        raise HTTPException(status_code=404, detail=f"Unknown challenge {req.challenge_id!r}.")
+
+    before = game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)
+    match = next(
+        (c for c in before["claimable"] if c["challenge_id"] == req.challenge_id), None)
+    if match is None:
+        ch = next((c for c in evaluated if c["challenge_id"] == req.challenge_id), None)
+        if ch is not None and ch.get("status") == "completed":
+            raise HTTPException(
+                status_code=409,
+                detail="Already claimed for this window. Come back in the next one.")
+        raise HTTPException(status_code=422, detail="This challenge is not completed yet.")
+
+    if not db.add_achievement(req.user_id, match["achievement_id"], match["xp"]):
+        raise HTTPException(status_code=409, detail="Already claimed for this window.")
+
+    after = game_state.build_game_state(
+        behavior_rows, wearable_rows, db.get_achievements(req.user_id), evaluated)
+    return {
+        "user_id": req.user_id,
+        "claimed": match,
+        "level": after["level"],
+        "xp_total": after["xp_total"],
+        "leveled_up": after["level"] > before["level"],
+    }
+
+
+def _closet_level(user_id):
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    return game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated)["level"]
+
+
+@app.get("/closet")
+async def get_closet(user_id: str = Query(...)):
+    """衣櫃：每一件衣服、幾級解鎖、解鎖了沒、現在穿哪一件。"""
+    require_user(user_id)
+    level = _closet_level(user_id)
+    gs = db.get_game_state(user_id)
+    equipped = gs["equipped_item_id"] if gs else None
+    return {
+        "user_id": user_id,
+        "level": level,
+        "equipped_item_id": equipped,
+        "items": inventory.closet_view(level, db.get_inventory(user_id), equipped),
+    }
+
+
+@app.post("/closet/equip")
+async def equip_item(req: EquipRequest):
+    """
+    換衣服。item_id=None 代表脫掉。
+
+    404 = 沒有這件衣服；403 = 還沒解鎖（訊息裡講幾級解鎖）。
+    """
+    require_user(req.user_id)
+    if req.item_id is not None:
+        item = inventory.ITEMS.get(req.item_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"Unknown item {req.item_id!r}.")
+        level = _closet_level(req.user_id)
+        if not inventory.is_unlocked(req.item_id, level, db.get_inventory(req.user_id)):
+            raise HTTPException(
+                status_code=403,
+                detail=f"{item['name']} unlocks at level {item['unlock_level']} (you are level {level}).")
+        # 穿過就記下來，之後規則改了也不收回。
+        db.add_inventory_item(req.user_id, req.item_id)
+    db.set_equipped_item(req.user_id, req.item_id)
+    return {"user_id": req.user_id, "equipped_item_id": req.item_id}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 好友（B5）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 兩條紅線，tests/test_friends.py 都守著：
+#    1. 只分享 Tier A 行為指標（白名單在 social/friends.py 的 FRIEND_FIELDS）。
+#       不得回傳深睡／REM／心率／分數——跨裝置不能比，而且是健康資訊。
+#    2. 別人的 user_id 永遠不出後端。user_id 就是憑證；好友之間用邀請碼當名牌。
+
+FRIEND_HISTORY_DAYS = 3650
+
+
+class AddFriendRequest(BaseModel):
+    user_id: str
+    invite_code: str
+
+
+def _friend_summary(friend_id):
+    user = db.get_user(friend_id)
+    handle = db.ensure_invite_code(friend_id)
+    rows = db.get_nightly_behavior(friend_id, days=FRIEND_HISTORY_DAYS)
+    return social_friends.build_friend_summary(user, handle, rows)
+
+
+def _friend_by_handle(user_id, handle):
+    """邀請碼 → 朋友的 user_id。不是朋友一律 404（不透露那個碼存不存在）。"""
+    friend_id = db.user_for_invite_code(handle)
+    if friend_id is None or not db.are_friends(user_id, friend_id):
+        raise HTTPException(status_code=404, detail="Not in your friends.")
+    return friend_id
+
+
+@app.get("/friends")
+async def get_friends(user_id: str = Query(...)):
+    """
+    我的邀請碼、我的朋友們（行為摘要）、依連續達成的排行。
+
+    ⚠️ 第一次呼叫時會替這個人建立邀請碼（之後永遠同一個）。
+    """
+    require_user(user_id)
+    summaries = [_friend_summary(fid) for fid in db.list_friend_ids(user_id)]
+    return {
+        "my_invite_code": db.ensure_invite_code(user_id),
+        "friends": summaries,
+        "leaderboard": social_friends.leaderboard(summaries),
+        "notes": {
+            "what_is_shared": (
+                "Friends only see behaviour: when the phone was put down, streaks and late nights. "
+                "Sleep scores, sleep stages and heart rate are never shared."
+            ),
+            "streak_breaks_on_missing_nights": (
+                "A night without a record breaks the streak, so streaks cannot be built by only "
+                "recording the good nights."
+            ),
+        },
+    }
+
+
+@app.post("/friends", status_code=201)
+async def add_friend(req: AddFriendRequest):
+    """
+    用邀請碼加好友（雙向）。
+
+    404 = 沒有這個碼；422 = 那是你自己的碼；409 = 已經是朋友了。
+    """
+    require_user(req.user_id)
+    friend_id = db.user_for_invite_code(req.invite_code)
+    if friend_id is None:
+        raise HTTPException(status_code=404, detail="No one has that invite code.")
+    if friend_id == req.user_id:
+        raise HTTPException(status_code=422, detail="That is your own invite code.")
+    if not db.add_friendship(req.user_id, friend_id):
+        raise HTTPException(status_code=409, detail="You are already friends.")
+    return {"friend": _friend_summary(friend_id)}
+
+
+@app.get("/friends/{handle}")
+async def get_friend(handle: str, user_id: str = Query(...)):
+    require_user(user_id)
+    return {"friend": _friend_summary(_friend_by_handle(user_id, handle))}
+
+
+@app.delete("/friends/{handle}")
+async def remove_friend(handle: str, user_id: str = Query(...)):
+    """解除好友，兩邊一起消失。"""
+    require_user(user_id)
+    friend_id = _friend_by_handle(user_id, handle)
+    db.remove_friendship(user_id, friend_id)
+    return {"removed": handle.strip().upper()}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 睡眠助理（B6）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 會花錢：每問一次就是一次 Claude API 呼叫（ai/llm_client.py，標準庫 urllib，不裝 SDK）。
+# ⚠️ 回答要通過 ai/chat.py 的四道驗證才回給 App；兩次都沒過就 503，
+#    不把沒過驗證的回答交出去。
+# ⚠️ `ai.chat` 在函式裡才 import：它會連帶 import ai/generate_advice.py，
+#    而那一支在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
+#    任何一支 import main 的測試都會帶著真的金鑰在跑。
+
+
+class ChatRequest(BaseModel):
+    user_id: str
+    message: str = Field(..., min_length=1, max_length=500)
+
+
+@app.post("/chat")
+def chat(req: ChatRequest):
+    """
+    問睡眠助理一個問題。答案只根據這個人自己的資料。
+
+    ⚠️ 用同步的 def 而不是 async：API 呼叫最多會等 60 秒，async 的話會卡住
+       整個事件迴圈，其他人的請求全部跟著等。同步的 def 會被丟到 threadpool。
+
+    503 = 伺服器沒設定金鑰／連不上 Claude／兩次都沒通過驗證。
+    """
+    user = require_user(req.user_id)
+    from ai import chat as chat_engine
+
+    if not chat_engine.key_available():
+        raise HTTPException(status_code=503, detail="The AI assistant is not configured on this server.")
+
+    behavior_rows = db.get_nightly_behavior(req.user_id, days=DEFAULT_HISTORY_DAYS)
+    wearable_rows = db.get_wearable_nightly(req.user_id, days=DEFAULT_HISTORY_DAYS)
+    streak, _ = challenge_engine.current_streak(behavior_rows)
+    facts = chat_engine.build_facts(
+        user,
+        behavior_rows[-1] if behavior_rows else None,
+        wearable_rows[-1] if wearable_rows else None,
+        streak,
+        adherence.late_night_ratio(behavior_rows),
+    )
+    try:
+        result = chat_engine.answer_question(req.message.strip(), facts)
+    except chat_engine.ChatUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return {"answer": result["answer"], "source": "llm"}

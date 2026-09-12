@@ -43,6 +43,20 @@ void main() {
     sample = await const AssetSleepRepository().load();
   });
 
+  /// 開一次 App，等到啟動的非同步流程跑完。
+  ///
+  /// ⚠️ **pump 一次不夠。** `_MainPageState._start()` 依序做三件事
+  /// （讀本機設定 → 解析帳號 → 補送就寢時間），每一步都是一個 await。
+  /// 在 `_account` 還是 null 的那幾幀，畫面上只有一個轉圈圈——
+  /// 這時候 `find.byType<HomeScreen>()` 會拿到「Bad state: No element」，
+  /// 而錯誤訊息完全不會指向「你 pump 得不夠多次」。
+  Future<void> openApp(WidgetTester tester) async {
+    await tester.pumpWidget(const SonnapApp());
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+  }
+
   /// IndexedStack 會把五個畫面都建出來，但沒顯示的那幾個包在 `Offstage` 裡，
   /// 而 `find.byType` 預設 `skipOffstage: true` 會跳過它們——所以找 Settings
   /// 一定要關掉那個預設值，否則會拿到「Bad state: No element」。
@@ -60,8 +74,7 @@ void main() {
   }
 
   testWidgets('首頁與設定頁一開始拿到同一個就寢時間', (tester) async {
-    await tester.pumpWidget(const SonnapApp());
-    await tester.pump();
+    await openApp(tester);
 
     final (home, settings) = bedtimesOf(tester);
     expect(
@@ -72,8 +85,7 @@ void main() {
   });
 
   testWidgets('在任一頁改就寢時間，另一頁立刻跟著變', (tester) async {
-    await tester.pumpWidget(const SonnapApp());
-    await tester.pump();
+    await openApp(tester);
 
     final (before, _) = bedtimesOf(tester);
     const changed = TimeOfDay(hour: 1, minute: 0);
@@ -107,8 +119,7 @@ void main() {
   });
 
   testWidgets('提醒開關同樣只有一個擁有者', (tester) async {
-    await tester.pumpWidget(const SonnapApp());
-    await tester.pump();
+    await openApp(tester);
 
     final before = settingsOf(tester).initialReminderOn;
     settingsOf(tester).onReminderChanged!(!before);
@@ -148,8 +159,7 @@ void main() {
   testWidgets('五個畫面共用同一個 repository 實例', (tester) async {
     // 各自 new 一個也能跑，但那樣「資料從哪來」會有三個答案，
     // Insights 頁就沒辦法誠實顯示來源（見 report_screen 的 _buildDeliveryRow）。
-    await tester.pumpWidget(const SonnapApp());
-    await tester.pump();
+    await openApp(tester);
 
     expect(homeOf(tester).repository, isNotNull);
   });

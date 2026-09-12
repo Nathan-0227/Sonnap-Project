@@ -353,6 +353,70 @@ CREATE TABLE IF NOT EXISTS challenge_progress (
     FOREIGN KEY (challenge_id) REFERENCES challenges(challenge_id) ON DELETE CASCADE
 );
 
+-- ── 遊戲化（B2）────────────────────────────────────────────────
+-- ⚠️ 設計紅線 4：這三張表**只存使用者的動作**（穿了什麼、領過什麼），
+--    不存 XP 或等級。XP 每次都從 nightly_behavior / wearable_nightly 即時算
+--    （game/state.py），理由同挑戰進度：事實來源只能有一個，受測者事後
+--    補填某一晚時 XP 要自動更正。存一個累加值的話，補填那一晚就永遠少算。
+-- ⚠️ 三張都掛 ON DELETE CASCADE——知情同意書承諾「退出即刪除」。
+
+CREATE TABLE IF NOT EXISTS user_game_state (
+    user_id          TEXT NOT NULL,
+    equipped_item_id TEXT,                    -- NULL = 什麼都沒穿
+    updated_at       TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 曾經穿過的衣服。⚠️ 存它的理由是**不收回**：XP 規則日後調整、等級因此
+-- 下降時，已經穿過的衣服不能消失（見 game/inventory.py）。
+CREATE TABLE IF NOT EXISTS user_inventory (
+    user_id     TEXT NOT NULL,
+    item_id     TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, item_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 已經領過的挑戰獎勵。achievement_id 的格式見 game/rewards.py
+-- （challenge:<id>:<窗格編號>，每個挑戰每個窗格領一次）。
+CREATE TABLE IF NOT EXISTS achievements (
+    user_id        TEXT NOT NULL,
+    achievement_id TEXT NOT NULL,
+    xp_awarded     INTEGER NOT NULL DEFAULT 0,
+    earned_at      TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, achievement_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- ── 好友（B5）──────────────────────────────────────────────────
+-- ⚠️ user_id 本身就是憑證，所以好友之間的名牌是**邀請碼**，不是 user_id。
+--    邀請碼只能拿來加好友，不能拿來登入（見 social/__init__.py）。
+CREATE TABLE IF NOT EXISTS invite_codes (
+    user_id    TEXT NOT NULL,
+    code       TEXT NOT NULL,              -- 6 碼，大寫，不含 0/O/1/I
+    created_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 好友關係是雙向的，一段關係存兩列（A→B、B→A）。查「我的朋友」只要一個
+-- WHERE，不必 OR 兩個方向。⚠️ 兩個欄位都掛 CASCADE：任何一方退出，
+-- 這段關係兩邊都要消失（知情同意書承諾「退出即刪除」）。
+CREATE TABLE IF NOT EXISTS friendships (
+    user_id    TEXT NOT NULL,
+    friend_id  TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, friend_id),
+    FOREIGN KEY (user_id)   REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- 查詢模式幾乎都是「某個使用者的最近 N 天」，所以索引建在 (user_id, date)。
 -- 主鍵已經涵蓋 nightly_behavior 與 wearable_nightly，只有 block_events 要補。
 CREATE INDEX IF NOT EXISTS idx_block_events_user_date
@@ -1144,6 +1208,250 @@ def get_challenge_progress(user_id, db_path=None):
             "SELECT * FROM challenge_progress WHERE user_id = ?", (user_id,)
         ).fetchall()
         return {r["challenge_id"]: dict(r) for r in rows}
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 遊戲化（B2）——只存使用者的動作，XP 一律即時算（見 game/state.py）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 這一段**不讀也不寫** wearable_nightly / nightly_behavior 以外的評分欄位，
+#    而且對那兩張表只有讀。設計紅線 4，tests/test_game_rewards.py 守著。
+# ⚠️ SQL 只用 db_backend.translate() 認得的形狀（`?` 與
+#    `ON CONFLICT(...) DO UPDATE SET x = excluded.x`）。別的寫法在 SQLite
+#    會過、在 MariaDB 會直接語法錯誤——而正式環境跑的是 MariaDB。
+
+def get_game_state(user_id, db_path=None):
+    """user_game_state 那一列；沒有就回 None（代表還沒穿過任何東西）。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM user_game_state WHERE user_id = ?", (user_id,)
+        ).fetchall()
+        return dict(rows[0]) if rows else None
+    finally:
+        conn.close()
+
+
+def set_equipped_item(user_id, item_id, db_path=None):
+    """換上一件衣服（item_id=None 代表脫掉）。能不能穿由呼叫端判斷。"""
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO user_game_state (user_id, equipped_item_id, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                equipped_item_id = excluded.equipped_item_id,
+                updated_at       = excluded.updated_at
+            """,
+            (user_id, item_id, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_inventory_item(user_id, item_id, db_path=None):
+    """
+    記下「這件穿過了」。重複呼叫不會改掉第一次的 unlocked_at。
+
+    ⚠️ 用 `DO UPDATE SET item_id = excluded.item_id`（等於什麼都沒改）而不是
+       `DO NOTHING`：後者 db_backend.translate() 翻不動，MariaDB 會語法錯誤。
+    """
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO user_inventory (user_id, item_id, unlocked_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, item_id) DO UPDATE SET
+                item_id = excluded.item_id
+            """,
+            (user_id, item_id, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_inventory(user_id, db_path=None):
+    """曾經穿過的 item_id 清單。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT item_id FROM user_inventory WHERE user_id = ? ORDER BY unlocked_at",
+            (user_id,),
+        ).fetchall()
+        return [r["item_id"] for r in rows]
+    finally:
+        conn.close()
+
+
+def get_achievements(user_id, db_path=None):
+    """已領過的挑戰獎勵，由舊到新。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM achievements WHERE user_id = ? ORDER BY earned_at",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_achievement(user_id, achievement_id, xp_awarded, db_path=None):
+    """
+    記下一次領獎。已經領過回 False、真的寫進去回 True。
+
+    ⚠️ 先查再寫而不是 INSERT 之後接 IntegrityError：SQLite 與 MariaDB
+       丟的例外類別不同，接錯一邊就會變成 500。單一使用者的請求沒有併發
+       問題，先查再寫就夠了。
+    """
+    conn = connect(db_path)
+    try:
+        exists = conn.execute(
+            "SELECT achievement_id FROM achievements WHERE user_id = ? AND achievement_id = ?",
+            (user_id, achievement_id),
+        ).fetchall()
+        if exists:
+            return False
+        conn.execute(
+            """
+            INSERT INTO achievements (user_id, achievement_id, xp_awarded, earned_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, achievement_id, int(xp_awarded), now_iso()),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 好友（B5）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ SQL 只用 db_backend.translate() 認得的形狀，理由同遊戲化那一段。
+
+# 不含 0/O/1/I：朋友是用唸的、用抄的在傳這個碼，長得像的字元會抄錯。
+_INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+INVITE_CODE_LENGTH = 6
+
+
+def get_invite_code(user_id, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT code FROM invite_codes WHERE user_id = ?", (user_id,)
+        ).fetchall()
+        return rows[0]["code"] if rows else None
+    finally:
+        conn.close()
+
+
+def user_for_invite_code(code, db_path=None):
+    """邀請碼 → user_id。大小寫不拘；查不到回 None。"""
+    if not code:
+        return None
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT user_id FROM invite_codes WHERE code = ?", (code.strip().upper(),)
+        ).fetchall()
+        return rows[0]["user_id"] if rows else None
+    finally:
+        conn.close()
+
+
+def ensure_invite_code(user_id, db_path=None):
+    """
+    取某人的邀請碼，沒有就建一個。同一個人永遠拿到同一個碼。
+
+    ⚠️ 碼是隨機的，**不是從 user_id 推出來的**——推得出來的話，
+       拿到邀請碼就等於拿到憑證。
+    """
+    import secrets
+
+    existing = get_invite_code(user_id, db_path)
+    if existing:
+        return existing
+    for _ in range(50):
+        code = "".join(secrets.choice(_INVITE_ALPHABET) for _ in range(INVITE_CODE_LENGTH))
+        if user_for_invite_code(code, db_path) is None:
+            break
+    else:  # pragma: no cover —— 32^6 ≈ 10 億種，D2 十來個人不會撞 50 次
+        raise RuntimeError("could not allocate a unique invite code")
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO invite_codes (user_id, code, created_at) VALUES (?, ?, ?)",
+            (user_id, code, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return code
+
+
+def are_friends(user_id, friend_id, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT friend_id FROM friendships WHERE user_id = ? AND friend_id = ?",
+            (user_id, friend_id),
+        ).fetchall()
+        return bool(rows)
+    finally:
+        conn.close()
+
+
+def add_friendship(user_id, friend_id, db_path=None):
+    """建立雙向好友關係。已經是朋友回 False。"""
+    if are_friends(user_id, friend_id, db_path):
+        return False
+    conn = connect(db_path)
+    try:
+        ts = now_iso()
+        for a, b in ((user_id, friend_id), (friend_id, user_id)):
+            conn.execute(
+                "INSERT INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)",
+                (a, b, ts),
+            )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def remove_friendship(user_id, friend_id, db_path=None):
+    """解除好友，兩個方向一起刪。本來就不是朋友回 False。"""
+    if not are_friends(user_id, friend_id, db_path):
+        return False
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            "DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) "
+            "OR (user_id = ? AND friend_id = ?)",
+            (user_id, friend_id, friend_id, user_id),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def list_friend_ids(user_id, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT friend_id FROM friendships WHERE user_id = ? ORDER BY created_at",
+            (user_id,),
+        ).fetchall()
+        return [r["friend_id"] for r in rows]
     finally:
         conn.close()
 

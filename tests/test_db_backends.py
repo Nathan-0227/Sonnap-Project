@@ -182,7 +182,9 @@ def live_checks(url):
     print("\n【7】兩個後端跑同一組操作，結果必須一樣")
     cfg = db_backend.mysql_config(url)
     conn = db_backend.MySQLConn(cfg)
-    for t in ("challenge_progress", "block_events", "app_usage_daily",
+    for t in ("friendships", "invite_codes",
+              "achievements", "user_inventory", "user_game_state",
+              "challenge_progress", "block_events", "app_usage_daily",
               "nightly_behavior", "wearable_nightly", "challenges", "users"):
         try:
             conn.execute(f"DROP TABLE IF EXISTS `{t}`")

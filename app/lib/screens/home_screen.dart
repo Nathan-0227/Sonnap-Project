@@ -4,6 +4,10 @@ import '../services/account_service.dart';
 import '../models/sleep_session.dart';
 import '../services/sleep_repository.dart';
 import '../widgets/feature_card.dart';
+import '../services/game_service.dart';
+import '../widgets/game_level_card.dart';
+import 'closet_screen.dart';
+import 'rewards_screen.dart';
 import '../services/bed_marks.dart';
 import '../services/key_value_store.dart';
 import '../widgets/bed_mark_buttons.dart';
@@ -38,9 +42,14 @@ class HomeScreen extends StatefulWidget {
   /// 上床／下床標記的儲存。可注入，測試才不必依賴真的原生 channel。
   final BedMarkStore bedMarks;
 
+  /// 遊戲化層（XP、等級、衣櫃、獎勵）。null = 這支 build 沒有後端，
+  /// 等級卡不顯示、衣櫃與獎勵點下去會老實講「要連上後端」。
+  final GameService? game;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
+    this.game,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
     this.targetBedtime = const TimeOfDay(hour: 23, minute: 30),
@@ -57,10 +66,58 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
   late Future<SleepSession> _sessionFuture;
 
+  /// `GET /game` 與 `GET /closet` 的結果。⚠️ 每一格都照抄後端，
+  /// 這個畫面不算 XP、不判斷哪件衣服解鎖了。
+  GameResult<GameState>? _game;
+  GameResult<ClosetState>? _closet;
+
   @override
   void initState() {
     super.initState();
     _sessionFuture = widget.repository.load();
+    _loadGame();
+  }
+
+  Future<void> _loadGame() async {
+    final service = widget.game;
+    if (service == null) return;
+    final game = await service.fetchGame();
+    final closet = await service.fetchCloset();
+    if (!mounted) return;
+    setState(() {
+      _game = game;
+      _closet = closet;
+    });
+  }
+
+  /// 沒有後端時老實講。⚠️ 不要沿用「will be available later」——
+  /// 功能已經做好了，缺的是連線；講成「以後才有」會讓人以為沒做。
+  void _showNeedsBackend(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("$feature needs the Sonnap backend. "
+            "It works when the app is connected to the server."),
+      ),
+    );
+  }
+
+  Future<void> _openCloset() async {
+    final service = widget.game;
+    if (service == null) return _showNeedsBackend("Closet");
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ClosetScreen(service: service)),
+    );
+    // 回來時重讀：剛換的衣服要出現在寵物身上。
+    if (mounted) await _loadGame();
+  }
+
+  Future<void> _openRewards() async {
+    final service = widget.game;
+    if (service == null) return _showNeedsBackend("Rewards");
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RewardsScreen(service: service)),
+    );
+    if (mounted) await _loadGame();
   }
 
   void _reload() {
@@ -242,6 +299,8 @@ class _HomeScreenState extends State<HomeScreen> {
             fallbackFilter: petMoodVisual(mood).fallbackFilter,
             onDiaryTap: () => _showDream(session),
             onFlowerTap: () => _showComingSoon("Pet activity"),
+            accessoryEmoji: _closet?.value?.equipped?.emoji,
+            growthStage: _game?.value?.growthStage,
           ),
 
           // IntrinsicHeight + stretch：兩張卡的高度下限都是 150，但內容較長時
@@ -274,6 +333,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 20),
 
+          if (_game?.value != null)
+            GameLevelCard(state: _game!.value!, onRewardsTap: _openRewards),
+
           Row(
             children: [
               Expanded(
@@ -281,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.checkroom_rounded,
                   title: "Closet",
                   subtitle: "Dress up your buddy!",
-                  onTap: () => _showComingSoon("Closet"),
+                  onTap: _openCloset,
                 ),
               ),
               const SizedBox(width: 16),
@@ -290,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.card_giftcard_rounded,
                   title: "Rewards",
                   subtitle: "Complete goals\nand unlock\nawesome rewards!",
-                  onTap: () => _showComingSoon("Rewards"),
+                  onTap: _openRewards,
                 ),
               ),
             ],

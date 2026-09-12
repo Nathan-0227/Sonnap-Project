@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bedtime_guard_label">Sonnap Bedtime Guard</string>
+    <string name="bedtime_guard_description">Sonnap Bedtime Guard only looks at which app is opening, never at what is on the screen. During your bedtime window it can show a reminder, or send you back to the home screen, when you open an app you put on your bedtime list.</string>
+</resources>

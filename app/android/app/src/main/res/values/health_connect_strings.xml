@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="health_privacy_title">How Sonnap uses Health Connect</string>
+    <string name="health_privacy_body">Sonnap reads only your sleep sessions: when each one started and ended, and its sleep stages. It sends them to the Sonnap backend, which scores each night with the same method it uses for Garmin data. Sonnap does not read heart rate, steps or any other data, does not write anything to Health Connect, and never shows your sleep data to friends.</string>
+    <string name="health_privacy_close">Close</string>
+</resources>
