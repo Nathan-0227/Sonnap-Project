@@ -32,6 +32,7 @@ migrate_camera_to_db.py — 把整夜錄影算出的臥床時間與入睡潛伏�
     python migrate_camera_to_db.py --csv tapo_metrics/20260912_011758.csv
 """
 import argparse
+import os
 import re
 import sys
 from datetime import datetime
@@ -136,7 +137,16 @@ def main():
     else:
         user_id, who = resolve_user(args.db_path)
     print(f"● 寫入帳號 {who}")
-    print(f"● 資料庫   {args.db_path or db.DB_PATH}")
+    # ⚠️ 不要印 db.DB_PATH 了事：設了 SONNAP_DB_URL 時實際寫的是 MySQL，
+    #    印出 SQLite 的路徑等於**安靜地說錯話**（2026-09-12 實際誤導過一次：
+    #    畫面說寫進 worktree 的 sonnap.db，其實六列都進了 MariaDB）。
+    # ⚠️ 不印 URL 本身——它可能含密碼。
+    if args.db_path:
+        print(f"● 資料庫   {args.db_path}（SQLite，由 --db-path 指定）")
+    elif os.environ.get("SONNAP_DB_URL"):
+        print("● 資料庫   MySQL/MariaDB（由 SONNAP_DB_URL 指定，內容不印）")
+    else:
+        print(f"● 資料庫   {db.DB_PATH}（SQLite）")
     if args.dry_run:
         print("● --dry-run：不會寫入任何東西")
     print()
