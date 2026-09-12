@@ -820,15 +820,67 @@
   },
   {
     "date": "2026-09-08",
-    "score": 82.8,
-    "quality": "Good",
+    "score": 79.4,
+    "quality": "Normal",
     "age_band": "young_adult",
-    "duration_score": 19.3,
+    "duration_score": 22.2,
     "efficiency_score": 25.0,
     "waso_score": 25.0,
-    "deep_score": 9.3,
-    "rem_score": 4.3,
+    "deep_score": 6.7,
+    "rem_score": 0.6,
     "rem_measured": true,
-    "recommendation": "Sleep quality was good. Keep your current routine. "
+    "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+  },
+  {
+    "date": "2026-09-09",
+    "score": 78.4,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 9.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 8.7,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.97 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-09-10",
+    "score": 63.0,
+    "quality": "Poor",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 3.0,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (3.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-09-11",
+    "score": 75.5,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 11.2,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 7.7,
+    "rem_score": 6.6,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.12 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-09-12",
+    "score": 75.1,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 25.3,
+    "efficiency_score": 25.0,
+    "waso_score": 15.0,
+    "deep_score": 3.3,
+    "rem_score": 6.5,
+    "rem_measured": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   }
 ]

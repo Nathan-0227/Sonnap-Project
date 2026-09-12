@@ -62,4 +62,8 @@
 2026-09-05,86.6,Good,young_adult,21.2,25.0,25.0,6.1,9.3,True,Sleep quality was good. Keep your current routine. 
 2026-09-06,81.0,Good,young_adult,15.8,25.0,25.0,9.4,5.8,True,Sleep quality was good. Keep your current routine. 
 2026-09-07,67.2,Normal,young_adult,0.3,25.0,25.0,10.0,6.9,True,"Sleep quality was acceptable, with room to improve. Sleep was short (4.03 h). Try going to bed earlier; aim for 7.0–9.0 h."
-2026-09-08,82.8,Good,young_adult,19.3,25.0,25.0,9.3,4.3,True,Sleep quality was good. Keep your current routine. 
+2026-09-08,79.4,Normal,young_adult,22.2,25.0,25.0,6.7,0.6,True,"Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+2026-09-09,78.4,Normal,young_adult,9.7,25.0,25.0,10.0,8.7,True,"Sleep quality was acceptable, with room to improve. Sleep was short (4.97 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-09-10,63.0,Poor,young_adult,0.0,25.0,25.0,10.0,3.0,True,Sleep quality was below average; consider adjusting your routine. Sleep was short (3.32 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-09-11,75.5,Normal,young_adult,11.2,25.0,25.0,7.7,6.6,True,"Sleep quality was acceptable, with room to improve. Sleep was short (5.12 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-09-12,75.1,Normal,young_adult,25.3,25.0,15.0,3.3,6.5,True,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
