@@ -435,6 +435,30 @@ SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python -m uvicorn main:
 第一次在新位置建 DB：`python db.py --init && python db.py --seed`
 再 `python migrate_garmin_to_db.py`（都要帶著同一個 `SONNAP_DB`）。
 
+⚠️ **更上一層：跑著的後端可能根本不是 SQLite。**（2026-09-10 連踩兩次）
+
+PR #42 把後端搬到 XAMPP 的 MariaDB（`SONNAP_DB_URL=mysql://root@localhost/sonnap`），
+09-10 04:20 合併。但**跑著的 uvicorn 是 09-10 01:16 從 `Sonnap-onset` worktree 啟動的**
+（比合併還早三小時）——那個目錄 checkout 的正是那條分支。而去查的人工作目錄
+停在較舊的分支上，grep `main.py`／`db.py` 看不到任何 MySQL，於是**更加確信是 SQLite**。
+所以手機上傳全進了 MariaDB，
+而去讀 `sonnap.db` 的人會看到「少了兩晚」、做出錯的結論（實際 5 晚都在）。
+四個 worktree 的 `sonnap.db` 全查過也一樣找不到，因為資料根本不在任何 sqlite 檔裡。
+
+**為什麼查不出來**：uvicorn 的 CommandLine 只顯示直譯器路徑，而 worktree
+共用主目錄的 venv，所以**所有 worktree 啟動的 uvicorn 看起來一模一樣**，
+看不出工作目錄、也看不出連哪種資料庫。
+
+→ **查資料一律先問跑著的那個 server，不要直接讀檔：**
+
+```bash
+curl -s "http://127.0.0.1:8000/insights?user_id=<id>"     # 以 server 回的為準
+```
+
+server 說的晚數跟你讀檔讀到的對不上，就是讀錯地方了。
+要直接讀 MariaDB：`mysql.connector.connect(host='127.0.0.1', user='root', password='', database='sonnap')`。
+⚠️ PR #42 現在合併了沒、main 上是哪種後端，**問 git 不要問這一段**。
+
 桌面上那份 `OneDrive\桌面\Sonnap-Project-main\Sonnap-舊工作副本_勿用\` 是最初下載的 zip，
 **沒有版控、已停用**。它裡面只剩三樣東西沒被搬過來，都是刻意的：`garmin/.env`（帳密）、
 除錯 log、`garmin/data/_backup_20260811/`（重抓資料前的保險）。
