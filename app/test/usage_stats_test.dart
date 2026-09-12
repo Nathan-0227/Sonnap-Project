@@ -19,6 +19,7 @@ import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/report_screen.dart';
 import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
+import 'package:app/services/pending_nightly.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/bed_marks.dart';
@@ -48,9 +49,15 @@ class _StubUploader implements NightlyUploader {
   final bool acceptsMarks;
 
   /// 上傳時實際收到的標記。用來驗「按了按鈕就要送上去」。
+  ///
+  /// ⚠️ 畫面走的是 [sync] 不是 [upload]，所以兩條都要記——只記 upload
+  /// 的話這個欄位永遠是 null，而測試會以為「按了卻沒送上去」。
   BedMarks? received;
 
-  _StubUploader(this.result, {this.acceptsMarks = true});
+  /// 這一晚有沒有被存進離線佇列（上傳失敗但留得住）。
+  final bool queued;
+
+  _StubUploader(this.result, {this.acceptsMarks = true, this.queued = false});
 
   @override
   Future<NightlyUploadResult> upload(
@@ -69,6 +76,23 @@ class _StubUploader implements NightlyUploader {
       storedBedEndAt: marks.endIso,
     );
   }
+
+  /// 畫面走的是這一條（[NightlyUploader.sync]）。補送的舊夜晚固定為空——
+  /// 佇列本身由 nightly_uploader_test.dart 測，這裡只驗顯示。
+  @override
+  Future<NightlyUploadBatch> sync(
+    LightsOutResult lightsOut, {
+    BedMarks marks = BedMarks.none,
+  }) async {
+    // ⚠️ 走 upload() 那一段，不要直接回 result。畫面走的是 sync()，
+    //    直接回 result 的話 acceptsMarks 就沒有作用——「回 201 但後端沒收下」
+    //    與「收下了」會長得一模一樣，守那件事的測試就守不住任何東西。
+    final current = await upload(lightsOut, marks: marks);
+    return NightlyUploadBatch(current: current, currentQueued: queued);
+  }
+
+  @override
+  PendingNightlyStore? get pending => null;
 
   @override
   String get baseUrl => 'stub';
@@ -602,8 +626,10 @@ void main() {
           reason: '達成度照樣算得出來');
     });
 
-    testWidgets('上傳失敗**不要**清掉標記', (tester) async {
+    testWidgets('上傳失敗、又沒進佇列 → **不要**清掉標記', (tester) async {
       // 後端沒開是 demo 的常態。清掉等於把使用者早上按的那一下弄丟。
+      // ⚠️ 判準是「後端真的收下了」。下面兩條測的是另外兩種
+      //    「看起來成功、其實還沒落地」的情況。
       final kv = InMemoryKeyValueStore();
       final store = BedMarkStore(kv);
       await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
@@ -626,11 +652,7 @@ void main() {
       // 那條判斷本身是對的（曾把 09-07 03:36 的標記寫進 09-06 那一列，
       // 算出 −1282 分鐘），但它讓「上傳成功」與「標記存下來了」變成兩件事。
       //
-      // 舊版判準是 `status == ok && marks.isComplete`——完全看不到後端
-      // 到底收了沒。結果手機上的 09-09 標記被清掉，而後端一列都沒存。
-      // **成功了但什麼都沒做**，這個專案最常見的那類 bug。
-      //
-      // → 判準必須是 `upload.marksStored`（後端回應有沒有帶回那兩個時刻）。
+      // → 判準必須是 `marksStored`（後端回應有沒有帶回那兩個時刻）。
       final kv = InMemoryKeyValueStore();
       final store = BedMarkStore(kv);
       await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
@@ -650,6 +672,58 @@ void main() {
       expect(stub.received?.isComplete, isTrue, reason: '有送出去');
       expect(await kv.getString(kBedStartKey), isNotNull,
           reason: '後端沒收下就清掉，那一晚就永遠回不來了');
+      expect(await kv.getString(kBedEndKey), isNotNull);
+    });
+
+    testWidgets('⚠️ 送出去的是上一晚的待送那一對 → 只清待送格，今晚剛按的開始要留著', (tester) async {
+      // 情境（2026-09-09 真的發生過）：早上沒開 App、晚上又按了下一晚的
+      // 「開始」。上一晚那一對被搬進待送格，這一次上傳送的是它。
+      // 上傳成功之後**只能清待送格**——用 clear() 的話會把使用者
+      // 今晚剛按的「開始」一起刪掉，而畫面上不會有任何跡象。
+      //
+      // ⚠️ 這一條是變異測試補出來的：主線只在儲存層（bed_marks_test）
+      //    測了 clearPending 本身，畫面層「送哪一格就清哪一格」沒有人守。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      final now = DateTime.now();
+      await store.markStart(now.subtract(const Duration(hours: 20)));
+      await store.markEnd(now.subtract(const Duration(hours: 12)));
+      await store.markStart(now.subtract(const Duration(minutes: 5))); // 今晚
+
+      final stub = _StubUploader(const NightlyUploadResult(
+        NightlyUploadStatus.ok,
+        date: '2026-09-01',
+        adherenceMinutes: 12,
+        isLate: true,
+      ));
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '送的是待送格那一對');
+      expect(await kv.getString(kBedPendingStartKey), isNull,
+          reason: '後端收下了，待送格要清');
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '今晚剛按的開始不能被一起刪掉');
+    });
+
+    testWidgets('上傳失敗、這一晚進了離線佇列 → 本機標記也要**保留**', (tester) async {
+      // ⚠️ 上一版的判準是「進佇列就算安全落地、可以清」。主線補上
+      //    same_night 之後那個理由不成立了，而且會在補送被後端退回時
+      //    把那一對弄丟（佇列裡的被退回、本機的已經清掉）。
+      //    只有後端真的收下才清——這一條把它釘住。
+      final kv = InMemoryKeyValueStore();
+      final store = BedMarkStore(kv);
+      await store.markStart(DateTime.now().subtract(const Duration(hours: 8)));
+      await store.markEnd(DateTime.now());
+
+      final stub = _StubUploader(
+        const NightlyUploadResult(NightlyUploadStatus.failed, error: 'boom'),
+        queued: true,
+      );
+      await pumpReport(tester, detected(), uploader: stub, bedMarks: store);
+
+      expect(stub.received?.isComplete, isTrue, reason: '標記要跟著進佇列');
+      expect(await kv.getString(kBedStartKey), isNotNull,
+          reason: '還沒有任何一邊確認收下，不能清');
       expect(await kv.getString(kBedEndKey), isNotNull);
     });
   });

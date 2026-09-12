@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'bedtime_urgency.dart';
+
 class HeaderCard extends StatefulWidget {
   final String username;
   final String message;
@@ -190,6 +192,12 @@ class _HeaderCardState extends State<HeaderCard> {
 
     final progress = rawProgress.clamp(0.0, 1.0);
 
+    // ⚠️ 顏色由 [bedtimeUrgency] 決定，**不要在這裡自己比 Duration**。
+    //    那個判斷有一段不直覺的地方（剛過就寢時間時倒數顯示的是 23 小時多，
+    //    看起來像「還很充裕」），寫在純函式裡才測得到、也才只有一份。
+    final urgency = bedtimeUrgency(now, targetBedtime);
+    final urgencyColor = bedtimeUrgencyColor(urgency);
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
@@ -319,7 +327,7 @@ class _HeaderCardState extends State<HeaderCard> {
                             value: progress,
                             strokeWidth: 12,
                             backgroundColor: Colors.white24,
-                            color: const Color(0xFF8B6DFF),
+                            color: urgencyColor,
                           ),
                         ),
                         // 圓環裡的字也要跟著縮——不然系統字級一調大就從
@@ -347,17 +355,21 @@ class _HeaderCardState extends State<HeaderCard> {
                                 ),
                                 Text(
                                   timeLeft,
+                                  // ⚠️ 測試靠這個 key 找到它。原本是靠
+                                  //    「FittedBox 底下唯一的 Text」定位，
+                                  //    但版面一改就有好幾個 FittedBox 了。
+                                  key: const Key('bedtime-countdown'),
                                   maxLines: 1,
-                                  style: const TextStyle(
-                                    color: Color(0xFFFFD96A),
+                                  style: TextStyle(
+                                    color: urgencyColor,
                                     fontSize: 30,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const Text(
-                                  "to bedtime",
+                                Text(
+                                  bedtimeUrgencyCaption(urgency),
                                   maxLines: 1,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 12,
                                   ),

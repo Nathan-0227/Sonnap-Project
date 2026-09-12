@@ -15,15 +15,37 @@ class PetCard extends StatelessWidget {
   /// ⚠️ 只套在退路上，不套在 [animationPath]——美術給的檔要照原樣播。
   final ColorFilter? fallbackFilter;
 
+  /// 寵物身上穿的衣服（衣櫃裡選的那一件的 emoji）。null = 什麼都沒穿。
+  final String? accessoryEmoji;
+
+  /// 成長階段（'baby' / 'young' / 'adult'），決定寵物畫多大。
+  /// ⚠️ 階段由後端依等級決定（game/levels.py），這裡只把它換成大小。
+  /// null = 沒有遊戲資料，維持原本的大小。
+  final String? growthStage;
+
   const PetCard({
     super.key,
     required this.message,
     required this.animationPath,
     this.fallbackAnimationPath,
     this.fallbackFilter,
+    this.accessoryEmoji,
+    this.growthStage,
     this.onDiaryTap,
     this.onFlowerTap,
   });
+
+  /// 成長階段 → 寵物大小。純呈現的對映。
+  double get _growthScale {
+    switch (growthStage) {
+      case 'baby':
+        return 0.85;
+      case 'adult':
+        return 1.12;
+      default:
+        return 1.0;
+    }
+  }
 
   /// 第二、三層退路。抽成方法是因為 errorBuilder 裡塞三層巢狀很難讀。
   Widget _buildFallback() {
@@ -164,7 +186,9 @@ class PetCard extends StatelessWidget {
               //   ③ 連 happy_dog.json 都讀不到 → 靜態的爪印 icon
               // ② 是目前的實際情況（美術只給了 happy_dog.json），
               // 用意是不要出現「文字寫 Anxious、圖在搖尾巴」的矛盾畫面。
-              child: Lottie.asset(
+              child: Transform.scale(
+                scale: _growthScale,
+                child: Lottie.asset(
                 animationPath,
                 width: 190,
                 height: 190,
@@ -173,8 +197,24 @@ class PetCard extends StatelessWidget {
                   return _buildFallback();
                 },
               ),
+              ),
             ),
           ),
+
+          // 衣櫃裡穿的那一件，疊在寵物頭上。
+          if (accessoryEmoji != null)
+            Positioned(
+              top: 70,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  accessoryEmoji!,
+                  key: const Key('pet-accessory'),
+                  style: const TextStyle(fontSize: 44),
+                ),
+              ),
+            ),
 
           const Positioned(
             bottom: 10,

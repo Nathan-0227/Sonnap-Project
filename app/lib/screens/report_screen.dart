@@ -2,11 +2,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
+import '../content/sleep_basics.dart';
 import '../models/sleep_session.dart';
 import '../models/wall_clock.dart';
 import '../services/lights_out.dart';
 import '../services/backfill.dart' as backfill;
 import '../services/bed_marks.dart';
+import '../services/challenges_service.dart';
+import '../services/home_service.dart';
 import '../services/key_value_store.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
@@ -24,6 +27,12 @@ class ReportScreen extends StatefulWidget {
   /// 把偵測到的就寢時刻送去後端。null = 這支 build 沒設定後端，不上傳。
   final NightlyUploader? uploader;
 
+  /// 挑戰進度的來源。null = 這支 build 沒有後端，整張卡不顯示。
+  final ChallengesService? challenges;
+
+  /// 熬夜比率的來源（`GET /home` 的 behavior 區塊）。
+  final HomeService? home;
+
   /// 使用者自己按的上床／下床時刻。
   ///
   /// ⚠️ **加分項不是取代品**：沒按的夜晚照樣走被動偵測的 `lights_out_at`，
@@ -39,6 +48,8 @@ class ReportScreen extends StatefulWidget {
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
     this.uploader,
+    this.challenges,
+    this.home,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
     this.cameraInsights,
   });
@@ -104,8 +115,23 @@ class _ReportScreenState extends State<ReportScreen>
   /// 但**是兩個不同的量**：一個是整天的總量，一個是一個時刻。
   LightsOutResult? _lightsOut;
 
-  /// 把 [_lightsOut] 送去後端的結果。**達成度的數字來自這裡而不是 Dart。**
-  NightlyUploadResult? _upload;
+  /// 把 [_lightsOut] 送去後端的結果，含這一次補送掉的舊夜晚。
+  /// **達成度的數字來自這裡而不是 Dart。**
+  NightlyUploadBatch? _batch;
+
+  /// 這一晚的結果。⚠️ 只看 [NightlyUploadBatch.current]——補送的舊夜晚
+  /// 不能混進來，否則畫面上顯示的會是三天前那一晚的達成度，
+  /// 而且看不出來講的是哪一天。
+  NightlyUploadResult? get _upload => _batch?.current;
+
+  /// `GET /challenges` 的結果。**每一格數字都是後端算的**，
+  /// 這個畫面一個都不重算。
+  ChallengesResult? _challenges;
+
+  /// `GET /home` 的結果。⚠️ **只用它的 behavior 區塊**——
+  /// 心情的唯一來源是 repository 的 payload，多一個來源就會出現
+  /// 首頁與 Insights 顯示兩隻不同寵物的情況。
+  HomeResult? _home;
 
   /// 上床前那一小時每個 App 各佔多久。與 [_usage]（整天彙總）是
   /// **兩個不同的量**——整天用了三小時 IG，跟躺下前那一小時都在滑 IG，
@@ -191,28 +217,59 @@ class _ReportScreenState extends State<ReportScreen>
     //    後端沒開是 demo 的常態（見 FallbackSleepRepository 的理由），
     //    不能讓它把已經算出來的就寢時刻連帶擋掉。
     final uploader = widget.uploader;
-    if (uploader == null) return;
-    final upload = await uploader.upload(lightsOut, marks: marks);
-    if (!mounted) return;
-    setState(() => _upload = upload);
+    if (uploader != null) {
+      // ⚠️ sync() 而不是 upload()：它會先把之前連不到後端那幾晚補送掉。
+      //    偵測視窗是往回 24 小時的滑動視窗，沒有這一步那些夜晚就永久消失了。
+      final batch = await uploader.sync(lightsOut, marks: marks);
+      if (!mounted) return;
+      setState(() => _batch = batch);
 
-    // 上傳成功才清掉標記，否則同一對會被算進第二晚。
-    // ⚠️ 失敗**不要**清 —— 後端沒開是 demo 的常態，清掉等於把使用者
-    //    今天早上按的那一下弄丟。
-    // ⚠️ 清掉的必須是**送出去的那一個槽**。用 clear() 清 pending 的情況，
-    //    會把使用者今晚剛按的「開始」一起刪掉——那正是這次要修的 bug 的
-    //    反向版本。
-    // ⚠️ 判準是「**後端收下了**」不是「上傳成功」。兩者會不一樣：
-    //    `main.py` 的 `same_night` 在夜份不符時靜靜丟掉整組標記，
-    //    但仍然回 201。2026-09-10 因此掉了一次資料——App 看到 201 就清掉，
-    //    而後端一列都沒存。**成功了但什麼都沒做。**
-    if (upload.status == NightlyUploadStatus.ok && upload.marksStored) {
-      if (pending.isComplete) {
-        await widget.bedMarks.clearPending();
-      } else {
-        await widget.bedMarks.clear();
+      // 清掉本機的上床標記，免得同一對被算進第二晚。
+      //
+      // ⚠️ 判準是「**後端收下了**」不是「上傳成功」。兩者會不一樣：
+      //    `main.py` 的 `same_night` 在夜份不符時靜靜丟掉整組標記，
+      //    但仍然回 201。2026-09-10 因此掉了一次資料——App 看到 201 就清掉，
+      //    而後端一列都沒存。**成功了但什麼都沒做。**
+      // ⚠️ 清掉的必須是**送出去的那一個槽**。用 clear() 清 pending 的情況，
+      //    會把使用者今晚剛按的「開始」一起刪掉。
+      // ⚠️ **上傳失敗、這一晚進了離線佇列時不清。** 上一版曾經在這裡清
+      //    （理由是 36 小時內明天那一晚會再讀到同一對、配到兩個夜晚）。
+      //    主線補上 same_night 之後，那件事改由後端擋——配錯夜的標記
+      //    根本存不進去。反過來，進佇列就清的話，補送時萬一被 same_night
+      //    退回，那一對就兩邊都沒有了。所以只在後端真的收下時才清。
+      final current = batch.current;
+      if (current.status == NightlyUploadStatus.ok && current.marksStored) {
+        if (pending.isComplete) {
+          await widget.bedMarks.clearPending();
+        } else {
+          await widget.bedMarks.clear();
+        }
       }
     }
+
+    // ⚠️ 挑戰進度一定要在上傳**之後**問，而且**不能寫在
+    //    `if (uploader == null) return;` 後面**——沒有 uploader 的 build
+    //    照樣要看得到挑戰卡。後端是每次即時重算的（main.py 的
+    //    /challenges），順序反了就會少算今晚這一筆，使用者看到的是
+    //    「昨天的進度」而畫面上完全看不出來。
+    await _loadChallenges();
+    await _loadHome();
+  }
+
+  Future<void> _loadChallenges() async {
+    final service = widget.challenges;
+    if (service == null) return;
+    final result = await service.fetch();
+    if (!mounted) return;
+    setState(() => _challenges = result);
+  }
+
+  Future<void> _loadHome() async {
+    final service = widget.home;
+    if (service == null) return;
+    final result = await service.fetch();
+    if (!mounted) return;
+    setState(() => _home = result);
   }
 
   /// 只負責把使用者帶到系統設定頁。**重查交給 [didChangeAppLifecycleState]**。
@@ -374,6 +431,19 @@ class _ReportScreenState extends State<ReportScreen>
                       );
                     },
                   ),
+
+                  const SizedBox(height: 14),
+
+                  _buildLateNightsCard(),
+
+                  if (_home?.behavior != null)
+                    const SizedBox(height: 14),
+
+                  _buildChallengesCard(),
+
+                  const SizedBox(height: 14),
+
+                  _buildSleepBasicsCard(),
                 ],
               ),
             );
@@ -1397,6 +1467,45 @@ class _ReportScreenState extends State<ReportScreen>
             ),
           ),
           _buildAdherenceLine(),
+          _buildBackfillLine(),
+        ],
+      ),
+    );
+  }
+
+  /// 「這次順便補送了幾晚」。
+  ///
+  /// ⚠️ 只講**晚數**，不講任何一晚的達成度。補送的是舊夜晚，把它們的數字
+  /// 混進上面那一行就會變成「畫面上顯示的達成度不知道是哪一天的」——
+  /// 那正是 [NightlyUploadBatch] 把兩者分開的理由。
+  Widget _buildBackfillLine() {
+    final batch = _batch;
+    if (batch == null || batch.replayed.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final n = batch.replayed.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.cloud_done_outlined,
+            size: 13,
+            color: Color(0xFF8498B7),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              n == 1
+                  ? 'Also synced 1 earlier night that could not reach the backend.'
+                  : 'Also synced $n earlier nights that could not reach the backend.',
+              style: const TextStyle(
+                color: Color(0xFF8498B7),
+                fontSize: 9,
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1410,8 +1519,13 @@ class _ReportScreenState extends State<ReportScreen>
   /// 第二個定義處，而兩份漂移時不會有任何錯誤訊息——與「不要在 Dart 從
   /// final_quality 推 pet_mood」是同一條紀律。
   ///
-  /// 上傳失敗**刻意不在這裡報錯**：那一晚的資料還在手機裡，下次開 App 會再試，
-  /// 而上面那個時刻已經算出來了，不該被後端連不上連帶擋掉。
+  /// 上傳失敗**刻意不在這裡報錯**：上面那個時刻已經算出來了，不該被
+  /// 後端連不上連帶擋掉，而那一晚也不會不見——[NightlyUploader.sync] 已經
+  /// 把它存進手機，下次開 App 補送。
+  ///
+  /// ⚠️ 這段註解原本寫的是「那一晚的資料還在手機裡，下次開 App 會再試」，
+  /// 而在 [PendingNightlyStore] 之前那是**假的**：偵測視窗是往回 24 小時的
+  /// 滑動視窗，隔天再開 App 的視窗裡已經沒有那一晚了。
   Widget _buildAdherenceLine() {
     final upload = _upload;
     if (upload == null || upload.status != NightlyUploadStatus.ok) {
@@ -2003,6 +2117,367 @@ class _ReportScreenState extends State<ReportScreen>
   // ============================================================
   // CARD
   // ============================================================
+
+  // ============================================================
+  // LATE NIGHTS
+  // ============================================================
+
+  /// 熬夜比率。`GET /home` 的 `behavior.late_night_ratio`。
+  ///
+  /// ⚠️ **這個數字不是 Dart 算的，分母也不是日曆天。**
+  /// `behavior/adherence.py` 的 `late_night_ratio()` 刻意用「有測到資料的
+  /// 夜數」當分母：把沒資料的日子當成「沒熬夜」數字會好看但沒有意義，
+  /// 當成「熬夜」則是憑空捏造。所以畫面上**一定要把分母講出來**，
+  /// 不然 40% 看起來像「30 天裡有 12 天」，實際上可能是「5 晚裡有 2 晚」。
+  ///
+  /// ⚠️ `ratio == null` 是「還沒有任何一晚有記錄」，不是 0%。
+  /// 畫成 0% 等於恭喜一個我們根本沒測到的人。
+  Widget _buildLateNightsCard() {
+    final result = _home;
+    final summary = result?.behavior;
+    if (result == null || result.status != HomeStatus.ok || summary == null) {
+      return const SizedBox.shrink();
+    }
+
+    final ratio = summary.lateNightRatio;
+    final hasData = ratio != null && summary.recordedNights > 0;
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.nightlight_round,
+                color: purpleColor,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Late Nights',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Text(
+                'from backend',
+                style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!hasData)
+            const Text(
+              'No nights recorded yet, so there is nothing to compare.',
+              style: TextStyle(
+                color: Color(0xFF6B7F9E),
+                fontSize: 10,
+                height: 1.4,
+              ),
+            )
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  '${(ratio * 100).round()}%',
+                  style: TextStyle(
+                    color: ratio >= 0.5 ? yellowColor : greenColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // ⚠️ 分母。沒有它，「40%」看起來像「30 天裡有 12 天」，
+                //    但它可能是「5 晚裡有 2 晚」——樣本大小完全不同。
+                Expanded(
+                  child: Text(
+                    'late on ${summary.lateNights} of '
+                    '${summary.recordedNights} recorded nights',
+                    style: const TextStyle(
+                      color: Color(0xFF9FB3D1),
+                      fontSize: 10,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              // ⚠️ 「有記錄的夜晚」不等於「過去 N 天」。這一句把兩者的差別
+              //    講清楚——分母的意義本身就是這張卡最容易被誤讀的地方。
+              'Counted over nights that were actually measured in the last '
+              '${summary.windowDays} days, not over calendar days.',
+              style: const TextStyle(
+                color: Color(0xFF8498B7),
+                fontSize: 9,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // SLEEP BASICS
+  // ============================================================
+
+  /// 睡眠小知識。內容在 `content/sleep_basics.dart`。
+  ///
+  /// ⚠️ 每一條都要把出處一起顯示出來。沒有出處的「小知識」就只是一句話——
+  /// 而這個專案的立場是每個數字都要講得出從哪來。
+  Widget _buildSleepBasicsCard() {
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.menu_book_rounded, color: purpleColor, size: 19),
+              SizedBox(width: 7),
+              Text(
+                'Sleep basics',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final b in kSleepBasics) ...[
+            Text(
+              b.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              b.summary,
+              style: const TextStyle(color: Color(0xFF9FB3D1), fontSize: 11, height: 1.4),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              b.source,
+              style: const TextStyle(color: Color(0xFF5B6E8C), fontSize: 9),
+            ),
+            if (b != kSleepBasics.last) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // CHALLENGES
+  // ============================================================
+
+  /// 挑戰進度。`GET /challenges`。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 三條紅線，違反了都不會報錯，只會安靜地講錯話
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  ///   1. **這裡一格數字都不算。** 進度、達成與否、那句 detail，全部是
+  ///      `behavior/challenges.py` 算好回來的。在 Dart 重算就有第二個
+  ///      定義處——尤其 consistency 的進度是 `目標 ÷ 實際`（比值，不是
+  ///      線性遞減），照直覺重寫一定會不一樣。
+  ///   2. **insufficient_data 是第三種狀態，不是 0%。** 畫成一條空的
+  ///      進度條，使用者會以為自己表現很差，而事實是我們還沒收到他的
+  ///      資料。後端刻意把兩者分開（`challenges.py` 的 `evaluate_challenge`）。
+  ///   3. **一定要顯示 recorded_nights 當分母。** `challenges.py:400`
+  ///      明寫理由：沒有它，「達成 3 晚」看不出是 3/3 還是 3/14。
+  ///
+  /// ⚠️ 拿不到（後端沒開、還沒建帳號、連不上）就整張卡不出現。
+  /// 顯示一張空的或上次的，比不顯示更糟——那會讓人以為那是今天的進度。
+  Widget _buildChallengesCard() {
+    final result = _challenges;
+    if (result == null ||
+        result.status != ChallengesStatus.ok ||
+        result.challenges.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.flag_rounded,
+                color: purpleColor,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Challenges',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Text(
+                'from backend',
+                style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Every target here is a behaviour you control - when you put the '
+            'phone down - never a sleep outcome.',
+            style: TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final challenge in result.challenges) ...[
+            _buildChallengeRow(challenge),
+            if (challenge != result.challenges.last)
+              const SizedBox(height: 13),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChallengeRow(ChallengeProgress challenge) {
+    final enough = challenge.state != ChallengeState.insufficientData;
+    final done = challenge.state == ChallengeState.completed;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              done
+                  ? Icons.check_circle_rounded
+                  : enough
+                      ? Icons.radio_button_unchecked_rounded
+                      : Icons.help_outline_rounded,
+              size: 13,
+              color: done
+                  ? greenColor
+                  : enough
+                      ? yellowColor
+                      : const Color(0xFF5B6E8C),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                challenge.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            // ⚠️ 分母。沒有它，「達成 3 晚」看不出是 3/3 還是 3/14。
+            Text(
+              '${challenge.recordedNights}/${challenge.windowDays} nights',
+              style: const TextStyle(
+                color: Color(0xFF5B6E8C),
+                fontSize: 8,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        _buildChallengeBar(challenge),
+        const SizedBox(height: 5),
+        Text(
+          // ⚠️ 整句都是後端寫的，不要在這裡重組。
+          challenge.detail,
+          style: TextStyle(
+            color: enough ? const Color(0xFF9FB3D1) : const Color(0xFF6B7F9E),
+            fontSize: 9,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 進度條。
+  ///
+  /// ⚠️ 資料不足時**不畫進度條**，改畫一條虛的底線加一句話。畫成 0% 的
+  /// 條子跟「你表現很差」長得一模一樣，而這兩件事要講的話完全相反。
+  ///
+  /// ⚠️ 不需要為 `lower_is_better`（作息收斂那一項的離散度）做任何反轉：
+  /// 後端回的 `progress` 已經是「越高越好」（consistency 用的是
+  /// `目標 ÷ 實際`）。在這裡再反轉一次就會把它倒過來。
+  Widget _buildChallengeBar(ChallengeProgress challenge) {
+    final progress = challenge.progress;
+    if (progress == null) {
+      return Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFF12325A),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'not enough data yet',
+            style: TextStyle(color: Color(0xFF6B7F9E), fontSize: 8),
+          ),
+        ],
+      );
+    }
+
+    final done = challenge.state == ChallengeState.completed;
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 5,
+              backgroundColor: const Color(0xFF12325A),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                done ? greenColor : purpleColor,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${(progress * 100).round()}%',
+          style: TextStyle(
+            color: done ? greenColor : const Color(0xFF9FB3D1),
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _insightCard({
     required Widget child,

@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'bed_marks.dart';
+import 'key_value_store.dart';
 import 'lights_out.dart';
+import 'pending_nightly.dart';
 import 'sleep_repository.dart';
 import 'user_identity.dart';
 
@@ -80,6 +82,41 @@ class NightlyUploadResult {
   });
 }
 
+/// 一次同步的結果：這一晚，加上補送掉的舊夜晚。
+///
+/// ⚠️ **[current] 與 [replayed] 一定要分開。** 畫面上的達成度只能講
+/// [current]——把補送的夜晚混進去，使用者早上看到的會是三天前那一晚的
+/// 數字，而畫面上完全看不出來講的是哪一天。這就是「補送不得重複計算」
+/// 具體長什麼樣子。
+@immutable
+class NightlyUploadBatch {
+  /// 這一次偵測到的那一晚。沒偵測到時 status 是 nothingDetected。
+  final NightlyUploadResult current;
+
+  /// 這一次順便補送成功的**舊**夜晚，不含 [current]。
+  final List<NightlyUploadResult> replayed;
+
+  /// 補送完之後還留在手機裡沒送出去的夜晚數。
+  final int stillPending;
+
+  /// 今晚這一筆**已經安全地存進佇列**了嗎（上傳失敗但留得住）。
+  ///
+  /// ⚠️ 呼叫端靠這個決定要不要清掉本機的上床標記。
+  /// 在有佇列之前，`bed_marks` 只在上傳成功時清——因為失敗時清掉就
+  /// 等於把使用者按的那一下弄丟。有了佇列之後那個取捨不存在了：
+  /// 標記已經跟著那一晚一起存進佇列，留在 [BedMarkStore] 裡反而會被
+  /// **明天那一晚**再讀一次（[kBedMarkMaxAge] 是 36 小時），
+  /// 同一對標記因此配到兩個不同的夜晚。
+  final bool currentQueued;
+
+  const NightlyUploadBatch({
+    required this.current,
+    this.replayed = const <NightlyUploadResult>[],
+    this.stillPending = 0,
+    this.currentQueued = false,
+  });
+}
+
 /// 把偵測到的就寢時刻送去後端 `POST /nightly`。
 ///
 /// ═══════════════════════════════════════════════════════════════════
@@ -114,11 +151,121 @@ class NightlyUploader {
   /// 上傳失敗不該讓畫面卡住——那一晚的資料還在手機裡，下次開 App 會再試。
   final Duration timeout;
 
+  /// 上傳失敗的夜晚存在哪裡。null = 不留存（舊行為）。
+  ///
+  /// ⚠️ 給了它才有 [sync]，而**只有 [sync] 補得回連不到後端的那一晚**。
+  /// 見 [PendingNightlyStore] 的檔頭：偵測視窗是往回 24 小時的滑動視窗，
+  /// 隔天再開一次 App 是救不回來的。
+  final PendingNightlyStore? pending;
+
   const NightlyUploader({
     required this.baseUrl,
     required this.identity,
+    this.pending,
     this.timeout = const Duration(seconds: 3),
   });
+
+  /// 送這一晚，順便把之前沒送成功的補送掉。
+  ///
+  /// 順序是**先補舊的、再送今晚**：畫面上顯示的是今晚，所以它要是最後
+  /// 拿到的那一份。
+  ///
+  /// ⚠️ 沒有 [pending] 時退化成單純的 [upload]，行為與加這一層之前
+  /// 完全相同——與 `buildSleepRepository()` 的「什麼都沒設定仍然跑得起來」
+  /// 是同一個原則。
+  Future<NightlyUploadBatch> sync(
+    LightsOutResult lightsOut, {
+    BedMarks marks = BedMarks.none,
+  }) async {
+    final queue = pending;
+    if (queue == null) {
+      return NightlyUploadBatch(current: await upload(lightsOut, marks: marks));
+    }
+
+    final todayIso =
+        lightsOut.status == LightsOutStatus.ok ? lightsOut.iso8601 : null;
+
+    // ⚠️ 濾一次，**送出與存進佇列用的是同一組**。分兩次算的話，
+    //    「送出去的」與「存起來的」有可能不一樣，而那種不一致只會在
+    //    補送成功之後才看得到。
+    final usable = _usableMarks(lightsOut, marks);
+
+    final stored = await queue.load();
+    // ⚠️ 今晚這一筆如果已經在佇列裡就先拿掉。24 小時的視窗會連續兩天算出
+    //    **同一個時刻**，不拿掉的話同一晚會被送兩次、畫面上也會算兩次。
+    stored.removeWhere((night) => night.lightsOutIso == todayIso);
+
+    final replayed = <NightlyUploadResult>[];
+    final remaining = <PendingNight>[];
+    for (final night in stored) {
+      // ⚠️ 補送要帶著**那一晚自己的**上床標記，不是現在手機裡的那一組。
+      //    拿今天的標記去補三天前那一晚，算出來的臥床時間是假的。
+      final result = await _post(night.lightsOutIso, night.marks);
+      if (result.status == NightlyUploadStatus.ok) {
+        replayed.add(result);
+      } else if (_worthKeeping(result.status)) {
+        remaining.add(night);
+      }
+      // 其餘狀態代表「這筆補不回來了」（例如後端回 400 說時刻壞掉），
+      // 留著只會每天重試一次同一個失敗。
+    }
+
+    final current = await upload(lightsOut, marks: usable);
+    final queuedToday = todayIso != null && _worthKeeping(current.status);
+    if (queuedToday) {
+      remaining.add(PendingNight(todayIso, marks: usable));
+    }
+
+    await queue.save(remaining);
+    return NightlyUploadBatch(
+      current: current,
+      replayed: replayed,
+      stillPending: remaining.length,
+      currentQueued: queuedToday,
+    );
+  }
+
+  /// 這種失敗值不值得留下來下次再試。
+  ///
+  /// ⚠️ 只有這兩種：
+  ///   - [NightlyUploadStatus.failed]：連不上／逾時／後端回錯。**這是
+  ///     這整個機制存在的理由**（受測者早上不在同一個 Wi-Fi 底下）。
+  ///   - [NightlyUploadStatus.noUser]：還沒建帳號。跳過註冊是刻意不寫進
+  ///     儲存的（見 `main.dart` 的 `_skipOnboarding`），所以之後一定還會
+  ///     被問一次；那時候這幾晚要補得回來。
+  ///
+  /// `noBackend` 不留：那支 build 根本沒有 `--dart-define=SONNAP_API_BASE`，
+  /// 留著也永遠送不出去。`nothingDetected` 不留：沒有東西可留。
+  static bool _worthKeeping(NightlyUploadStatus status) =>
+      status == NightlyUploadStatus.failed ||
+      status == NightlyUploadStatus.noUser;
+
+  /// 把「按太晚的下床」濾掉，回一組可以照送的標記。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 這一步必須在**送出與存進佇列之前**做，不能放在 [_post] 裡
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  /// 判準（`bedEndIsPlausible`）要 `lights_out_at` 與 `quietMinutes`
+  /// 兩個輸入，而**佇列裡只存前者**——補送的時候已經沒有材料重算了。
+  /// 放在 [_post] 裡的話，今晚那一筆判得出來、補送那幾筆判不出來，
+  /// 於是同一個規則對不同的夜晚有不同的結果，而且不會有任何錯誤訊息。
+  ///
+  /// 濾在這裡還有第二個好處：**存進佇列的就已經是乾淨的**，
+  /// 不會有一個「按太晚的 end」躺在手機裡等著哪天被送出去。
+  ///
+  /// ⚠️ 只丟掉 end，**start 照送**——那一半仍然是有效的自述。
+  /// 丟掉整組等於懲罰使用者忘記按。
+  BedMarks _usableMarks(LightsOutResult lightsOut, BedMarks marks) {
+    if (marks.endAt == null) return marks;
+    if (bedEndIsPlausible(marks.endAt!, lightsOut.at, lightsOut.quietMinutes)) {
+      return marks;
+    }
+    // ⚠️ 這裡**不是**改用推算的時刻。那會把自述欄位偷偷換成偵測值，
+    //    而「使用者說的」與「手機測的」是兩個不同的量。
+    debugPrint('NightlyUpload: bed_end_at 按得太晚，這一晚不送 end');
+    return BedMarks(startAt: marks.startAt);
+  }
 
   /// [marks] 是使用者自己按的上床／下床時刻（可選）。
   ///
@@ -142,18 +289,17 @@ class NightlyUploader {
       return const NightlyUploadResult(NightlyUploadStatus.nothingDetected);
     }
 
+    return _post(iso, _usableMarks(lightsOut, marks));
+  }
+
+  /// 真正發出請求的那一段。吃 ISO8601 字串而不是 [LightsOutResult]，
+  /// 因為補送時手上只剩存下來的那一筆 [PendingNight]——達成度那三個欄位
+  /// 刻意不存（理由見 [PendingNightlyStore]）。
+  Future<NightlyUploadResult> _post(String iso, BedMarks marks) async {
     final userId = await identity.currentUserId();
     if (userId == null) {
       return const NightlyUploadResult(NightlyUploadStatus.noUser);
     }
-
-    // ⚠️ 按「下床」按得太晚時，那個時刻不是下床時刻，是「想起來要按」的
-    //    時刻（2026-09-08 實測：08:20 起床、12:11 才按）。照送會算出一個
-    //    錯得很合理的臥床時間與效率。判準見 `bedEndIsPlausible`。
-    //    ⚠️ 只丟掉 end，**start 照送**——那一半仍然是有效的自述。
-    final endIsStale = marks.endAt != null &&
-        !bedEndIsPlausible(marks.endAt!, lightsOut.at, lightsOut.quietMinutes);
-    final endIso = endIsStale ? null : marks.endIso;
 
     final uri = Uri.parse('$baseUrl/nightly');
     final client = HttpClient()..connectionTimeout = timeout;
@@ -167,7 +313,7 @@ class NightlyUploader {
         // 兩個都是**自述**的時刻。後端只在兩者都有時才算得出臥床時間，
         // 少一個就整組是 null（見 behavior/sleep_efficiency.py）。
         if (marks.startIso != null) 'bed_start_at': marks.startIso,
-        if (endIso case final String v) 'bed_end_at': v,
+        if (marks.endIso case final String v) 'bed_end_at': v,
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
@@ -205,13 +351,11 @@ class NightlyUploader {
       // ⚠️ 只印**有沒有**標記，不印時刻本身也不印 user_id。
       //    這一行是實機 debug 用的：先前查不出「按了按鈕卻沒進 DB」
       //    是 App 沒送還是後端沒存，就是因為兩邊都看不到這件事。
-      final marksState = endIsStale
-          ? 'end-dropped(stale)'
-          : marks.isComplete
-              ? 'complete'
-              : marks.hasStart
-                  ? 'start-only'
-                  : 'none';
+      final marksState = marks.isComplete
+          ? 'complete'
+          : marks.hasStart
+              ? 'start-only'
+              : 'none';
       debugPrint(
         'NightlyUpload: ok date=${result.date} '
         'adherence=${result.adherenceMinutes}m late=${result.isLate} '
@@ -243,11 +387,13 @@ class NightlyUploader {
 NightlyUploader? buildNightlyUploader({
   String? baseUrlOverride,
   String? userIdOverride,
+  KeyValueStore? store,
 }) {
   final baseUrl = (baseUrlOverride ?? ApiSleepRepository.configuredBaseUrl).trim();
   if (baseUrl.isEmpty) return null;
   return NightlyUploader(
     baseUrl: baseUrl,
     identity: buildUserIdentity(userIdOverride: userIdOverride),
+    pending: PendingNightlyStore(store ?? const PlatformKeyValueStore()),
   );
 }

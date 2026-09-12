@@ -159,6 +159,53 @@ class AccountService {
       client.close(force: true);
     }
   }
+
+  /// 把改過的目標就寢時間送去後端（`PATCH /users/{id}`）。成功回 true。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 少了這一步，改設定只會改到畫面
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  /// 達成度是後端算的，用的是 `users.target_bedtime`。App 端改完不通知
+  /// 後端的話，首頁倒數到 01:00、後端卻還在拿 23:30 算——使用者會看到
+  /// 「比目標晚了 90 分鐘」而完全不知道那個「目標」是什麼。
+  ///
+  /// ⚠️ 失敗回 false 而**不拋例外**，呼叫端把它留在
+  /// [UserSettingsStore] 的待同步狀態裡，下次開 App 補送。
+  /// 後端只有在同一個 Wi-Fi 底下連得到，改設定的當下不一定連得上。
+  Future<bool> updateTargetBedtime({
+    required String userId,
+    required String targetBedtime,
+  }) async {
+    if (baseUrl.trim().isEmpty || userId.isEmpty) return false;
+
+    final uri = Uri.parse('$baseUrl/users/$userId');
+    final client = HttpClient()..connectionTimeout = timeout;
+
+    try {
+      final request = await client.patchUrl(uri).timeout(timeout);
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode({'target_bedtime': targetBedtime}));
+
+      final response = await request.close().timeout(timeout);
+      final body = await response.transform(utf8.decoder).join();
+
+      if (response.statusCode != 200) {
+        // ⚠️ 不印 user_id（它是憑證），也不印整個 uri（裡面就有它）。
+        debugPrint(
+          'AccountService: PATCH target_bedtime -> ${response.statusCode} $body',
+        );
+        return false;
+      }
+      debugPrint('AccountService: target_bedtime synced ($targetBedtime)');
+      return true;
+    } catch (error) {
+      debugPrint('AccountService: updateTargetBedtime failed - $error');
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
 }
 
 /// 從已經解析好的狀態拿身分。

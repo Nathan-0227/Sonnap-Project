@@ -17,6 +17,19 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
     <!--
+      POST_NOTIFICATIONS：就寢提醒。Android 13（API 33）起要執行時權限。
+      ⚠️ 沒有這一條，Android 13 以上的手機排了提醒也不會出現，而且沒有任何錯誤。
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Health Connect：只讀睡眠 session（B8）。
+      ⚠️ 只宣告用得到的這一個。多宣告的權限會一起出現在授權畫面上，
+         受測者看到「心率、步數、體重」很可能整組拒絕。
+    -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+
+    <!--
       套件可見性（Android 11 / API 30 起）。
 
       ⚠️ 沒有這一段，睡前分心分析會**安靜地少掉最重要的那幾個 App**。
@@ -38,6 +51,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Health Connect 本體。少了它 getSdkStatus 一律回「沒有安裝」。 -->
+        <package android:name="com.google.android.apps.healthdata" />
     </queries>
 
     <application
@@ -71,6 +86,57 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 就寢提醒的鬧鐘接收器。exported=false：只有自己的 AlarmManager 叫得動它。 -->
+        <receiver
+            android:name=".BedtimeReminderReceiver"
+            android:exported="false" />
+        <!--
+          就寢守門的無障礙服務。
+          ⚠️ BIND_ACCESSIBILITY_SERVICE 只有系統拿得到，所以 exported=true 也只有系統叫得動。
+          ⚠️ Android 13 起側載的 App 預設不能開無障礙服務（「受限設定」），使用者要先到
+             應用程式資訊 → 右上角選單 → 允許受限設定。見 docs/BEDTIME_GUARD.md。
+        -->
+        <service
+            android:name=".BedtimeGuardService"
+            android:exported="true"
+            android:label="@string/bedtime_guard_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/bedtime_guard_config" />
+        </service>
+        <!-- 提醒模式的全螢幕提醒。不進最近使用清單，關掉就沒了。 -->
+        <activity
+            android:name=".GuardReminderActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <!--
+          Health Connect 的「這個 App 怎麼使用你的資料」頁。
+          ⚠️ 少了它 Health Connect 拒絕顯示授權畫面，而且沒有任何錯誤訊息。
+             Android 13 以下認 intent-filter，Android 14 以上認底下的 activity-alias。
+        -->
+        <activity
+            android:name=".HealthPrivacyActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".HealthPrivacyActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
