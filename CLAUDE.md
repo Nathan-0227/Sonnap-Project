@@ -454,6 +454,29 @@ PR #42 把後端搬到 XAMPP 的 MariaDB（`SONNAP_DB_URL=mysql://root@localhost
 共用主目錄的 venv，所以**所有 worktree 啟動的 uvicorn 看起來一模一樣**，
 看不出工作目錄、也看不出連哪種資料庫。
 
+→ **怎麼正確啟動**（少了 `SONNAP_DB_URL` 就會寫進空的 SQLite，資料分成兩邊）：
+
+```powershell
+cd C:\Users\user\Projects\Sonnap-Project
+$env:SONNAP_DB_URL="mysql://root@localhost/sonnap"
+.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+⚠️ 這份文件先前**沒有寫這條指令**，是 2026-09-12 補的。缺了它就只能靠猜，
+而猜錯的代價是上面那整段（連踩兩次）。
+
+⚠️ 症狀對照：啟動時出現
+`[Errno 10048] only one usage of each socket address` **不是設定錯了**，
+是 8000 埠已經有人在聽（常見原因：Claude 在背景跑了一個）。先找出來停掉：
+
+```powershell
+Get-NetTCPConnection -LocalPort 8000 -State Listen |
+  ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" } |
+  Select-Object ProcessId, CommandLine
+```
+
+⚠️ **背景啟動的後端活不過一個 session**。要整夜開著就自己在終端機跑。
+
 → **查資料一律先問跑著的那個 server，不要直接讀檔：**
 
 ```bash
