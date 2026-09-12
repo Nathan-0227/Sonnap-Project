@@ -13,6 +13,7 @@ import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/bedtime_guard.dart';
 import 'services/bedtime_reminder.dart';
+import 'services/camera_insights.dart';
 import 'services/challenges_service.dart';
 import 'services/chat_service.dart';
 import 'services/friends_service.dart';
@@ -141,6 +142,17 @@ class _MainPageState extends State<MainPage> {
       // ⚠️ 有了這個，連不到後端的那一晚才不會永久消失（偵測視窗是往回
       //    24 小時的滑動視窗，隔天就算不出來了）。理由見 PendingNightlyStore。
       pending: PendingNightlyStore(widget.store ?? const PlatformKeyValueStore()),
+    );
+  }
+
+  /// 攝影機的臥床時間／入睡潛伏期。與 [_uploader] 同一個理由依 [_account]
+  /// 重建：帳號是在 App 開起來之後才建立的，啟動時固定住會用到空的身分。
+  CameraInsightsService? get _cameraInsights {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return CameraInsightsService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
     );
   }
 
@@ -400,6 +412,7 @@ class _MainPageState extends State<MainPage> {
       ReportScreen(
         repository: _repository,
         uploader: _uploader,
+        cameraInsights: _cameraInsights,
         challenges: _challenges,
         home: _home,
       ),

@@ -353,6 +353,46 @@ CREATE TABLE IF NOT EXISTS challenge_progress (
     FOREIGN KEY (challenge_id) REFERENCES challenges(challenge_id) ON DELETE CASCADE
 );
 
+-- ── 攝影機：臥床時間與入睡潛伏期（2026-09-12 新增）────────────
+-- ⚠️ **這張表是呈現用的，絕不進任何分數。**
+--    `Research-Background/攝影機分數.md` 的結論是「現行有效的攝影機計分
+--    項目：0 項」，所以這裡**刻意沒有任何 score / quality 欄位**。
+--    加一個就會變成第五代沒有引文的攝影機公式（設計紅線 2）。
+--
+-- ⚠️ 兩端的可信度完全不同，所以每個量都帶 provenance：
+--      臥床起訖 = **自述**（開始／結束錄影），不是攝影機偵測到的
+--      入睡時刻 = **偵測**（動作密度轉折），效標 n=2、尚未驗證
+CREATE TABLE IF NOT EXISTS camera_nightly (
+    user_id        TEXT NOT NULL,
+    date           TEXT NOT NULL,            -- 起床日，與其他表同一個約定
+
+    bed_start_at   TEXT,                     -- 開始錄影＝宣告上床（自述）
+    bed_end_at     TEXT,                     -- 結束錄影（自述）
+    time_in_bed_minutes REAL,
+
+    -- ⚠️ 低於偵測下限時這兩欄是 NULL **不是 0**。報 0 會被讀成
+    --    「躺下就睡著」，而真值可能是 5 分鐘（實測第 6 晚就是這樣）。
+    --    below_floor 為真時，呈現要寫「≤ floor 分鐘」。
+    sleep_onset_at TEXT,
+    sleep_onset_latency_minutes REAL,
+    sleep_onset_below_floor INTEGER,
+    sleep_onset_floor_minutes REAL,
+
+    events_total   INTEGER,                  -- 整夜動作事件數
+    events_per_hour REAL,                    -- 對照 Montini 2024 的常模用
+
+    bed_times_provenance   TEXT,
+    sleep_onset_provenance TEXT,
+    motion_threshold_pct   REAL,
+    motion_threshold_basis TEXT,             -- 'roi' | 'frame'，分母是哪一個
+    roi            TEXT,                     -- "x,y,w,h"；沒有 ROI 時 NULL
+    csv_name       TEXT,                     -- 哪一份錄影算出來的
+    created_at     TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- ── 遊戲化（B2）────────────────────────────────────────────────
 -- ⚠️ 設計紅線 4：這三張表**只存使用者的動作**（穿了什麼、領過什麼），
 --    不存 XP 或等級。XP 每次都從 nightly_behavior / wearable_nightly 即時算
@@ -902,6 +942,88 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
             (user_id, date, source, *values),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def upsert_camera_nightly(user_id, date, result, db_path=None):
+    """把 `tapo_sleep_onset.analyse()` 的結果寫成一列（可重複執行）。
+
+    result 直接吃 analyse() 的 dict，欄位對映寫在這裡一處——
+    呼叫端不要自己拆，否則欄名漂移時不會有錯誤訊息。
+
+    ⚠️ 整列覆寫是**對的**：這一列完全由那一份 CSV 重算得出，沒有
+       「使用者按過而這次沒帶」的情形（那是 nightly_behavior 的問題）。
+    """
+    roi = result.get("roi")
+    basis = "roi" if roi else "frame"
+    threshold = result.get(
+        "motion_threshold_pct_of_roi" if roi else "motion_threshold_pct_of_frame")
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO camera_nightly
+                (user_id, date, bed_start_at, bed_end_at, time_in_bed_minutes,
+                 sleep_onset_at, sleep_onset_latency_minutes,
+                 sleep_onset_below_floor, sleep_onset_floor_minutes,
+                 events_total, events_per_hour,
+                 bed_times_provenance, sleep_onset_provenance,
+                 motion_threshold_pct, motion_threshold_basis, roi,
+                 csv_name, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                bed_start_at                = excluded.bed_start_at,
+                bed_end_at                  = excluded.bed_end_at,
+                time_in_bed_minutes         = excluded.time_in_bed_minutes,
+                sleep_onset_at              = excluded.sleep_onset_at,
+                sleep_onset_latency_minutes = excluded.sleep_onset_latency_minutes,
+                sleep_onset_below_floor     = excluded.sleep_onset_below_floor,
+                sleep_onset_floor_minutes   = excluded.sleep_onset_floor_minutes,
+                events_total                = excluded.events_total,
+                events_per_hour             = excluded.events_per_hour,
+                bed_times_provenance        = excluded.bed_times_provenance,
+                sleep_onset_provenance      = excluded.sleep_onset_provenance,
+                motion_threshold_pct        = excluded.motion_threshold_pct,
+                motion_threshold_basis      = excluded.motion_threshold_basis,
+                roi                         = excluded.roi,
+                csv_name                    = excluded.csv_name
+            """,
+            (user_id, date,
+             result.get("bed_start_at"), result.get("bed_end_at"),
+             result.get("time_in_bed_minutes"),
+             result.get("sleep_onset_at"),
+             result.get("sleep_onset_latency_minutes"),
+             1 if result.get("sleep_onset_below_floor") else 0,
+             result.get("sleep_onset_floor_minutes"),
+             result.get("events_total"), result.get("events_per_hour"),
+             result.get("bed_times_provenance"),
+             result.get("sleep_onset_provenance"),
+             threshold, basis,
+             ",".join(str(v) for v in roi) if roi else None,
+             result.get("csv"), now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_camera_nightly(user_id, days=30, db_path=None):
+    """取最近 N 晚的攝影機資料，由舊到新。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM (
+                SELECT * FROM camera_nightly
+                WHERE user_id = ?
+                ORDER BY date DESC
+                LIMIT ?
+            ) AS recent ORDER BY date ASC   -- AS recent 是給 MySQL 的，見 get_wearable_nightly
+            """,
+            (user_id, days),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 
@@ -1475,7 +1597,7 @@ def print_stats(db_path=None):
         return
 
     tables = ["users", "nightly_behavior", "app_usage_daily", "block_events",
-              "wearable_nightly", "challenges", "challenge_progress"]
+              "wearable_nightly", "camera_nightly", "challenges", "challenge_progress"]
     conn = connect(db_path)
     try:
         print(f"Database: {path}")

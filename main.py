@@ -717,6 +717,7 @@ async def get_insights(
 
     behavior_rows = db.get_nightly_behavior(user_id, days=days)
     wearable_rows = db.get_wearable_nightly(user_id, days=days)
+    camera_rows = db.get_camera_nightly(user_id, days=days)
 
     ratio, late_nights, recorded = adherence.late_night_ratio(behavior_rows)
     spread, spread_n = adherence.bedtime_spread_minutes(behavior_rows)
@@ -807,6 +808,45 @@ async def get_insights(
                     "device_brand": r["device_brand"],
                 }
                 for r in wearable_rows
+            ],
+        },
+        # ⚠️ 呈現用，**不計分**。攝影機目前沒有任何合格的計分項
+        #    （Research-Background/攝影機分數.md 的結論是 0 項），所以這個
+        #    區塊刻意只有量與 provenance，沒有 score／quality。
+        # ⚠️ 沒有資料時回 None 而不是空陣列：畫面要能說「沒有攝影機資料」，
+        #    而不是畫出一排 0。
+        "camera": None if not camera_rows else {
+            "note": (
+                "Camera metrics are presentational only and never enter any score. "
+                "Time in bed is SELF-REPORTED (recording start/stop), not detected. "
+                "Sleep onset is detected from motion density and has been compared "
+                "against a physiological criterion on 2 nights only."
+            ),
+            "floor_note": (
+                "When sleep_onset_below_floor is true, the latency is shorter than "
+                "the detector can resolve: read it as 'at most floor minutes'. "
+                "It is NOT zero - latency and onset are null in that case."
+            ),
+            "history": [
+                {
+                    "date": r["date"],
+                    "bed_start_at": r["bed_start_at"],
+                    "bed_end_at": r["bed_end_at"],
+                    "time_in_bed_minutes": r["time_in_bed_minutes"],
+                    "sleep_onset_at": r["sleep_onset_at"],
+                    "sleep_onset_latency_minutes": r["sleep_onset_latency_minutes"],
+                    "sleep_onset_below_floor": bool(r["sleep_onset_below_floor"]),
+                    "sleep_onset_floor_minutes": r["sleep_onset_floor_minutes"],
+                    "events_total": r["events_total"],
+                    "events_per_hour": r["events_per_hour"],
+                    "bed_times_provenance": r["bed_times_provenance"],
+                    "sleep_onset_provenance": r["sleep_onset_provenance"],
+                    "motion_threshold_pct": r["motion_threshold_pct"],
+                    "motion_threshold_basis": r["motion_threshold_basis"],
+                    "roi": r["roi"],
+                    "csv_name": r["csv_name"],
+                }
+                for r in camera_rows
             ],
         },
         "notes": {
