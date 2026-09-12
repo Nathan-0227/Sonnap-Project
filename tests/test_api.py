@@ -402,6 +402,57 @@ ok("也沒有 import Tier B（wearable/）", not hits_b,
 
 print()
 print("=" * 78)
+print("【額外】同一晚重傳，不得抹掉已經存下的上床／下床標記")
+print("=" * 78)
+# ⚠️ 2026-09-11 實測：MySQL 裡每一晚的 bed_start_at 都是 NULL，連補登時後端
+#    親口回過 84.6% 的 09-09 也是。upsert 整列覆寫，而 App 每次回到前景都重傳
+#    同一晚——第一次收下後本機就清掉，之後的重傳不帶標記，就把它抹成 NULL。
+#    每一次都回 201：**成功了，但把資料弄丟**。
+u8 = client.post("/users", json={"display_name": "重傳", "study_cohort": "L0"}).json()["user_id"]
+NIGHT8 = {"user_id": u8, "lights_out_at": "2026-09-06T23:30:00+08:00"}
+MARKS8 = {"bed_start_at": "2026-09-06T23:00:00+08:00",
+          "bed_end_at": "2026-09-07T07:00:00+08:00"}
+
+
+def stored8():
+    return client.get(f"/insights?user_id={u8}").json()["behavior"]["history"][-1]
+
+
+a8 = client.post("/nightly", json={**NIGHT8, **MARKS8}).json()
+check("① 帶標記：效率", a8["sleep_efficiency"], 93.8)
+check("① 標記來自這次請求", a8["bed_marks_source"], "request")
+ok("① 回應帶回 bed_start_at（App 靠它決定清本機）", a8["bed_start_at"] is not None)
+
+b8 = client.post("/nightly", json=NIGHT8).json()
+check("② 不帶標記重傳：DB 的效率仍在", stored8()["sleep_efficiency"], 93.8)
+ok("② DB 的 bed_start_at 仍在", stored8()["bed_start_at"] is not None,
+   str(stored8()["bed_start_at"]))
+check("② 回應的效率照實（沿用已存的標記算）", b8["sleep_efficiency"], 93.8)
+check("② bed_marks_source 是 stored", b8["bed_marks_source"], "stored")
+# ⚠️ 這一條最要緊：回應若帶回舊標記，App 會以為「我送的被收下了」而清本機。
+check("② 回應的 bed_start_at 必須是 None", b8["bed_start_at"], None)
+
+c8 = client.post("/nightly", json={**NIGHT8,
+                                   "bed_start_at": "2026-09-07T23:10:00+08:00"}).json()
+check("③ 帶的是下一晚的開始（拒收）：DB 效率仍在", stored8()["sleep_efficiency"], 93.8)
+check("③ 回應 bed_start_at 是 None（否則今晚的會被清）", c8["bed_start_at"], None)
+
+client.post("/nightly", json={**NIGHT8, "bed_start_at": "2026-09-06T23:00:00+08:00"})
+check("④ 只帶同一個上床：沿用已存的下床", stored8()["sleep_efficiency"], 93.8)
+
+client.post("/nightly", json={**NIGHT8, "bed_start_at": "2026-09-06T23:15:00+08:00",
+                              "bed_end_at": "2026-09-07T07:00:00+08:00"})
+check("⑤ 帶新的一組：照新的覆寫（更正仍有效）", stored8()["sleep_efficiency"], 96.8)
+
+# 反向對照：從來沒按過的夜晚，重傳不可以憑空生出效率
+u9 = client.post("/users", json={"display_name": "沒按", "study_cohort": "L0"}).json()["user_id"]
+f9 = client.post("/nightly", json={"user_id": u9,
+                                   "lights_out_at": "2026-09-06T23:30:00+08:00"}).json()
+check("反向：沒有標記的夜晚效率是 None", f9["sleep_efficiency"], None)
+check("反向：bed_marks_source 是 None", f9["bed_marks_source"], None)
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)
