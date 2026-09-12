@@ -1103,6 +1103,74 @@
       "prompt_version": "v4",
       "fingerprint": "58432b0ddadfbfba",
       "generated_at": "2026-09-10T02:04:33+08:00"
+    },
+    "2026-09-09": {
+      "date": "2026-09-09",
+      "lang": "en",
+      "trend_note": "Your stress score has risen over the last seven nights compared to the month before, while your resting heart rate has gone down.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept only 5.0 hours, below the 7.0–9.0 h target. Try heading to bed half an hour earlier tonight so your body gets closer to that full range.",
+      "dream_summary": "I dreamt of a sky that kept changing seasons behind my eyes, autumn orange fading to spring green with every blink. My paws felt warm grass, then cool damp leaves, over and over. Somewhere a breeze rolled through, quick and shifting, never staying long enough for me to settle into one place before it turned again.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "a9b5c21b7a322e72",
+      "generated_at": "2026-09-12T21:56:22+08:00"
+    },
+    "2026-09-10": {
+      "date": "2026-09-10",
+      "lang": "en",
+      "trend_note": "Your stress score has climbed noticeably over the last week compared to the month before, while your resting heart rate has eased down slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "You only slept 3.3 hours last night, well under the 7-9 hour goal. Try heading to bed half an hour earlier tonight, and keep building from there.",
+      "dream_summary": "I was chasing a scent through tall grass, weaving low the way I do, tail up, nose down, right at the good part where the trail was about to lead somewhere. Then the light came up too soon and pulled me out of it, paws still twitching like I was mid-stride. I wanted just a little more time to see where it went.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "defeabdd8c453229",
+      "generated_at": "2026-09-12T21:56:27+08:00"
+    },
+    "2026-09-11": {
+      "date": "2026-09-11",
+      "lang": "en",
+      "trend_note": "Your stress score has risen from 20.0 to 33.1 points over the recent period, while your sleep score has dipped slightly from 81.4 to 78.4.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 5.1 hours, below the 7-9 hour goal. Try heading to bed half an hour earlier tonight so you can inch closer to that range.",
+      "dream_summary": "I dreamt of a sky that kept changing overhead, orange fading into green with every blink, and my paws sank into cool grass beneath it. The colors shifted fast, one moment to the next, never quite settling long enough for me to smell what season it was. I kept turning circles trying to catch up, breathing warm little clouds into the changing air.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "df1744c4705a962f",
+      "generated_at": "2026-09-12T21:56:31+08:00"
+    },
+    "2026-09-12": {
+      "date": "2026-09-12",
+      "lang": "en",
+      "trend_note": "Your stress score has risen by 12.2 points over the last 7 nights compared to the prior 28, while your sleep score has dropped by 4.5 points.",
+      "model": "claude-sonnet-5",
+      "advice": "Your deep sleep was 4.6%, below the 13-23% range. Try keeping a consistent bedtime tonight and adding some daytime exercise to help nudge deep sleep back up.",
+      "dream_summary": "I dreamt of a tree that kept growing new branches, and with every branch, another bird landed and shifted its wings. The shapes kept shifting before I could settle on any one of them, colors and shapes always sliding into the next. I never got bored, just kept following the next branch as it unfurled, paws twitching the whole while.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "2480af1937b55391",
+      "generated_at": "2026-09-12T21:56:36+08:00"
     }
   }
 }
