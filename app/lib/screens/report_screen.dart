@@ -11,6 +11,7 @@ import '../services/key_value_store.dart';
 import '../services/nightly_uploader.dart';
 import '../services/sleep_repository.dart';
 import '../services/pre_bed_apps.dart';
+import '../services/camera_insights.dart';
 import '../services/usage_stats.dart';
 import '../widgets/pet_mood_animation.dart';
 
@@ -29,12 +30,17 @@ class ReportScreen extends StatefulWidget {
   /// 只是少了臥床時間。見 `bed_marks.dart`。
   final BedMarkStore bedMarks;
 
+  /// 攝影機量到的臥床時間與入睡潛伏期。null = 這支 build 沒設定後端，
+  /// 整張卡片不存在（單機模式是預期行為，不是降級）。
+  final CameraInsightsSource? cameraInsights;
+
   const ReportScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
     this.repository = const AssetSleepRepository(),
     this.uploader,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
+    this.cameraInsights,
   });
 
   @override
@@ -107,11 +113,26 @@ class _ReportScreenState extends State<ReportScreen>
   PreBedResult? _preBed;
 
 
+  /// 攝影機那張卡片的資料。null = 還在讀（不是「沒有資料」）。
+  CameraInsightsResult? _camera;
+
+  /// ⚠️ 刻意**不**併進 `_loadUsage()`：那個函式裡「有幾個 await 就要 pump
+  /// 幾次」，`usage_stats_test.dart` 寫死了 8 次。在那裡多一個 await 會讓
+  /// 別人的測試變紅，而失敗訊息會指向完全無關的文字。
+  Future<void> _loadCamera() async {
+    final source = widget.cameraInsights;
+    if (source == null) return;
+    final result = await source.load();
+    if (!mounted) return;
+    setState(() => _camera = result);
+  }
+
   @override
   void initState() {
     super.initState();
     // 監聽 App 回到前景。理由見 didChangeAppLifecycleState。
     WidgetsBinding.instance.addObserver(this);
+    _loadCamera();
     _sessionFuture = widget.repository.load();
     _loadUsage();
   }
@@ -137,6 +158,7 @@ class _ReportScreenState extends State<ReportScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _loadUsage();
+      _loadCamera();
     }
   }
 
@@ -307,6 +329,12 @@ class _ReportScreenState extends State<ReportScreen>
                   _buildWeeklyMoodCard(session),
 
                   const SizedBox(height: 14),
+
+                  // 沒設定後端時不顯示——與 _buildDeliveryRow 同一個判準。
+                  if (widget.cameraInsights != null) ...[
+                    _buildCameraCard(),
+                    const SizedBox(height: 14),
+                  ],
 
                   LayoutBuilder(
                     builder:
@@ -1538,6 +1566,133 @@ class _ReportScreenState extends State<ReportScreen>
   // ============================================================
   // TRACKING SOURCES
   // ============================================================
+
+
+  // ============================================================
+  // CAMERA: TIME IN BED & SLEEP ONSET
+  // ============================================================
+
+  /// 攝影機量到的兩個量。**呈現用，不參與任何分數。**
+  ///
+  /// ⚠️ 三件事在這張卡上必須講清楚，少一件就是安靜地誇大：
+  ///   1. 臥床時間是**自述**（開始／結束錄影），不是攝影機看到人躺下；
+  ///   2. 入睡潛伏期低於偵測下限時只能寫「≤ N min」，**不能寫 0**
+  ///      —— 報 0 會被讀成「躺下就睡著」，而真值可能是 5 分鐘；
+  ///   3. 它不進任何分數（攝影機現行可計分項目是 0 項）。
+  /// `camera_card_test.dart` 三條都守著。
+  Widget _buildCameraCard() {
+    final camera = _camera;
+    final night = camera?.latest;
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.videocam_outlined, color: blueColor, size: 19),
+              SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Camera: Time in Bed & Sleep Onset',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 3),
+
+          const Text(
+            'Bed times are self-reported. Sleep onset is detected.',
+            style: TextStyle(color: Color(0xFF8498B7), fontSize: 9),
+          ),
+
+          const SizedBox(height: 15),
+
+          if (camera == null)
+            const _NoDataMessage(message: 'Reading camera data...')
+          else if (camera.status == CameraInsightsStatus.failed)
+            const _NoDataMessage(
+              message: 'Could not reach the backend for camera data.',
+            )
+          else if (camera.status == CameraInsightsStatus.noUser)
+            const _NoDataMessage(
+              message: 'No account yet, so camera nights cannot be loaded.',
+            )
+          else if (night == null)
+            const _NoDataMessage(
+              message: 'No camera nights yet. Record a night to see this.',
+            )
+          else ...[
+            _SleepStat(
+              emoji: '🛏️',
+              title: 'Time in bed (self-reported)',
+              value: _durationText(night.timeInBedMinutes),
+            ),
+            const SizedBox(height: 8),
+            _SleepStat(
+              emoji: '😴',
+              title: night.onsetDetected
+                  ? 'Fell asleep after (detected)'
+                  : 'Fell asleep after',
+              value: _onsetText(night),
+            ),
+            const SizedBox(height: 8),
+            _SleepStat(
+              emoji: '🌀',
+              title: 'Movements per hour',
+              value: night.eventsPerHour == null
+                  ? '--'
+                  : night.eventsPerHour!.toStringAsFixed(1),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Night of ${night.date}. Presentational only - '
+              'not part of any score.',
+              style: const TextStyle(color: Color(0xFF8498B7), fontSize: 9),
+            ),
+            if (night.belowFloor)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Shorter than the detector can resolve, so this is an upper '
+                  'bound - not zero.',
+                  style: TextStyle(color: Color(0xFF8498B7), fontSize: 9),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 分鐘 → 「6 h 33 min」。null 時回 `--` 而不是 0。
+  String _durationText(double? minutes) {
+    if (minutes == null) return '--';
+    final total = minutes.round();
+    final h = total ~/ 60;
+    final m = total % 60;
+    return h > 0 ? '$h h $m min' : '$m min';
+  }
+
+  /// 入睡潛伏期的文字。
+  ///
+  /// ⚠️ **低於偵測下限時一定要寫成「≤ N min」。** 後端在那種情況給的是
+  /// null（不是 0），這裡也不准自己填 0——見 `_buildCameraCard` 的說明。
+  String _onsetText(CameraNight night) {
+    if (night.belowFloor) {
+      final floor = (night.floorMinutes ?? 10).round();
+      return '≤ $floor min';
+    }
+    final sol = night.sleepOnsetLatencyMinutes;
+    if (sol == null) return 'not detected';
+    return '${sol.round()} min';
+  }
 
   Widget _buildTrackingSourcesCard(
     SleepSession session,
