@@ -1,63 +1,63 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-09-10T02:05:23+08:00",
-  "session_id": "20260908_001",
+  "generated_at": "2026-09-12T17:48:04+08:00",
+  "session_id": "20260912_001",
   "status": {
-    "pet_mood": "happy",
+    "pet_mood": "bored",
     "current_activity": null,
-    "energy_level": 83,
-    "mood_reason": "final_quality=Good"
+    "energy_level": 77,
+    "mood_reason": "final_quality=Normal"
   },
   "metrics": {
     "motion_count": null,
     "garmin_movement": {
-      "sample_minutes": 418,
-      "level_mean": 1.198,
-      "level_max": 5.905,
-      "active_minutes": 171
+      "sample_minutes": 722,
+      "level_mean": 1.064,
+      "level_max": 7.053,
+      "active_minutes": 269
     },
-    "sleep_duration_minutes": 356,
+    "sleep_duration_minutes": 568,
     "ambient_noise_db": null,
-    "sleep_start_time": "2026-09-08T02:11:00+08:00",
-    "wake_time": "2026-09-08T08:09:00+08:00",
-    "deep_minutes": 43,
-    "rem_minutes": 123,
-    "waso_minutes": 2,
-    "sleep_efficiency": 99.44,
-    "avg_heart_rate": 57.25,
+    "sleep_start_time": "2026-09-12T01:30:00+08:00",
+    "wake_time": "2026-09-12T11:32:00+08:00",
+    "deep_minutes": 26,
+    "rem_minutes": 175,
+    "waso_minutes": 21,
+    "sleep_efficiency": 94.35,
+    "avg_heart_rate": 66.51,
     "resting_heart_rate": 56
   },
   "ai_content": {
-    "advice": "Your sleep was good overall, but you only got 5.9 hours and deep sleep was a bit below range at 12.1%. Keep your current routine tonight, as recommended, and try to protect a slightly longer sleep window if you can.",
-    "dream_summary": "I found a picture book on the floor of my dream, and every time a page turned the whole scene changed under my paws. Warm sand became damp grass, then cool tile, each new page trading one smell for another. I kept nosing the corner to turn it again, chasing the next scent before I had even finished the last one.",
-    "trend_note": "Your stress score has risen over the past week compared to the prior month, and your sleep-period average heart rate is a bit higher too, even though resting heart rate has dipped slightly.",
-    "is_ai_generated": true,
-    "content_type": "fiction+advice",
-    "source": "llm",
-    "model": "claude-sonnet-5"
+    "advice": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.",
+    "dream_summary": null,
+    "trend_note": null,
+    "is_ai_generated": false,
+    "content_type": "advice",
+    "source": "rule_based",
+    "model": null
   },
   "scoring": {
-    "final_score": 82.8,
-    "final_quality": "Good",
-    "base_score": 82.8,
-    "total_modifier": 0,
-    "sri": 81.7,
-    "modifier_note": "Building personal baseline (resting heart rate/sleep-period average heart rate/stress/activity/night-time awakenings/sleep segments below 14 nights within the last 28 days); this modifier is paused.",
-    "recommendation": "Sleep quality was good. Keep your current routine. "
+    "final_score": 76.9,
+    "final_quality": "Normal",
+    "base_score": 75.1,
+    "total_modifier": 1.78,
+    "sri": 79.4,
+    "modifier_note": "",
+    "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   "display": {
     "lang": "en",
-    "score_color": "#9AD36A",
-    "score_message": "Great job!",
-    "mood_description": "Your buddy is feeling great!",
-    "header_message": "Let's keep this rhythm going!",
-    "pet_message": "Sweet dreams\nare waiting\nfor us! 🌙",
+    "score_color": "#FFC83D",
+    "score_message": "Not bad.",
+    "mood_description": "Your buddy is a little restless.",
+    "header_message": "Let's get a good night's sleep!",
+    "pet_message": "Let's rest\na little\nearlier tonight.",
     "streak_encouragement": "Amazing consistency!"
   },
   "streak": {
-    "streak_days": 13,
-    "completed_days": 7,
+    "streak_days": 17,
+    "completed_days": 6,
     "definition": "streak_days = consecutive nights with a sleep record, counting back from the latest night. completed_days = nights rated Good or Normal within the last 7 calendar days. Nights when the watch was not worn are excluded, so a low number reflects wear rate, not sleep quality."
   },
   "history": [
@@ -693,22 +693,62 @@
     },
     {
       "date": "2026-09-08",
-      "final_score": 82.8,
-      "final_quality": "Good",
-      "sleep_duration_hours": 5.93,
+      "final_score": 79.4,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 6.22,
       "sleep_start_time": "2026-09-08T02:11:00+08:00",
-      "wake_time": "2026-09-08T08:09:00+08:00",
-      "pet_mood": "happy",
-      "mood_reason": "final_quality=Good"
+      "wake_time": "2026-09-08T08:26:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
+    },
+    {
+      "date": "2026-09-09",
+      "final_score": 78.4,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 4.97,
+      "sleep_start_time": "2026-09-09T03:25:00+08:00",
+      "wake_time": "2026-09-09T08:23:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
+    },
+    {
+      "date": "2026-09-10",
+      "final_score": 63.0,
+      "final_quality": "Poor",
+      "sleep_duration_hours": 3.32,
+      "sleep_start_time": "2026-09-10T05:14:00+08:00",
+      "wake_time": "2026-09-10T08:34:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor"
+    },
+    {
+      "date": "2026-09-11",
+      "final_score": 69.8,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 5.12,
+      "sleep_start_time": "2026-09-11T01:59:00+08:00",
+      "wake_time": "2026-09-11T07:06:00+08:00",
+      "pet_mood": "anxious",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0"
+    },
+    {
+      "date": "2026-09-12",
+      "final_score": 76.9,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 9.47,
+      "sleep_start_time": "2026-09-12T01:30:00+08:00",
+      "wake_time": "2026-09-12T11:32:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal"
     }
   ],
   "data_sources": [
     "garmin"
   ],
   "notes": {
-    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-09-08.",
+    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-09-12.",
     "mapping": "The pet_mood / energy_level mapping is a default value, still pending PM approval. (mapping_version=1)"
   },
   "disclaimer": "Sleep scores are computed from Garmin watch data using literature-weighted rules and do not constitute a medical diagnosis. Any dream content, where generated, is an AI creation imagined from sleep data, not a record of the user’s actual dreams.",
-  "timestamp": "2026-09-08T08:09:00+08:00"
+  "timestamp": "2026-09-12T11:32:00+08:00"
 }
