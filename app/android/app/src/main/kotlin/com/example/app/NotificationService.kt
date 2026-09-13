@@ -26,10 +26,24 @@ import android.os.Build
  * 而這個專案不出那三個平台。用平台自己的 AlarmManager + Notification 就夠了，
  * 也不需要 androidx。
  *
+ * ## ⚠️ 為什麼要精準鬧鐘（2026-09-13 實機看到的）
+ *
+ * 原本用 setAndAllowWhileIdle（不精準），註解寫「省電模式下可能晚幾分鐘」——那是錯的。
+ * 實機（S24、Android 16）`dumpsys alarm` 顯示那則 23:00 的提醒帶著
+ * `window=+1h`：系統有權拖到 **24:00** 才響，那時已經過了 23:30 的就寢時間，
+ * 「睡前 30 分鐘提醒」整個失去意義，而且不會有任何錯誤訊息。
+ *
+ * 現在：拿得到精準鬧鐘就用 setExactAndAllowWhileIdle，拿不到才退回不精準的。
+ * 權限用 USE_EXACT_ALARM（Android 13+ 安裝時自動給，受測者不用多按一步）。
+ *
+ * ⚠️ **上架 Google Play 前要拿掉 USE_EXACT_ALARM**：Play 只准鬧鐘／行事曆類 App 用。
+ *    現在不構成代價，因為就寢守門（Accessibility）本來就讓這個 App 上不了 Play，
+ *    要上架時兩個一起處理。
+ *
  * ## ⚠️ 已知限制（寫進報告的限制一節）
  *
- * - 用 setAndAllowWhileIdle（不精準鬧鐘）：省電模式下可能晚幾分鐘。精準鬧鐘在
- *   Android 12+ 要另外申請 SCHEDULE_EXACT_ALARM，對「睡前提醒」不值得。
+ * - 手機不給精準鬧鐘時（Android 12，或使用者在設定裡關掉）退回不精準的，
+ *   可能晚到 1 小時。
  * - **重開機之後鬧鐘會消失**，要等使用者下次開 App 才會重排。沒有處理
  *   BOOT_COMPLETED，因為那需要多一個常駐的 receiver，而三星會殺背景。
  */
@@ -76,13 +90,22 @@ class NotificationService(private val context: Context) {
      */
     fun schedule(triggerAtMillis: Long, title: String, body: String): Boolean {
         ensureChannel()
-        alarms.setAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
-            pendingIntent(triggerAtMillis, title, body),
-        )
+        val operation = pendingIntent(triggerAtMillis, title, body)
+        if (canScheduleExact()) {
+            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+        } else {
+            alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+        }
         return canPostNotifications()
     }
+
+    /**
+     * 拿不拿得到精準鬧鐘。Android 12 以前不用權限；12 起要問系統。
+     * ⚠️ 不能省：沒有權限時呼叫 setExactAndAllowWhileIdle 會丟 SecurityException，
+     *    整個提醒就排不上了。
+     */
+    private fun canScheduleExact(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms.canScheduleExactAlarms()
 
     /**
      * 取消已經排好的那一則。
