@@ -128,7 +128,7 @@ generated plugin 檔，而這個專案不出那三個平台。同一個取捨見
 |---|---|
 | CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]` |
 | 綁 `0.0.0.0` | ✅ `uvicorn main:app --host 0.0.0.0 --port 8000` 實測可用 |
-| Windows 防火牆 | ✅ 已加規則 `Sonnap venv python (demo)`（Inbound / Allow / TCP / Private+Public） |
+| Windows 防火牆 | ✅ 手機連得到（2026-09-13 從手機實測）。⚠️ 但**不是靠** `Sonnap venv python (demo)` 那條規則，見下 |
 
 ### 🔴 IP 每次都不一樣，而且它是**編譯期**參數
 
@@ -147,20 +147,49 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 ⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到。
 
-⚠️ 防火牆規則**綁定的是程式不是埠**：放行的是
-`Sonnap-Project\.venv\Scripts\python.exe`。刻意不開 `-LocalPort 8000`——
-開埠的話任何監聽該埠的程式都會對區網露出。
+⚠️ **防火牆認的是「實際開著 8000 埠的那支程式」，而那支不是 venv 的 python.exe。**
+（2026-09-13 實測）Windows 上 `.venv\Scripts\python.exe` 只是轉介程式，
+它會再叫出**系統 Python** 來跑，真正開埠的是後者：
 
-⚠️ **換了 venv（重建、搬家、改用系統 Python）規則就失效**，而且症狀是
-「手機連不上」沒有任何錯誤訊息。原本擋住的就是這件事：機器上兩條既有的
-inbound 規則指向**系統 Python**（`...\python313\python.exe`），
-伺服器跑的卻是 venv 的 python.exe，路徑不同所以規則不適用。
+| | 路徑 |
+|---|---|
+| 開著 8000 埠的程式 | `...\AppData\Local\Programs\Python\Python313\python.exe` |
+| 它的上一層（轉介） | `Sonnap-Project\.venv\Scripts\python.exe` |
+| `Sonnap venv python (demo)` 放行的 | `Sonnap-Project\.venv\Scripts\python.exe` ← **對不上** |
 
-demo 結束後移除：
+實測：把 `Sonnap venv python (demo)` **停用之後，手機照樣連得到**
+（`adb shell curl http://<IP>:8000/health` 回 `status: ok`），測完已恢復啟用。
+所以舊版這裡寫的兩句都不成立：「換了 venv 規則就失效」、
+「原本擋住的是系統 Python 規則與 venv 路徑對不上」。
+
+真正放行系統 Python 的是四條名叫 `python.exe` 的規則（Private／Public × TCP／UDP，
+不限埠）。內部名稱開頭是 `TCP Query User`／`UDP Query User`——那是**某次 Python
+第一次開埠時，Windows 跳出「允許存取」視窗、有人按了允許**才產生的，不是專案加的。
+熱點連線被 Windows 當成 **Public** 網路（同日實測），所以要有 Public 的規則才連得進來。
+
+⚠️ **沒驗到的一點**：反向實驗「停用系統 Python 的規則後，手機就連不到」**沒有做**
+（停用那條規則的動作被 Claude Code 的安全機制擋下）。機器上另有 10 條不限程式的
+放行規則（Teams、Game Bar、Microsoft Store 等 App 的），推測只管各自的 App，但沒有驗證。
+要驗的話：系統管理員 PowerShell 停用那條 Public TCP 的 `python.exe` 規則 → 從手機測 → 再啟用。
+
+→ **手機連不上、懷疑是防火牆時**，查的是「開埠那支程式」有沒有規則，不是查 venv 那條：
 
 ```powershell
-Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
+$exe = (Get-NetTCPConnection -LocalPort 8000 -State Listen |
+  ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" }).ExecutablePath
+Get-NetFirewallApplicationFilter | Where-Object { $_.Program -eq $exe } |
+  Get-NetFirewallRule | Select-Object DisplayName, Enabled, Action, Profile
 ```
+
+demo 結束後：
+
+```powershell
+Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"   # 對連線沒有作用，留著只是雜訊
+```
+
+⚠️ **拿掉上面那條並不會把門關上。** 系統 Python 那四條放行的是
+**這台電腦上任何 Python 程式、任何埠，連公用網路也算**。要真的收起來得處理那四條，
+但它們不是專案加的、可能有別的用途，**刪不刪由使用者決定**，不要代刪。
 
 ⚠️ **驗證只能從手機做**。「本機用區網 IP 打得開」不等於手機打得開——
 同一台機器發往自己區網 IP 的封包**不經過防火牆**，09-01 那次就是這樣
@@ -172,8 +201,8 @@ Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 **09-09 的進度查核前務必在現場再測一次。**
 （09-03 那次是把電腦連上手機熱點才通的——那也是現場可用的備案。）
 
-⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），規則掛在 Public 設定檔上
-代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
+⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），而放行它的規則
+（系統 Python 那四條）掛在 Public 設定檔上，代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
 
 ### ✅ `tapo 2.0/.env` 的密碼已換（2026-08-28）
 

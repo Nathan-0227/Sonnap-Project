@@ -11,6 +11,41 @@
 
 ---
 
+## 📌 2026-09-13 防火牆說明更正：放行手機的不是 `Sonnap venv python (demo)`
+
+起因是 App 連不到後端。查到最後**跟防火牆無關**：電腦連著 JY NETWORK，
+沒連手機熱點；而且想換也換不過去，因為電腦記住的熱點是 WPA3，手機當時發的是 WPA2，
+Windows 回 `Capability matching failed at profile (cipher not found)`。
+使用者重新把電腦連上熱點之後，手機就連得到了。
+
+排查途中發現 CLAUDE.md 的防火牆原因寫錯，逐項實測：
+
+| 查什麼 | 結果 |
+|---|---|
+| 開著 8000 埠的程式 | `...\Python313\python.exe`（系統 Python） |
+| 它的父程式 | `.venv\Scripts\python.exe`（轉介程式） |
+| `Sonnap venv python (demo)` 放行的 | `.venv\Scripts\python.exe` → 與開埠的程式對不上 |
+| 系統 Python 的規則 | 4 條 `python.exe`，Allow，Private／Public × TCP／UDP，內部名稱 `TCP/UDP Query User{...}`（Windows 跳窗按允許產生） |
+| 熱點連線的網路類型 | Public |
+| 三種設定檔的防火牆 | 全部開啟 |
+| 手機 `adb shell curl http://10.91.117.92:8000/health` | `status: ok` |
+| **停用** `Sonnap venv python (demo)` 後再測 | **仍然 `status: ok`**（測完已重新啟用） |
+
+→ 舊版寫的「換了 venv 規則就失效」「原本擋住的是系統 Python 規則與 venv 路徑對不上」
+都不成立。09-01 那次到底是什麼擋住的，現在已經無法回推（當時系統 Python 的規則有幾條、
+那個 Wi-Fi 被當成 Private 還是 Public 都沒有記錄）。
+
+**沒做到的**：反向實驗「停用系統 Python 的 Public TCP 規則 → 手機應該連不到」。
+停用規則的指令被 Claude Code 的安全機制擋下，沒有繞過。機器上另有 10 條
+Program=Any 的放行規則（Teams、Game Bar、Microsoft Store…），`Package` 欄是空的、
+`Owner` 綁使用者 SID，推測只管各自的 App，但沒有驗證。
+
+順帶抓到一個文件裡的指令錯誤：D2 手冊把 PowerShell 指令包在 bash 的
+`powershell -Command "..."` 裡，實跑 bash 會把 `$exe`、`$_` 當成自己的變數換掉，
+整條失敗。改成獨立的 PowerShell 區塊，照抄實跑過。
+
+---
+
 ## 📌 2026-09-02 ~ 09-03 Tier A 行為迴圈接通（A6 → 上傳後端 → 暱稱制帳號）
 
 `nightly_behavior` 那張表從 08-26（PR #11）就存在，有端點、有測試、有挑戰邏輯，
