@@ -749,6 +749,80 @@ def update_user(user_id, db_path=None, **fields):
         conn.close()
 
 
+def resolve_phone_account(db_path=None):
+    """
+    挑出「手機一直在上傳的那個帳號」：nightly_behavior 夜數最多的那個。
+
+    回傳 (user_id 或 None, info)。info 是 dict：
+      reason   : "ok" | "no_users" | "no_behavior" | "tie"
+      accounts : 帳號總數
+      nights   : 勝出（或並列第一）帳號的夜數
+      tied     : 夜數並列第一的 user_id 清單（reason="tie" 時）
+      all      : 全部 user_id（reason="no_behavior" 時）
+
+    ⚠️ **這裡不 sys.exit**——分不出來時怎麼辦由呼叫端決定：
+       攝影機匯入會停下來請人指定，Garmin 匯入會把本人那段先留在研究者帳號。
+
+    ⚠️ **攝影機匯入與 Garmin 匯入必須共用這一個判準。** 兩邊各寫一份的話，
+       同一晚的攝影機資料與手錶資料可能落在不同帳號，而且不會有任何錯誤訊息
+       ——2026-09-13 之前就是這個狀態：攝影機在手機帳號，手錶全在研究者帳號。
+    """
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.user_id AS user_id, COUNT(n.date) AS nights
+            FROM users u
+            LEFT JOIN nightly_behavior n ON n.user_id = u.user_id
+            GROUP BY u.user_id
+            ORDER BY nights DESC
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    counts = [(r["user_id"], r["nights"]) for r in rows]
+    if not counts:
+        return None, {"reason": "no_users", "accounts": 0}
+    best, best_n = counts[0]
+    if best_n == 0:
+        return None, {"reason": "no_behavior", "accounts": len(counts),
+                      "all": [u for u, _ in counts]}
+    tied = [u for u, n in counts if n == best_n]
+    if len(tied) > 1:
+        return None, {"reason": "tie", "accounts": len(counts),
+                      "nights": best_n, "tied": tied}
+    return best, {"reason": "ok", "accounts": len(counts), "nights": best_n}
+
+
+def delete_wearable_nightly(user_id, date, source=None, db_path=None):
+    """
+    刪掉某帳號某一晚的 wearable_nightly。給了 source 就只刪那個來源的。
+
+    回傳實際刪掉的列數。
+
+    ⚠️ 用途是**搬家後清掉舊副本**（見 migrate_garmin_to_db.py 的戴錶者分帳號）。
+       wearable_nightly 的主鍵是 (user_id, date)，同一晚搬到新帳號之後，
+       舊帳號那份不會自己消失——不清的話同一晚會同時算在兩個人頭上。
+    """
+    conn = connect(db_path)
+    try:
+        if source is None:
+            cur = conn.execute(
+                "DELETE FROM wearable_nightly WHERE user_id = ? AND date = ?",
+                (user_id, date),
+            )
+        else:
+            cur = conn.execute(
+                "DELETE FROM wearable_nightly WHERE user_id = ? AND date = ? AND source = ?",
+                (user_id, date, source),
+            )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def delete_user(user_id, db_path=None):
     """
     刪除使用者及其所有資料。

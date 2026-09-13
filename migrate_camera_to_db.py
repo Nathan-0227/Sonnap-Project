@@ -66,40 +66,28 @@ def mask(user_id):
 
 
 def resolve_user(db_path=None):
-    """從資料庫挑出「手機一直在上傳的那個帳號」。回 (user_id, 診斷文字)。"""
-    conn = db.connect(db_path)
-    try:
-        rows = conn.execute(
-            """
-            SELECT u.user_id AS user_id, COUNT(n.date) AS nights
-            FROM users u
-            LEFT JOIN nightly_behavior n ON n.user_id = u.user_id
-            GROUP BY u.user_id
-            ORDER BY nights DESC
-            """
-        ).fetchall()
-    finally:
-        conn.close()
+    """從資料庫挑出「手機一直在上傳的那個帳號」。回 (user_id, 診斷文字)。
 
-    if not rows:
+    判準本身在 db.resolve_phone_account()——Garmin 匯入也用同一個，
+    兩邊才會把同一晚的攝影機與手錶資料放進同一個帳號。
+    """
+    user_id, info = db.resolve_phone_account(db_path)
+    if user_id:
+        return user_id, f"{mask(user_id)}（{info['nights']} 晚行為資料，共 {info['accounts']} 個帳號）"
+
+    if info["reason"] == "no_users":
         sys.exit("✗ 資料庫裡沒有任何使用者。先用手機建帳號（或跑 "
                  "migrate_garmin_to_db.py）再來。")
-
-    counts = [(r["user_id"], r["nights"]) for r in rows]
-    best, best_n = counts[0]
-    if best_n == 0:
+    if info["reason"] == "no_behavior":
         sys.exit("\n".join([
             "✗ 每個帳號都還沒有任何 nightly_behavior 資料，分不出哪個是手機在用的。",
             "   先讓手機上傳一晚，或用 --user-id 指定。",
-            "   現有帳號（遮罩）：" + ", ".join(mask(u) for u, _ in counts),
+            "   現有帳號（遮罩）：" + ", ".join(mask(u) for u in info["all"]),
         ]))
-    tied = [u for u, n in counts if n == best_n]
-    if len(tied) > 1:
-        sys.exit("\n".join([
-            f"✗ 有 {len(tied)} 個帳號的夜數一樣多（各 {best_n} 晚），我不猜。",
-            "   用 --user-id 指定一個：" + ", ".join(mask(u) for u in tied),
-        ]))
-    return best, f"{mask(best)}（{best_n} 晚行為資料，共 {len(counts)} 個帳號）"
+    sys.exit("\n".join([
+        f"✗ 有 {len(info['tied'])} 個帳號的夜數一樣多（各 {info['nights']} 晚），我不猜。",
+        "   用 --user-id 指定一個：" + ", ".join(mask(u) for u in info["tied"]),
+    ]))
 
 
 def nights(metrics_dir, explicit):

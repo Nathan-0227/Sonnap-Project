@@ -950,7 +950,12 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   `no such column`。加欄位時兩邊都要改。
 - `build_app_payload.py` — `garmin/data/*.json` → `app/assets/data/app_payload.json`
 - `migrate_garmin_to_db.py` — Garmin 的每一晚 → `wearable_nightly`，可重複執行。
-  也是測試用 `RESEARCHER_USER_ID` 的產生處
+  ⚠️ **2026-09-13 起依戴錶者分帳號**：`wearer_a` → 另開的 `WEARER_A_USER_ID`；
+  `unverified` → 研究者帳號（「無法歸屬」的桶子，不當成任何一個人）；
+  `wearer_c`（本人）→ **手機一直在上傳的那個帳號**，執行時用 `db.resolve_phone_account()` 找，
+  跟攝影機匯入共用同一個判準——兩邊各寫一份的話同一晚的攝影機與手錶資料會分在兩個帳號。
+  搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的夜晚**不覆蓋**。
+  ⚠️ 在此之前所有夜晚都在研究者帳號，所以手機 App 依帳號撈手錶資料的功能一晚都拿不到。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1003,6 +1008,7 @@ python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
 python tests/test_sleep_efficiency.py    # 2026-09-06 新增
 python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
+python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
