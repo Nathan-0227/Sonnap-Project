@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -35,8 +34,6 @@ class HealthConnectService(private val context: Context) {
         val PERMISSIONS = setOf(HealthPermission.getReadPermission(SleepSessionRecord::class))
     }
 
-    private val contract = PermissionController.createRequestPermissionResultContract(PROVIDER)
-
     fun status(): String = when (HealthConnectClient.getSdkStatus(context, PROVIDER)) {
         HealthConnectClient.SDK_AVAILABLE -> "available"
         HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "needs_update"
@@ -47,10 +44,8 @@ class HealthConnectService(private val context: Context) {
         HealthConnectClient.getOrCreate(context).permissionController
             .getGrantedPermissions().containsAll(PERMISSIONS)
 
-    fun permissionIntent(): Intent = contract.createIntent(context, PERMISSIONS)
-
-    fun permissionGranted(resultCode: Int, data: Intent?): Boolean =
-        contract.parseResult(resultCode, data).containsAll(PERMISSIONS)
+    // 授權畫面由 MainActivity 的 registerForActivityResult 開（見那裡的說明）。
+    // ⚠️ 不要在這裡做一個 createIntent() 給 startActivityForResult 用——那正是閃退的原因。
 
     /** 帶到 Play 商店。沒有 Play 商店的手機退回網頁。 */
     fun openProviderStore() {

@@ -1,10 +1,10 @@
 package com.example.app
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import io.flutter.embedding.android.FlutterActivity
+import androidx.health.connect.client.PermissionController
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
@@ -13,7 +13,21 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-class MainActivity : FlutterActivity() {
+/**
+ * ## ⚠️ 必須是 FlutterFragmentActivity，不能是 FlutterActivity（2026-09-13 實機閃退）
+ *
+ * Health Connect 的授權 contract 產生的 Intent 是
+ * `androidx.activity.result.contract.action.REQUEST_PERMISSIONS`——那**不是真的畫面**，
+ * 是 AndroidX 的暗號，只有 ComponentActivity 的 registerForActivityResult 會攔下來
+ * 轉成系統授權視窗。FlutterActivity 是最陽春的 Activity，拿去 startActivityForResult：
+ *
+ *   1. 丟 ActivityNotFoundException → Flutter 自動回 Dart 一次錯誤
+ *   2. 系統又送 RESULT_CANCELED 回來 → 再回一次 → `Reply already submitted` → **整個 App 閃退**
+ *
+ * 單元測試與 `flutter build apk` 都抓不到（編得過、Dart 端測的是假的平台），
+ * 只有實機按下「Connect and sync」才會發生。`health_connect_test.dart` 有一條在守。
+ */
+class MainActivity : FlutterFragmentActivity() {
 
     private lateinit var usageStatsService: UsageStatsService
     private lateinit var keyValueStore: KeyValueStore
@@ -24,8 +38,15 @@ class MainActivity : FlutterActivity() {
     /** Health Connect 的 API 都是 suspend。Main：MethodChannel 的回覆要在主執行緒。 */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** 等授權畫面回來的那一個呼叫。 */
+    /** 等授權畫面回來的那一個呼叫。只准由 [finishHealthRequest] 回覆。 */
     private var pendingHealthResult: MethodChannel.Result? = null
+
+    /** ⚠️ 要在 Activity 建構時就註冊（STARTED 之後註冊會丟例外），所以是欄位不是區域變數。 */
+    private val healthPermissionLauncher = registerForActivityResult(
+        PermissionController.createRequestPermissionResultContract(HealthConnectService.PROVIDER)
+    ) { granted ->
+        finishHealthRequest(granted.containsAll(HealthConnectService.PERMISSIONS))
+    }
 
     companion object {
         private const val CHANNEL = "sonnap/usage"
@@ -33,8 +54,17 @@ class MainActivity : FlutterActivity() {
         private const val NOTIFY_CHANNEL = "sonnap/notify"
         private const val GUARD_CHANNEL = "sonnap/guard"
         private const val HEALTH_CHANNEL = "sonnap/health"
-        private const val HEALTH_PERMISSION_REQUEST = 4203
         private const val NOTIFY_PERMISSION_REQUEST = 4202
+    }
+
+    /**
+     * 回覆等授權的那一個呼叫，**而且只回一次**：先清掉再回，
+     * 回覆途中有任何東西再進來，看到的都是 null。
+     */
+    private fun finishHealthRequest(granted: Boolean) {
+        val pending = pendingHealthResult ?: return
+        pendingHealthResult = null
+        pending.success(granted)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -258,9 +288,16 @@ class MainActivity : FlutterActivity() {
                         return@setMethodCallHandler
                     }
                     // 上一個還沒回來就又按了一次：先把舊的結掉，免得它永遠等不到。
-                    pendingHealthResult?.success(false)
+                    finishHealthRequest(false)
                     pendingHealthResult = result
-                    startActivityForResult(healthService.permissionIntent(), HEALTH_PERMISSION_REQUEST)
+                    try {
+                        healthPermissionLauncher.launch(HealthConnectService.PERMISSIONS)
+                    } catch (e: Exception) {
+                        // ⚠️ 自己接住並清掉 pending。讓例外跑出去的話，Flutter 會替我們回一次錯誤，
+                        //    而 pending 還握著同一個 result——之後再回就是閃退的那條路。
+                        pendingHealthResult = null
+                        result.error("HEALTH_PERMISSION_FAILED", e.message, null)
+                    }
                 }
                 "openProviderStore" -> {
                     healthService.openProviderStore()
@@ -285,15 +322,6 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-    }
-
-    @Deprecated("FlutterActivity is a plain Activity; the result API needs ComponentActivity.")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != HEALTH_PERMISSION_REQUEST) return
-        val granted = runCatching { healthService.permissionGranted(resultCode, data) }.getOrDefault(false)
-        pendingHealthResult?.success(granted)
-        pendingHealthResult = null
     }
 
     override fun onDestroy() {

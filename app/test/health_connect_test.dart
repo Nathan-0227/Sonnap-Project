@@ -535,5 +535,47 @@ void main() {
       expect(RegExp(r'minusDays|minusHours|plusDays|Duration\.of|TimeUnit|ChronoUnit').hasMatch(code), isFalse);
       expect(RegExp(r'\b(72|4320|259200000)L?\b').hasMatch(code), isFalse);
     });
+
+    // 2026-09-13 實機（S24、Android 16）：按「Connect and sync」整個 App 閃退，
+    // 當天三次。contract 的 Intent（androidx...REQUEST_PERMISSIONS）不是真的畫面，
+    // 拿去 startActivityForResult 會找不到 → Flutter 回一次錯誤 → 系統再送取消回來
+    // → 第二次回覆 → `Reply already submitted`。
+    // ⚠️ 這幾條只掃原始碼。flutter build 與其他測試都抓不到這個錯，只有實機按下去才會。
+    group('授權畫面不能閃退', () {
+      // ⚠️ 檔案可能是 CRLF，照 \r?\n 切，不然行首判斷與後面的比對都會對不上。
+      String codeOf(String name) => File('$dir/kotlin/com/example/app/$name')
+          .readAsStringSync()
+          .split(RegExp(r'\r?\n'))
+          .where((l) => !l.trimLeft().startsWith('*') && !l.trimLeft().startsWith('//'))
+          .join('\n');
+
+      test('MainActivity 是 FlutterFragmentActivity（registerForActivityResult 要 ComponentActivity）', () {
+        final code = codeOf('MainActivity.kt');
+        expect(RegExp(r'class\s+MainActivity\s*:\s*FlutterFragmentActivity\(').hasMatch(code), isTrue);
+      });
+
+      test('授權走 registerForActivityResult，不走 startActivityForResult', () {
+        final code = codeOf('MainActivity.kt');
+        expect(code, contains('registerForActivityResult('));
+        expect(code, contains('createRequestPermissionResultContract('));
+        expect(code, isNot(contains('startActivityForResult(')));
+        expect(code, isNot(contains('onActivityResult(')));
+        expect(codeOf('HealthConnectService.kt'), isNot(contains('createIntent(')),
+            reason: '做一個 Intent 出來，就會有人拿去 startActivityForResult');
+      });
+
+      test('launch 丟例外時自己回覆並清掉 pending（不讓 Flutter 替我們回、之後又回一次）', () {
+        final code = codeOf('MainActivity.kt');
+        // 從 HEALTH_CHANNEL 的 handler 開始找，才不會對到 sonnap/notify 那個同名的 requestPermission。
+        final block = RegExp(
+          r'HEALTH_CHANNEL\s*\)\.setMethodCallHandler.*?"requestPermission" -> \{.*?HEALTH_PERMISSION_FAILED',
+          dotAll: true,
+        ).stringMatch(code);
+        expect(block, isNotNull, reason: 'Health Connect 的 requestPermission 分支裡要有自己的錯誤回覆');
+        expect(block, contains('healthPermissionLauncher.launch('));
+        expect(block, contains('catch'));
+        expect(block, contains('pendingHealthResult = null'));
+      });
+    });
   });
 }
