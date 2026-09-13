@@ -954,6 +954,25 @@ def get_nightly_behavior(user_id, days=30, db_path=None):
 # Tier B：穿戴裝置資料（唯讀給 API，寫入只由上游 pipeline / adapter 呼叫）
 # ═══════════════════════════════════════════════════════════════════
 
+def get_wearable_source(user_id, date, db_path=None):
+    """
+    某帳號某一晚的 wearable_nightly 是哪個來源（'garmin' / 'health_connect'）。
+    **沒有那一列回 None。**
+
+    給「同一晚兩個來源誰留下」的規則用（Garmin 優先，見 main.py 的 POST /wearable
+    與 migrate_garmin_to_db.py）。
+    """
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT source FROM wearable_nightly WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchone()
+        return dict(row)["source"] if row else None
+    finally:
+        conn.close()
+
+
 def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     """
     寫入某一晚的穿戴裝置資料。

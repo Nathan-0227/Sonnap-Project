@@ -213,6 +213,11 @@ enum WearableUploadStatus {
   /// 後端說這一段算不了（422，例如沒有分期）。**不重送**——送幾次都一樣。
   rejected,
 
+  /// 那一晚後端已經有 Garmin 的資料（409），照「Garmin 優先」留著 Garmin。
+  /// **不重送**：之後送幾次都一樣是 409，而把它當成 failed 的話每次開 App 都會重送。
+  /// 實機上兩者常是同一支錶（Garmin Connect 同步進 Health Connect）。
+  keptGarmin,
+
   /// 還沒有帳號
   noUser,
 
@@ -260,6 +265,10 @@ class WearableUploader {
 
       if (response.statusCode == 422) {
         return WearableUploadResult(WearableUploadStatus.rejected, error: body);
+      }
+      if (response.statusCode == 409) {
+        debugPrint('WearableUpload: kept Garmin for ${session.wakeDate}');
+        return WearableUploadResult(WearableUploadStatus.keptGarmin, date: session.wakeDate);
       }
       if (response.statusCode != 201) {
         return WearableUploadResult(WearableUploadStatus.failed,
@@ -346,8 +355,10 @@ class HealthSyncController {
     for (final s in sessionsToUpload(sessions, uploaded)) {
       final r = await up.upload(s);
       results.add(r);
-      // ⚠️ 只有 failed / noUser 要重送；rejected 送幾次都是 422。
-      if (r.status == WearableUploadStatus.ok || r.status == WearableUploadStatus.rejected) {
+      // ⚠️ 只有 failed / noUser 要重送；rejected 送幾次都是 422、keptGarmin 送幾次都是 409。
+      if (r.status == WearableUploadStatus.ok ||
+          r.status == WearableUploadStatus.rejected ||
+          r.status == WearableUploadStatus.keptGarmin) {
         uploaded.add(s.key);
       }
     }
@@ -393,11 +404,17 @@ String describeHealthSync(HealthSyncResult result) {
   final ok = result.uploads.where((u) => u.status == WearableUploadStatus.ok).toList();
   final failed = result.uploads.where((u) => u.status == WearableUploadStatus.failed).length;
   final rejected = result.uploads.where((u) => u.status == WearableUploadStatus.rejected).length;
+  final keptGarmin = result.uploads.where((u) => u.status == WearableUploadStatus.keptGarmin).length;
   final parts = <String>[];
   if (ok.isNotEmpty) {
     final latest = ok.last;
     parts.add('Sent ${ok.length} night${ok.length == 1 ? '' : 's'}. '
         'Latest: ${latest.date ?? '?'}, rated ${latest.baseQuality ?? '?'} by the backend.');
+  }
+  // ⚠️ 要講出來：不講的話使用者看到「送了卻沒有分數」會以為壞了。
+  if (keptGarmin > 0) {
+    parts.add('$keptGarmin night${keptGarmin == 1 ? '' : 's'} already had Garmin data, '
+        'so the Garmin score was kept.');
   }
   if (failed > 0) parts.add('$failed could not be sent and will be retried.');
   if (rejected > 0) parts.add('$rejected could not be scored by the backend.');

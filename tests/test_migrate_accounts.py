@@ -7,7 +7,8 @@
    （wearer_a → 另開帳號、unverified → 研究者帳號、wearer_c → 手機帳號）
 2. 搬家後舊帳號裡的副本要清掉——主鍵是 (帳號, 日期)，資料庫擋不住跨帳號重複，
    漏清的話同一晚會同時算在兩個人頭上，而且沒有任何錯誤訊息
-3. 手機的 Health Connect 已經送過的那一晚不能被 Garmin 蓋掉
+3. 同一晚兩個來源時 **Garmin 優先**（2026-09-13 使用者決定）：
+   Health Connect 已經送過的那一晚要被 Garmin 蓋掉。反方向由 POST /wearable 擋（test_api.py）
 4. 找不到手機帳號（新資料庫還沒上傳過）時不能崩潰，本人那段先留在研究者帳號
 
 用真的 garmin/data 檔、臨時的 SQLite 資料庫跑。不需要 pytest：
@@ -114,15 +115,18 @@ check("第二次匯入也成功", run_migrate(path), 0)
 check("重跑後每一晚仍只掛在一個帳號",
       sorted(d for d, us in garmin_owner_map(path, accounts).items() if len(us) != 1), [])
 
-print("【3】Health Connect 已經送過的那一晚不被 Garmin 蓋掉")
+print("【3】Garmin 優先：Health Connect 已經送過的那一晚被 Garmin 蓋掉")
+# 實機（2026-09-13）：兩個來源常是同一支錶——Garmin Connect 同步進 Health Connect。
+# 同一晚 Garmin 69.8、Health Connect 75.9，留哪一份由使用者決定為 Garmin。
 hc_date = wearer_c_dates[-1]
 hc_metrics = dict(metrics_by_date[hc_date])
 hc_metrics["final_score"] = 12.3
 db.upsert_wearable_nightly(phone, hc_date, source="health_connect", metrics=hc_metrics, db_path=path)
-check("匯入仍然成功", run_migrate(path), 0)
+check("匯入仍然成功（驗收通過，不必跳過那一晚）", run_migrate(path), 0)
 row = {r["date"]: r for r in db.get_wearable_nightly(phone, days=10_000, db_path=path)}[hc_date]
-check("那一晚來源仍是 health_connect", row["source"], "health_connect")
-check("那一晚的分數沒被改掉", row["final_score"], 12.3)
+check("那一晚來源變成 garmin", row["source"], "garmin")
+check("那一晚的分數是 Garmin 的，不是 Health Connect 的 12.3",
+      row["final_score"], metrics_by_date[hc_date]["final_score"])
 
 print("【4】找不到手機帳號時不崩潰，本人那段先留在研究者帳號")
 path2 = make_db()

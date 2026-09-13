@@ -453,6 +453,39 @@ check("反向：bed_marks_source 是 None", f9["bed_marks_source"], None)
 
 print()
 print("=" * 78)
+print("【額外】同一晚兩個來源：Garmin 優先（2026-09-13 使用者決定）")
+print("=" * 78)
+# 實機：Garmin Connect 把睡眠同步進 Health Connect，Sonnap 再讀一次 → 同一支錶、
+# 同一晚兩個分數（09-11：Garmin 69.8、Health Connect 75.9）。主鍵是 (帳號, 日期)，
+# 不擋的話分數跟著「誰最後送」跳動，而且沒有錯誤訊息。
+u10 = client.post("/users", json={"display_name": "兩個來源", "study_cohort": "L1"}).json()["user_id"]
+db.upsert_wearable_nightly(u10, E, source="garmin",
+                           metrics={"final_score": 69.8, "final_quality": "Normal",
+                                    "device_brand": "Garmin Vivoactive 3"}, db_path=TMP)
+
+
+def row10():
+    rows = [r for r in db.get_wearable_nightly(u10, days=10_000, db_path=TMP) if r["date"] == E]
+    return rows[0] if rows else {}
+
+
+r10 = client.post("/wearable", json={"user_id": u10, "session": session})
+check("那晚已有 Garmin → 409（App 據此不重送）", r10.status_code, 409)
+check("來源仍是 garmin", row10().get("source"), "garmin")
+check("分數仍是 Garmin 的 69.8，沒被 Health Connect 蓋掉", row10().get("final_score"), 69.8)
+check("db.get_wearable_source 回 garmin", db.get_wearable_source(u10, E, db_path=TMP), "garmin")
+
+# 反向對照：Health Connect 蓋 Health Connect 照常（手錶補完整的一段要能更新），
+# 沒有任何列的夜晚照常 201——少了這兩條，把整個上傳擋掉測試也會綠。
+# ⚠️ 不能用 u5：前面的 CASCADE 測試已經把它刪了（會拿到 404 而不是想驗的東西）。
+u11 = client.post("/users", json={"display_name": "只有 HC", "study_cohort": "L1"}).json()["user_id"]
+client.post("/wearable", json={"user_id": u11, "session": session})
+r10b = client.post("/wearable", json={"user_id": u11, "session": session})
+check("反向：那晚是 health_connect → 照常覆寫 201", r10b.status_code, 201)
+check("反向：沒有任何列的夜晚 source 是 None", db.get_wearable_source(u10, "2020-01-01", db_path=TMP), None)
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)

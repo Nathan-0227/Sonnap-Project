@@ -244,6 +244,23 @@ Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難�
 
 （08-28 那一輪九個 commit 的逐項實測數字見 [DEVLOG.md](docs/DEVLOG.md)。）
 
+### ⚠️ 同一晚兩個來源：**Garmin 優先**（2026-09-13 使用者決定）
+
+`wearable_nightly` 的主鍵是（帳號, 日期），一晚只能留一列。實機上 Garmin 與
+Health Connect 常是**同一支錶**（Garmin Connect 會同步進 Health Connect），
+不定規則的話分數會跟著「誰最後送」跳動（09-11：Garmin 69.8、Health Connect 75.9），
+而且沒有任何錯誤訊息。
+
+| 寫入路徑 | 那一晚已經是 | 做什麼 |
+|---|---|---|
+| `POST /wearable`（Health Connect） | `garmin` | **不寫，回 409**；App 記成送過、不重送 |
+| `POST /wearable` | `health_connect` 或沒有 | 照常寫（手錶補完整的一段要能更新） |
+| `migrate_garmin_to_db.py` | `health_connect` | **蓋掉**，並印出蓋了哪幾晚 |
+
+留 Garmin 的理由：它有戴錶者分段與 Tier3 個人化修正；Health Connect 來源的 Tier3 一律是 0。
+⚠️ 規則寫在**兩個**寫入路徑裡（`main.py` 與匯入腳本），改一邊要改另一邊——
+`test_api.py` 與 `test_migrate_accounts.py` 各守一邊。
+
 ### ⏭️ 這一輪之後，還沒做的
 
 | 事情 | 卡在誰 |

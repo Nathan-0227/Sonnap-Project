@@ -516,6 +516,24 @@ async def post_wearable(req: WearableRequest):
     except HealthConnectError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # ⚠️ **同一晚已經有 Garmin 就不蓋（Garmin 優先，2026-09-13 使用者決定）。**
+    #
+    #    主鍵是 (帳號, 日期)，一晚只能留一列。實機上兩個來源常常是**同一支錶**：
+    #    Garmin Connect 會把睡眠同步進 Health Connect，Sonnap 再從那裡讀一次。
+    #    不擋的話，同一晚的分數會跟著「誰最後送」跳動（09-11：Garmin 69.8、
+    #    Health Connect 75.9），而且沒有任何錯誤訊息。
+    #    留 Garmin 的理由：它走完整 pipeline，有戴錶者分段與 Tier3 個人化修正；
+    #    Health Connect 來源的 Tier3 一律是 0（見 adapter 的 HC_MODIFIER_NOTE）。
+    #
+    #    回 409 而不是 201：App 要能分辨「收下了」與「那晚已經有 Garmin、不必再送」，
+    #    後者不重送（見 health_connect.dart 的 WearableUploadStatus.keptGarmin）。
+    #    反方向（Garmin 蓋掉 Health Connect）由 migrate_garmin_to_db.py 負責。
+    if db.get_wearable_source(req.user_id, night_date) == "garmin":
+        raise HTTPException(
+            status_code=409,
+            detail=f"{night_date} already has Garmin data; the Garmin night is kept.",
+        )
+
     db.upsert_wearable_nightly(
         user_id=req.user_id, date=night_date,
         source="health_connect", metrics=metrics,
