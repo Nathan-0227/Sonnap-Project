@@ -128,7 +128,7 @@ generated plugin 檔，而這個專案不出那三個平台。同一個取捨見
 |---|---|
 | CORS | ✅ 已經是 `["GET", "POST", "PATCH", "DELETE", "OPTIONS"]` |
 | 綁 `0.0.0.0` | ✅ `uvicorn main:app --host 0.0.0.0 --port 8000` 實測可用 |
-| Windows 防火牆 | ✅ 已加規則 `Sonnap venv python (demo)`（Inbound / Allow / TCP / Private+Public） |
+| Windows 防火牆 | ✅ 手機連得到（2026-09-13 從手機實測）。⚠️ 但**不是靠** `Sonnap venv python (demo)` 那條規則，見下 |
 
 ### 🔴 IP 每次都不一樣，而且它是**編譯期**參數
 
@@ -147,20 +147,49 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 ⚠️ **不要用 `192.168.56.1`**，那是 VirtualBox 的 host-only 介面，手機連不到。
 
-⚠️ 防火牆規則**綁定的是程式不是埠**：放行的是
-`Sonnap-Project\.venv\Scripts\python.exe`。刻意不開 `-LocalPort 8000`——
-開埠的話任何監聽該埠的程式都會對區網露出。
+⚠️ **防火牆認的是「實際開著 8000 埠的那支程式」，而那支不是 venv 的 python.exe。**
+（2026-09-13 實測）Windows 上 `.venv\Scripts\python.exe` 只是轉介程式，
+它會再叫出**系統 Python** 來跑，真正開埠的是後者：
 
-⚠️ **換了 venv（重建、搬家、改用系統 Python）規則就失效**，而且症狀是
-「手機連不上」沒有任何錯誤訊息。原本擋住的就是這件事：機器上兩條既有的
-inbound 規則指向**系統 Python**（`...\python313\python.exe`），
-伺服器跑的卻是 venv 的 python.exe，路徑不同所以規則不適用。
+| | 路徑 |
+|---|---|
+| 開著 8000 埠的程式 | `...\AppData\Local\Programs\Python\Python313\python.exe` |
+| 它的上一層（轉介） | `Sonnap-Project\.venv\Scripts\python.exe` |
+| `Sonnap venv python (demo)` 放行的 | `Sonnap-Project\.venv\Scripts\python.exe` ← **對不上** |
 
-demo 結束後移除：
+實測：把 `Sonnap venv python (demo)` **停用之後，手機照樣連得到**
+（`adb shell curl http://<IP>:8000/health` 回 `status: ok`），測完已恢復啟用。
+所以舊版這裡寫的兩句都不成立：「換了 venv 規則就失效」、
+「原本擋住的是系統 Python 規則與 venv 路徑對不上」。
+
+真正放行系統 Python 的是四條名叫 `python.exe` 的規則（Private／Public × TCP／UDP，
+不限埠）。內部名稱開頭是 `TCP Query User`／`UDP Query User`——那是**某次 Python
+第一次開埠時，Windows 跳出「允許存取」視窗、有人按了允許**才產生的，不是專案加的。
+熱點連線被 Windows 當成 **Public** 網路（同日實測），所以要有 Public 的規則才連得進來。
+
+⚠️ **沒驗到的一點**：反向實驗「停用系統 Python 的規則後，手機就連不到」**沒有做**
+（停用那條規則的動作被 Claude Code 的安全機制擋下）。機器上另有 10 條不限程式的
+放行規則（Teams、Game Bar、Microsoft Store 等 App 的），推測只管各自的 App，但沒有驗證。
+要驗的話：系統管理員 PowerShell 停用那條 Public TCP 的 `python.exe` 規則 → 從手機測 → 再啟用。
+
+→ **手機連不上、懷疑是防火牆時**，查的是「開埠那支程式」有沒有規則，不是查 venv 那條：
 
 ```powershell
-Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
+$exe = (Get-NetTCPConnection -LocalPort 8000 -State Listen |
+  ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" }).ExecutablePath
+Get-NetFirewallApplicationFilter | Where-Object { $_.Program -eq $exe } |
+  Get-NetFirewallRule | Select-Object DisplayName, Enabled, Action, Profile
 ```
+
+demo 結束後：
+
+```powershell
+Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"   # 對連線沒有作用，留著只是雜訊
+```
+
+⚠️ **拿掉上面那條並不會把門關上。** 系統 Python 那四條放行的是
+**這台電腦上任何 Python 程式、任何埠，連公用網路也算**。要真的收起來得處理那四條，
+但它們不是專案加的、可能有別的用途，**刪不刪由使用者決定**，不要代刪。
 
 ⚠️ **驗證只能從手機做**。「本機用區網 IP 打得開」不等於手機打得開——
 同一台機器發往自己區網 IP 的封包**不經過防火牆**，09-01 那次就是這樣
@@ -172,8 +201,8 @@ Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 **09-09 的進度查核前務必在現場再測一次。**
 （09-03 那次是把電腦連上手機熱點才通的——那也是現場可用的備案。）
 
-⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），規則掛在 Public 設定檔上
-代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
+⚠️ 這個 API **沒有認證**（`user_id` 本身就是憑證），而放行它的規則
+（系統 Python 那四條）掛在 Public 設定檔上，代表在外面的網路也生效。D2 側載那個情境可接受，但不要長期開著。
 
 ### ✅ `tapo 2.0/.env` 的密碼已換（2026-08-28）
 
@@ -214,6 +243,23 @@ Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
 Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難查）。
 
 （08-28 那一輪九個 commit 的逐項實測數字見 [DEVLOG.md](docs/DEVLOG.md)。）
+
+### ⚠️ 同一晚兩個來源：**Garmin 優先**（2026-09-13 使用者決定）
+
+`wearable_nightly` 的主鍵是（帳號, 日期），一晚只能留一列。實機上 Garmin 與
+Health Connect 常是**同一支錶**（Garmin Connect 會同步進 Health Connect），
+不定規則的話分數會跟著「誰最後送」跳動（09-11：Garmin 69.8、Health Connect 75.9），
+而且沒有任何錯誤訊息。
+
+| 寫入路徑 | 那一晚已經是 | 做什麼 |
+|---|---|---|
+| `POST /wearable`（Health Connect） | `garmin` | **不寫，回 409**；App 記成送過、不重送 |
+| `POST /wearable` | `health_connect` 或沒有 | 照常寫（手錶補完整的一段要能更新） |
+| `migrate_garmin_to_db.py` | `health_connect` | **蓋掉**，並印出蓋了哪幾晚 |
+
+留 Garmin 的理由：它有戴錶者分段與 Tier3 個人化修正；Health Connect 來源的 Tier3 一律是 0。
+⚠️ 規則寫在**兩個**寫入路徑裡（`main.py` 與匯入腳本），改一邊要改另一邊——
+`test_api.py` 與 `test_migrate_accounts.py` 各守一邊。
 
 ### ⏭️ 這一輪之後，還沒做的
 
@@ -287,7 +333,7 @@ Garmin 來源有值，那種「只在一種來源下缺資料」的 bug 最難�
 | 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段 |
 | 就寢提醒 | `bedtime_reminder.dart`、`sonnap/notify`（AlarmManager） | 提前 30 分鐘，**留在 Dart**。關掉開關要 cancel（不是只是不排新的）。⚠️ 手機重開機後鬧鐘會消失，要等下次開 App 才重排 |
 | 就寢守門（Accessibility） | `bedtime_guard.dart`、`sonnap/guard` | 守「目標前 30 分 → 目標後 6 小時」，判斷全在 Dart，Kotlin 只照做。`canRetrieveWindowContent="false"`（不讀畫面內容，設定頁的承諾靠它）。⚠️ **Google Play 不會讓它上架**；Android 13+ 側載要先「允許受限設定」。實機清單見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
-| Health Connect | `health_connect.dart`、`sonnap/health` → `POST /wearable` | 只要 `READ_SLEEP`。**每個起床日只送最長的一段**（午覺照順序送會蓋掉那一晚，後端照樣回 201）。`minSdk` 因此 24 → 26。實機清單見 [HEALTH_CONNECT.md](docs/HEALTH_CONNECT.md) |
+| Health Connect | `health_connect.dart`、`sonnap/health` → `POST /wearable` | 只要 `READ_SLEEP`。**每個起床日只送最長的一段**（午覺照順序送會蓋掉那一晚，後端照樣回 201）。**那一晚已有 Garmin 就回 409、不蓋**（見「同一晚兩個來源」）。`minSdk` 因此 24 → 26。實機清單見 [HEALTH_CONNECT.md](docs/HEALTH_CONNECT.md) |
 
 ⚠️ 三個「30 分鐘」必須一致：就寢提醒 `kReminderLead`、守門 `kGuardLeadIn`、
 首頁倒數變紅 `kImminentThreshold`。不一致時通知說「還有 30 分」、倒數還是綠的、
@@ -977,7 +1023,12 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   `no such column`。加欄位時兩邊都要改。
 - `build_app_payload.py` — `garmin/data/*.json` → `app/assets/data/app_payload.json`
 - `migrate_garmin_to_db.py` — Garmin 的每一晚 → `wearable_nightly`，可重複執行。
-  也是測試用 `RESEARCHER_USER_ID` 的產生處
+  ⚠️ **2026-09-13 起依戴錶者分帳號**：`wearer_a` → 另開的 `WEARER_A_USER_ID`；
+  `unverified` → 研究者帳號（「無法歸屬」的桶子，不當成任何一個人）；
+  `wearer_c`（本人）→ **手機一直在上傳的那個帳號**，執行時用 `db.resolve_phone_account()` 找，
+  跟攝影機匯入共用同一個判準——兩邊各寫一份的話同一晚的攝影機與手錶資料會分在兩個帳號。
+  搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的夜晚**不覆蓋**。
+  ⚠️ 在此之前所有夜晚都在研究者帳號，所以手機 App 依帳號撈手錶資料的功能一晚都拿不到。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1009,7 +1060,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 15 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 16 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1018,7 +1069,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 15 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 16 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1040,6 +1091,7 @@ python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
+python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
@@ -1050,7 +1102,7 @@ python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**401 條全過**，2026-09-13 在 main `3ced924` 實測）：
+Flutter（在 `app/` 底下跑，**406 條全過**，2026-09-13 在 main `cbe93a1` 合併後實測）：
 
 ```bash
 flutter test

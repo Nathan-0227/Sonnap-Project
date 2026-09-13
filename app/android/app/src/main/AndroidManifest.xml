@@ -23,6 +23,19 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
+      精準鬧鐘：就寢提醒要在「目標前 30 分鐘」準時響。
+      ⚠️ 少了它，Android 會把提醒延後最多 1 小時（實機看到 window=+1h），
+         23:00 的提醒拖到 24:00 才響，已經過了就寢時間。見 NotificationService.kt。
+      USE_EXACT_ALARM：Android 13+ 安裝時自動給。
+      SCHEDULE_EXACT_ALARM：只給 Android 12（13 以上由上面那一條負責）。
+      ⚠️ 上架 Google Play 前要拿掉 USE_EXACT_ALARM（Play 只准鬧鐘／行事曆類 App 用）。
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+
+    <!--
       Health Connect：只讀睡眠 session（B8）。
       ⚠️ 只宣告用得到的這一個。多宣告的權限會一起出現在授權畫面上，
          受測者看到「心率、步數、體重」很可能整組拒絕。

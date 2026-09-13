@@ -668,50 +668,9 @@ def _sample_data(data: Any) -> Any:
     return data
 
 
-def _debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any]) -> None:
-    payload = {
-        "sessionId": "54141a",
-        "runId": run_id,
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-    }
-    with open("debug-54141a.log", "a", encoding="utf-8") as f:
-        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-
-
 def main() -> None:
     args = parse_args()
-    # region agent log
-    _debug_log(
-        run_id="pre-fix",
-        hypothesis_id="H1",
-        location="garmin_connect_fetch.py:main:startup",
-        message="Script startup context",
-        data={
-            "cwd": os.getcwd(),
-            "script_exists": os.path.exists("garmin_connect_fetch.py"),
-            "start_date": args.start_date,
-            "end_date": args.end_date,
-            "days": args.days,
-        },
-    )
-    # endregion
     if not args.email or not args.password:
-        # region agent log
-        _debug_log(
-            run_id="pre-fix",
-            hypothesis_id="H4",
-            location="garmin_connect_fetch.py:main:credentials",
-            message="Credential presence check",
-            data={
-                "has_email": bool(args.email),
-                "has_password": bool(args.password),
-            },
-        )
-        # endregion
         raise ValueError("Missing credentials. Provide --email/--password or GARMIN_EMAIL/GARMIN_PASSWORD.")
 
     try:
@@ -721,15 +680,6 @@ def main() -> None:
 
     client = Garmin(args.email, args.password)
     client.login()
-    # region agent log
-    _debug_log(
-        run_id="pre-fix",
-        hypothesis_id="H3",
-        location="garmin_connect_fetch.py:main:login",
-        message="Garmin login successful",
-        data={"login": "ok"},
-    )
-    # endregion
 
     records: List[Dict[str, Any]] = []
     debug_rows: List[Dict[str, Any]] = []

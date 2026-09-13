@@ -202,4 +202,35 @@ void main() {
       }
     });
   });
+
+  // 2026-09-13 實機（S24、Android 16）：不精準鬧鐘帶著 window=+1h，
+  // 23:00 的提醒系統有權拖到 24:00——已經過了 23:30 的就寢時間，而且不會報錯。
+  // ⚠️ 這兩條只掃原始碼，擋得住「有人改回不精準」，證明不了手機真的準時。
+  //    真正的驗收是裝進手機後 `adb shell dumpsys alarm` 那一則不再帶 window。
+  group('提醒要準時', () {
+    const main = 'android/app/src/main';
+
+    String codeOf(String path) => File(path)
+        .readAsStringSync()
+        .split('\n')
+        .where((l) => !l.trimLeft().startsWith('*') && !l.trimLeft().startsWith('//'))
+        .join('\n');
+
+    test('manifest 要有精準鬧鐘權限（13+ 用 USE_EXACT_ALARM，12 用 SCHEDULE_EXACT_ALARM）', () {
+      final manifest = File('$main/AndroidManifest.xml').readAsStringSync();
+      expect(manifest, contains('<uses-permission android:name="android.permission.USE_EXACT_ALARM" />'));
+      final schedule = RegExp(r'<uses-permission[^>]*SCHEDULE_EXACT_ALARM[^>]*>', dotAll: true).firstMatch(manifest);
+      expect(schedule, isNotNull);
+      expect(schedule!.group(0), contains('android:maxSdkVersion="32"'),
+          reason: '13 以上由 USE_EXACT_ALARM 負責；不設上限的話 14+ 會多一個要使用者去設定裡開的權限');
+    });
+
+    test('排程用精準鬧鐘，而且先問系統給不給（沒權限時硬排會丟例外、整則排不上）', () {
+      final code = codeOf('$main/kotlin/com/example/app/NotificationService.kt');
+      expect(code, contains('setExactAndAllowWhileIdle('));
+      expect(code, contains('canScheduleExactAlarms()'));
+      // 退路要留著：拿不到精準鬧鐘時，晚一點響總比不響好。
+      expect(code, contains('setAndAllowWhileIdle('));
+    });
+  });
 }

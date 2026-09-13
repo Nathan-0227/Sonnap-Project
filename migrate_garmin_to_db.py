@@ -51,6 +51,10 @@ from pathlib import Path
 
 import db
 
+# 戴錶者分段的唯一定義在 pipeline 裡，這裡直接引用，不另外抄一份日期
+sys.path.insert(0, str(Path(__file__).parent / "garmin"))
+from apply_recovery_modifier import wearer_segment  # noqa: E402
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -79,6 +83,35 @@ RESEARCHER_DEVICE = "Garmin Vivoactive 3"
 #    → young_adult。features.json 每一列都帶著 age_band，
 #    下面會實際讀出來核對，不是照抄這個預設值。
 RESEARCHER_AGE_BAND = "young_adult"
+
+# ═══════════════════════════════════════════════════════════════════
+# 戴錶者分帳號（2026-09-13）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 這支手錶在 2026-05-28 ~ 08-27 經手過好幾個人（見
+# garmin/apply_recovery_modifier.py 的 WEARER_SEGMENTS）。先前所有夜晚
+# 都塞進研究者帳號，結果是：
+#   · 手機 App 用的是另一個帳號，所以依帳號撈手錶資料的功能（遊戲化裡
+#     睡眠品質那一份、Insights 的個人化區塊）一晚都拿不到；
+#   · 攝影機匯入早就寫進手機帳號了，同一晚的攝影機與手錶資料分在兩個帳號。
+#
+# 現在依區段歸帳號：
+#   wearer_a（05-28 ~ 07-27，確定同一人）  → WEARER_A_USER_ID（另開帳號）
+#   unverified（07-28 ~ 08-27，多人戴過）  → 研究者帳號。這個帳號從此是
+#                                             「無法歸屬」的桶子，不當成任何一個人
+#   wearer_c（08-28 起，專題負責人本人）   → 手機一直在上傳的那個帳號
+#
+# ⚠️ **本人的帳號代碼不寫進這支程式。** user_id 在這個專案等同憑證，
+#    執行時才用 db.resolve_phone_account() 去資料庫找——跟攝影機匯入同一個判準。
+#    找不到（例如新建的資料庫還沒有手機上傳過）就先留在研究者帳號並提醒。
+#
+# ⚠️ **只換「掛在誰名下」，不動任何分數。** Tier3 與 SRI 在 pipeline 裡
+#    早就依區段各自算好了，這裡搬的是算完的結果。
+#
+# ⚠️ WEARER_A_USER_ID 比照 RESEARCHER_USER_ID 寫死：它是一個沒有人會登入的
+#    純資料帳號，寫死才能重複執行而不每次長出新帳號。
+WEARER_A_USER_ID = "00000000-5017-4e01-9a30-00000000000a"
+
 
 
 def load(name):
@@ -198,49 +231,103 @@ def ensure_user(db_path=None):
     return RESEARCHER_USER_ID, True
 
 
-def verify(user_id, db_path=None):
+def ensure_wearer_a_user(db_path=None):
+    """確保 wearer_a 那個純資料帳號存在。回傳 (user_id, 是否為新建)。"""
+    if db.get_user(WEARER_A_USER_ID, db_path):
+        return WEARER_A_USER_ID, False
+    db.create_user(
+        display_name="wearer_a (former wearer)",
+        target_bedtime="23:30",
+        # 分數當初就是用這個年齡層算的（main() 會核對 features.json），照實記錄
+        age_band=RESEARCHER_AGE_BAND,
+        study_cohort="L2",
+        wearable_brand=RESEARCHER_DEVICE,
+        db_path=db_path,
+        user_id=WEARER_A_USER_ID,
+    )
+    return WEARER_A_USER_ID, True
+
+
+def assign_owners(dates, db_path=None):
     """
-    驗收第 4 項：wearable_nightly 有 46 列，且 final_score 與
-    garmin_sleep_quality_final.csv **逐列相符**。
+    每一晚應該掛在哪個帳號。回傳 (date → user_id, 手機帳號或 None, 提醒文字清單)。
+    """
+    phone, info = db.resolve_phone_account(db_path)
+    notes = []
+    if phone in (RESEARCHER_USER_ID, WEARER_A_USER_ID):
+        # 純資料帳號剛好上傳夜數最多（例如測試資料）——那不是手機帳號，
+        # 不能把本人的夜晚搬過去，否則等於沒搬。
+        notes.append("The account with the most phone uploads is a data-only account; "
+                     "keeping wearer_c nights in the researcher account.")
+        phone = None
+    elif phone is None:
+        notes.append(f"No phone account could be identified ({info['reason']}); "
+                     "keeping wearer_c nights in the researcher account for now. "
+                     "Re-run after the phone has uploaded at least one night.")
+
+    owners = {}
+    for date in dates:
+        name, _trusted, _start, _end = wearer_segment(date)
+        if name == "wearer_a":
+            owners[date] = WEARER_A_USER_ID
+        elif name == "wearer_c" and phone:
+            owners[date] = phone
+        else:
+            # unverified、落在所有分段之外、或找不到手機帳號時的 wearer_c
+            owners[date] = RESEARCHER_USER_ID
+    return owners, phone, notes
+
+
+def verify(owners, db_path=None):
+    """
+    驗收：CSV 的每一晚都**只**掛在它該在的那一個帳號底下，
+    而且 final_score／final_quality 與 CSV 逐列相符。
 
     ⚠️ 刻意拿 **CSV** 而不是 JSON 來比對。JSON 正是灌資料時讀的那份，
        拿它比對等於自己跟自己比，任何搬運過程的錯誤都驗不出來。
        CSV 是 pipeline 的另一份獨立輸出，比對它才有意義。
+
+    ⚠️ 「同一晚同時掛在兩個帳號」是這一版要特別擋的：主鍵是 (帳號, 日期)，
+       所以資料庫本身擋不住跨帳號重複，搬家漏清舊副本時不會有任何錯誤訊息。
     """
     csv_path = GARMIN_DATA / "garmin_sleep_quality_final.csv"
     if not csv_path.exists():
-        return False, f"Comparison file {csv_path.name} not found"
+        return False, [f"Comparison file {csv_path.name} not found"]
 
     with csv_path.open(encoding="utf-8-sig", newline="") as f:
         expected = {r["date"]: r for r in csv.DictReader(f)}
 
-    stored = {r["date"]: r for r in db.get_wearable_nightly(
-        user_id, days=10_000, db_path=db_path)}
+    accounts = (set(owners.values()) | {RESEARCHER_USER_ID, WEARER_A_USER_ID}) - {None}
+    stored = {
+        uid: {r["date"]: r for r in db.get_wearable_nightly(uid, days=10_000, db_path=db_path)
+              if r.get("source") == "garmin"}
+        for uid in accounts
+    }
 
     problems = []
-    if len(stored) != len(expected):
-        problems.append(
-            f"Row count mismatch: database has {len(stored)}, CSV has {len(expected)}"
-        )
-
     for date, exp in expected.items():
-        got = stored.get(date)
-        if got is None:
-            problems.append(f"{date} is not in the database")
+        owner = owners.get(date)
+        holders = [u for u, rows in stored.items() if date in rows]
+        if owner is None:
+            problems.append(f"{date} has no assigned account")
             continue
-        # CSV 全是字串，轉成 float 再比。用 != 直接比字串會因為
-        # "85.0" vs "85" 這種格式差異而誤報。
+        if owner not in holders:
+            problems.append(f"{date} is not stored under its assigned account")
+            continue
+        if len(holders) > 1:
+            problems.append(f"{date} is stored under {len(holders)} accounts at once")
+        got = stored[owner][date]
         exp_score = float(exp["final_score"])
+        # CSV 全是字串，轉成 float 再比，避免 "85.0" vs "85" 誤報
         if abs((got["final_score"] or -1) - exp_score) > 1e-9:
-            problems.append(
-                f"{date} final_score mismatch: database {got['final_score']}, "
-                f"CSV {exp_score}"
-            )
+            problems.append(f"{date} final_score mismatch: database {got['final_score']}, CSV {exp_score}")
         if got["final_quality"] != exp["final_quality"]:
-            problems.append(
-                f"{date} final_quality mismatch: database {got['final_quality']}, "
-                f"CSV {exp['final_quality']}"
-            )
+            problems.append(f"{date} final_quality mismatch: database {got['final_quality']}, "
+                            f"CSV {exp['final_quality']}")
+
+    total = sum(len(rows) for rows in stored.values())
+    if total != len(expected):
+        problems.append(f"Garmin row count mismatch: {total} across accounts, CSV has {len(expected)}")
 
     return (not problems), problems
 
@@ -395,7 +482,7 @@ def simulate_challenges(feats):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Load the researcher's Garmin data into wearable_nightly."
+        description="Load the Garmin data into wearable_nightly, one account per wearer segment."
     )
     parser.add_argument("--verify", action="store_true",
                         help="Only verify that the database matches the CSV; do not write.")
@@ -418,30 +505,63 @@ def main():
               f"which differs from the expected {RESEARCHER_AGE_BAND!r}. "
               f"Scores were computed with the former; the user record will reflect it as-is.")
 
+    owners, phone, notes = assign_owners([d for d, _ in rows], args.db)
+    for note in notes:
+        print(f"⚠ {note}")
+
     if not args.verify:
         db.init_db(args.db)
-        user_id, created = ensure_user(args.db)
-        print(f"{'Created' if created else 'Reusing existing'} user {user_id}")
+        _, created = ensure_user(args.db)
+        print(f"{'Created' if created else 'Reusing existing'} researcher account")
+        _, created_a = ensure_wearer_a_user(args.db)
+        print(f"{'Created' if created_a else 'Reusing existing'} wearer_a account")
 
+        existing = {
+            uid: {r["date"]: r for r in db.get_wearable_nightly(uid, days=10_000, db_path=args.db)}
+            for uid in set(owners.values())
+        }
+
+        removed = 0
+        replaced = []
         for date, metrics in rows:
-            db.upsert_wearable_nightly(
-                user_id, date, source="garmin", metrics=metrics,
-                db_path=args.db,
-            )
-        print(f"Wrote {len(rows)} nights into wearable_nightly")
-    else:
-        user_id = RESEARCHER_USER_ID
+            owner = owners[date]
+            current = existing.get(owner, {}).get(date)
+            if current is not None and current.get("source") == "health_connect":
+                # ⚠️ **Garmin 優先（2026-09-13 使用者決定）：蓋掉 Health Connect 那一列。**
+                #    主鍵是 (帳號, 日期)，一晚只能留一筆。實機上兩者常是同一支錶
+                #    （Garmin Connect 同步進 Health Connect），留 Garmin 是因為它有
+                #    戴錶者分段與 Tier3。反方向由 main.py 的 POST /wearable 擋（回 409）。
+                #    先前這裡是「跳過、不覆蓋」，當時註明是還沒做的產品決定。
+                replaced.append(date)
+            db.upsert_wearable_nightly(owner, date, source="garmin", metrics=metrics,
+                                       db_path=args.db)
+            # 搬家後清掉其他帳號裡同一晚的 Garmin 舊副本（只刪 garmin 來源的）
+            for other in {RESEARCHER_USER_ID, WEARER_A_USER_ID, phone} - {owner, None}:
+                removed += db.delete_wearable_nightly(other, date, source="garmin",
+                                                      db_path=args.db)
 
-    ok, problems = verify(user_id, args.db)
+        labels = {RESEARCHER_USER_ID: "researcher account (incl. unverified)",
+                  WEARER_A_USER_ID: "wearer_a account"}
+        counts = {}
+        for date, uid in owners.items():
+            counts[uid] = counts.get(uid, 0) + 1
+        for uid, n in counts.items():
+            print(f"  {labels.get(uid, 'phone account (wearer_c)')}: {n} nights")
+        if removed:
+            print(f"  Removed {removed} stale copies from accounts those nights no longer belong to")
+        if replaced:
+            print(f"  Replaced Health Connect data with Garmin on {len(replaced)} nights "
+                  f"(Garmin takes priority): {sorted(replaced)}")
+
+    ok, problems = verify(owners, args.db)
     if ok:
-        print(f"\u2713 Verified: final_score / final_quality for {len(rows)} nights "
-              f"match garmin_sleep_quality_final.csv row for row")
+        print(f"✓ Verified: {len(rows)} nights are each under exactly one account, "
+              f"and final_score / final_quality match garmin_sleep_quality_final.csv row for row")
     else:
-        print("\u2717 Verification failed:")
-        for p in (problems if isinstance(problems, list) else [problems]):
+        print("✗ Verification failed:")
+        for p in problems:
             print(f"    {p}")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
