@@ -41,13 +41,26 @@ ipconfig | findstr IPv4
 # 2. 起後端，一定要綁 0.0.0.0
 .venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
 
-# 3. 防火牆規則還在嗎（綁的是程式不是埠，換過 venv 就失效且無錯誤訊息）
-powershell -Command "Get-NetFirewallRule -DisplayName 'Sonnap venv python (demo)'"
+# 3. 防火牆：見下方 PowerShell 區塊（放在 bash 裡跑 $ 會被 bash 吃掉，實測會壞）
 
 # 4. 建 APK。⚠️ 千萬不要帶 SONNAP_USER_ID——那會讓所有受測者變成同一個人
 cd app && flutter build apk --debug \
   --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000
 ```
+
+第 3 步，後端起來之後在 **PowerShell** 跑。查的是防火牆有沒有放行
+「實際開著 8000 埠的程式」，至少要有一列 `Allow` 且 Profile 含 `Public`：
+
+```powershell
+$exe = (Get-NetTCPConnection -LocalPort 8000 -State Listen |
+  ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" }).ExecutablePath
+Get-NetFirewallApplicationFilter | Where-Object { $_.Program -eq $exe } |
+  Get-NetFirewallRule | Select-Object DisplayName, Enabled, Action, Profile
+```
+
+⚠️ 開埠的是**系統 Python**，不是 venv 的 python.exe（venv 那支只是轉介），
+所以查 `Sonnap venv python (demo)` 那條沒有意義——2026-09-13 實測把它停用，
+手機照樣連得到。原因見 CLAUDE.md「手機連後端」一節。
 
 ⚠️ **驗證只能從手機做。** 同一台機器打自己的區網 IP **不經過防火牆**，
 09-01 那次差點誤判成「已經通了」。請用手機瀏覽器開 `http://<IP>:8000/health`。
@@ -120,8 +133,11 @@ curl -X DELETE http://127.0.0.1:8000/users/<user_id>
 2. 導出彙總資料
 3. **關掉伺服器**、移除防火牆規則：
    ```powershell
-   Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"
+   Remove-NetFirewallRule -DisplayName "Sonnap venv python (demo)"   # 對連線沒作用，只是清掉雜訊
    ```
+   ⚠️ **這一步不會把門關上。** 真正放行後端的是系統 Python 那四條 `python.exe` 規則
+   （Windows 跳窗時有人按了允許產生的），它們放行**這台電腦上任何 Python 程式、
+   任何埠、連公用網路也算**。要不要刪由電腦主人決定——不是專案加的，可能有別的用途。
 4. 報告完成後刪除原始資料（同意書第四節的承諾）
 
 ## 六、報告怎麼寫才誠實
