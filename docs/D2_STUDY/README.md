@@ -4,51 +4,72 @@
 >
 > 材料：[知情同意書](知情同意書.md)｜[隱私政策](隱私政策.md)｜[招募文](招募文.md)｜[前後測問卷](前後測問卷.md)
 
-## 🔴 開跑前必讀：一個會讓整個實測拿不到資料的結構問題
+## 🔴 開跑前必讀：哪些情況會讓一晚的資料消失
 
-**受測者早上開 App 的那一刻，如果連不到後端，那一晚的資料就永久消失。**
+（2026-09-13 改寫。09-06 建立時這裡寫的是「連不到後端那一晚就永久消失」，
+那時還沒有離線補送。**09-08 的 `4a48e7a` 補上了**，所以那條已經不成立。）
 
-三件事湊在一起造成的：
+| 情況 | 會不會掉 | 為什麼 |
+|---|---|---|
+| 早上開 App 時**連不到後端**（不在同一個 Wi-Fi、後端沒開） | ✅ **不會** | 那一晚先存在手機裡，**下次開 App 而且連得到時**補送（`pending_nightly.dart`）。不會在背景自己送 |
+| 手機裡累積超過 **14 晚**沒送出去 | ❌ 最舊的會被丟掉 | 佇列上限 `PendingNightlyStore.maxEntries = 14` |
+| 起床後 **24 小時內完全沒開 App** | ❌ **會** | 就寢時刻只往回找 24 小時（`lights_out.dart:180`），沒開 App 就沒有人去找 |
+| 研究者電腦的後端**沒連到 MariaDB** | ⚠️ 資料沒掉，但**寫進了另一個空的資料庫**，查資料時會以為沒進來 | 見第一節第 3 步 |
 
-| 事實 | 位置 |
-|---|---|
-| 就寢時刻的查詢視窗是**往回 24 小時的滑動視窗** | `lights_out.dart:180` `kLightsOutWindow = Duration(hours: 24)` |
-| 上傳是一次性的，**失敗不留任何東西**，沒有佇列也沒有重試 | `nightly_uploader.dart` 全檔沒有 `store` / `queue` / `retry` |
-| 後端在研究者電腦上，**只有同一個 Wi-Fi 連得到**，IP 還是編譯期參數 | `--dart-define=SONNAP_API_BASE` |
+→ 所以要求受測者的只有一件事：**每天開一次 App**，在哪裡開都可以。
+→ 研究者這邊：實測期間後端要**常常開著**，受測者手機裡的夜晚才送得進來。
 
-→ 隔天再開 App 也救不回來：視窗已經滑過去了，昨晚那段安靜期不在裡面。
+⚠️ 補送只存在 **09-08 之後建置的 APK** 裡。發出去的 APK 比這個舊就要重建。
 
-### 因應（依優先序）
-
-1. **先做離線佇列再發 APK。** 上傳失敗就把 `lights_out_at` 存進本機
-   （用既有的 `KeyValueStore` / `sonnap/store`，不必裝新套件），下次開 App 補送。
-   這樣受測者在哪裡開 App 都沒差，回到同一個 Wi-Fi 才真正送出。
-   **這是 B1 的第一項，優先於挑戰進度卡**——沒有它可能整個實測沒有資料。
-2. 在那之前，只收**同一個 Wi-Fi 底下的室友**，並要求早上在家開 App。
-3. 研究者的筆電在實測期間**每天早上都要開著並跑著伺服器**。
-
-⚠️ 不要為了繞過這件事把後端丟到公網——這個 API **沒有認證**，
+⚠️ 不要為了讓外面也連得到而把後端丟到公網——這個 API **沒有認證**，
 `user_id` 本身就是憑證，公開等於把受測者資料攤開。
 
 ---
 
 ## 一、開跑前檢查（每一項都要實際跑過）
 
-```bash
-# 1. 查當下 IP。⚠️ 不要用 192.168.56.1（VirtualBox host-only，手機連不到）
-ipconfig | findstr IPv4
+> 這一節的指令分兩種視窗，**不能混用**：標 `powershell` 的貼進 PowerShell，
+> 標 `bash` 的貼進 Git Bash。貼錯視窗會直接出錯（兩者設定環境變數的寫法不同）。
 
-# 2. 起後端，一定要綁 0.0.0.0
-.venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+**1. 開資料庫**：打開 XAMPP Control Panel，MySQL 那一列按 **Start**。
 
-# 3. 防火牆：見下方 PowerShell 區塊（放在 bash 裡跑 $ 會被 bash 吃掉，實測會壞）
+沒開的話，要連資料庫的程式會出現 `Can't connect to MySQL server ... (10061)`
+（2026-09-13 匯入手錶資料時實際遇到，原因就是忘了開 XAMPP）。
+確認佔著資料庫連接埠的是 XAMPP，而不是這台電腦另外裝過的 MySQL：
 
-# 4. 建 APK。⚠️ 千萬不要帶 SONNAP_USER_ID——那會讓所有受測者變成同一個人
-cd app && flutter build apk --debug \
-  --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000
+```powershell
+(Get-CimInstance Win32_Process -Filter "ProcessId=$((Get-NetTCPConnection -LocalPort 3306 -State Listen | Select-Object -First 1).OwningProcess)").ExecutablePath
+# 應該印出 c:\xampp\mysql\bin\mysqld.exe
 ```
 
-第 3 步，後端起來之後在 **PowerShell** 跑。查的是防火牆有沒有放行
+**2. 查當下 IP**。⚠️ 不要用 `192.168.56.1`（VirtualBox 的虛擬網卡，手機連不到）
+
+```powershell
+ipconfig | findstr IPv4
+```
+
+**3. 起後端**，三行都要，順序不能換：
+
+```powershell
+cd C:\Users\user\Projects\Sonnap-Project
+$env:SONNAP_DB_URL="mysql://root@localhost/sonnap"
+.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+🔴 **少了第二行不會有任何錯誤訊息**：後端照樣起來、手機照樣連得上、帳號照樣建得起來，
+但資料全部寫進 `data/sonnap.db`（另一個空的資料庫），跟 MariaDB 分成兩邊。
+之後用第二、三節的指令去查，會以為受測者都沒資料。
+（2026-09-10 連踩兩次的是反方向的同一件事：後端寫進 MariaDB，查的人卻去讀 SQLite，
+於是得出「少了兩晚」的錯誤結論。詳見 CLAUDE.md「跑著的後端可能根本不是 SQLite」。）
+
+⚠️ 第二行**只對這個視窗有效**。視窗關掉、重開機，都要三行重跑。
+⚠️ 實測期間這個視窗要一直開著；由 Claude 在背景啟動的後端活不過一個對話。
+⚠️ 出現 `[Errno 10048] only one usage of each socket address` 不是設定錯，
+是已經有一個後端在跑了。**從電腦上看不出那一個有沒有連 MariaDB**
+（所有後端在程式清單裡長得一模一樣），所以一律把它關掉、照這三行重開。
+找不到那個視窗的話，CLAUDE.md 有一段指令可以找出是誰佔著 8000。
+
+**4. 防火牆**：後端起來之後在 **PowerShell** 跑。查的是防火牆有沒有放行
 「實際開著 8000 埠的程式」，至少要有一列 `Allow` 且 Profile 含 `Public`：
 
 ```powershell
@@ -61,6 +82,14 @@ Get-NetFirewallApplicationFilter | Where-Object { $_.Program -eq $exe } |
 ⚠️ 開埠的是**系統 Python**，不是 venv 的 python.exe（venv 那支只是轉介），
 所以查 `Sonnap venv python (demo)` 那條沒有意義——2026-09-13 實測把它停用，
 手機照樣連得到。原因見 CLAUDE.md「手機連後端」一節。
+
+**5. 建 APK**：
+
+```bash
+# ⚠️ 千萬不要帶 SONNAP_USER_ID——那會讓所有受測者變成同一個人
+cd app && flutter build apk --debug \
+  --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000
+```
 
 ⚠️ **驗證只能從手機做。** 同一台機器打自己的區網 IP **不經過防火牆**，
 09-01 那次差點誤判成「已經通了」。請用手機瀏覽器開 `http://<IP>:8000/health`。
@@ -78,11 +107,20 @@ platform-backed 的 HTTP client，這件事會安靜地壞掉。**
 3. 簽名（拍照或電子簽都可以）
 4. 填[前測問卷](前後測問卷.md)第一、二部分
 5. 傳 APK，陪他裝完並開權限
-6. 確認他手機上真的建立了帳號：
+6. 確認他手機上真的建立了帳號（在 `Sonnap-Project` 目錄開 Git Bash 跑）：
 
 ```bash
+SONNAP_DB_URL=mysql://root@localhost/sonnap PYTHONIOENCODING=utf-8 \
 .venv/Scripts/python.exe -c "import db;c=db.connect();[print(dict(r)) for r in c.execute('SELECT user_id, display_name, created_at FROM users')];c.close()"
 ```
+
+⚠️ 第一行的 `SONNAP_DB_URL=...` 不能省：省了會去查另一個空的資料庫，**永遠查不到人**。
+`PYTHONIOENCODING=utf-8` 是給中文暱稱用的，Git Bash 預設編碼印中文會直接報錯。
+→ **手機明明建好帳號、這裡卻查不到** → 八成是後端啟動時少了第一節第 3 步的第二行，
+  帳號被建進了空的那個資料庫。先關掉後端照第一節重開。
+  ⚠️ 但**重開 App 救不回來**：手機會記住第一次建的帳號、不會再建一次，
+  而那個帳號在 MariaDB 裡不存在，之後每一次上傳都會失敗。
+  這種情況目前**沒有現成的處理指令**，發生時先停下來處理，不要繼續收資料。
 
 ⚠️ 註冊畫面**不得出現「安全」「加密」字眼**（有測試守著）——
 那會與同意書第 4 節自相矛盾。
@@ -95,6 +133,7 @@ platform-backed 的 HTTP client，這件事會安靜地壞掉。**
 **研究者**：確認資料真的進來了。
 
 ```bash
+SONNAP_DB_URL=mysql://root@localhost/sonnap PYTHONIOENCODING=utf-8 \
 .venv/Scripts/python.exe -c "
 import db
 c = db.connect()
@@ -106,7 +145,8 @@ for u in users:
 "
 ```
 
-⚠️ `db.py` **沒有** `list_users()`，所以這裡直接下 SQL。上面兩段都實測跑過。
+⚠️ `db.py` **沒有** `list_users()`，所以這裡直接下 SQL。
+上面兩段 2026-09-13 在 MariaDB 上照抄實測跑過（09-06 那次跑的是 SQLite，當時沒有第一行）。
 
 **有人某天沒有資料就當天問**，不要等到最後才發現。最常見的原因是
 沒開 App 或不在同一個 Wi-Fi——而那一晚**補不回來**（見開頭）。
@@ -120,12 +160,18 @@ curl -X DELETE http://127.0.0.1:8000/users/<user_id>
 ```
 
 連鎖刪除會把 `nightly_behavior`、`wearable_nightly` 等全部清掉
-（`db.py:572`；`tests/test_api.py:264` 有一條測試在守「刪完不能留下孤兒資料」）。
+（`db.py` 的 `delete_user()`；`tests/test_api.py` 的「CASCADE 後沒有孤兒資料」那條測試在守）。
+✅ 2026-09-13 查過 MariaDB：**13 個外鍵全部是 CASCADE**，每一張有 `user_id` 的表都有掛，
+沒有漏網的表。（那條測試跑的是 SQLite，所以 MariaDB 這邊是另外查的。）
+
 刪完回報給他，並確認：
 
 ```bash
+SONNAP_DB_URL=mysql://root@localhost/sonnap \
 .venv/Scripts/python.exe -c "import db;print(db.get_user('<user_id>'))"   # 應為 None
 ```
+
+⚠️ 同樣不能省第一行：省了會去空的資料庫查，**沒刪乾淨也會印出 None**。
 
 ## 五、結束
 
