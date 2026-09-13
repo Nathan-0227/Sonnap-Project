@@ -5,7 +5,8 @@
 //      （後端以起床日 upsert、照樣回 201）。
 //   2. 起床日照字串上的牆鐘時間：07:30+08:00 在 UTC 是前一天。
 //   3. 送出去的欄位名稱跟 adapter 讀的一致（漂移時只會變成 422）。
-//   4. 連不上的那一段下次要再送；後端 422 的不再送（送幾次都一樣）。
+//   4. 連不上的那一段下次要再送；後端 422 的不再送（送幾次都一樣）；
+//      409（那晚已有 Garmin，Garmin 優先）也不再送，而且畫面要講出來。
 //   5. 沒有後端的 build 不碰 Health Connect（開 App 不會跳授權）。
 //   6. 開 App 時的自動同步不問授權，只有設定頁的按鈕問。
 //   7. 只要睡眠權限；授權畫面需要的隱私頁兩個入口都在。
@@ -265,6 +266,15 @@ void main() {
       expect(r.status, WearableUploadStatus.rejected);
     });
 
+    test('409 → keptGarmin（那晚已有 Garmin，照 Garmin 優先留著）', () async {
+      status = 409;
+      final r = await WearableUploader(baseUrl: baseUrl, identity: ResolvedUserIdentity('u1'))
+          .upload(_s(_night11));
+      expect(r.status, WearableUploadStatus.keptGarmin,
+          reason: '當成 failed 的話，每次開 App 都會重送一次、每次都 409');
+      expect(r.date, '2026-09-11');
+    });
+
     test('500 → failed（下次再送）', () async {
       status = 500;
       final r = await WearableUploader(baseUrl: baseUrl, identity: ResolvedUserIdentity('u1'))
@@ -368,6 +378,20 @@ void main() {
           reason: '連不上的那晚要補送；422 的送幾次都一樣');
     });
 
+    test('那晚已有 Garmin（409）→ 不再送', () async {
+      final health = _FakeHealth(sessions: [_night10, _night11]);
+      final store = InMemoryKeyValueStore();
+      final first = _FakeUploader((s) => s.key == _s(_night11).key
+          ? WearableUploadStatus.keptGarmin
+          : WearableUploadStatus.failed);
+      await controller(health, uploader: first, store: store).sync();
+
+      final second = _FakeUploader();
+      await controller(health, uploader: second, store: store).sync();
+      expect(second.sent.map((s) => s.key), [_s(_night10).key],
+          reason: '已有 Garmin 的那晚送幾次都是 409；連不上的那晚照樣補送（反向對照）');
+    });
+
     test('送過的清單存壞了 → 當作沒送過（最壞是重送一次，後端是 upsert）', () async {
       final health = _FakeHealth(sessions: [_night11]);
       final store = InMemoryKeyValueStore({HealthSyncController.uploadedKey: '{bad'});
@@ -392,6 +416,15 @@ void main() {
         WearableUploadResult(WearableUploadStatus.failed),
       ]));
       expect(text, contains('will be retried'));
+    });
+
+    test('保留 Garmin 的夜晚要講出來（不然「送了卻沒分數」看起來像壞了）', () {
+      final text = describeHealthSync(const HealthSyncResult(HealthSyncStatus.done, found: 2, uploads: [
+        WearableUploadResult(WearableUploadStatus.keptGarmin, date: '2026-09-11'),
+        WearableUploadResult(WearableUploadStatus.keptGarmin, date: '2026-09-12'),
+      ]));
+      expect(text, contains('2 nights already had Garmin data'));
+      expect(text, isNot(contains('will be retried')));
     });
 
     test('找不到任何 session → 講明往回看幾天', () {

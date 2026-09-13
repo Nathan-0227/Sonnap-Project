@@ -20,6 +20,7 @@ Settings → Health Connect：
 | **每個起床日只送最長的那一段** | 後端以（使用者, 起床日）upsert。午覺也是一筆 session、起床日跟前一晚一樣，照順序全送的話午覺會蓋掉那一晚，而且照樣回 201 |
 | 同一天後來出現更長的一段 → 送新的 | 手錶可能先寫半段、同步後補成完整的一段 |
 | 連不上 → 下次開 App 再送；後端 422 → 不再送 | 422 代表這一段算不了（例如沒有分期），送幾次都一樣 |
+| **同一晚已經有 Garmin → 後端回 409、不蓋，App 不再送**（2026-09-13 使用者決定：Garmin 優先） | 實機上兩者常是**同一支錶**：Garmin Connect 把睡眠同步進 Health Connect，Sonnap 再讀一次，同一晚變兩個分數（09-11：Garmin 69.8、Health Connect 75.9）。留 Garmin 是因為它有戴錶者分段與 Tier3。反方向：`migrate_garmin_to_db.py` 會蓋掉 Health Connect 的那一列。畫面上會寫「N nights already had Garmin data」 |
 | 沒有後端的 build 完全不碰 Health Connect | demo build 開起來跳授權畫面、授權了也沒地方送 |
 | 只要 `READ_SLEEP` | 多要的權限會一起出現在授權畫面，受測者看到心率、步數、體重可能整組拒絕 |
 

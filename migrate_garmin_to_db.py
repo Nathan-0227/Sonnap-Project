@@ -278,7 +278,7 @@ def assign_owners(dates, db_path=None):
     return owners, phone, notes
 
 
-def verify(owners, db_path=None, skip_dates=()):
+def verify(owners, db_path=None):
     """
     驗收：CSV 的每一晚都**只**掛在它該在的那一個帳號底下，
     而且 final_score／final_quality 與 CSV 逐列相符。
@@ -295,7 +295,7 @@ def verify(owners, db_path=None, skip_dates=()):
         return False, [f"Comparison file {csv_path.name} not found"]
 
     with csv_path.open(encoding="utf-8-sig", newline="") as f:
-        expected = {r["date"]: r for r in csv.DictReader(f) if r["date"] not in set(skip_dates)}
+        expected = {r["date"]: r for r in csv.DictReader(f)}
 
     accounts = (set(owners.values()) | {RESEARCHER_USER_ID, WEARER_A_USER_ID}) - {None}
     stored = {
@@ -509,7 +509,6 @@ def main():
     for note in notes:
         print(f"⚠ {note}")
 
-    skipped = set()
     if not args.verify:
         db.init_db(args.db)
         _, created = ensure_user(args.db)
@@ -523,15 +522,17 @@ def main():
         }
 
         removed = 0
+        replaced = []
         for date, metrics in rows:
             owner = owners[date]
             current = existing.get(owner, {}).get(date)
             if current is not None and current.get("source") == "health_connect":
-                # 手機的 Health Connect 已經送過這一晚——不覆蓋。
-                # 主鍵是 (帳號, 日期)，一晚只能留一筆；該留 Garmin（有 Tier3）還是
-                # Health Connect（手機自己同步的），是還沒做的產品決定。
-                skipped.add(date)
-                continue
+                # ⚠️ **Garmin 優先（2026-09-13 使用者決定）：蓋掉 Health Connect 那一列。**
+                #    主鍵是 (帳號, 日期)，一晚只能留一筆。實機上兩者常是同一支錶
+                #    （Garmin Connect 同步進 Health Connect），留 Garmin 是因為它有
+                #    戴錶者分段與 Tier3。反方向由 main.py 的 POST /wearable 擋（回 409）。
+                #    先前這裡是「跳過、不覆蓋」，當時註明是還沒做的產品決定。
+                replaced.append(date)
             db.upsert_wearable_nightly(owner, date, source="garmin", metrics=metrics,
                                        db_path=args.db)
             # 搬家後清掉其他帳號裡同一晚的 Garmin 舊副本（只刪 garmin 來源的）
@@ -543,19 +544,18 @@ def main():
                   WEARER_A_USER_ID: "wearer_a account"}
         counts = {}
         for date, uid in owners.items():
-            if date not in skipped:
-                counts[uid] = counts.get(uid, 0) + 1
+            counts[uid] = counts.get(uid, 0) + 1
         for uid, n in counts.items():
             print(f"  {labels.get(uid, 'phone account (wearer_c)')}: {n} nights")
         if removed:
             print(f"  Removed {removed} stale copies from accounts those nights no longer belong to")
-        if skipped:
-            print(f"  Skipped {len(skipped)} nights that already have Health Connect data: "
-                  f"{sorted(skipped)}")
+        if replaced:
+            print(f"  Replaced Health Connect data with Garmin on {len(replaced)} nights "
+                  f"(Garmin takes priority): {sorted(replaced)}")
 
-    ok, problems = verify(owners, args.db, skip_dates=skipped)
+    ok, problems = verify(owners, args.db)
     if ok:
-        print(f"✓ Verified: {len(rows) - len(skipped)} nights are each under exactly one account, "
+        print(f"✓ Verified: {len(rows)} nights are each under exactly one account, "
               f"and final_score / final_quality match garmin_sleep_quality_final.csv row for row")
     else:
         print("✗ Verification failed:")
