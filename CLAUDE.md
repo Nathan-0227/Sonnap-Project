@@ -272,13 +272,15 @@ Health Connect 常是**同一支錶**（Garmin Connect 會同步進 Health Conne
 | id 117（08-19）`total_events=73` 但 `timeline=[]` | ⚠️ **2026-09-04 追過：不是程式 bug。** 解析、截斷、兩條寫入路徑全部排除，且所有存檔點都有 `if sleep_timeline:` 保護。`updated_at` 晚 5.5 小時而計數保留 → 最可能是有人在 phpMyAdmin 手動清掉。我方已加 `count_mismatch` 防護（測試【6】） |
 | ~~補生成缺的夜晚夢境~~ | ✅ **已完成**（2026-09-10）。64/64 全是 llm。⚠️ 那個旗標叫什麼名字別記錯——`generate_advice.py` **沒有 `--ai`**，只有 `--dates` / `--limit` / `--refresh-stale` / `--dry-run`。花錢之前先跑 `--dry-run`，它會列出待生成的夜晚且不呼叫 API |
 
-**刻意不做**（09-09 之前）：
+**刻意不做**：
 
 | 事情 | 理由 |
 |---|---|
 | 背景排程（WorkManager）每天自動上傳 | 事件保留 ≥5 天，「忘記開 App」有很大容錯；而三星會殺背景、各家 ROM 不同 |
-| 睡前 60 分鐘的 App 歸因 | 材料已經在 `queryEvents` 那條路上（把事件流依 App 切段），但畫面現在誠實地寫著「Daily totals. Not yet narrowed to the hour before bed.」 |
-| 遊戲化、Accessibility 阻斷、Health Connect、好友社交、D2 實測 | 見末尾「設計紅線」與路線圖 |
+| D2 實測 | 見路線圖 |
+
+（睡前 60 分鐘的 App 歸因、遊戲化、Accessibility 阻斷、Health Connect、好友社交
+都已經做了，見下方「產品迴圈」。）
 
 ### ⚠️ Flutter 端解析 payload 的時間一律走 `parseWallClock()`
 
@@ -316,8 +318,26 @@ Health Connect 常是**同一支錶**（Garmin Connect 會同步進 Health Conne
 ✅ **手機端的 UsageStats 與 `lights_out_at` 2026-09-03 完成**（PR #30），
 連同暱稱制帳號——**D2 需要的最小組合已經齊了**。
 
-剩下的：**睡前 App 分布**（材料已在 `queryEvents` 那條路上，只是還沒切段）、
-**Accessibility 阻斷**、**Health Connect 串接**。三個都不在 09-09 之前的範圍。
+✅ **睡前 App 分布**已接上（`app/lib/services/pre_bed_apps.dart`，Insights 頁）。
+
+### ✅ 產品迴圈（PR #51，2026-09-12 合併）
+
+六個功能一起進來。🔴 **後三個（提醒、守門、Health Connect）沒有在實機驗證過**，
+只驗證了 `flutter build apk --debug` 編得過、Dart 端測試全過——
+報告與 PPT 不能寫成「手機上已經可以用」。
+
+| 功能 | 在哪 | 不能破的規則 |
+|---|---|---|
+| 遊戲化（XP／等級／衣櫃／成就） | `game/`、`GET /game`、`POST /game/claim`、`GET /closet`、`POST /closet/equip` | 紅線 4、5。一晚 XP = 行為（準時 30／容許內 15／熬夜 0）＋品質（Good 20／Normal 10／Poor・Bad 0）→ 熬夜又睡不好 = 0。行為上限大於品質上限，沒戴錶的人也升得了級。**XP 不存**，每次從 `nightly_behavior`／`wearable_nightly` 即時算；表只存使用者動作（領取、穿戴） |
+| 好友 | `social/friends.py`、`/friends`、`/friends/{handle}` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。回傳欄位是**白名單** `FRIEND_FIELDS`（只有行為指標：放下手機的時刻、熬夜、連續天數），不得加深睡／REM／心率／分數。心情用純行為版（不含生理的 `anxious` 覆寫） |
+| 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段 |
+| 就寢提醒 | `bedtime_reminder.dart`、`sonnap/notify`（AlarmManager） | 提前 30 分鐘，**留在 Dart**。關掉開關要 cancel（不是只是不排新的）。⚠️ 手機重開機後鬧鐘會消失，要等下次開 App 才重排 |
+| 就寢守門（Accessibility） | `bedtime_guard.dart`、`sonnap/guard` | 守「目標前 30 分 → 目標後 6 小時」，判斷全在 Dart，Kotlin 只照做。`canRetrieveWindowContent="false"`（不讀畫面內容，設定頁的承諾靠它）。⚠️ **Google Play 不會讓它上架**；Android 13+ 側載要先「允許受限設定」。實機清單見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
+| Health Connect | `health_connect.dart`、`sonnap/health` → `POST /wearable` | 只要 `READ_SLEEP`。**每個起床日只送最長的一段**（午覺照順序送會蓋掉那一晚，後端照樣回 201）。**那一晚已有 Garmin 就回 409、不蓋**（見「同一晚兩個來源」）。`minSdk` 因此 24 → 26。實機清單見 [HEALTH_CONNECT.md](docs/HEALTH_CONNECT.md) |
+
+⚠️ 三個「30 分鐘」必須一致：就寢提醒 `kReminderLead`、守門 `kGuardLeadIn`、
+首頁倒數變紅 `kImminentThreshold`。不一致時通知說「還有 30 分」、倒數還是綠的、
+App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 ⚠️ **要動評分邏輯或新增遊戲化功能（挑戰／獎勵／寵物成長／貨幣）之前，
 先讀「🚧 設計紅線」那一節**——那五條紅線是拿外部同類專案對照後定的，
@@ -982,15 +1002,22 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 }
 ```
 
-## 現有程式碼結構（2026-08-26 核對過）
+## 現有程式碼結構（端點、資料表、測試數 2026-09-13 核對過）
 
 **後端（根目錄）**
 
-- `main.py` — FastAPI。12 個端點：`POST /users /nightly /wearable`、
-  `PATCH`+`DELETE /users/{id}`、`GET /home /insights /challenges /get-sleep-data /health`。
+- `main.py` — FastAPI。20 個端點：
+  使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
+  上傳 `POST /nightly /wearable`；
+  讀取 `GET /home /insights /challenges /get-sleep-data /health`；
+  遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
+  好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
+  助理 `POST /chat`。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — SQLite（標準庫 `sqlite3`），七張表，暱稱制免註冊。
+- `db.py` — 13 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+  設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
+  自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
   的表什麼都不做、連新加的欄位也不補，只改 SCHEMA 會讓已跑過 `--init` 的開發機
   `no such column`。加欄位時兩邊都要改。
@@ -1027,23 +1054,26 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 |---|---|
 | `garmin/` | 5 步 pipeline（見下節）。⚠️ 只留程式碼，生成物全在 `garmin/data/` |
 | `behavior/` | Tier A 行為層：`challenges.py`、`pet_state.py`、`adherence.py` |
+| `game/` | 遊戲化：XP、等級、衣櫃、成就。**只讀評分層**（紅線 4） |
+| `social/` | 好友：邀請碼、行為指標白名單 |
 | `wearable/` | `healthconnect_adapter.py`：Health Connect → **既有評分器**（一個門檻都沒改） |
-| `ai/` | 夢境日記（Claude API）。⚠️ `ai/.env` 有金鑰，已被 gitignore |
+| `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | `test_api.py`、`test_healthconnect_adapter.py`，**獨立腳本不需 pytest** |
+| `tests/` | 16 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
 
-**環境**：`.venv` 已裝 `fastapi`、`uvicorn`、`httpx`、`garminconnect`、
-`mysql-connector-python`。**未裝** `pandas`、`matplotlib`、`seaborn`、`opencv-python`、
-`numpy`——只有 `itegration/` 與 `tapo/` 需要，要用時再 `pip install -r requirements.txt`。
-⚠️ `garminconnect` 只有 `--fetch` 那一步需要，pipeline 後四步不受影響。
+**環境**：見上方交接區的「⚠️ 環境」（`requirements.txt` 全部裝好了）。
 
 **驗收指令**
 
-Python 五支，都是獨立腳本、不需要 pytest：
+Python 16 支，都是獨立腳本、不需要 pytest。全部跑一次：
+
+```bash
+for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
+```
 
 ```bash
 python tests/test_api.py                 # 端點與行為層（用暫存 DB，不碰 data/sonnap.db）
@@ -1054,7 +1084,14 @@ python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
 python tests/test_sleep_efficiency.py    # 2026-09-06 新增
 python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
-python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號
+python tests/test_waso_annotate.py
+python tests/test_db_backends.py         # SQLite SCHEMA → MariaDB DDL
+python tests/test_db_show.py
+python tests/test_camera_nightly.py      # PR #50
+python tests/test_game_rewards.py        # PR #51。含紅線 4、5
+python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
+python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
+python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
@@ -1065,12 +1102,11 @@ python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**153 條全過**）：
+Flutter（在 `app/` 底下跑，**406 條全過**，2026-09-13 在 main `cbe93a1` 合併後實測）：
 
 ```bash
 flutter test
-flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色常數，
-                    #                        是 Jeremy 既有的，不是新帶進來的）
+flutter analyze     # No issues found
 ```
 
 ⚠️ Flutter 這邊有幾條測試守的是**壞掉時不會報錯**的機制，改到對應的檔案時要一起看：
@@ -1085,6 +1121,12 @@ flutter analyze     # 0 error、3 個 warning（report_screen 的未使用顏色
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
+| `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」 |
+| `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
+| `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |
+| `bedtime_reminder_test.dart` | 提醒時刻（含跨午夜）；關掉要 cancel；改目標要重排；提前量不得寫進 Kotlin（含 `1800000L` 這種 Long 寫法） |
+| `bedtime_guard_test.dart` | 守門的時間窗（半夜滑手機守的是「昨晚那一窗」）；改目標要重推到原生端；不讀畫面內容；三個 30 分鐘一致 |
+| `health_connect_test.dart` | 每個起床日只送最長一段；起床日照牆鐘時間不是 UTC；連不上的下次再送、422 的不再送；沒有後端的 build 不碰 Health Connect；只要睡眠權限 |
 
 ⚠️ **`TestWidgetsFlutterBinding` 會把全域 `HttpClient` 換成「一律回 400」的假實作**，
 只要同一個檔案裡有任何一條 `testWidgets` 就會裝上。症狀是連 `127.0.0.1:1`
@@ -1138,8 +1180,9 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 只產一份檔的理由：兩份就會有「App 顯示的跟 API 回傳的對不上」這種最難查的 bug。
 之後要接 HTTP 只要實作 `sleep_repository.dart` 裡預留的 `ApiSleepRepository`。
 
-✅ **四個畫面都接上真實資料了**：`home_screen` / `report_screen`（PR #16）/
-`assistant_screen`（PR #20）/ `friends_screen` 仍是假資料（社交功能還沒做後端）。
+✅ **四個有資料的分頁都接上真實資料了**：`home_screen` / `report_screen`（PR #16）/
+`assistant_screen`（PR #51 起改問 Claude）/ `friends_screen`（PR #51 起接好友後端）。
+⚠️ 好友、助理、遊戲化**需要後端**；沒給 `SONNAP_API_BASE` 的 build 會照實說「需要後端」。
 
 `app/lib/services/` 現在的分工：
 
@@ -1148,23 +1191,45 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 | `sleep_repository.dart` | 睡眠資料。asset / API 兩種來源 + 失敗退回，來源顯示在 Insights 頁 |
 | `usage_stats.dart` | 包 `sonnap/usage` channel：手機使用時間 + 就寢時刻查詢 |
 | `lights_out.dart` | **純函式**：把互動事件流變成一個就寢時刻。沒有 I/O，測得到 |
-| `nightly_uploader.dart` | `POST /nightly` |
+| `pre_bed_apps.dart` | 睡前 60 分鐘的 App 切段 |
+| `nightly_uploader.dart` / `pending_nightly.dart` | `POST /nightly`；連不上的那一晚進離線佇列，下次補送 |
+| `bed_marks.dart` | 上床／下床標記 |
+| `backfill.dart` | 補填**過去**沒上傳到的夜晚（連續兩天沒開 App，中間那一晚原本會永遠傳不上去）。只換 `now`，偵測走同一條 `lightsOut()` 路徑 |
 | `user_identity.dart` / `account_service.dart` | 身分的兩條路（見交接區） |
+| `user_settings.dart` | 目標就寢時間與提醒開關的保存與同步（PATCH 後端） |
 | `key_value_store.dart` | 包 `sonnap/store` channel（Android SharedPreferences） |
+| `challenges_service.dart` / `home_service.dart` / `camera_insights.dart` | 讀後端算好的挑戰進度、熬夜比率、攝影機臥床時間（Dart 不重算） |
+| `game_service.dart` / `friends_service.dart` / `chat_service.dart` | 遊戲化、好友、助理（PR #51） |
+| `bedtime_reminder.dart` / `notification_service.dart` | 就寢提醒（`sonnap/notify`） |
+| `bedtime_guard.dart` | 就寢守門（`sonnap/guard`） |
+| `health_connect.dart` | Health Connect（`sonnap/health`） |
+| `assistant_answers.dart` | ⚠️ **已經沒有任何地方 import**（助理改問 Claude 之後退場），檔案留著沒刪 |
 
-原生端在 `app/android/app/src/main/kotlin/com/example/app/`：
-`UsageStatsService.kt`（使用時間 + `queryEvents`）、`KeyValueStore.kt`、
-`MainActivity.kt`（註冊兩個 channel）。
+原生端在 `app/android/app/src/main/kotlin/com/example/app/`，
+`MainActivity.kt` 註冊 5 個 channel：
+
+| channel | Kotlin |
+|---|---|
+| `sonnap/usage` | `UsageStatsService.kt`（使用時間 + `queryEvents`） |
+| `sonnap/store` | `KeyValueStore.kt` |
+| `sonnap/notify` | `NotificationService.kt`、`BedtimeReminderReceiver.kt` |
+| `sonnap/guard` | `BedtimeGuardBridge.kt`、`BedtimeGuardService.kt`、`GuardConfigStore.kt`、`GuardReminderActivity.kt` |
+| `sonnap/health` | `HealthConnectService.kt`、`HealthPrivacyActivity.kt` |
 
 ⚠️ **原生端只回事實，產品判斷留在 Dart。** 「哪些 App 要顯示」「哪一段安靜算睡覺」
 都在 Dart——門檻寫進 Kotlin 的話，每次調整都要重編 APK 才驗得了。
 
-⚠️ `assistant_screen` 的答案由 `app/lib/services/assistant_answers.dart` 產生，
-它是**查表路由器不是生成器**：`_topicKeywords` 把問題分到 12 個主題，
-每個主題只從 payload 取既有欄位組句。**不要在這裡加「算出來」的建議**——
-那會變成第二套沒有文獻依據的評分層（紅線 4）。
-問不出來的題目要老實說「我沒有這項資料」並列出真的做得到的事，
-不要寫「等後端接上就有了」。
+⚠️ `assistant_screen` 的答案來自 **`POST /chat`**（`ai/chat.py`，呼叫 Claude）：
+
+- 🔴 **每問一次就花一次 API 額度。** 測試（`tests/test_chat.py`）有三道保險確保不打真的 API，
+  改測試時不要拆掉任何一道。
+- 模型只拿到 `build_facts()` 組好的**既有欄位**。**不要在這裡加「算出來」的建議**——
+  那會變成第二套沒有文獻依據的評分層（紅線 4）。
+- 回答要過驗證才交出去，禁字、中文洩漏、拼字數值**直接 import 自 `generate_advice.py`**
+  （與夢境共用同一份定義，不要複製一份）；回答裡的數字要跟事實對得上。
+  最多試 `MAX_ATTEMPTS = 2` 次，都沒過就回 **503**，App 照實說答不出來——
+  **不交出沒通過驗證的回答，也不退回舊的查表**。
+- 伺服器沒設金鑰時同樣回 503。
 
 ---
 
