@@ -639,11 +639,16 @@ generated plugin 檔**。那是雜訊（這個專案不出那三個平台），c
 
 ### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
 
-`garmin_connect_fetch.py:778` 用 `open(args.output, "w")`，
+`garmin_connect_fetch.py` 寫檔用 `open(args.output, "w")`，
 所以 **`--days N` 會把整個 `garmin_standard_data.json` 換掉**，只留最近 N 天。
 `--days 7` 這種用法會**弄丟前面所有歷史**，而且不會有任何警告。
+⚠️ `--days` **預設是 1**，所以 `run_pipeline.py --fetch` 不帶天數＝整份歷史只剩一天。
 
-正確用法是給完整區間：
+→ **每天早上用 `morning_import.py`**（2026-09-15 新增）：它帶完整區間抓、
+  抓之前備份、抓完比對「原本的夜晚都還在」，沒過就還原並停下，
+  分數變了的夜晚也會列出來。
+
+要手動抓的話給完整區間：
 
 ```bash
 python garmin/garmin_connect_fetch.py --start-date 2026-05-28 --end-date <今天>
@@ -1029,6 +1034,14 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   跟攝影機匯入共用同一個判準——兩邊各寫一份的話同一晚的攝影機與手錶資料會分在兩個帳號。
   搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的夜晚**不覆蓋**。
   ⚠️ 在此之前所有夜晚都在研究者帳號，所以手機 App 依帳號撈手錶資料的功能一晚都拿不到。
+- **`morning_import.py`（2026-09-15 新增）— 每天早上一條指令。**
+  資料庫連線 → 昨晚的錄影檢查 → 抓 Garmin＋評分＋晚數檢查 → 全部過了才寫入
+  （手錶、攝影機、夢境、App 資料檔）。**任何一項沒過就停，資料庫一筆都不寫**；
+  手錶那段停下來時會先把檔案還原。
+  攝影機排在抓手錶**之前**檢查（本機檔案、幾秒查完），擋法是
+  「不到 120 分鐘」或「臥床 ÷ 錄影時長 < 0.8」——後者專擋 09-13 那種
+  後半夜斷線、臥床被算短卻剛好過 120 分鐘的夜晚，校準數字寫在檔案裡。
+  要在主 clone 跑（`.env` 只在那裡），並先設 `SONNAP_DB_URL`。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1060,7 +1073,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 16 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 17 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1069,7 +1082,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 16 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 17 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1092,6 +1105,7 @@ python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）
+python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料帶完整區間
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
