@@ -117,6 +117,19 @@ def ratio(part, whole):
     return round(part / whole, 4)
 
 
+# 總睡眠時間允許超出睡眠視窗多少分鐘。
+#
+# Garmin 的階段時長一律量化到整分鐘（實測 276 筆 *_duration_sec 全是 60 的倍數），
+# 而視窗是由秒級的入睡／起床時刻相減得來，因此 1 分鐘以內的落差可由量化本身解釋。
+# 超過這個量，代表 Garmin 給的階段時長與它自己給的時刻**互相矛盾**。
+#
+# ⚠️ 實測 2026-06-27：階段合計 688 分鐘、視窗只有 447.9 分鐘，差 240 分鐘。
+#    原始回傳即為 deep 17400s + light 23880s + REM 0 —— 上游資料問題，不是解析錯誤。
+#    在加這條檢查之前，該晚的效率被 `min(…, 100.0)` 夾平成 100%，
+#    於是一列完全不可信的資料（REM=0、深睡佔 42%）照樣拿滿睡眠效率那 25 分。
+MAX_SLEEP_OVER_PERIOD_MINUTES = 1.0
+
+
 def is_valid_night(row):
     """
     判斷這一列是否為「有效的睡眠夜晚」。回傳 (是否有效, 略過原因)。
@@ -125,6 +138,11 @@ def is_valid_night(row):
     - 手錶沒戴著睡的日子（入睡/起床時間為空）
     - 入睡時間 == 起床時間 的異常資料（例如 2026-06-02）
     - 沒有任何睡眠時長的日子
+    - 階段時長與入睡／起床時刻矛盾的日子（例如 2026-06-27）
+
+    ⚠️ 判準與 apply_recovery_modifier.has_measured_sleep() 必須一致，
+       兩者刻意不互相 import，由 tests/test_scoring_guards.py【1】守著。
+       **改這裡就要同步改那裡**，否則測試會紅。
     """
     start = parse_iso(row.get("sleep_start_time"))
     wake = parse_iso(row.get("wake_time"))
@@ -139,6 +157,13 @@ def is_valid_night(row):
 
     if not total_sleep or total_sleep <= 0:
         return False, "total sleep time is 0"
+
+    if total_sleep - sleep_period_min > MAX_SLEEP_OVER_PERIOD_MINUTES:
+        return False, (
+            f"total sleep {total_sleep:.0f} min exceeds the sleep window "
+            f"{sleep_period_min:.0f} min: the stage durations contradict the "
+            f"onset/wake timestamps from the same source (bad upstream row)"
+        )
 
     return True, ""
 
