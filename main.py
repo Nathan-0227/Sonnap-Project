@@ -653,6 +653,13 @@ async def get_home(
                 "are no awakenings. Not comparable with clinical sleep efficiency."
                 if b_row and b_row["sleep_efficiency"] is not None else None
             ),
+            # ⚠️ 分子改用手錶實測的那個效率。與 /insights 逐夜那一份**走同一支
+            #    純函式**——兩邊各寫一次算式的話，同一晚會在首頁與 Insights
+            #    顯示兩個不同的百分比，而且不會有任何錯誤訊息。
+            **sleep_efficiency.measured_efficiency(
+                (w_row or {}).get("duration_min"),
+                b_row["time_in_bed_minutes"] if b_row else None,
+            ),
             "late_night_ratio": ratio,
             "late_nights": late_nights,
             "recorded_nights": recorded,
@@ -796,6 +803,14 @@ async def get_insights(
                     "phone_in_bed_minutes": r["phone_in_bed_minutes"],
                     "sleep_efficiency": r["sleep_efficiency"],
                     "efficiency_basis": r["efficiency_basis"],
+                    # ⚠️ 分子改用手錶實測的那個效率。**在這裡 join、不存資料庫**：
+                    #    手機與手錶的寫入時機不固定（手機早上自己上傳，手錶要有人
+                    #    跑 morning_import），寫入時算的話手錶晚到的夜晚會永遠是
+                    #    null 且不會回頭補。讀取時算則手錶哪天進來哪天就對。
+                    **sleep_efficiency.measured_efficiency(
+                        (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
+                        r["time_in_bed_minutes"],
+                    ),
                 }
                 for r in behavior_rows
             ],

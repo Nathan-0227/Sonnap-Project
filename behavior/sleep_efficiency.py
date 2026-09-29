@@ -180,6 +180,91 @@ def evaluate_efficiency(bed_start_at, lights_out_at, bed_end_at, source="phone")
     }
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 第二個數字：分子改用**手錶量到的**睡眠（2026-09-30 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 上面那個 evaluate_efficiency() 的分子是「假定」睡眠，所以它量的其實是
+# 「臥床時間裡沒在滑手機的比例」。這裡把分子換成手錶實測的總睡眠時間，
+# 分母沿用同一個自述臥床區間，得到的才是真正的睡眠效率。
+#
+# 📖 文獻依據（Research-Background/Garmin手錶分數.md B-1、B-5 情境①）：
+#    ANSI/CTA/NSF-2110 並列接受兩種分母——TIB（臥床時間）與
+#    **TATS（Time Attempting to Sleep，嘗試入睡的時間）**。
+#    手機「開始睡覺／結束睡覺」按鈕記錄的正是使用者宣告「我要睡了」到
+#    「我起來了」的區間，在構念上**直接對應 TATS**，不是 TIB 的粗略代理。
+#    因此 Ohayon 2017 的 ≥85% 切點對這個數字是適用的。
+#
+# 🔴 **但它仍然不進 final_score。** 兩個阻礙（見 B-5、B-6）：
+#    ① 樣本：同時有手錶睡眠與按鈕區間的夜晚極少，無法驗證門檻
+#    ② 公平性：不是每晚都有人按按鈕。有按的夜晚分母較大、數字較低，
+#       與沒按的夜晚餵進同一組 EFFICIENCY_GOOD=85，會**系統性扣按按鈕者的分**，
+#       而差異來自「有沒有按」不是睡眠本身。
+#    → 照 SRI 的先例：照算、照顯示、標 basis、不進 total_modifier。
+
+MEASURED_EFFICIENCY_BASIS = "watch_tst__phone_tats"
+
+# 手錶睡眠允許超出自述臥床區間多少分鐘。
+#
+# 超過就是矛盾——不可能睡得比「嘗試入睡的時間」還久。成因通常是按鈕按錯
+# （例如忘了按「開始睡覺」、隔天才補按），不是睡眠本身的性質。
+# ⚠️ **不夾平成 100%。** 那正是 2026-06-27 那個 bug 的形狀：靜默夾平會讓
+#    一列矛盾的資料看起來完全正常（見 extract_sleep_features 的同名常數）。
+#    這裡一律回 None 並在 note 說明，「算不出來」與「效率 100%」必須分得開。
+MAX_SLEEP_OVER_TATS_MINUTES = 1.0
+
+
+def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
+    """
+    手錶實測睡眠 ÷ 自述臥床（TATS）。回傳 dict；算不出來時每個數值欄位是 None。
+
+    total_sleep_minutes：手錶量到的總睡眠（`wearable_nightly.total_sleep_minutes`）
+    time_in_bed_minutes：evaluate_efficiency() 算好的臥床分鐘數（結束 − 開始）
+
+    ⚠️ **純函式，不讀資料庫、不 import 評分層。** 兩份資料分別來自
+       nightly_behavior 與 wearable_nightly，而它們的寫入時機不固定
+       （手機早上自己上傳、手錶要有人跑 morning_import），所以**由呼叫端
+       在讀取時 join**，不在寫入時算、也不存進資料庫——存了就會有
+       「手錶晚到那晚永遠是 null」的問題。
+    """
+    def blank(reason):
+        return {
+            "measured_efficiency": None,
+            "measured_efficiency_basis": MEASURED_EFFICIENCY_BASIS,
+            "measured_efficiency_note": reason,
+        }
+
+    if total_sleep_minutes is None:
+        return blank("no watch data for this night")
+    if not time_in_bed_minutes:
+        return blank("no bed_start/bed_end: the user did not mark getting "
+                     "into or out of bed")
+
+    tst = float(total_sleep_minutes)
+    tats = float(time_in_bed_minutes)
+    if tst <= 0:
+        return blank("the watch measured no sleep for this night")
+
+    if tst - tats > MAX_SLEEP_OVER_TATS_MINUTES:
+        return blank(
+            f"measured sleep {tst:.0f} min exceeds the declared attempt window "
+            f"{tats:.0f} min - the bed marks are probably wrong, so no "
+            f"efficiency is reported for this night"
+        )
+
+    return {
+        "measured_efficiency": round(min(tst / tats * 100, 100.0), 1),
+        "measured_efficiency_basis": MEASURED_EFFICIENCY_BASIS,
+        # ⚠️ 這句會送到前端。它說明分子分母各自從哪來——前端同時拿得到
+        #    三、四個叫「效率」的數字，只有 basis 與這句話分得開它們。
+        "measured_efficiency_note": (
+            "Watch-measured total sleep divided by the user's own "
+            "'going to sleep' to 'got up' window (time attempting to sleep). "
+            "Presentation only - it never feeds the sleep score."
+        ),
+    }
+
+
 def phone_in_bed_share(row):
     """
     「上床後滑手機」佔臥床時間的比例（%）。

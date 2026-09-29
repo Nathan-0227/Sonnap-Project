@@ -312,19 +312,6 @@
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
-    "date": "2026-06-27",
-    "score": 61.4,
-    "quality": "Poor",
-    "age_band": "young_adult",
-    "duration_score": 5.3,
-    "efficiency_score": 25.0,
-    "waso_score": 25.0,
-    "deep_score": 0.0,
-    "rem_score": null,
-    "rem_measured": false,
-    "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
-  },
-  {
     "date": "2026-06-28",
     "score": 93.1,
     "quality": "Good",

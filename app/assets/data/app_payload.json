@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-09-29T15:58:15+08:00",
+  "generated_at": "2026-09-30T02:15:10+08:00",
   "session_id": "20260928_001",
   "status": {
     "pet_mood": "happy",
@@ -302,18 +302,8 @@
       "mood_reason": "final_quality=Good"
     },
     {
-      "date": "2026-06-27",
-      "final_score": 65.2,
-      "final_quality": "Normal",
-      "sleep_duration_hours": 11.47,
-      "sleep_start_time": "2026-06-27T02:48:08+08:00",
-      "wake_time": "2026-06-27T10:16:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal"
-    },
-    {
       "date": "2026-06-28",
-      "final_score": 95.2,
+      "final_score": 95.4,
       "final_quality": "Good",
       "sleep_duration_hours": 6.47,
       "sleep_start_time": "2026-06-28T02:18:00+08:00",
@@ -343,7 +333,7 @@
     },
     {
       "date": "2026-07-02",
-      "final_score": 99.5,
+      "final_score": 99.7,
       "final_quality": "Good",
       "sleep_duration_hours": 8.75,
       "sleep_start_time": "2026-07-02T01:06:00+08:00",
@@ -363,7 +353,7 @@
     },
     {
       "date": "2026-07-07",
-      "final_score": 83.2,
+      "final_score": 83.3,
       "final_quality": "Good",
       "sleep_duration_hours": 8.77,
       "sleep_start_time": "2026-07-07T03:28:00+08:00",
@@ -373,17 +363,17 @@
     },
     {
       "date": "2026-07-09",
-      "final_score": 64.5,
+      "final_score": 64.6,
       "final_quality": "Poor",
       "sleep_duration_hours": 9.02,
       "sleep_start_time": "2026-07-09T01:06:00+08:00",
       "wake_time": "2026-07-09T10:24:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "rhr+avg_hr modifier=-3.5300000000000002 ≤ -3.0"
+      "mood_reason": "rhr+avg_hr modifier=-3.3899999999999997 ≤ -3.0"
     },
     {
       "date": "2026-07-11",
-      "final_score": 86.8,
+      "final_score": 87.2,
       "final_quality": "Good",
       "sleep_duration_hours": 9.08,
       "sleep_start_time": "2026-07-10T22:42:00+08:00",
@@ -393,7 +383,7 @@
     },
     {
       "date": "2026-07-12",
-      "final_score": 53.0,
+      "final_score": 53.1,
       "final_quality": "Poor",
       "sleep_duration_hours": 12.75,
       "sleep_start_time": "2026-07-12T02:39:00+08:00",
@@ -403,7 +393,7 @@
     },
     {
       "date": "2026-07-17",
-      "final_score": 95.8,
+      "final_score": 96.1,
       "final_quality": "Good",
       "sleep_duration_hours": 6.73,
       "sleep_start_time": "2026-07-17T03:09:00+08:00",
@@ -413,7 +403,7 @@
     },
     {
       "date": "2026-07-19",
-      "final_score": 65.4,
+      "final_score": 65.7,
       "final_quality": "Normal",
       "sleep_duration_hours": 11.03,
       "sleep_start_time": "2026-07-19T04:14:00+08:00",
@@ -423,7 +413,7 @@
     },
     {
       "date": "2026-07-20",
-      "final_score": 80.6,
+      "final_score": 80.8,
       "final_quality": "Good",
       "sleep_duration_hours": 6.85,
       "sleep_start_time": "2026-07-20T04:20:00+08:00",
@@ -433,7 +423,7 @@
     },
     {
       "date": "2026-07-21",
-      "final_score": 83.4,
+      "final_score": 83.5,
       "final_quality": "Good",
       "sleep_duration_hours": 8.45,
       "sleep_start_time": "2026-07-21T03:58:00+08:00",
@@ -453,7 +443,7 @@
     },
     {
       "date": "2026-07-25",
-      "final_score": 72.7,
+      "final_score": 72.9,
       "final_quality": "Normal",
       "sleep_duration_hours": 7.95,
       "sleep_start_time": "2026-07-25T03:15:00+08:00",
