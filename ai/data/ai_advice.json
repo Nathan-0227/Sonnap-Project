@@ -1171,6 +1171,108 @@
       "prompt_version": "v4",
       "fingerprint": "2480af1937b55391",
       "generated_at": "2026-09-12T21:56:36+08:00"
+    },
+    "2026-09-13": {
+      "date": "2026-09-13",
+      "lang": "en",
+      "trend_note": "Your sleep score has drifted down over the last week compared to the month before, even though stress has ticked up a little.",
+      "model": "claude-sonnet-5",
+      "advice": "Last night was good overall - 8.0 hours with 100.0% efficiency and no time awake. Keep your current routine tonight; nothing to change.",
+      "dream_summary": "I dreamt of a library that kept shifting its shelves, sliding just as I turned to look. Colors from one stall spilled into the next in a market that never sat still. I padded from row to row, nose low, chasing a smell that kept moving, never quite catching it, yet never tired of trying.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "0d74fe187f221d1e",
+      "generated_at": "2026-09-15T04:36:50+08:00"
+    },
+    "2026-09-14": {
+      "date": "2026-09-14",
+      "lang": "en",
+      "trend_note": "Your stress score has been higher over the last 7 nights compared to the prior month, while your resting heart rate has come down slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "You only slept 4.0 hours last night. Try heading to bed earlier tonight so you can get closer to the recommended 7.0–9.0 hours.",
+      "dream_summary": "I dreamt of a sky that kept turning seasons on me, orange leaves swirling one blink, soft green buds the next. I chased the changing light across a field, paws cool in the grass, nose catching the smell of rain and then blossoms in the same breath, never sure which season I'd land in next.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "ad325beffadd5449",
+      "generated_at": "2026-09-15T04:37:00+08:00"
+    },
+    "2026-09-15": {
+      "date": "2026-09-15",
+      "lang": "en",
+      "trend_note": "Your sleep score has dropped over the last week compared to the prior month, while your resting heart rate has actually eased down a bit.",
+      "model": "claude-sonnet-5",
+      "advice": "You only slept 3.1 hours last night, well short of the 7.0-9.0 hour goal. Try heading to bed earlier tonight so your body gets the fuller rest it's been missing.",
+      "dream_summary": "I dreamt I sank into a seabed that seemed to breathe, warm sand giving a little under my paws with every breath out. Somewhere far off a whale rolled beneath the floor, tilting everything just once, slow and heavy. I did not want to lift my head. The dream ended too soon, cut off mid-sink, like the sky went light before I was done.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "a6ecce825192583e",
+      "generated_at": "2026-09-15T09:30:12+08:00"
+    },
+    "2026-09-16": {
+      "date": "2026-09-16",
+      "lang": "en",
+      "trend_note": "Your stress score has risen over the last 7 nights compared to the prior 28, while your sleep score has dropped over that same period.",
+      "model": "claude-sonnet-5",
+      "advice": "Sleep was good but short at 5.5 hours, below the 7-9 hour target. Keep tonight's routine as-is, but try to get to bed a bit earlier so you reach that 7-hour mark.",
+      "dream_summary": "I dreamt I was curled in a pile of quilts that had sat in the sun all day, sinking down heavy and warm with every breath. I didn't want to move a single paw. A few pages in the middle of the diary are blank - I did not see that part, just soft dark and the smell of warm cotton until morning.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "c3641632b1459f3c",
+      "generated_at": "2026-09-16T08:26:22+08:00"
+    },
+    "2026-09-17": {
+      "date": "2026-09-17",
+      "lang": "en",
+      "trend_note": "Your sleep score has dropped over the last week compared to the month before, even though your heart rate has eased slightly.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept only 4.7 hours last night, well under the 7.0-9.0 h target. Try heading to bed half an hour earlier tonight and see how that feels.",
+      "dream_summary": "I had just curled into the grass when I heard someone calling my name from far off. I got up to look, paws damp with dew, and the story seemed to end right there before I could finish it. A few pages in the middle of the diary are blank - I did not see that part. Then the calling faded and I drifted again.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "298d2cb69e9158ec",
+      "generated_at": "2026-09-18T08:30:38+08:00"
+    },
+    "2026-09-18": {
+      "date": "2026-09-18",
+      "lang": "en",
+      "trend_note": "Your resting heart rate and average heart rate have both eased down slightly over the last week compared to the month before, even though stress and sleep score have drifted a touch in the other direction.",
+      "model": "claude-sonnet-5",
+      "advice": "Sleep quality was good overall, so keep your current routine. You slept 6.3 hours, a bit short of the 7-9 hour range, so if you can, try easing into bed a touch earlier tonight.",
+      "dream_summary": "I dreamt of a library sliding its shelves around me, cases gliding silent and quick, always changing before I could get my paws on a single spot. One moment a scent trail led one way, then it curled off somewhere new. I trotted after it, ears up, never quite catching it, but never tired of trying either.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "c1d028da76709f16",
+      "generated_at": "2026-09-18T08:30:43+08:00"
     }
   }
 }
