@@ -5,14 +5,91 @@ A. 睡眠時長（Sleep Duration）
 Hirshkowitz M, Whiton K, Albert SM, Alessi C, Bruni O, DonCarlos L, Hazen N, Herman J, Katz ES, Kheirandish-Gozal L, Neubauer DN, O’Donnell AE, Ohayon M, Peever J, Rawding R, Sachdeva RC, Setters B, Vitiello MV, Ware JC, Adams Hillard PJ. National Sleep Foundation’s sleep time duration recommendations: methodology and results summary. Sleep Health. 2015;1(1):40-43. doi:10.1016/j.sleh.2014.12.010
 
 B. 睡眠效率（Sleep Efficiency, SE）
-睡眠效率定義為總睡眠時間除以臥床時間（TST / Time in Bed × 100%），反映入睡後實際睡著時間的占比。本研究將睡眠效率設為評分系統中的關鍵指標之一。Hertenstein 等人（2018）在針對 206 名健康成人（19–73 歲）的多導睡眠圖參考數據研究中指出，健康個體的睡眠效率分布具有高度變異性，其樣本中 SE 平均值周圍 1 個標準差可達 71%–93%；該文獻同時提醒，若僅憑此分布統計量將「SE 低於 80%」直接當作嚴格病理切點，可能誤將健康個體的正常變異判為異常，故不宜單獨依此文獻訂出診斷級門檻。
 
-有鑑於此，本研究改以另一份獨立於 Hertenstein 樣本分布的文獻——Ohayon 等人（2017）之 National Sleep Foundation 睡眠品質共識報告——作為切點設定的直接依據。該報告由 Sleep Quality Consensus Panel 系統性回顧 277 篇文獻後，以專家共識方式明確建議：睡眠效率 ≥85% 可視為良好睡眠品質之指標，<75% 則視為不良。Sonnap 採用比此共識更保守（門檻更高）的三段式設計：SE ≥85% 定義為「良好」，80%–84% 為「尚可」，<80% 則視為「偏低」並予以扣分。此設計一方面採納 Ohayon 等人以專家共識方式提出、確實支持以操作性切點分級的建議，另一方面仍參考 Hertenstein 等人揭示的個體變異幅度，於分級機制中保留「尚可」此一緩衝級距，避免將健康個體的正常變異一步到位判為「偏低」，藉此兼顧文獻對切點使用之提醒，以及評分系統對可操作性門檻的實務需求。
+B-0. 🔴 本節結論先講：門檻是對的，但它被套在錯的量上
+
+2026-09-30 重新查證後確認：**本節所引的 ≥85% 門檻，其文獻定義的分母是「臥床時間」，而 Sonnap 實際餵進這個門檻的量，分母不含入睡潛伏期。兩者不是同一個構念。** 後果是 84 晚實測中 83 晚拿滿這 25 分，「偏低」那一級一次都沒有觸發過。
+
+完整的錯配分析、實測數字與「要怎樣才能正確計分」寫在 B-3 至 B-5。**先讀完再引用本節的任何門檻。**
+
+B-1. 構念與定義
+
+睡眠效率反映「躺下之後真正睡著的占比」。其分母**必須包含躺著但尚未睡著的那段時間**，這正是它與單純的睡眠時長不同、能反映入睡困難的原因。
+
+文獻與標準對分母的兩種寫法：
+
+| 分母 | 全名 | 涵蓋入睡潛伏期 | 出處 |
+|---|---|---|---|
+| TIB | Time in Bed（臥床時間，自上床躺下起算） | ✅ | 臨床慣例；Ohayon 2017 表述為「while in bed」 |
+| TATS | Time Attempting to Sleep（嘗試入睡的時間） | ✅ | ANSI/CTA/NSF-2110（消費性睡眠裝置標準）並列接受 |
+
+⚠️ TATS 這個定義對本專案特別重要：它不是「臥床時間的粗略代理」，而是**標準本身並列認可的分母**。Sonnap 手機端的「開始睡覺」按鈕記錄的正是使用者宣告「我現在要睡了」的時刻——在構念上直接對應 TATS，而非 TIB 的近似。
+
+B-2. 門檻的文獻依據
+
+Hertenstein 等人（2018）以 206 名健康成人（19–73 歲）的多導睡眠圖參考數據指出，健康個體的 SE 分布具有高度變異性，樣本中 SE 平均值周圍 1 個標準差可達 71%–93%；該文獻同時提醒，若僅憑此分布統計量將「SE 低於 80%」直接當作嚴格病理切點，可能誤將健康個體的正常變異判為異常，故**不宜單獨依此文獻訂出診斷級門檻**。
+
+因此切點的直接依據改採 Ohayon 等人（2017）之 National Sleep Foundation 睡眠品質共識報告。該報告由 Sleep Quality Consensus Panel 系統性回顧 277 篇文獻後，以專家共識方式建議：**睡眠效率達到「在床時間的 85% 以上」（at least 85 percent of the total time while in bed）可視為良好睡眠品質之指標**。ANSI/CTA/NSF-2110 標準對成人亦採 >85%。
+
+Sonnap 採三段式設計：SE ≥85% 為「良好」、80–84.9% 為「尚可」、<80% 為「偏低」並扣分。保留「尚可」這一緩衝級距，是為了兼顧 Hertenstein 揭示的個體變異幅度，避免把健康個體的正常變異一步判為偏低。
+
+⚠️ **查證失敗的一項**：本節原文宣稱該報告「<75% 則視為不良」。2026-09-30 以可公開取得的來源（出版社摘要、ScienceDaily 發布稿、ANSI/CTA 衍生標準）**均無法逐字確認此數值**。在取得全文核對之前，不得引用 75% 這個數字；Sonnap 現行程式也未使用它（程式的下緣是 80%）。
+
+B-3. 🔴 實作與定義的錯配
+
+`garmin/extract_sleep_features.py:225` 的實際算式是：
+
+    sleep_efficiency = min(總睡眠時間 ÷ 睡眠期間 × 100, 100.0)
+    其中「睡眠期間」= 起床時間 − 入睡時間
+
+分母是**睡眠期間**（sleep period time），**不含入睡潛伏期**——既不是 TIB 也不是 TATS。該檔案開頭本來就誠實標註了這個限制（「實為『睡眠期間效率』…待 TAPO 攝影機提供上床時間後，才能計算真正的臨床睡眠效率」），`evaluate_sleep_quality.py:172` 亦註明「V1 的效率因缺上床時間而偏高，鑑別力有限」。
+
+**問題不在於這個量本身，而在於它被拿去比對一個為另一種分母訂的門檻。** 分母少掉入睡潛伏期，數值必然系統性偏高；用臨床門檻去量它，門檻自動變得過於寬鬆。這不是係數調校問題，是構念錯配。
+
+B-4. 實測後果（84 晚，2026-05-29 ~ 09-28）
+
+| 觀察 | 數值 |
+|---|---|
+| 中位數 | 99.13% |
+| 平均 | 97.77% |
+| 最小值 | 81.96% |
+| **≥85%（拿滿 25 分）** | **83 / 84 晚** |
+| 80–84.9%（約 17 分） | 1 晚 |
+| <80%（扣分級距） | **0 晚——84 晚裡從未觸發** |
+
+→ 基礎分數 100 分中的這 25 分實質上是固定給的，真正在浮動的只有 75 分。三段式分級有一級從未使用，另一級只出現過一次。
+
+**另有一項獨立的資料一致性問題**：夾平前的原始值有 **7 晚超過 100%，最高 153.71%**。睡眠時間不可能超過睡眠期間，這代表 Garmin 的「總睡眠時間」與「起床 − 入睡」兩個欄位在那幾晚彼此不一致。程式的 `min(…, 100.0)` 把它們靜默削平為 100%，因此從輸出端完全看不出來。84 晚中有 45 晚 ≥99%，指標在上緣飽和。
+
+B-5. 三種情境各自能不能計分
+
+| 情境 | 分母 | 門檻能不能用 | 判定 |
+|---|---|---|---|
+| ① 有手機「開始／結束睡覺」按鈕 | TATS（自述） | ✅ Ohayon 2017 / ANSI-2110 的 ≥85% 正是為這種分母訂的 | **構念相符**，但見下方兩項阻礙 |
+| ② 只有 Garmin | 睡眠期間（起床 − 入睡） | ❌ 查無任何針對此分母的常模或切點 | **不應繼續套用 ≥85%** |
+| ③ 攝影機自動偵測上床（未實作） | TIB（量測） | ✅ 同① | 最理想，但影像組尚未提供 |
+
+情境①**目前仍不可進 `final_score`**，阻礙有二：
+
+1. **樣本不足**：資料庫中同時具備手錶睡眠與按鈕臥床時間的夜晚僅 **2 晚**（2026-09-11：307 ÷ 333.3 = 92.1%；2026-09-13：480 ÷ 523.4 = 91.7%）。n=2 無法驗證任何門檻。
+2. **公平性**：不是每晚都有人按按鈕。有按的夜晚分母較大、數值較低，與沒按的夜晚餵進同一組 `EFFICIENCY_GOOD = 85`，會**系統性地扣有按按鈕者的分**，而該差異來自「有沒有按」而非睡眠本身。此即 `clinical_efficiency` 至今不計分的同一理由。
+
+B-6. 要計分還缺什麼
+
+- **缺口 A（樣本）**：需累積足夠的「同時有手錶睡眠 + 自述 TATS」夜晚。現有 2 晚。
+- **缺口 B（涵蓋率）**：需讓臥床／嘗試入睡時刻**不依賴使用者記得按按鈕**——即情境③的攝影機自動偵測。在那之前，情境①與②會永久並存，而兩者不可餵進同一組門檻。
+- **缺口 C（情境②的去留）**：若情境②查不到可用常模（目前如此），則應面對一個更尖銳的結論：**沒有臥床時間的夜晚，這 25 分本來就缺乏有效依據**。可能的處置包含改為呈現不計分、或改配分結構——但兩者都是計分變更，依紅線 2 須另有文獻依據後才能動。
+
+→ 在缺口補上之前，照 SRI（J 節）與攝影機動作率的先例：**照算、照顯示、標註 basis、不進 `total_modifier`**。
+
+⚠️ 本節不對 `EFFICIENCY_GOOD` / `EFFICIENCY_FAIR` 做任何修改，亦未變更任何程式碼。
 
 文獻
 Hertenstein M, Gabryelska A, Spiegelhalder K, Nissen C, Johann AF, Umarova R, Riemann D, Baglioni C, Feige B. Reference data for polysomnography-measured and subjective sleep in healthy adults. J Clin Sleep Med. 2018;14(4):523-532. doi:10.5664/jcsm.7036
 
-Ohayon MM, Krystal A, Roehrs TA, Roth T, Vitiello MV. National Sleep Foundation's sleep quality recommendations: first report. Sleep Health. 2017;3(1):6-19. doi:10.1016/j.sleh.2016.11.006
+Ohayon M, Wickwire EM, Hirshkowitz M, Albert SM, Avidan A, Daly FJ, Dauvilliers Y, Ferri R, Fung C, Gozal D, Hazen N, Krystal A, Lichstein K, Mallampalli M, Plazzi G, Rawding R, Scheer FA, Somers V, Vitiello MV. National Sleep Foundation's sleep quality recommendations: first report. Sleep Health. 2017;3(1):6-19. doi:10.1016/j.sleh.2016.11.006
+
+ANSI/CTA/NSF-2110. Recommendations and Best Practices of Sleep Quality Determination in Consumer Sleep Monitoring Solutions. Consumer Technology Association / National Sleep Foundation.（成人 SE >85%；分母並列接受 TIB 與 TATS）
 
 
 C. 深層睡眠比例（Slow-Wave Sleep / N3）
@@ -274,7 +351,7 @@ Ohayon MM, et al. Meta-analysis of quantitative sleep parameters from childhood 
 | 指標 | 權重/角色 | 文獻 | 對應程式變數 | 程式門檻 | 查證狀態 |
 |---|---|---|---|---|---|
 | 睡眠時長 (A) | Tier1 核心 30 | Hirshkowitz 2015 | `DURATION_RANGE` | 7–9h（分齡） | ✅ 完整核對，數字一致 |
-| 睡眠效率 (B) | Tier1 核心 25 | Hertenstein 2018 + Ohayon 2017 | `EFFICIENCY_GOOD`/`EFFICIENCY_FAIR` | ≥85% 佳／80–84% 尚可 | ✅ 完整核對；已修正原本自相矛盾（見下方修訂記錄） |
+| 睡眠效率 (B) | Tier1 核心 25 | Hertenstein 2018 + Ohayon 2017 + ANSI/CTA-2110 | `EFFICIENCY_GOOD`/`EFFICIENCY_FAIR` | ≥85% 佳／80–84% 尚可 | 🔴 **門檻有引文但構念錯配**：文獻的 ≥85% 分母是臥床時間／嘗試入睡時間，程式餵進去的分母是「起床 − 入睡」（不含入睡潛伏期）。實測 84 晚有 83 晚拿滿，扣分級距從未觸發；另有 7 晚原始值 >100% 被 `min(…,100)` 靜默夾平。詳見 B-3～B-6 |
 | WASO (E) | Tier1 核心 25 | Ohayon 2004 + Harrison 2021 | `WASO_THRESHOLD` | 分齡 15–60 分鐘區間 | ⚠️ 常模趨勢有文獻依據，分級切點為操作性轉換非論文原文表格（已誠實標註） |
 | 深層睡眠比例 (C) | Tier2 結構輔助 10 | Boulos 2019 + Hertenstein 2018 | `DEEP_RANGE` | 13–23% | ⚠️ 方向正確，精確 pooled mean 建議口試前人工核對 Boulos 2019 Table 2 |
 | REM 比例 (D) | Tier2 結構輔助 10 | Ohayon 2004 | `REM_RANGE` | 分齡 14–27% 區間 | ✅ 完整核對，年齡趨勢與方向一致 |
@@ -292,6 +369,13 @@ Ohayon MM, et al. Meta-analysis of quantitative sleep parameters from childhood 
 ### 修訂記錄（原分散於兩份文件的修正註記，此處統一保留摘要）
 
 - **2026-07-30，B 節（睡眠效率）**：原本引用 Hertenstein 一篇即自相矛盾——文中說「不宜視為嚴格病理切點」，卻直接拿來當扣分切點。已補入 Ohayon (2017) 作為切點設定的直接依據，Hertenstein 改回「解釋個體變異幅度」的角色。
+- **2026-09-30，B 節（睡眠效率）— 構念錯配，非係數問題**：2026-07-30 那次只修好「門檻從哪來」，沒有檢查「門檻被套在什麼量上」。本次查證發現四件事：
+  - **(1) 分母錯配**：Ohayon (2017) 的 ≥85% 其原文表述為「at least 85 percent of the total time **while in bed**」，分母是臥床時間；ANSI/CTA/NSF-2110（消費性睡眠裝置標準）並列接受 TIB 與 TATS（嘗試入睡時間），**兩者都包含入睡潛伏期**。而 `extract_sleep_features.py:225` 的分母是「起床 − 入睡」，不含入睡潛伏期，兩者不是同一個構念。分母少一段必然使數值系統性偏高，臨床門檻因此自動變得過於寬鬆。⚠️ 這不是調係數能修的。
+  - **(2) 實測後果**：84 晚（2026-05-29~09-28）中 **83 晚 ≥85% 拿滿 25 分**，中位數 99.13%，`<80%` 的扣分級距 **84 晚從未觸發**。該 25 分實質為固定給分。
+  - **(3) 新發現的資料一致性問題**：夾平前有 **7 晚原始效率 >100%（最高 153.71%）**，代表 Garmin 的「總睡眠時間」與「起床 − 入睡」在那幾晚彼此不一致；`min(…, 100.0)` 將其靜默削平，從輸出端看不出來。此問題與 (1) 獨立，兩者都要處理。
+  - **(4) 引用錯誤**：Ohayon (2017) 原作者清單誤植為「Ohayon MM, Krystal A, Roehrs TA, Roth T, Vitiello MV」——Roehrs 與 Roth 並非本文作者，且漏列第二作者 Wickwire EM。已更正為完整作者清單。第一作者 Ohayon 經核對無誤（方法論第 6 點，本專案已誤植過兩次）。
+  - **未能查證者**：原文宣稱該報告「<75% 視為不良」，以可公開取得的來源均無法逐字確認，已於 B-2 標註為待核對，且註明現行程式並未使用該數值。
+  - **本次不改任何程式碼**：依紅線 2（要計分先有文獻），計分變更須待缺口補上後另行處理。缺口清單見 B-6。
 - **2026-07-30，F 節（心率/RHR）**：原本僅靠 Kerkering (2022)（測量可靠度研究）撐起「個人化 baseline + 趨勢評分」整套設計，屬推論跳躍。已補入 Quer (2020)（為何用個人化基準）與 Cosgrave (2021)（心率變化確與睡眠品質相關，且排除酒精等 confound）。原考慮的 Strüven (2025) 飲酒研究因介入變因是酒精、無法乾淨支持「心率高＝睡眠差」而未採用。
 - **2026-07-30，G 節（壓力分數）**：原文獻清單有 4 條無作者/期刊/年份的裸標題、2 條「Zhang J 2024」缺卷期/DOI（其中一條標題誤植研究方法，橫斷面應為縱貫性）。已逐條查證補全，並找到與 Sonnap 應用情境高度吻合的 Chalmers (2022)（穿戴式裝置 HRV+睡眠品質壓力偵測模型）。
 - **2026-07-30，I 節（複合式評分）**：原文兩段話對「心率/HRV 該歸核心還是輔助」講法互相矛盾，且與 V1 實際程式碼（僅 5 項核心+結構指標，無心率/HRV/壓力/活動量）不符。已改為 Tier1–4 分層架構，並如實說明「核心/輔助分類非 PSQI 直接規定，是本研究自行設計」。
