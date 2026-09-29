@@ -743,6 +743,18 @@ def build_modifier_note(rhr_available, avg_hr_available, stress_available,
     return " ".join(notes)
 
 
+# 總睡眠時間允許超出睡眠視窗多少分鐘。
+#
+# ⚠️ 這個值與 extract_sleep_features.MAX_SLEEP_OVER_PERIOD_MINUTES **必須相同**。
+#    刻意各寫一份而不 import（理由同 has_measured_sleep 的 docstring），
+#    防止漂移的方法是 tests/test_scoring_guards.py【1】拿真實資料逐列比對。
+#
+# 依據：Garmin 的階段時長量化到整分鐘（實測 *_duration_sec 全為 60 的倍數），
+# 視窗則由秒級時刻相減，故 1 分鐘內的落差屬量化誤差；超過即為上游資料自相矛盾
+# （實測 2026-06-27：階段合計 688 分鐘 vs 視窗 447.9 分鐘）。
+MAX_SLEEP_OVER_PERIOD_MINUTES = 1.0
+
+
 def has_measured_sleep(row):
     """
     這一列有沒有**真的量到睡眠**。回傳 True / False。
@@ -766,11 +778,14 @@ def has_measured_sleep(row):
         wake_dt = datetime.fromisoformat(wake)
     except (TypeError, ValueError):
         return False
-    if (wake_dt - start_dt).total_seconds() <= 0:
+    sleep_period_min = (wake_dt - start_dt).total_seconds() / 60.0
+    if sleep_period_min <= 0:
         return False                      # 入睡 == 起床（06-02 那筆）或反轉
     total = to_float(row.get("total_sleep_minutes"))
     if total is None or total <= 0:
         return False                      # 有時間區間但一分鐘睡眠都沒偵測到
+    if total - sleep_period_min > MAX_SLEEP_OVER_PERIOD_MINUTES:
+        return False                      # 階段時長與時刻矛盾（06-27 那筆）
     return True
 
 

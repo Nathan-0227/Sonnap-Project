@@ -200,6 +200,55 @@ else:
 
 print()
 print("=" * 78)
+print("【5】階段時長超出睡眠視窗的夜晚必須被排除")
+print("=" * 78)
+# 2026-09-30 新增。Garmin 有時給出「階段時長合計 > 它自己給的入睡→起床視窗」
+# 的資料（實測 2026-06-27：688 分 vs 447.9 分）。在加這條檢查之前，
+# 效率算出 153.62% 後被 `min(…, 100.0)` 夾平成 100%，於是一列完全不可信的
+# 資料（REM=0、深睡佔 42%）照樣拿滿睡眠效率那 25 分——**沒有任何錯誤訊息**。
+#
+# ⚠️ 兩支函式各有一份判準且刻意不互相 import，所以下面兩邊都要驗。
+
+
+def night_row(total_sleep, period_min):
+    """合成一列 summary。入睡固定 02:00，起床往後推 period_min 分鐘。"""
+    from datetime import datetime, timedelta
+    start = datetime.fromisoformat("2026-01-01T02:00:00+08:00")
+    return {
+        "date": "2026-01-01",
+        "sleep_start_time": start.isoformat(),
+        "wake_time": (start + timedelta(minutes=period_min)).isoformat(),
+        "total_sleep_minutes": str(total_sleep),
+    }
+
+
+# 超出很多 → 兩邊都要擋
+bad = night_row(688, 447.9)
+ok("矛盾的列：is_valid_night 要擋", esf.is_valid_night(bad)[0] is False)
+ok("矛盾的列：has_measured_sleep 要擋", arm.has_measured_sleep(bad) is False)
+
+# 正常的列 → 兩邊都要放行（確認這條檢查不會過度殺傷）
+good = night_row(400, 480)
+ok("正常的列：is_valid_night 要放行", esf.is_valid_night(good)[0] is True)
+ok("正常的列：has_measured_sleep 要放行", arm.has_measured_sleep(good) is True)
+
+# 邊界：Garmin 階段時長量化到整分鐘，1 分鐘內的落差屬量化誤差，不可誤殺。
+# 實測有 16 晚總睡眠正好等於視窗（效率真的是 100.00%），那些必須留著。
+exact = night_row(480, 480)
+ok("總睡眠正好等於視窗（真 100%）不可誤殺", esf.is_valid_night(exact)[0] is True)
+ok("兩個常數必須相同",
+   esf.MAX_SLEEP_OVER_PERIOD_MINUTES == arm.MAX_SLEEP_OVER_PERIOD_MINUTES,
+   f"{esf.MAX_SLEEP_OVER_PERIOD_MINUTES} / {arm.MAX_SLEEP_OVER_PERIOD_MINUTES}")
+
+# 真實資料回歸：summary 裡那一晚確實會被擋下來。
+real_bad = [r for r in rows if r.get("date") == "2026-06-27"]
+if real_bad:
+    ok("真實資料 2026-06-27 被排除", esf.is_valid_night(real_bad[0])[0] is False)
+else:
+    print("  - 跳過真實資料回歸（summary 裡沒有 2026-06-27）")
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)
