@@ -67,12 +67,20 @@ SESSION = {
 # TIB = 23:00 → 07:30 = 510 分   clinical_eff = 445/510 = 87.25%   latency = 20 分
 #
 # 評分（young_adult）：
-#   duration  7.42h ∈ [7,9]        → 30.0
-#   efficiency 96.74 ≥ 85          → 25.0
-#   waso      15 ≤ 15（佳）        → 25.0
-#   deep      13.48% ∈ [13,23]     → 10.0
-#   rem       26.97% > 25          → 10 − (26.97−25)×0.6 = 8.818
-#   總分 = 98.818 → 98.8  Good
+#   duration  7.42h ∈ [7,9]        → 30.0   （配分 30）
+#   efficiency                     → **不計分**，見下
+#   waso      15 ≤ 15（佳）        → 25.0   （配分 25）
+#   deep      13.48% ∈ [13,23]     → 10.0   （配分 10）
+#   rem       26.97% > 25          → 10 − (26.97−25)×0.6 = 8.818  （配分 10）
+#   總分 = 73.818 / 75 × 100 = 98.4  Good
+#
+# ⚠️ 2026-10-01 從 98.8 改成 98.4。**不是這支測試或 adapter 壞了**——
+#    `EFFICIENCY_SCORING_ENABLED` 改成 False（睡眠效率的門檻套在錯的量上，
+#    理由見 evaluate_sleep_quality.py 該常數的說明），效率那 25 分從分子與
+#    分母同時移除，於是 REM 那 1.182 的缺口改成除以 75 而不是 100。
+#    這個值是手算驗證過的，不是照程式的輸出抄的：
+#       舊 (30+25+25+10+8.818)/100 = 98.818 → 98.8
+#       新 (30+25   +10+8.818)/ 75 = 98.424 → 98.4
 EXPECT = {
     "sleep_duration_hours": 7.42,
     "sleep_efficiency": 96.74,
@@ -83,7 +91,7 @@ EXPECT = {
     "sleep_latency_minutes": 20.0,
     "clinical_sleep_efficiency": 87.25,
 }
-EXPECT_SCORE = 98.8
+EXPECT_SCORE = 98.4
 EXPECT_QUALITY = "Good"
 
 fails = []

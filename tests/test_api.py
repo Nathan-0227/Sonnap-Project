@@ -174,13 +174,36 @@ session = {
 rw = client.post("/wearable", json={"user_id": u5, "session": session})
 check("POST /wearable 狀態碼", rw.status_code, 201)
 w = rw.json()
-check("分數（與手算相符）", w["final_score"], 98.8)
+# ⚠️ 2026-10-01：98.8 → 98.4。效率不計分（EFFICIENCY_SCORING_ENABLED=False，
+#    理由見 evaluate_sleep_quality.py 該常數），那 25 分從分子分母同時移除，
+#    REM 的 1.182 缺口改成除以 75：(30+25+10+8.818)/75 = 98.4。手算驗證過。
+check("分數（與手算相符）", w["final_score"], 98.4)
 check("臥床時間（Garmin 給不出來）", w["time_in_bed_min"], 510.0)
 check("入睡潛伏期", w["sleep_latency_min"], 20.0)
 
 client.post("/nightly", json={"user_id": u5, "lights_out_at": f"{D}T23:05:00+08:00"})
 h5 = client.get(f"/home?user_id={u5}").json()
-check("有穿戴資料 → energy_level 有值", h5["status"]["energy_level"], 99)
+# energy_level = round_half_up(final_score)，所以跟著上面那筆從 99 變 98。
+check("有穿戴資料 → energy_level 有值", h5["status"]["energy_level"], 98)
+
+# ── 分數組成要跟著分數一起回 ──────────────────────────────────────
+# ⚠️ 裝置組合因人而異（只有手機／有手錶／手錶加攝影機），評分器對量不到的
+#    項目走權重正規化，所以兩個都是 82 分的夜晚可能由不同項目組成。
+#    只回一個數字，讀的人無從知道這件事。
+#    逐項的判準另有 tests/test_score_composition.py 逐夜比對評分器。
+comp5 = h5["scoring"]["composition"]
+check("/home 有回分數組成", sorted(comp5["scored"]),
+      ["deep", "duration", "rem", "waso"])
+check("效率不在組成裡（已停止計分）", "efficiency" in comp5["scored"], False)
+check("有算的配分總和", comp5["scored_weight"], 75)
+eff_reason = next((u["reason"] for u in comp5["unscored"]
+                   if u["component"] == "efficiency"), "")
+check("效率附了不計分的理由（且講到分母）", "time in bed" in eff_reason, True)
+
+i5 = client.get(f"/insights?user_id={u5}").json()
+hist5 = i5["wearable"]["history"]
+check("/insights 逐夜都帶 composition",
+      all(r.get("composition") for r in hist5), True)
 check("mood 由行為驅動（不是由分數）", h5["status"]["mood_driver"], "behavior")
 check("Tier B 的臥床時間出現在 metrics",
       h5["metrics"]["time_in_bed_minutes"], 510.0)

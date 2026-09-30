@@ -109,6 +109,44 @@ DEEP_RANGE = (13.0, 23.0)
 EFFICIENCY_GOOD = 85.0   # ≥85% 良好
 EFFICIENCY_FAIR = 80.0   # 80–84.9% 尚可；<80% 偏低
 
+# ═══════════════════════════════════════════════════════════════════
+# 🔴 睡眠效率目前**不進計分**（2026-10-01 決定）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 上面那組門檻本身沒問題，**錯的是它被套在哪個量上**。
+#
+#   Ohayon 2017 的 ≥85%     分母 = 臥床時間（原文 "while in bed"）
+#   ANSI/CTA/NSF-2110       分母 = TIB 或 TATS，兩者都含入睡潛伏期
+#   本 pipeline 餵進來的     分母 = 起床 − 入睡（**不含**入睡潛伏期）
+#
+# 分母少一段，數值必然系統性偏高，臨床門檻因此自動變得過寬。
+# 實測 84 晚有 83 晚 ≥85% 拿滿 25 分，`<80%` 的扣分級距**一次都沒觸發**，
+# 17 晚達 100.00%。這 25 分實質是固定給的。**構念錯配，不是調係數能修的。**
+# 完整分析：Research-Background/Garmin手錶分數.md B-3～B-6。
+#
+# ⚠️ 為什麼不改用手機／攝影機的自述臥床時間來算（那個分母是對的）：
+#    兩個來源都是**自述**——攝影機的臥床時間在 tapo_sleep_onset.py 裡
+#    標著 `SELF_REPORTED_recording_start_stop`，不是量測的。而自述的分母
+#    代表使用者只要「快睡著才按開始」就能把效率推向 100%，
+#    那會是本系統**第一個使用者說了算的計分輸入**（現有五項全部來自手錶），
+#    正是紅線 4、5 要防的東西。
+#
+# ⚠️ 為什麼不靠攝影機偵測上床就好：**背景相減做不到**。實測 09-30 那夜
+#    91155 幀，床鋪 ROI 的前景像素有 **84% 的幀是 0**——人躺著不動與空床
+#    在背景相減下完全一樣。它偵測得到「入睡」（開錄後 30 分鐘 62.9% 的幀
+#    有動作 vs 之後 11.9%），但**入睡不是上床**，拿入睡當分母起點就退回
+#    Garmin 現在這個有缺陷的分母。要真的量到上床時刻得換成人形偵測，
+#    規格與驗收條件已寫進 docs/TAPO_HANDOFF.md。
+#
+# → 在那之前照 SRI 與攝影機動作率的先例：**照算、照顯示、標 basis、不計分**。
+#   `score_efficiency()` 保留不刪：它對正確的分母是對的程式，
+#   人形偵測驗證通過之後把這個旗標改成 True 就能重新啟用。
+#
+# ⚠️ 關掉之後那 25 分的權重會由既有的正規化機制分給其他項（見 evaluate_night
+#    末段）。副作用：**WASO 的有效權重從 25% 升到 33%**，而 WASO 的分級切點
+#    在文獻文件裡標著「操作性轉換非論文原文表格」。已知並接受，記錄在此。
+EFFICIENCY_SCORING_ENABLED = False
+
 # 各指標配分（核心 80 分 + 輔助 20 分 = 100）
 WEIGHTS = {
     "duration": 30,
@@ -288,7 +326,8 @@ def evaluate_night(row):
 
     component_scores = {
         "duration": score_duration(duration_h, band),
-        "efficiency": score_efficiency(efficiency),
+        # ⚠️ 見 EFFICIENCY_SCORING_ENABLED：目前一律 None，走權重正規化。
+        "efficiency": score_efficiency(efficiency) if EFFICIENCY_SCORING_ENABLED else None,
         "waso": score_waso(waso_min, band),
         "deep": score_deep(deep_pct),
         "rem": None if rem_unavailable else score_rem(rem_pct, band),
