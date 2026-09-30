@@ -1,7 +1,7 @@
 """
 tests/test_sleep_efficiency.py
 
-守的是 `behavior/sleep_efficiency.py` 那五個**壞掉時不會報錯**的機制。
+守的是 `behavior/sleep_efficiency.py` 那六個**壞掉時不會報錯**的機制。
 
 這個數字的危險之處在於它**永遠算得出一個看起來合理的百分比**。
 分子錯、分母錯、把「沒測到」當成 0%，結果都還是落在 0–100 之間，
@@ -13,8 +13,11 @@ tests/test_sleep_efficiency.py
   【3】efficiency_basis 必須跟著數字走，而且不能與另外兩種效率混用
   【4】放下手機早於上床是合法的一晚（滑手機 0 分鐘），晚於起床是資料錯誤
   【5】臥床時間過短要擋掉 —— 分母小的時候百分比會劇烈跳動
+  【6】measured_efficiency 的分子必須是**量到的**睡眠，不是假定的
+      （含反向對照：睡眠變動時數字要跟著變。舊那個數字的核心限制正是
+        「睡眠完全不影響它」，兩者一旦混淆就白做了）
 
-五條都用「把 bug 重新引入、確認測試會紅」驗證過。
+六條都用「把 bug 重新引入、確認測試會紅」驗證過。
 
 執行：python tests/test_sleep_efficiency.py
 """
@@ -30,8 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from behavior.sleep_efficiency import (  # noqa: E402
-    evaluate_efficiency, phone_in_bed_share,
-    EFFICIENCY_BASIS, MIN_TIME_IN_BED_MINUTES,
+    evaluate_efficiency, phone_in_bed_share, measured_efficiency,
+    EFFICIENCY_BASIS, MEASURED_EFFICIENCY_BASIS, MIN_TIME_IN_BED_MINUTES,
 )
 
 fails = []
@@ -159,6 +162,55 @@ print("\n【附】datetime 與 ISO8601 字串要給出一樣的結果")
 iso = evaluate_efficiency("2026-09-06T23:00:00", "2026-09-06T23:30:00",
                           "2026-09-07T07:00:00")
 check("ISO 字串與 datetime 一致", iso["sleep_efficiency"], night(None, 30)["sleep_efficiency"])
+
+# ═══════════════════════════════════════════════════════════════════
+# 【6】measured_efficiency：分子改用手錶實測（2026-09-30 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 這是**第二個**數字，與上面那個並存。差別只在分子：
+#   evaluate_efficiency  分子 = 假定睡眠（臥床 − 滑手機）→ 量的是滑手機比例
+#   measured_efficiency  分子 = 手錶實測睡眠           → 才是真的睡眠效率
+#
+# ⚠️ 下面第一條是**反向對照**：同一個臥床區間，餵不同的手錶睡眠時間，
+#    新數字必須跟著變。少了這一條，就無法證明「分子真的換成量測值」了——
+#    舊那個數字的核心限制正是「睡眠完全不影響它」（見【1】）。
+print()
+print("【6】measured_efficiency：分子是量到的，不是假定的")
+
+a = measured_efficiency(total_sleep_minutes=307, time_in_bed_minutes=333.3)
+b = measured_efficiency(total_sleep_minutes=250, time_in_bed_minutes=333.3)
+check("307 分睡眠 ÷ 333.3 分臥床", a["measured_efficiency"], 92.1)
+check("同一臥床、睡眠變少 → 數字要變低", b["measured_efficiency"], 75.0)
+check_true("反向對照：睡眠確實會影響這個數字（舊那個不會）",
+           a["measured_efficiency"] != b["measured_efficiency"])
+
+# 兩個數字必須分得開：basis 不同
+old = night(None, 30)
+check_true("新舊兩個數字的 basis 不同（前端才分得出來）",
+           old["efficiency_basis"] != MEASURED_EFFICIENCY_BASIS)
+
+# 缺任一邊都要是 None，不是 0
+check("沒有手錶資料 → None",
+      measured_efficiency(None, 333.3)["measured_efficiency"], None)
+check("沒有按按鈕 → None",
+      measured_efficiency(307, None)["measured_efficiency"], None)
+check("手錶測到 0 分鐘睡眠 → None（不是 0%）",
+      measured_efficiency(0, 333.3)["measured_efficiency"], None)
+
+# ⚠️ 矛盾的一晚不可夾平成 100%——那正是 2026-06-27 那個 bug 的形狀。
+contradictory = measured_efficiency(total_sleep_minutes=500, time_in_bed_minutes=400)
+check("睡眠 > 臥床 → None（不是夾平成 100）",
+      contradictory["measured_efficiency"], None)
+check_true("且要說明原因", bool(contradictory["measured_efficiency_note"]))
+
+# 容差：1 分鐘內屬四捨五入，不可誤殺
+check("睡眠比臥床多 0.5 分（四捨五入）→ 仍算得出來",
+      measured_efficiency(400.5, 400)["measured_efficiency"], 100.0)
+
+# basis 一定要跟著走，連算不出來的時候也是
+check_true("算不出來時 basis 仍然存在",
+           measured_efficiency(None, None)["measured_efficiency_basis"]
+           == MEASURED_EFFICIENCY_BASIS)
 
 # ═══════════════════════════════════════════════════════════════════
 print()
