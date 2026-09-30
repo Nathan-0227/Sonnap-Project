@@ -266,6 +266,56 @@ EFFICIENCY_UNSCORED_REASON = (
     "two are different constructs. Shown for information, never scored."
 )
 
+# ═══════════════════════════════════════════════════════════════════
+# 這個分數宣稱自己是什麼（2026-10-01 使用者決定）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 舊的宣稱是「多維度合成的睡眠品質分數」。2026-10-01 逐項查證後改成
+# **以睡眠時長為主、其他維度為輔**——理由是四個計分項裡，只有睡眠時長的
+# 裝置誤差明確小於它的判讀級距：
+#
+#   分項      級距寬度（換算成分鐘）   已知裝置偏差        偏差÷級距
+#   duration  120 分（7–9 小時）      −16.9 分           14%   ✅
+#   waso       15 分                  +13.3~24.1 分      89–161%  🔴
+#   deep       42 分（13–23% of 7h）  高估，量級不明      算不出來 ⚠️
+#   rem        21 分（20–25% of 7h）  低估，量級不明      算不出來 ⚠️
+#
+# 關鍵是**級距寬度差了 8 倍**：同樣約 17 分鐘的誤差對 duration 無關痛癢，
+# 對 WASO 是致命的。完整分析見 Garmin手錶分數.md E-3～E-6 與 I 節。
+#
+# ⚠️ 這是「改宣稱」不是「改結構」——分項、配分、程式一個都沒動。
+#    要回到「多維度合成」的宣稱，需要一次效標驗證（本專案這支
+#    Vivoactive 3 對照參考標準，一次量出三項的偏差），**外加**把
+#    30/25/10/10 這組權重本身 justify——I 節自己承認那組權重是
+#    設計決策而非文獻推導。所以「回去」比現狀更嚴格，不是回到原點。
+
+PRIMARY_SCORE_COMPONENT = "duration"
+
+# 有計分、但門檻效度存疑的分項。**這不是「沒測到」**（那個走 unscored），
+# 是「測到了、也照門檻算了，但那個門檻能不能套在這支錶的量測上，證據不足」。
+#
+# ⚠️ duration 刻意不在這裡：它的偏差（−16.9 分）只佔級距（120 分）的 14%，
+#    是唯一誤差明確小於級距的分項。如果每一項都掛警語，警語就沒有意義了。
+SCORED_COMPONENT_CAVEATS = {
+    "waso": (
+        "the device's own wake-detection error is as large as the whole "
+        "band this is graded on (bias +13 to +24 min in a meta-analysis of "
+        "consumer wrist devices, versus a 15-min band for young adults), so "
+        "which band a night falls into is driven partly by device error. "
+        "The age trend itself is literature-backed."
+    ),
+    "deep": (
+        "consumer wrist devices are 60-75% accurate at four-class sleep "
+        "staging and are known to over-report deep sleep; no pooled bias in "
+        "minutes is available, so the size of the error is unquantified."
+    ),
+    "rem": (
+        "consumer wrist devices are 60-75% accurate at four-class sleep "
+        "staging and are known to under-report REM - this watch reports zero "
+        "REM on some nights, which are excluded rather than scored as poor."
+    ),
+}
+
 
 def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
     """
@@ -298,11 +348,23 @@ def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
         "scored": scored,
         "unscored": unscored,
         "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in scored),
+        # ⚠️ 這個分數**不是**多維度等權的合成，它以睡眠時長為主。
+        #    只回 scored 清單會讓人以為四項的可信度一樣——並不是。
+        "primary_component": PRIMARY_SCORE_COMPONENT,
+        # 有計分但門檻效度存疑的分項。與 unscored 是不同的兩件事：
+        # unscored = 沒測到；caveats = 測到了也算了，但門檻能不能套上證據不足。
+        "caveats": [
+            {"component": k, "caveat": SCORED_COMPONENT_CAVEATS[k]}
+            for k in scored if k in SCORED_COMPONENT_CAVEATS
+        ],
         "note": (
             "The score is renormalised to 100 over the components that were "
             "measurable on this night, so a night scored on fewer components is "
             "not directly comparable with one scored on more. Which components "
-            "are available depends on the devices the user has."
+            "are available depends on the devices the user has. This is a "
+            "duration-primary score, not an equally-weighted composite: sleep "
+            "duration is the only component whose device measurement error is "
+            "clearly smaller than the band it is graded on. See 'caveats'."
         ),
     }
 
