@@ -204,6 +204,15 @@ i5 = client.get(f"/insights?user_id={u5}").json()
 hist5 = i5["wearable"]["history"]
 check("/insights 逐夜都帶 composition",
       all(r.get("composition") for r in hist5), True)
+
+# ⚠️ 2026-10-01：分數宣稱「以睡眠時長為主」，不是四項等權合成。
+#    只回 scored 清單會讓前端以為四項一樣可信——並不是。
+check("回傳 primary_component", comp5["primary_component"], "duration")
+check("有計分但門檻效度存疑的分項要掛警語",
+      sorted(c["component"] for c in comp5["caveats"]),
+      ["deep", "rem", "waso"])
+check("duration 刻意沒有警語",
+      "duration" in [c["component"] for c in comp5["caveats"]], False)
 check("mood 由行為驅動（不是由分數）", h5["status"]["mood_driver"], "behavior")
 check("Tier B 的臥床時間出現在 metrics",
       h5["metrics"]["time_in_bed_minutes"], 510.0)

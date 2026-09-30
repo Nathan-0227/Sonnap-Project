@@ -165,6 +165,50 @@ check("沒有手錶資料那一晚回 None", main.score_composition(None), None)
 
 print()
 print("=" * 78)
+print("【5】分數的宣稱與警語（2026-10-01 新增）")
+print("=" * 78)
+# 2026-10-01 使用者決定：這個分數誠實宣稱「以睡眠時長為主」，不是多維度等權合成。
+# 依據是四個計分項裡只有 duration 的裝置誤差明確小於它的判讀級距
+# （14% vs WASO 的 89–161%，deep/rem 的量級查不到）。詳見 E-3～E-6 與 I 節。
+#
+# ⚠️ 這幾條守的是「宣稱不會被靜默改掉」。少了它們，之後有人把 primary_component
+#    拿掉或把 caveats 清空，API 就會退回「四項看起來一樣可信」的樣子，
+#    而**不會有任何錯誤訊息**。
+
+full = main.score_composition(
+    {"duration_min": 400.0, "waso_min": 10.0, "deep_min": 50.0, "rem_measured": 1})
+
+check("primary_component 是 duration", full["primary_component"], "duration")
+ok("primary_component 一定在 scored 裡",
+   full["primary_component"] in full["scored"])
+
+cav = {c["component"] for c in full["caveats"]}
+check("有警語的分項", sorted(cav), ["deep", "rem", "waso"])
+ok("duration 刻意沒有警語（否則警語就沒有意義）", "duration" not in cav)
+ok("每條警語都有內容", all(len(c["caveat"]) > 40 for c in full["caveats"]))
+
+# ⚠️ 警語與「沒測到」是不同的兩件事，不可混為一談。
+# ⚠️ 這裡用帶預設值的 next()：警語被拿掉時要**乾淨地回報失敗**，
+#    不是丟 StopIteration 把整支測試打斷——崩掉的測試比紅掉的難診斷。
+waso_cav = next((c["caveat"] for c in full["caveats"]
+                 if c["component"] == "waso"), "")
+ok("WASO 的警語要講到「誤差和級距一樣大」這個具體理由",
+   "band" in waso_cav)
+ok("警語不可以只寫「沒測到」", bool(waso_cav) and "not measured" not in waso_cav)
+
+# 沒測到的分項不該出現在 caveats（它在 unscored，理由不一樣）
+partial = main.score_composition(
+    {"duration_min": 400.0, "waso_min": 10.0, "deep_min": 50.0, "rem_measured": 0})
+pc = {c["component"] for c in partial["caveats"]}
+ok("REM 沒測到時，它出現在 unscored 而不是 caveats",
+   "rem" not in pc and any(u["component"] == "rem" for u in partial["unscored"]))
+
+# note 要講出「不是等權合成」，否則前端仍會把四項當成一樣可信
+ok("note 要說明這是以時長為主、不是等權合成",
+   "duration-primary" in full["note"])
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)
