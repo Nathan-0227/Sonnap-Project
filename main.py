@@ -237,6 +237,77 @@ def _row_for(rows: List[dict], target_date: Optional[str]) -> Optional[dict]:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 分數是由哪幾項組成的
+# ═══════════════════════════════════════════════════════════════════
+#
+# 為什麼要回這個：**裝置組合因人而異**。只有手機的人、有手錶的人、
+# 手錶加攝影機的人，量得到的構念不一樣。評分器對量不到的項目走權重
+# 正規化（把它的配分按比例分給其他項，見 evaluate_sleep_quality.py 末段），
+# 所以兩個都是「82 分」的夜晚**可能由不同的項目組成**。
+# 只回一個數字，讀的人無從知道這件事。
+#
+# ⚠️ 這裡是**刻意寫的第二份判準**，與 evaluate_sleep_quality.evaluate_night()
+#    的 component_scores 必須給出一樣的答案。不 import 那支的理由同
+#    has_measured_sleep：garmin/ 五支是各自獨立的行程、不是 package。
+#    防止漂移的方法是測試而不是耦合——tests/test_score_composition.py
+#    拿真實資料逐夜比對兩邊。
+#
+# ⚠️ 判斷一律用 `is not None`，**不可用真假值**：WASO 0 分鐘會拿滿分 25、
+#    深睡 0 分鐘會拿 0 分，兩者都是「有測到」。用真假值會把它們誤判成沒資料。
+
+SCORE_COMPONENT_WEIGHTS = {"duration": 30, "efficiency": 25, "waso": 25, "deep": 10, "rem": 10}
+
+# 效率為什麼不計分。與 evaluate_sleep_quality.EFFICIENCY_SCORING_ENABLED 同一件事，
+# 這裡只是把理由講給 API 的使用者聽（完整分析見 Garmin手錶分數.md B-3～B-6）。
+EFFICIENCY_UNSCORED_REASON = (
+    "the only sleep-efficiency figure this watch can produce divides by "
+    "(wake - sleep onset), which excludes the time spent awake in bed. The >=85% "
+    "threshold it would be compared against is defined for time in bed, so the "
+    "two are different constructs. Shown for information, never scored."
+)
+
+
+def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
+    """
+    這一晚的分數由哪幾項組成。沒有手錶資料那一晚回 None。
+
+    `rem` 那一項讀的是資料庫裡存著的 `rem_measured`——那是**評分器自己的判定**
+    （migrate_garmin_to_db.py 專門為此把 Tier1/2 那份輸出的欄位帶過來），
+    不是在這裡重新判斷一次 REM 有沒有測到。
+    """
+    if not wearable_row:
+        return None
+
+    present = {
+        "duration": wearable_row.get("duration_min") is not None,
+        "efficiency": False,                      # 見 EFFICIENCY_UNSCORED_REASON
+        "waso": wearable_row.get("waso_min") is not None,
+        "deep": wearable_row.get("deep_min") is not None,
+        "rem": bool(wearable_row.get("rem_measured")),
+    }
+    scored = [k for k, v in present.items() if v]
+    unscored = [
+        {
+            "component": k,
+            "reason": EFFICIENCY_UNSCORED_REASON if k == "efficiency"
+            else "not measured on this night",
+        }
+        for k, v in present.items() if not v
+    ]
+    return {
+        "scored": scored,
+        "unscored": unscored,
+        "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in scored),
+        "note": (
+            "The score is renormalised to 100 over the components that were "
+            "measurable on this night, so a night scored on fewer components is "
+            "not directly comparable with one scored on more. Which components "
+            "are available depends on the devices the user has."
+        ),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
 # 心情：兩層如何合併
 # ═══════════════════════════════════════════════════════════════════
 
@@ -698,6 +769,9 @@ async def get_home(
             "rem_measured": bool(w_row["rem_measured"]),
             "source": w_row["source"],
             "device_brand": w_row["device_brand"],
+            # ⚠️ 分數由哪幾項組成。裝置組合因人而異，兩個都是 82 分的夜晚
+            #    可能不是同一回事——見 score_composition() 的說明。
+            "composition": score_composition(w_row),
         },
         "display": display,
         "streak": {
@@ -828,6 +902,9 @@ async def get_insights(
                     "mood_reason": moods[r["date"]][1],
                     "final_score": r["final_score"],
                     "final_quality": r["final_quality"],
+                    # ⚠️ 逐夜都帶，因為組成會隨當晚量到什麼而變（例如某幾晚
+                    #    手錶測不到 REM）。只在最上層給一次會讓人以為每晚一樣。
+                    "composition": score_composition(r),
                     "sleep_duration_hours": (
                         round(r["duration_min"] / 60.0, 2)
                         if r["duration_min"] is not None else None
