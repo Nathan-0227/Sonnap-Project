@@ -213,6 +213,53 @@ check_true("算不出來時 basis 仍然存在",
            == MEASURED_EFFICIENCY_BASIS)
 
 # ═══════════════════════════════════════════════════════════════════
+# 【6b】那幾句 note 是**使用者會直接讀到的字**，不是 log（2026-10-01）
+# ═══════════════════════════════════════════════════════════════════
+#
+# App 的「Sleep Efficiency (measured)」卡片**原封不動顯示** note，一個字都
+# 不改寫（改寫就會有第二份說法）。所以寫法壞掉時不會有任何錯誤訊息——
+# 只會讓使用者在畫面上讀到一行像 log 的句子。
+# 這幾條就是在守那件事；每一條都用「把舊寫法放回去、確認會紅」驗證過。
+print()
+print("【6b】那幾句話要寫得像話（會直接顯示在手機上）")
+
+NOTES = {
+    "沒有手錶資料": measured_efficiency(None, 333.3)["measured_efficiency_note"],
+    "沒按按鈕": measured_efficiency(307, None)["measured_efficiency_note"],
+    "手錶測到 0 睡眠": measured_efficiency(0, 333.3)["measured_efficiency_note"],
+    "睡眠比臥床長": measured_efficiency(520, 422.2)["measured_efficiency_note"],
+    "算得出來": measured_efficiency(307, 333.3)["measured_efficiency_note"],
+}
+
+for label, note in NOTES.items():
+    # ① 不得出現欄位名／底線識別字——那是 API 的語言，不是人的語言
+    check_true(f"{label}：沒有欄位名洩漏到畫面上",
+               "_" not in note)
+    # ② 不得用第三人稱講使用者本人
+    check_true(f"{label}：不說「the user」，要對著使用者說話",
+               "the user" not in note.lower())
+    # ③ 要是完整的句子（句點結尾）
+    check_true(f"{label}：是一句話不是片語", note.strip().endswith("."))
+
+# ④ 做得到的事要講出來，而且照抄 App 上按鈕的字。
+#    ⚠️ 「沒按按鈕」是這幾種情況裡**唯一使用者改得了的**，所以它必須給指示；
+#       少了這句，忘記按的人只會知道「沒有數字」，不知道那是自己可以補的。
+check_true("沒按按鈕：要指出按哪兩個鈕（照抄 App 上的字）",
+           "Start sleep" in NOTES["沒按按鈕"]
+           and "Out of bed" in NOTES["沒按按鈕"])
+
+# ⑤ 矛盾的那一晚要把**兩個時長都講出來**，使用者才看得出是哪一邊不對勁。
+#    只說「資料有誤」等於要人家自己去猜。
+check_true("睡眠比臥床長：兩個時長都要出現（換算成時分）",
+           "8 h 40 m" in NOTES["睡眠比臥床長"]
+           and "7 h 2 m" in NOTES["睡眠比臥床長"])
+
+# ⑥ 算得出來的那句**必須講「不進分數」**。這個數字看起來就像一般的睡眠
+#    效率，少了那半句，使用者會以為它影響了分數。
+check_true("算得出來：要說它不影響分數",
+           "never affects your sleep score" in NOTES["算得出來"])
+
+# ═══════════════════════════════════════════════════════════════════
 print()
 if fails:
     print(f"✗ {len(fails)} 條未通過：")

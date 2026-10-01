@@ -53,7 +53,7 @@ behavior/sleep_efficiency.py — 睡眠效率（行為版，Tier A）
 
 | 欄位 | 分子 | 分母 | 有文獻嗎 | 進 final_score 嗎 |
 |---|---|---|---|---|
-| `wearable_nightly.efficiency`（Garmin） | 手錶量的總睡眠 | 起床 − **入睡** | ✅ | ✅ |
+| `wearable_nightly.efficiency`（Garmin） | 手錶量的總睡眠 | 起床 − **入睡** | 🔴 門檻套錯量 | ❌ **2026-10-01 起停止計分** |
 | `wearable_nightly.clinical_efficiency`（Health Connect） | 手錶量的總睡眠 | 起床 − **上床** | ✅ | ❌ 只供呈現 |
 | **本模組**（手機／行為） | **假定**睡眠 | 結束 − 開始（自述） | ❌ | ❌ **絕不** |
 
@@ -214,6 +214,19 @@ MEASURED_EFFICIENCY_BASIS = "watch_tst__phone_tats"
 MAX_SLEEP_OVER_TATS_MINUTES = 1.0
 
 
+def _hm(minutes):
+    """
+    分鐘 → 給人讀的「8 h 40 m」。
+
+    ⚠️ 只用在**要給使用者看的句子**裡。畫面上寫「520 min」沒有錯，但沒有人
+       會在腦中把它換算成八個多小時——而這幾句話存在的目的正是讓人一眼看出
+       「手錶量到的」與「你自己標的」差多少。
+    """
+    total = int(round(minutes))
+    h, m = divmod(total, 60)
+    return f"{h} h {m} m" if h else f"{m} m"
+
+
 def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
     """
     手錶實測睡眠 ÷ 自述臥床（TATS）。回傳 dict；算不出來時每個數值欄位是 None。
@@ -234,22 +247,43 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
             "measured_efficiency_note": reason,
         }
 
+    # ⚠️ 下面每一句**都會原封不動出現在手機畫面上**（Insights 頁那張
+    #    「Sleep Efficiency (measured)」卡片直接顯示 note，不改寫一個字——
+    #    改寫就會有第二份說法，而兩份漂移時不會有任何錯誤訊息）。
+    #    所以這些句子要用**對使用者說話**的寫法：
+    #      ① 第二人稱（your / you），不要寫 "the user"
+    #      ② 不要出現欄位名（`bed_start` 之類）——那是給 API 讀的，
+    #         畫面上出現就變成一行 log
+    #      ③ 做得到的事要講出來，而且**照抄 App 上按鈕的字**
+    #         （`Start sleep` / `Out of bed`，與 challenges.py 同一組字）
+    #    `tests/test_sleep_efficiency.py`【6】有幾條在守這三點。
     if total_sleep_minutes is None:
-        return blank("no watch data for this night")
+        return blank(
+            "No sleep data from your watch for this night yet, so there is "
+            "nothing to compare your bed marks with."
+        )
     if not time_in_bed_minutes:
-        return blank("no bed_start/bed_end: the user did not mark getting "
-                     "into or out of bed")
+        return blank(
+            "You didn't mark this night. Tap Start sleep when you get into "
+            "bed and Out of bed when you get up, and this can be worked out "
+            "for you."
+        )
 
     tst = float(total_sleep_minutes)
     tats = float(time_in_bed_minutes)
     if tst <= 0:
-        return blank("the watch measured no sleep for this night")
+        return blank(
+            "Your watch recorded no sleep at all for this night, so there is "
+            "nothing to divide."
+        )
 
     if tst - tats > MAX_SLEEP_OVER_TATS_MINUTES:
+        # ⚠️ 兩個時長都要講出來，使用者才看得出是哪一邊不對勁。
+        #    **不要只說「資料有誤」**——那等於要人家自己去猜。
         return blank(
-            f"measured sleep {tst:.0f} min exceeds the declared attempt window "
-            f"{tats:.0f} min - the bed marks are probably wrong, so no "
-            f"efficiency is reported for this night"
+            f"Your watch recorded {_hm(tst)} of sleep, but the window you "
+            f"marked is only {_hm(tats)} long. One of the two bed marks is "
+            f"probably off, so no figure is shown for this night."
         )
 
     return {
@@ -257,10 +291,13 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
         "measured_efficiency_basis": MEASURED_EFFICIENCY_BASIS,
         # ⚠️ 這句會送到前端。它說明分子分母各自從哪來——前端同時拿得到
         #    三、四個叫「效率」的數字，只有 basis 與這句話分得開它們。
+        # ⚠️ 「不進分數」那半句不能省：這個數字看起來就像一般的睡眠效率，
+        #    少了那半句，使用者會以為它影響了分數。
         "measured_efficiency_note": (
-            "Watch-measured total sleep divided by the user's own "
-            "'going to sleep' to 'got up' window (time attempting to sleep). "
-            "Presentation only - it never feeds the sleep score."
+            "The sleep your watch measured, as a share of the time you said "
+            "you were trying to sleep - from when you tapped Start sleep to "
+            "when you tapped Out of bed. Shown for information only; it never "
+            "affects your sleep score."
         ),
     }
 

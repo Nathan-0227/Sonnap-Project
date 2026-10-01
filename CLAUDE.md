@@ -1241,7 +1241,7 @@ python tests/test_scoring_guards.py      # 2026-08-28 新增
 python tests/test_tapo_index.py          # 2026-08-30 新增
 python tests/test_history_mood.py        # 2026-09-01 新增
 python tests/test_tapo_roi_csv.py        # 2026-09-06 新增
-python tests/test_sleep_efficiency.py    # 2026-09-06 新增
+python tests/test_sleep_efficiency.py    # 2026-09-06 新增；【6b】守 measured_efficiency 那幾句話是給人讀的（會原封不動顯示在手機上）
 python tests/test_sleep_onset.py         # 2026-09-06 新增（沒有錄影檔會自動跳過）
 python tests/test_waso_annotate.py
 python tests/test_db_backends.py         # SQLite SCHEMA → MariaDB DDL
@@ -1262,7 +1262,7 @@ python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**419 條全過**，2026-10-01 在 `feat/score-claim-and-caveats` 實測）：
+Flutter（在 `app/` 底下跑，**430 條全過**，2026-10-01 在 `feat/composition-in-app` 實測）：
 
 ```bash
 flutter test
@@ -1278,6 +1278,7 @@ flutter analyze     # No issues found
 | `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
 | `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚）。⚠️ 釘住日期的三條在 2026-10-01 改過期望值（效率停止計分後 83 晚分數整批位移：07-12 與 08-09 Poor→Bad、08-23 Good→Normal），**真正要守的那件事改成由資料推導**（anxious 要橫跨多個品質等級），下次分數位移時才不會又無預警地紅 |
 | `score_composition_test.dart` | 分數卡那段警語。四個壞掉時不會報錯的地方：警語文字必須照抄後端（用哨兵字串驗）、`caveats` 與 `unscored` 要分開呈現、`primary_component` 不得寫死成 duration、沒有 `composition` 時整段不顯示（**不准退回「四項等權」那種預設敘述**）。六條都用「把 bug 重新引入、確認測試會紅」驗證過 |
+| `measured_efficiency_test.dart` | 手錶實測效率那張卡。算不出來時**不得畫成 0%**（0% 會被讀成「整夜沒睡著」，真相是沒量到）；那句「不影響分數」與 `basis` 都不能省（App 裡有四個叫「效率」的數字，只有 basis 分得開）；百分比照抄不四捨五入掉小數。⚠️ **不要在這裡驗「畫面上沒有底線」**——`Basis: watch_tst__phone_tats` 是刻意保留的機器標籤，那條守則在後端的 `test_sleep_efficiency.py`【6b】 |
 | `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用（**含反面**：有睡前資料時標題與說明都要換）；沒有後端回應時不得顯示達成度；上床／下床按鈕是**加分項不是取代品**（沒按不得擋住上傳） |
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |

@@ -36,13 +36,18 @@ const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 /// 後端 `behavior/sleep_efficiency.py` 的原文（算得出來的情況）。
 /// ⚠️ 照抄，不要在測試裡改寫——這條測試的意義就是「畫面上的字來自後端」。
 const String kOkNote =
-    "Watch-measured total sleep divided by the user's own 'going to sleep' "
-    "to 'got up' window (time attempting to sleep). Presentation only - it "
-    "never feeds the sleep score.";
+    'The sleep your watch measured, as a share of the time you said you were '
+    'trying to sleep - from when you tapped Start sleep to when you tapped '
+    'Out of bed. Shown for information only; it never affects your sleep '
+    'score.';
 
 /// 算不出來時後端給的原因（最常見的那一個：沒按按鈕）。
+/// ⚠️ 這句**要能讓人照著做**——「沒按按鈕」是所有失敗情況裡唯一使用者
+///    改得了的，所以它會指名那兩個按鈕。後端的守則寫在
+///    `tests/test_sleep_efficiency.py`【6b】。
 const String kNoMarksNote =
-    'no bed_start/bed_end: the user did not mark getting into or out of bed';
+    "You didn't mark this night. Tap Start sleep when you get into bed and "
+    'Out of bed when you get up, and this can be worked out for you.';
 
 /// 有數字的那一晚。91.7% 是 2026-09-13 的實測值（480 分 ÷ 523.4 分）。
 const Map<String, dynamic> kHomeWithEfficiency = {
@@ -242,9 +247,10 @@ void main() {
     testWidgets('【3】那句「不計分」與 basis 都必須在', (tester) async {
       await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
 
-      expect(find.textContaining('never feeds the sleep score'), findsOneWidget,
+      expect(find.textContaining('never affects your sleep score'),
+          findsOneWidget,
           reason: '照抄後端。改寫成「參考值」就是自己發明了一種說法');
-      expect(find.textContaining('time attempting to sleep'), findsOneWidget,
+      expect(find.textContaining('you were trying to sleep'), findsOneWidget,
           reason: '分母是自述的那段窗，這句話是唯一講出來的地方');
       expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget,
           reason: '四個「效率」只有 basis 分得開，省掉就會被拿去比另外三個');
@@ -253,9 +259,14 @@ void main() {
     testWidgets('【4】算不出來 → 說原因，**不得**出現 0%', (tester) async {
       await pump(tester, _StubHome(_parsed(kHomeWithoutMarks)));
 
-      expect(find.textContaining('did not mark getting into or out of bed'),
+      expect(find.textContaining('Tap Start sleep when you get into bed'),
           findsOneWidget,
-          reason: '原因照抄後端；「沒按按鈕」與「沒戴錶」要分得開');
+          reason: '原因照抄後端，而且要讓人照著做——那兩個按鈕的字要出現在畫面上');
+      // ⚠️ 這裡**不能**驗「畫面上沒有底線」：`Basis: watch_tst__phone_tats`
+      //    是刻意保留的機器可讀標籤，本來就該出現。
+      //    「note 不得出現欄位名」那條守則在後端
+      //    （`tests/test_sleep_efficiency.py`【6b】），那裡驗的是函式的輸出
+      //    本身，不會被畫面上別的元素干擾。
       expect(find.text('0.0%'), findsNothing);
       expect(find.text('0%'), findsNothing,
           reason: '0% 會被讀成「整夜沒睡著」，而真相是我們沒量到');
