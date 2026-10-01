@@ -62,6 +62,7 @@ OUTPUT_PATH = ROOT / "app" / "assets" / "data" / "app_payload.json"
 # tapo/sleep_reports/<日期>/*.json，並依 video_clip 檔名定日期）。
 # 只用標準庫，import 它不會多帶進任何相依套件。
 sys.path.insert(0, str(ROOT))
+import score_claim  # noqa: E402
 import tapo_index  # noqa: E402
 
 SCHEMA_VERSION = 1
@@ -375,10 +376,35 @@ def load_ai_advice(target_date, fallback_recommendation):
     }
 
 
+def composition_for(base_row):
+    """
+    這一晚的分數由哪幾項組成。沒有 Tier1/2 那一列時回 None。
+
+    ⚠️ **直讀評分器算出來的分項得分**（`*_score` 不是 None 就是有算），
+       不從原始度量推論。所以這裡不是第三份判準，是把評分器的輸出原樣傳遞。
+       （`main.py` 的 `score_composition()` 才是推論版——它讀資料庫，
+       拿不到分項得分，由 tests/test_score_composition.py 逐夜比對守著。）
+
+    ⚠️ 用 `is not None` 不可用真假值：0 分是「有算但拿 0 分」，不是「沒算」。
+    """
+    if not base_row:
+        return None
+    return score_claim.compose(
+        k for k in ("duration", "efficiency", "waso", "deep", "rem")
+        if base_row.get(f"{k}_score") is not None
+    )
+
+
 def build_payload(target_date=None):
     """組出完整 payload。找不到資料時丟 SystemExit，讓 pipeline 停在這裡。"""
     quality_rows = load_json(GARMIN_DATA / "garmin_sleep_quality_final.json")
     feature_rows = load_json(GARMIN_DATA / "garmin_sleep_features.json")
+    # 分項得分只在 Tier1/2 那份輸出裡（final 那份只有 base/final 與各修正值）。
+    # ⚠️ 多讀一份檔是為了讓 payload 帶得出「分數由哪幾項組成」——
+    #    而且是**直讀評分器算出來的分項得分**，不做任何推論。
+    #    先例：migrate_garmin_to_db.py 為了 rem_measured 也多讀這一份。
+    base_rows = load_json(GARMIN_DATA / "garmin_sleep_quality.json") or []
+    base_by_date = {r["date"]: r for r in base_rows}
 
     if not quality_rows:
         sys.exit(
@@ -457,6 +483,9 @@ def build_payload(target_date=None):
                 "wake_time": feat.get("wake_time"),
                 "pet_mood": row_mood,
                 "mood_reason": row_mood_reason,
+                # ⚠️ 逐夜都帶：組成會隨當晚量到什麼而變（例如某幾晚手錶測不到
+                #    REM）。只在最上層給一次會讓人以為每晚一樣。
+                "composition": composition_for(base_by_date.get(row["date"])),
             }
         )
 
@@ -528,6 +557,12 @@ def build_payload(target_date=None):
             "modifier_note": quality.get("modifier_note"),
             # 規則式建議原文照搬，不改寫不翻譯——它是事實來源
             "recommendation": quality.get("recommendation"),
+            # ⚠️ 分數由哪幾項組成 + 哪幾項的門檻效度存疑。
+            #    **與分數同源同晚**——這是為什麼 composition 要放進 payload 而不是
+            #    讓 App 去 API 另外撈：分數來自這個檔，警語若來自別處就可能
+            #    講的是不同的夜晚（CLAUDE.md：「兩份就會有 App 顯示的跟 API
+            #    回傳的對不上」這種最難查的 bug）。
+            "composition": composition_for(base_by_date.get(quality.get("date"))),
         },
         "display": {
             "lang": "en",

@@ -662,6 +662,13 @@ class _ReportScreenState extends State<ReportScreen>
               ),
             ],
           ),
+
+          // 這個分數由哪幾項組成、哪幾項的門檻效度存疑。
+          // ⚠️ 後端沒給 `composition` 時這一段整個不出現（見該元件的說明）。
+          _ScoreCompositionNote(
+            composition:
+                session.scoring.composition,
+          ),
         ],
       ),
     );
@@ -2722,6 +2729,208 @@ class _HistoryQualityItem
     return '${parsed.month}/${parsed.day}';
   }
 }
+
+// ================================================================
+// SCORE COMPOSITION NOTE
+// ================================================================
+
+/// 分項的顯示名稱。
+///
+/// ⚠️ **只是名字，不含任何對可信度的判斷**——判斷是後端送來的字串。
+/// ⚠️ 對不上的鍵名**照原樣顯示、不要丟掉**：後端日後新增分項時，
+///    畫面上少一項不會有任何錯誤訊息。
+const Map<String, String> _componentLabels = {
+  'duration': 'Sleep duration',
+  'efficiency': 'Sleep efficiency',
+  'waso': 'Time awake during the night',
+  'deep': 'Deep sleep',
+  'rem': 'REM sleep',
+};
+
+String _componentLabel(String key) => _componentLabels[key] ?? key;
+
+/// 分數旁邊那段「這個分數由哪幾項組成、哪幾項的門檻效度存疑」。
+///
+/// ⚠️ **警語的文字一個字都不在這裡產生。** 警語、不計分的原因、整段 note
+///    全部照抄後端（唯一定義處是 `score_claim.py`）。在 Dart 自己寫一份
+///    就會有兩種說法，而兩份漂移時不會有任何錯誤訊息——使用者會在 App 與
+///    API 看到不同的警語。這裡只產生**版面**與**分項的名字**。
+///
+/// ⚠️ **[ScoreComposition] 是 null 時整段不顯示**（舊的打包檔沒有這個欄位）。
+///    不可以退回「四項等權合成」那種預設敘述——那是對使用者謊稱分數的可信度。
+///
+/// ⚠️ **`caveats` 與 `unscored` 必須分開呈現**，它們是不同的兩件事：
+///    - `unscored`：這一晚沒測到（或構念錯配，像睡眠效率）→ **沒有進分數**
+///    - `caveats`：測到了、也照門檻算進分數了，但那個門檻能不能套在這支錶
+///      的量測上，證據不足
+///    併成一段「資料有限」會讓人以為有警語的項目沒計分，那是反過來的。
+class _ScoreCompositionNote extends StatefulWidget {
+  final ScoreComposition? composition;
+
+  const _ScoreCompositionNote({required this.composition});
+
+  @override
+  State<_ScoreCompositionNote> createState() => _ScoreCompositionNoteState();
+}
+
+class _ScoreCompositionNoteState extends State<_ScoreCompositionNote> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final composition = widget.composition;
+    if (composition == null) return const SizedBox.shrink();
+
+    final primary = composition.primaryComponent;
+    final scored = composition.scored;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 14),
+        const Divider(color: Color(0xFF12325A), height: 1),
+        const SizedBox(height: 12),
+
+        // ⚠️ 這一行是整段的重點，**預設就要看得見、不收在折疊裡**：
+        //    「以時長為主」與「四項一樣可信」是兩種不同的宣稱。
+        if (primary != null && primary.isNotEmpty)
+          Row(
+            children: [
+              const Icon(
+                Icons.straighten_rounded,
+                color: Color(0xFF66C7FF),
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Mainly measures ${_componentLabel(primary).toLowerCase()}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        if (scored.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(
+            'Scored on ${composition.scoredWeight} of 100 points: '
+            '${scored.map(_componentLabel).join(', ')}',
+            style: const TextStyle(
+              color: Color(0xFF8498B7),
+              fontSize: 9,
+              height: 1.4,
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 8),
+
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                Text(
+                  _compositionToggleLabel,
+                  style: const TextStyle(
+                    color: Color(0xFF66C7FF),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: const Color(0xFF66C7FF),
+                  size: 15,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (_expanded) ...[
+          if (composition.note != null && composition.note!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              composition.note!,
+              style: const TextStyle(
+                color: Color(0xFF8498B7),
+                fontSize: 9,
+                height: 1.5,
+              ),
+            ),
+          ],
+
+          // 有計分、但門檻效度存疑。
+          if (composition.caveats.isNotEmpty)
+            _compositionGroup(
+              heading: 'Counted in the score, with a known limit:',
+              notes: composition.caveats,
+            ),
+
+          // 沒有進分數。
+          if (composition.unscored.isNotEmpty)
+            _compositionGroup(
+              heading: 'Not counted in the score tonight:',
+              notes: composition.unscored,
+            ),
+        ],
+      ],
+    );
+  }
+
+  /// 一組附註（caveats 或 unscored）。
+  ///
+  /// [heading] 是 Dart 這邊唯一帶判斷意味的字，存在的理由是**兩組必須分得開**；
+  /// 每一條的實質內容（[ScoreComponentNote.text]）仍然是後端的原文。
+  Widget _compositionGroup({
+    required String heading,
+    required List<ScoreComponentNote> notes,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            heading,
+            style: const TextStyle(
+              color: Color(0xFFC1CEE2),
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          ...notes.map(
+            (note) => Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(
+                '${_componentLabel(note.component)} - ${note.text}',
+                style: const TextStyle(
+                  color: Color(0xFF8498B7),
+                  fontSize: 9,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 折疊開關的字。測試拿它判斷「整段在不在」，所以放成常數共用——
+/// 改字的時候測試會一起改到，不會變成找不到而假性通過。
+const String _compositionToggleLabel = 'How this score is put together';
 
 // ================================================================
 // NO DATA MESSAGE

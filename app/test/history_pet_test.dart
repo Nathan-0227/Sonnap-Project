@@ -218,31 +218,64 @@ void main() {
       return null;
     }
 
-    test('08-09 是 tired（Poor）', () {
+    // 釘住日期的測試在 `HISTORY_NIGHTS = 90` 之後才安全：窗格是 30 晚的
+    // 時候，補抓幾晚就會把舊夜晚推出去，這種測試會無預警地紅。
+    //
+    // ⚠️ **這三晚的品質等級在 2026-10-01 整批位移過一次。**
+    // 睡眠效率停止計分之後（那 25 分的門檻套在錯的量上，見
+    // `Research-Background/Garmin手錶分數.md` B-3～B-6），剩下的配分
+    // 重新正規化到 100，實測 83 晚的分數整批往下走：
+    // 07-12 Poor→Bad、08-09 Poor→Bad、08-23 Good→Normal。
+    // **分數變了不代表心情的來源壞了**，所以這裡更新的是期望值；
+    // 而「心情不能從品質推」那個真正要守的東西改成**由資料本身推導**
+    // （下面兩條），這樣下一次分數位移時它不會又無預警地紅。
+
+    test('08-09 是 tired（Bad）', () {
       final night = nightOf('2026-08-09');
       expect(night, isNotNull);
       expect(night!.petMood, 'tired');
-      expect(night.finalQuality, 'Poor');
+      expect(night.finalQuality, 'Bad');
     });
 
-    test('08-23 是 happy（Good）', () {
+    test('08-23 是 bored（Normal）', () {
       final night = nightOf('2026-08-23');
       expect(night, isNotNull);
-      expect(night!.petMood, 'happy');
-      expect(night.finalQuality, 'Good');
+      expect(night!.petMood, 'bored');
+      expect(night.finalQuality, 'Normal');
     });
 
-    // 釘住日期的測試在 `HISTORY_NIGHTS = 90` 之後才安全：窗格是 30 晚的
-    // 時候，補抓幾晚就會把舊夜晚推出去，這種測試會無預警地紅。
-    test('07-12 是 anxious，而且品質不是最差的那一級', () {
+    test('07-12 是 anxious，而且同一個品質等級裡有別的心情', () {
       final night = nightOf('2026-07-12');
       expect(night, isNotNull, reason: '07-12 不在 history 裡——窗格又滑了');
       expect(night!.petMood, 'anxious');
+
+      // 這才是這一晚存在的理由：**同一個品質等級底下有不同的心情**。
+      // 釘住「它是 Poor」每次分數位移都會紅，而那不是程式壞了；
+      // 改成從資料推導之後，只有拿掉 anxious 覆寫才會讓它紅。
+      final sameQuality = sample.history
+          .where((e) => e.finalQuality == night.finalQuality)
+          .map((e) => e.petMood)
+          .toSet();
       expect(
-        night.finalQuality,
-        'Poor',
-        reason: '這一晚正是「同樣是 Poor，別晚是 tired 而它是 anxious」的例子，'
-            '拿掉的話上面那條反例測試就沒有素材了',
+        sameQuality.length,
+        greaterThan(1),
+        reason: '${night.finalQuality} 這一級底下只剩一種心情，'
+            '「心情不是從品質推出來的」就沒有素材可以證明了',
+      );
+    });
+
+    test('⚠️ anxious 橫跨多個品質等級（所以心情不可能是從品質查表來的）', () {
+      // 實測 83 晚：Good 1、Normal 1、Poor 4、Bad 2 都有 anxious。
+      // 這條紅了代表 Tier3 的生理覆寫實質上失效，或 payload 的來源變了。
+      final levels = sample.history
+          .where((e) => e.petMood == 'anxious')
+          .map((e) => e.finalQuality)
+          .toSet();
+      expect(
+        levels.length,
+        greaterThan(1),
+        reason: 'anxious 全部集中在同一個品質等級的話，'
+            '「照品質查表」會給出一樣的結果，這組測試就守不住任何東西',
       );
     });
 

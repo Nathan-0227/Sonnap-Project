@@ -934,6 +934,23 @@ ANSI/CTA/NSF-2110 並列接受 TIB 與 **TATS**（嘗試入睡的時間）——
 裝置組合因人而異，兩個都是 82 分的夜晚可能由不同項目組成。
 `main.score_composition()` 是**刻意寫的第二份判準**（評分在 pipeline 讀 CSV、
 API 讀資料庫，拿不到同一份資料），由 `tests/test_score_composition.py` 逐夜比對守著。
+
+⚠️ **警語與那段 note 的文字只有一個定義處：`score_claim.py`。**
+三個消費端（API、打包檔、App 畫面）全部照抄它：
+
+| 哪一端 | 怎麼拿到 | 判準寫在哪 |
+|---|---|---|
+| `main.py`（API） | `score_claim.compose(...)` | 從資料庫原始度量**推論**哪幾項有算 |
+| `build_app_payload.py`（打包檔） | 同上 | 直接讀 pipeline 的 `{項目}_score` 是否為 None |
+| `report_screen.dart`（Insights 頁分數卡） | 照抄 payload／API 的字串 | 不判斷，**一個字都不在 Dart 產生** |
+
+⚠️ `build_app_payload.py` **不能 import `main.py`**（反向已經 import 了
+`map_pet_mood`，會循環），這就是文字單獨抽成 `score_claim.py` 的原因。
+⚠️ 打包檔的分項得分只在 `garmin_sleep_quality.json` 裡（`*_final.json` 沒有），
+所以打包腳本要**多讀那一份檔**。
+⚠️ Dart 端刻意**沒有**配分表：`scored_weight` 照抄後端。在 Dart 把
+30+25 加起來就是第二份配分表，而兩份漂移時不會有任何錯誤訊息
+（`app/test/score_composition_test.dart` 有一條守著）。
 ⚠️ 判斷一律用 `is not None` **不可用真假值**——WASO 0 分鐘拿滿分 25、深睡 0 分鐘拿 0 分，
 兩者都是「有測到」。實測真實資料有 **16 晚 WASO 是 0**，用真假值會誤報那 16 晚。
 
@@ -1239,7 +1256,7 @@ python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**406 條全過**，2026-09-13 在 main `cbe93a1` 合併後實測）：
+Flutter（在 `app/` 底下跑，**419 條全過**，2026-10-01 在 `feat/score-claim-and-caveats` 實測）：
 
 ```bash
 flutter test
@@ -1253,7 +1270,8 @@ flutter analyze     # No issues found
 | `lights_out_test.dart` | 就寢時刻偵測的三條規則（見交接區）。含「把 `resumed` 濾掉答案就會壞」的反向對照 |
 | `nightly_uploader_test.dart` | 三種「沒上傳」的原因要分得開；body 不含 `target_bedtime`；達成度照抄後端 |
 | `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
-| `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚） |
+| `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚）。⚠️ 釘住日期的三條在 2026-10-01 改過期望值（效率停止計分後 83 晚分數整批位移：07-12 與 08-09 Poor→Bad、08-23 Good→Normal），**真正要守的那件事改成由資料推導**（anxious 要橫跨多個品質等級），下次分數位移時才不會又無預警地紅 |
+| `score_composition_test.dart` | 分數卡那段警語。四個壞掉時不會報錯的地方：警語文字必須照抄後端（用哨兵字串驗）、`caveats` 與 `unscored` 要分開呈現、`primary_component` 不得寫死成 duration、沒有 `composition` 時整段不顯示（**不准退回「四項等權」那種預設敘述**）。六條都用「把 bug 重新引入、確認測試會紅」驗證過 |
 | `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用（**含反面**：有睡前資料時標題與說明都要換）；沒有後端回應時不得顯示達成度；上床／下床按鈕是**加分項不是取代品**（沒按不得擋住上傳） |
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |

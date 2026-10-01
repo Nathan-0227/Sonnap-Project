@@ -88,6 +88,12 @@ class Scoring {
   /// 規則式建議**原文**。這是事實來源，AI 的 advice 是它的重新配音。
   final String? recommendation;
 
+  /// 這個分數由哪幾項組成，以及哪幾項的門檻效度存疑。
+  ///
+  /// ⚠️ **可以是 null**：舊的打包檔沒有這個欄位。null 時畫面要**什麼都不顯示**，
+  ///    不可以憑空生一個組成清單——那會變成對使用者謊稱分數的可信度。
+  final ScoreComposition? composition;
+
   const Scoring({
     this.finalScore,
     this.finalQuality = 'Normal',
@@ -96,6 +102,7 @@ class Scoring {
     this.sri,
     this.modifierNote,
     this.recommendation,
+    this.composition,
   });
 
   /// UI 的分數環要用整數
@@ -110,7 +117,92 @@ class Scoring {
       sri: (json['sri'] as num?)?.toDouble(),
       modifierNote: json['modifier_note'] as String?,
       recommendation: json['recommendation'] as String?,
+      composition: ScoreComposition.fromJsonOrNull(json['composition']),
     );
+  }
+}
+
+/// 分數由哪幾項組成，以及哪幾項雖然有計分、但門檻效度存疑。
+///
+/// ═══════════════════════════════════════════════════════════════
+/// 為什麼畫面需要這個
+/// ═══════════════════════════════════════════════════════════════
+/// **裝置組合因人而異**：只有手機的人、有手錶的人、手錶加攝影機的人，
+/// 量得到的構念不一樣。評分器對量不到的項目會把配分按比例分給其他項，
+/// 所以兩個都是「82 分」的夜晚**可能由不同的項目組成**。
+///
+/// 而且四項的可信度並不相同——只有睡眠時長的裝置誤差明確小於它的判讀級距
+/// （偏差約 17 分鐘 vs 級距 120 分鐘）。WASO 的級距只有 15 分鐘，
+/// 而裝置誤差就有 13~24 分鐘。完整依據見
+/// `Research-Background/Garmin手錶分數.md` 的 I-0 與 E-3～E-6。
+///
+/// ⚠️ **一個字都不在 Dart 這邊產生。** `caveats` 的文字、`primaryComponent`
+///    是哪一項，全部照抄後端（`score_claim.py` 是唯一定義處）。
+///    在這裡自己寫警語就會有第二份說法，而兩份漂移時不會有任何錯誤訊息。
+class ScoreComposition {
+  /// 這一晚真的有算分的項目（後端的順序，Dart 不重排）
+  final List<String> scored;
+
+  /// 沒算分的項目與原因
+  final List<ScoreComponentNote> unscored;
+
+  /// 有算分項目的配分總和（滿分 100 中的多少）
+  final int scoredWeight;
+
+  /// 這個分數以哪一項為主。⚠️ 有值代表「**不是**四項等權合成」。
+  final String? primaryComponent;
+
+  /// 有計分、但門檻效度存疑的項目。
+  /// ⚠️ 與 [unscored] 是不同的兩件事：unscored 是「沒測到」，
+  ///    caveats 是「測到了也算了，但門檻能不能套上證據不足」。
+  final List<ScoreComponentNote> caveats;
+
+  final String? note;
+
+  const ScoreComposition({
+    this.scored = const [],
+    this.unscored = const [],
+    this.scoredWeight = 0,
+    this.primaryComponent,
+    this.caveats = const [],
+    this.note,
+  });
+
+  /// 舊的 payload 沒有這個欄位 → 回 null，畫面就什麼都不顯示。
+  static ScoreComposition? fromJsonOrNull(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = raw.cast<String, dynamic>();
+    return ScoreComposition(
+      scored: (json['scored'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(growable: false),
+      unscored: ScoreComponentNote.listFrom(json['unscored'], 'reason'),
+      scoredWeight: (json['scored_weight'] as num?)?.toInt() ?? 0,
+      primaryComponent: json['primary_component'] as String?,
+      caveats: ScoreComponentNote.listFrom(json['caveats'], 'caveat'),
+      note: json['note'] as String?,
+    );
+  }
+}
+
+/// 某一個計分項目的附註（沒算的原因，或有算但要注意的限制）。
+class ScoreComponentNote {
+  final String component;
+  final String text;
+
+  const ScoreComponentNote(this.component, this.text);
+
+  /// [textKey] 是後端放說明文字的鍵名：unscored 用 `reason`、caveats 用 `caveat`。
+  static List<ScoreComponentNote> listFrom(dynamic raw, String textKey) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => ScoreComponentNote(
+              e['component']?.toString() ?? '',
+              e[textKey]?.toString() ?? '',
+            ))
+        .where((e) => e.component.isNotEmpty && e.text.isNotEmpty)
+        .toList(growable: false);
   }
 }
 
