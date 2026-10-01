@@ -439,6 +439,14 @@ class _ReportScreenState extends State<ReportScreen>
                   if (_home?.behavior != null)
                     const SizedBox(height: 14),
 
+                  // 手錶實測 ÷ 自述臥床。與熬夜比率同樣來自 `/home` 的
+                  // behavior 區塊，所以放在一起；舊版後端沒有這個欄位時
+                  // 整張卡不出現（見該函式）。
+                  _buildMeasuredEfficiencyCard(),
+
+                  if (_home?.behavior?.measuredEfficiencyNote != null)
+                    const SizedBox(height: 14),
+
                   _buildChallengesCard(),
 
                   const SizedBox(height: 14),
@@ -824,7 +832,52 @@ class _ReportScreenState extends State<ReportScreen>
           _buildSleepStats(
             validHistory,
           ),
+
+          // 這段期間裡的夜晚不一定都算了同樣多項。
+          _buildCompositionSpread(
+            validHistory,
+          ),
         ],
+      ),
+    );
+  }
+
+  /// 「這幾晚分別算了 100 分裡的幾分」——只在**真的不一致時**出現。
+  ///
+  /// 這一行要講的就是「這幾晚彼此不可比」，所以全部一致時印它等於喊狼來了，
+  /// 下次真的不一致時就沒人看了。實測 83 晚裡有 14 晚手錶沒測到 REM，
+  /// 那些夜晚是在三項上重新正規化的 → 選「全部」就會看到這一行。
+  ///
+  /// ⚠️ 這裡只對**畫面上已經有的數字**取最小與最大，不重算任何配分、
+  ///    也不改寫警語的措辭。「為什麼不可比」由分數卡那段後端原文負責解釋，
+  ///    這一行只負責指出「這裡真的發生了」，並指回去那一段。
+  Widget _buildCompositionSpread(
+    List<HistoryEntry> history,
+  ) {
+    final weights = history
+        .map((e) => e.composition?.scoredWeight)
+        .whereType<int>()
+        .where((w) => w > 0)
+        .toSet();
+
+    if (weights.length < 2) {
+      return const SizedBox.shrink();
+    }
+
+    final low = weights.reduce(math.min);
+    final high = weights.reduce(math.max);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Text(
+        'These nights are scored on $low-$high of 100 points, '
+        'depending on what each night measured - see '
+        '"$_compositionToggleLabel" above.',
+        style: const TextStyle(
+          color: Color(0xFF8498B7),
+          fontSize: 9,
+          height: 1.4,
+        ),
       ),
     );
   }
@@ -989,6 +1042,23 @@ class _ReportScreenState extends State<ReportScreen>
                         fontSize: 8.5,
                       ),
                     ),
+                ],
+
+                // 這一晚的分數是在**幾項**上算出來的。
+                // ⚠️ 數字照抄後端的 `scored_weight`，不在這裡把分項的配分
+                //    加總——Dart 端刻意沒有配分表（見 _ScoreCompositionNote）。
+                // ⚠️ 放在 `mood` 的 if 外面：沒有心情的夜晚也要看得到。
+                if (entry.composition != null &&
+                    entry.composition!.scoredWeight > 0) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'Scored on '
+                    '${entry.composition!.scoredWeight} of 100 pts',
+                    style: const TextStyle(
+                      color: Color(0xFF8296B7),
+                      fontSize: 8.5,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -2227,6 +2297,113 @@ class _ReportScreenState extends State<ReportScreen>
                 fontSize: 9,
                 height: 1.4,
               ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // MEASURED SLEEP EFFICIENCY
+  // ============================================================
+
+  /// 手錶實測的睡眠效率（`GET /home` 的 `behavior.measured_efficiency`）。
+  ///
+  /// ## 為什麼這張卡存在
+  ///
+  /// App 裡有**四個**東西叫「睡眠效率」，而只有這一個的分母符合
+  /// Ohayon 2017／ANSI-2110 那個 ≥85% 門檻所要求的量（嘗試入睡的時間，
+  /// 含入睡潛伏期）。手錶自己給的那個分母是「起床 − 入睡」，不含潛伏期，
+  /// 所以 2026-10-01 起**停止計分**了。這一個是替代的呈現，不是替代的計分。
+  ///
+  /// ⚠️ 三件事缺一不可，缺了就會被讀成另一個量：
+  ///   1. **不計分**——後端的 note 原文就這麼寫，照抄，不要改寫成「參考值」。
+  ///   2. **分母是自述的**（使用者自己按的那兩個按鈕）。
+  ///   3. **算不出來時顯示後端給的原因**，不要畫 0%、也不要留白。
+  ///      最常見的原因是「那一晚沒按按鈕」，而那是使用者唯一改得了的事。
+  ///
+  /// ⚠️ **Dart 不重算這個百分比**，見 [BehaviorSummary.measuredEfficiency]。
+  Widget _buildMeasuredEfficiencyCard() {
+    final result = _home;
+    final summary = result?.behavior;
+    if (result == null ||
+        result.status != HomeStatus.ok ||
+        summary == null) {
+      return const SizedBox.shrink();
+    }
+
+    // 後端沒給 note 代表這個欄位還不在它的回應裡（舊版後端）→ 整張卡不出現。
+    final note = summary.measuredEfficiencyNote;
+    if (note == null || note.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final value = summary.measuredEfficiency;
+    final basis = summary.measuredEfficiencyBasis;
+
+    return _insightCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.bedtime_rounded,
+                color: blueColor,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              const Expanded(
+                child: Text(
+                  'Sleep Efficiency (measured)',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Text(
+                'from backend',
+                style: TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          if (value == null)
+            // 原因照抄後端。⚠️ 不要在這裡改成「尚無資料」——
+            //    「沒按按鈕」與「沒戴錶」要分得開，使用者只改得了前者。
+            _NoDataMessage(message: note)
+          else ...[
+            Text(
+              '${value.toStringAsFixed(1)}%',
+              style: const TextStyle(
+                color: blueColor,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              note,
+              style: const TextStyle(
+                color: Color(0xFF9FB3D1),
+                fontSize: 9,
+                height: 1.45,
+              ),
+            ),
+          ],
+
+          // ⚠️ basis 不能省：這個 App 同時可能顯示三、四個叫「效率」的數字，
+          //    只讀數字不讀 basis 就會把它們混為一談。
+          if (basis != null && basis.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Basis: $basis',
+              style: const TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
             ),
           ],
         ],

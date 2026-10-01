@@ -43,11 +43,34 @@ class BehaviorSummary {
   /// 後端往回看幾天。用來誠實地講「最近 N 天裡有 M 晚有記錄」。
   final int windowDays;
 
+  /// 手錶實測總睡眠 ÷ 使用者自述的「嘗試入睡」區間（TATS），**百分比**。
+  ///
+  /// ⚠️ **null 是常態，而且不是 0%。** 要同時有手錶資料與「開始睡覺／
+  ///    結束睡覺」兩個按鈕才算得出來。null 時畫面要顯示
+  ///    [measuredEfficiencyNote]（後端寫的原因），最常見的原因正是
+  ///    「那一晚沒按按鈕」——那是使用者唯一改得了的事。
+  /// ⚠️ **這個數字不進任何分數**，而且分母是**自述的**。
+  ///    App 裡同時存在三、四個叫「效率」的數字，只有 [measuredEfficiencyBasis]
+  ///    與 [measuredEfficiencyNote] 分得開它們，所以**兩個都不能省**。
+  /// ⚠️ **Dart 不重算它。** 分子在 `wearable_nightly`、分母在
+  ///    `nightly_behavior`，後端在讀取時 join（`behavior/sleep_efficiency.py`），
+  ///    因為兩張表的寫入時機不固定。在這裡自己乘一次就有第二個定義處。
+  final double? measuredEfficiency;
+
+  /// 分子分母各自是什麼的機器可讀標籤（例：`watch_tst__phone_tats`）。
+  final String? measuredEfficiencyBasis;
+
+  /// 給人看的那句說明；算不出來時它是**原因**。兩種情況都照抄，不要改寫。
+  final String? measuredEfficiencyNote;
+
   const BehaviorSummary({
     required this.lateNightRatio,
     required this.lateNights,
     required this.recordedNights,
     required this.windowDays,
+    this.measuredEfficiency,
+    this.measuredEfficiencyBasis,
+    this.measuredEfficiencyNote,
   });
 
   factory BehaviorSummary.fromJson(
@@ -61,6 +84,12 @@ class BehaviorSummary {
       lateNights: (behavior['late_nights'] as num?)?.toInt() ?? 0,
       recordedNights: (behavior['recorded_nights'] as num?)?.toInt() ?? 0,
       windowDays: windowDays,
+      // ⚠️ 同樣照抄，同樣不要 `?? 0`：算不出來與 0% 是兩件事。
+      measuredEfficiency:
+          (behavior['measured_efficiency'] as num?)?.toDouble(),
+      measuredEfficiencyBasis:
+          behavior['measured_efficiency_basis'] as String?,
+      measuredEfficiencyNote: behavior['measured_efficiency_note'] as String?,
     );
   }
 }
