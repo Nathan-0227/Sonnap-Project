@@ -254,6 +254,16 @@ check_true("睡眠比臥床長：兩個時長都要出現（換算成時分）",
            "8 h 40 m" in NOTES["睡眠比臥床長"]
            and "7 h 2 m" in NOTES["睡眠比臥床長"])
 
+# ⑥ ⚠️ **不得斷定使用者按錯**。2026-09-20 實測那一晚兩個標記都是誠實的，
+#    是本人按完 Out of bed 之後又睡著（手錶多記錄 148 分鐘）。
+#    說「標記是錯的」會讓使用者不敢相信自己按的紀錄，而那正是我們要他每天按的東西。
+leak = NOTES["睡眠比臥床長"].lower()
+check_true("睡眠比臥床長：不得斷定標記按錯了",
+           "probably off" not in leak and "wrong" not in leak
+           and "incorrect" not in leak)
+check_true("睡眠比臥床長：要提出最可能的無辜解釋（又睡著了）",
+           "fallen asleep again" in leak)
+
 # ⑥ 算得出來的那句**必須講「不進分數」**。這個數字看起來就像一般的睡眠
 #    效率，少了那半句，使用者會以為它影響了分數。
 check_true("算得出來：要說它不影響分數",

@@ -280,10 +280,18 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
     if tst - tats > MAX_SLEEP_OVER_TATS_MINUTES:
         # ⚠️ 兩個時長都要講出來，使用者才看得出是哪一邊不對勁。
         #    **不要只說「資料有誤」**——那等於要人家自己去猜。
+        #
+        # ⚠️ **不要斷定「標記按錯了」。** 2026-09-20 實測：使用者早上 11:05
+        #    按了 Out of bed，手錶卻一路記錄到 13:34（多 148 分鐘）——
+        #    本人說明是「關掉之後又不小心睡著」。那一晚**兩個標記都是誠實的**，
+        #    是人真的又睡了。先前這裡寫「其中一個標記大概是錯的」，
+        #    對那一晚而言是錯的診斷，而且會讓使用者不敢相信自己按的紀錄。
+        #    → 只陳述事實 + 提出最可能的無辜解釋，把判斷留給使用者。
         return blank(
-            f"Your watch recorded {_hm(tst)} of sleep, but the window you "
-            f"marked is only {_hm(tats)} long. One of the two bed marks is "
-            f"probably off, so no figure is shown for this night."
+            f"Your watch recorded {_hm(tst)} of sleep, which is longer than "
+            f"the {_hm(tats)} window you marked - you may have fallen asleep "
+            f"again after tapping Out of bed. No figure is shown for this "
+            f"night."
         )
 
     return {
