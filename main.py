@@ -714,6 +714,10 @@ async def get_home(
             **sleep_efficiency.measured_efficiency(
                 (w_row or {}).get("duration_min"),
                 b_row["time_in_bed_minutes"] if b_row else None,
+                # ⚠️ 標記本身也要給：算不出來時，「沒按」與「按了但那一對
+                #    不能用」要講不同的話（10-01 實測兩下差 1.8 秒）。
+                b_row["bed_start_at"] if b_row else None,
+                b_row["bed_end_at"] if b_row else None,
             ),
             # ⚠️ 並列的第二個：結束時刻改用**手錶認定的起床**，所以忘了按
             #    Out of bed 的夜晚也算得出來（實測 3 晚 → 6 晚）。
@@ -877,6 +881,8 @@ async def get_insights(
                     **sleep_efficiency.measured_efficiency(
                         (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
                         r["time_in_bed_minutes"],
+                        r["bed_start_at"],
+                        r["bed_end_at"],
                     ),
                     # 並列的第二個，理由同 /home。
                     **sleep_efficiency.watch_wake_efficiency(

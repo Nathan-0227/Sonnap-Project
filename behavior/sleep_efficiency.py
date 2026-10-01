@@ -244,12 +244,33 @@ def _hm(minutes):
     return f"{h} h {m} m" if h else f"{m} m"
 
 
-def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
+def _gap_text(minutes):
+    """
+    兩個標記之間的距離，給人讀。不到一分鐘要講成秒——10-01 那次是 **1.8 秒**，
+    寫成「0 m」會讓人以為是程式壞了而不是自己誤觸。
+    """
+    if minutes < 1:
+        return f"{round(minutes * 60)} seconds"
+    return _hm(minutes)
+
+
+def measured_efficiency(total_sleep_minutes, time_in_bed_minutes,
+                        bed_start_at=None, bed_end_at=None):
     """
     手錶實測睡眠 ÷ 自述臥床（TATS）。回傳 dict；算不出來時每個數值欄位是 None。
 
     total_sleep_minutes：手錶量到的總睡眠（`wearable_nightly.total_sleep_minutes`）
     time_in_bed_minutes：evaluate_efficiency() 算好的臥床分鐘數（結束 − 開始）
+    bed_start_at / bed_end_at：那兩個標記本身。**只用來把話講對**，不參與計算。
+
+    ⚠️ 為什麼要多收這兩個參數（2026-10-02）：`time_in_bed_minutes` 是 None 時
+       有兩種完全不同的情況，而光看 None 分不出來——
+         ① 真的沒按
+         ② 按了，但那一對被 evaluate_efficiency 判為不可用
+            （10-01 實測：兩下只差 1.8 秒）
+       舊版一律講「You didn't mark this night」，對 ② 是**假話**。
+       而且實機上它與並列的第二個效率同時出現，那一塊正說著
+       「getting into bed 到 waking up 之間有 1 分鐘」——兩句話當場打架。
 
     ⚠️ **純函式，不讀資料庫、不 import 評分層。** 兩份資料分別來自
        nightly_behavior 與 wearable_nightly，而它們的寫入時機不固定
@@ -280,10 +301,32 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
             "nothing to compare your bed marks with."
         )
     if not time_in_bed_minutes:
+        start, end = _wall(_parse(bed_start_at)), _wall(_parse(bed_end_at))
+        if start is None or end is None:
+            # ① 真的沒按（或只按了一個）→ 講得出可以怎麼做。
+            return blank(
+                "You didn't mark this night. Tap Start sleep when you get "
+                "into bed and Out of bed when you get up, and this can be "
+                "worked out for you."
+            )
+
+        gap = (end - start).total_seconds() / 60.0
+        if 0 <= gap < MIN_TIME_IN_BED_MINUTES:
+            # ② 按了，但兩下太近（10-01 實測 1.8 秒）。
+            # ⚠️ 門檻用的是同一個 MIN_TIME_IN_BED_MINUTES，不是另外訂一個——
+            #    另訂就會出現「這裡說可以用、那裡說不能用」。
+            return blank(
+                f"Your two marks for this night are only {_gap_text(gap)} "
+                f"apart, so there is no window to measure. Tap Start sleep "
+                f"when you get into bed and Out of bed when you get up."
+            )
+
+        # ③ 標記在、間隔也夠，但臥床時間仍然算不出來——成因在手機那一側
+        #    （例如最後一次用手機的時刻落在「下床」之後）。這種少見，
+        #    但**不可以講成「你沒有標記」**。
         return blank(
-            "You didn't mark this night. Tap Start sleep when you get into "
-            "bed and Out of bed when you get up, and this can be worked out "
-            "for you."
+            "Your marks for this night could not be lined up with when you "
+            "last used your phone, so no figure is shown for this night."
         )
 
     tst = float(total_sleep_minutes)

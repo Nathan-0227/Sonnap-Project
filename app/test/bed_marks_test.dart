@@ -216,6 +216,42 @@ void main() {
     test('沒有 pending 時回 none，不是丟例外', () async {
       expect((await marks.readPending(now: n2s)).isComplete, isFalse);
     });
+
+    // 2026-10-02 實機：09-20 那一對在手機上卡了十二天。上傳時後端沒回報
+    // 收下（marksStored 是 false），清除條件因此一直沒成立，而
+    // readPending 只是「不採用」它，沒有刪掉。
+    test('🔴 放超過 kPendingDiscardAfter 就從儲存裡刪掉，不是只忽略', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+      final ancient = n1s.add(kPendingDiscardAfter + const Duration(hours: 1));
+
+      expect((await marks.readPending(now: ancient)).isComplete, isFalse);
+      expect(await kv.getString(kBedPendingStartKey), isNull,
+          reason: '只「當作沒有」的話，它會永遠留在手機上');
+      expect(await kv.getString(kBedPendingEndKey), isNull);
+    });
+
+    test('⚠️ 只是過期（還沒到刪除門檻）→ 不採用，但**不可以刪**', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+      final stale = n1s.add(kBedMarkMaxAge + const Duration(minutes: 1));
+
+      expect((await marks.readPending(now: stale)).isComplete, isFalse);
+      expect(await kv.getString(kBedPendingStartKey), isNotNull,
+          reason: '刪掉是不可逆的。萬一是時鐘／時區讓它看起來過期，'
+              '36 小時就刪會把真的資料銷毀');
+    });
+
+    test('⚠️ 反向對照：還沒過期的那一對不得被刪', () async {
+      await marks.markStart(n1s);
+      await marks.markEnd(n1e);
+      await marks.markStart(n2s);
+
+      expect((await marks.readPending(now: n2s)).isComplete, isTrue);
+      expect(await kv.getString(kBedPendingStartKey), isNotNull);
+    });
   });
 }
 

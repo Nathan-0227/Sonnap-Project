@@ -272,6 +272,48 @@ check_true("算得出來：要說它不影響分數",
            "never affects your sleep score" in NOTES["算得出來"])
 
 # ═══════════════════════════════════════════════════════════════════
+# 【6d】「沒按」與「按了但那一對不能用」必須講不同的話（2026-10-02）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 10-01 實機截圖抓到的：卡片上半說「You didn't mark this night」，
+# 下半（並列的第二個效率）同時說「getting into bed 到 waking up 之間有 1 分鐘」
+# ——**兩句話當場打架**，而使用者其實有按，只是兩下差 1.8 秒。
+# 對②講「你沒有標記」是假話，而且會讓人以為按鈕沒作用。
+print()
+print("【6d】算不出來的三種情況要分得開")
+
+none_at_all = measured_efficiency(300, None)["measured_efficiency_note"]
+mistap = measured_efficiency(
+    242, None, "2026-10-01T09:03:43", "2026-10-01T09:03:44.864794",
+)["measured_efficiency_note"]
+unusable = measured_efficiency(
+    300, None, "2026-09-20T04:03:22", "2026-09-20T11:05:33",
+)["measured_efficiency_note"]
+
+check_true("① 完全沒按：要說「你沒有標記這一晚」",
+           "didn't mark this night" in none_at_all)
+check_true("② 按了但兩下太近：**不得**說成沒有標記",
+           "didn't mark this night" not in mistap)
+check_true("② 要講出兩個標記差多久（1.8 秒要講成秒，不是「0 m」）",
+           "2 seconds apart" in mistap)
+check_true("② 仍然要講得出可以怎麼做",
+           "Tap Start sleep" in mistap and "Out of bed" in mistap)
+check_true("③ 標記在、間隔也夠，但對不起來：三種話都不一樣",
+           unusable not in (none_at_all, mistap)
+           and "didn't mark this night" not in unusable)
+check_true("⚠️ 三句互不相同（任何兩種情況講一樣的話就等於沒分）",
+           len({none_at_all, mistap, unusable}) == 3)
+
+# 不給標記時要退回舊行為（呼叫端還沒傳的話不能爆）
+check_true("沒傳標記參數時照舊（向後相容）",
+           measured_efficiency(300, None)["measured_efficiency"] is None)
+
+# 這三句同樣是給人讀的
+for label, note in {"①": none_at_all, "②": mistap, "③": unusable}.items():
+    check_true(f"{label} 沒有欄位名洩漏到畫面上", "_" not in note)
+    check_true(f"{label} 不說「the user」", "the user" not in note.lower())
+
+# ═══════════════════════════════════════════════════════════════════
 # 【6c】watch_wake_efficiency：結束時刻改用手錶的（2026-10-02 新增）
 # ═══════════════════════════════════════════════════════════════════
 #

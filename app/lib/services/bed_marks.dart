@@ -20,6 +20,13 @@ const String kBedPendingEndKey = 'bed_pending_end_at';
 /// 36 小時涵蓋得到「昨晚按的、今晚才上傳」，又擋得掉更久以前的。
 const Duration kBedMarkMaxAge = Duration(hours: 36);
 
+/// 待送的那一對放多久之後**從儲存裡刪掉**（不只是不採用）。
+///
+/// ⚠️ 刻意遠大於 [kBedMarkMaxAge]：超過 36 小時只是「不拿來用」，
+/// 刪掉卻是不可逆的。留這麼寬的間距，是為了讓「時鐘／時區讓一對正常的
+/// 標記看起來過期」這種情況不會把真的資料銷毀。
+const Duration kPendingDiscardAfter = Duration(days: 7);
+
 /// 「下床」按得比實際起床晚多久，還算說得通。
 ///
 /// ⚠️ **忘記按是常態，不是例外。** 2026-09-08 實測：08:20 起床、12:11 才
@@ -118,7 +125,20 @@ class BedMarkStore {
     if (start == null || end == null || !end.isAfter(start)) {
       return BedMarks.none;
     }
-    if (at.difference(start) > kBedMarkMaxAge) return BedMarks.none;
+    if (at.difference(start) > kBedMarkMaxAge) {
+      // 早就不會被採用了，但**還留在儲存裡**。2026-10-02 在實機上看到
+      // 09-20 那一對卡在這裡十二天：上傳時後端沒回報收下（`marksStored`
+      // 是 false），清除條件因此一直沒成立。
+      //
+      // ⚠️ 不在 [kBedMarkMaxAge] 一到就刪，要再等到 [kPendingDiscardAfter]。
+      //    刪掉是不可逆的；萬一哪天是時鐘或時區讓一對正常的標記「看起來」
+      //    過期，36 小時就刪會把真的資料銷毀，而留著只是佔位子。
+      //    七天遠超過任何合理的時鐘偏差，又能讓它不要無限期堆在那裡。
+      if (at.difference(start) > kPendingDiscardAfter) {
+        await clearPending();
+      }
+      return BedMarks.none;
+    }
     return BedMarks(startAt: start, endAt: end);
   }
 
