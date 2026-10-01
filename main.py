@@ -48,6 +48,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import db
+import score_claim
 from behavior import (adherence, challenges as challenge_engine, pet_state,
                       sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
@@ -255,67 +256,15 @@ def _row_for(rows: List[dict], target_date: Optional[str]) -> Optional[dict]:
 # ⚠️ 判斷一律用 `is not None`，**不可用真假值**：WASO 0 分鐘會拿滿分 25、
 #    深睡 0 分鐘會拿 0 分，兩者都是「有測到」。用真假值會把它們誤判成沒資料。
 
-SCORE_COMPONENT_WEIGHTS = {"duration": 30, "efficiency": 25, "waso": 25, "deep": 10, "rem": 10}
-
-# 效率為什麼不計分。與 evaluate_sleep_quality.EFFICIENCY_SCORING_ENABLED 同一件事，
-# 這裡只是把理由講給 API 的使用者聽（完整分析見 Garmin手錶分數.md B-3～B-6）。
-EFFICIENCY_UNSCORED_REASON = (
-    "the only sleep-efficiency figure this watch can produce divides by "
-    "(wake - sleep onset), which excludes the time spent awake in bed. The >=85% "
-    "threshold it would be compared against is defined for time in bed, so the "
-    "two are different constructs. Shown for information, never scored."
-)
-
-# ═══════════════════════════════════════════════════════════════════
-# 這個分數宣稱自己是什麼（2026-10-01 使用者決定）
-# ═══════════════════════════════════════════════════════════════════
+# 宣稱、警語、配分與輸出形狀全部集中在 score_claim.py。
+# ⚠️ 為什麼不寫在這裡：build_app_payload.py 也要輸出同一組文字，而它
+#    **不能 import main.py**（main.py 反過來 import 了它，會循環）。
+#    文字複製兩份的話，改一邊沒改另一邊，使用者會在 App 與 API 看到
+#    不同的警語，而且不會有任何錯誤訊息。
 #
-# 舊的宣稱是「多維度合成的睡眠品質分數」。2026-10-01 逐項查證後改成
-# **以睡眠時長為主、其他維度為輔**——理由是四個計分項裡，只有睡眠時長的
-# 裝置誤差明確小於它的判讀級距：
-#
-#   分項      級距寬度（換算成分鐘）   已知裝置偏差        偏差÷級距
-#   duration  120 分（7–9 小時）      −16.9 分           14%   ✅
-#   waso       15 分                  +13.3~24.1 分      89–161%  🔴
-#   deep       42 分（13–23% of 7h）  高估，量級不明      算不出來 ⚠️
-#   rem        21 分（20–25% of 7h）  低估，量級不明      算不出來 ⚠️
-#
-# 關鍵是**級距寬度差了 8 倍**：同樣約 17 分鐘的誤差對 duration 無關痛癢，
-# 對 WASO 是致命的。完整分析見 Garmin手錶分數.md E-3～E-6 與 I 節。
-#
-# ⚠️ 這是「改宣稱」不是「改結構」——分項、配分、程式一個都沒動。
-#    要回到「多維度合成」的宣稱，需要一次效標驗證（本專案這支
-#    Vivoactive 3 對照參考標準，一次量出三項的偏差），**外加**把
-#    30/25/10/10 這組權重本身 justify——I 節自己承認那組權重是
-#    設計決策而非文獻推導。所以「回去」比現狀更嚴格，不是回到原點。
-
-PRIMARY_SCORE_COMPONENT = "duration"
-
-# 有計分、但門檻效度存疑的分項。**這不是「沒測到」**（那個走 unscored），
-# 是「測到了、也照門檻算了，但那個門檻能不能套在這支錶的量測上，證據不足」。
-#
-# ⚠️ duration 刻意不在這裡：它的偏差（−16.9 分）只佔級距（120 分）的 14%，
-#    是唯一誤差明確小於級距的分項。如果每一項都掛警語，警語就沒有意義了。
-SCORED_COMPONENT_CAVEATS = {
-    "waso": (
-        "the device's own wake-detection error is as large as the whole "
-        "band this is graded on (bias +13 to +24 min in a meta-analysis of "
-        "consumer wrist devices, versus a 15-min band for young adults), so "
-        "which band a night falls into is driven partly by device error. "
-        "The age trend itself is literature-backed."
-    ),
-    "deep": (
-        "consumer wrist devices are 60-75% accurate at four-class sleep "
-        "staging and are known to over-report deep sleep; no pooled bias in "
-        "minutes is available, so the size of the error is unquantified."
-    ),
-    "rem": (
-        "consumer wrist devices are 60-75% accurate at four-class sleep "
-        "staging and are known to under-report REM - this watch reports zero "
-        "REM on some nights, which are excluded rather than scored as poor."
-    ),
-}
-
+# ⚠️ 「哪幾項有算」的**判準**留在下面那支函式裡（從資料庫的原始度量推論），
+#    與 build_app_payload 那份（直讀 pipeline 的分項得分）刻意各寫一份，
+#    由 tests/test_score_composition.py 逐夜比對守著。
 
 def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
     """
@@ -328,45 +277,18 @@ def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
     if not wearable_row:
         return None
 
+    # ⚠️ 判斷一律用 `is not None`，**不可用真假值**：WASO 0 分鐘會拿滿分 25、
+    #    深睡 0 分鐘會拿 0 分，兩者都是「有測到」。用真假值會把它們誤判成沒資料
+    #    （實測真實資料有 16 晚 WASO 是 0）。
     present = {
         "duration": wearable_row.get("duration_min") is not None,
-        "efficiency": False,                      # 見 EFFICIENCY_UNSCORED_REASON
+        # 效率一律不算，見 score_claim.EFFICIENCY_UNSCORED_REASON
+        "efficiency": False,
         "waso": wearable_row.get("waso_min") is not None,
         "deep": wearable_row.get("deep_min") is not None,
         "rem": bool(wearable_row.get("rem_measured")),
     }
-    scored = [k for k, v in present.items() if v]
-    unscored = [
-        {
-            "component": k,
-            "reason": EFFICIENCY_UNSCORED_REASON if k == "efficiency"
-            else "not measured on this night",
-        }
-        for k, v in present.items() if not v
-    ]
-    return {
-        "scored": scored,
-        "unscored": unscored,
-        "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in scored),
-        # ⚠️ 這個分數**不是**多維度等權的合成，它以睡眠時長為主。
-        #    只回 scored 清單會讓人以為四項的可信度一樣——並不是。
-        "primary_component": PRIMARY_SCORE_COMPONENT,
-        # 有計分但門檻效度存疑的分項。與 unscored 是不同的兩件事：
-        # unscored = 沒測到；caveats = 測到了也算了，但門檻能不能套上證據不足。
-        "caveats": [
-            {"component": k, "caveat": SCORED_COMPONENT_CAVEATS[k]}
-            for k in scored if k in SCORED_COMPONENT_CAVEATS
-        ],
-        "note": (
-            "The score is renormalised to 100 over the components that were "
-            "measurable on this night, so a night scored on fewer components is "
-            "not directly comparable with one scored on more. Which components "
-            "are available depends on the devices the user has. This is a "
-            "duration-primary score, not an equally-weighted composite: sleep "
-            "duration is the only component whose device measurement error is "
-            "clearly smaller than the band it is graded on. See 'caveats'."
-        ),
-    }
+    return score_claim.compose(k for k, v in present.items() if v)
 
 
 # ═══════════════════════════════════════════════════════════════════

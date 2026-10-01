@@ -209,6 +209,69 @@ ok("note 要說明這是以時長為主、不是等權合成",
 
 print()
 print("=" * 78)
+print("【6】打包檔的 composition 必須與評分器一致（2026-10-01 新增）")
+print("=" * 78)
+# 分數組成現在有**三個地方**在講同一件事：
+#   評分器（真相）      evaluate_night() 的 *_score 是不是 None
+#   打包檔（原樣傳遞）  build_app_payload.composition_for() 直讀那些 *_score
+#   API（推論）        main.score_composition() 從資料庫的原始度量推論
+#
+# 【1】守的是「API 推論 vs 評分器」。這一條守的是「打包檔 vs 評分器」。
+# ⚠️ 為什麼打包檔也要守：它雖然是原樣傳遞、理論上不會錯，但**欄位名打錯
+#    一個字就會變成「全部都沒算」**，而那看起來完全正常（composition 還是
+#    回一個合法的 dict，只是 scored 是空的）。
+#
+# ⚠️ 打包檔必須帶 composition 的理由（不是可有可無）：首頁分數來自打包檔，
+#    警語若改從 API 撈，兩者可能講不同的夜晚——CLAUDE.md 明列的那種
+#    「App 顯示的跟 API 回傳的對不上」最難查的 bug。
+
+PAYLOAD = ROOT / "app" / "assets" / "data" / "app_payload.json"
+if not PAYLOAD.exists():
+    print("  - 跳過（app_payload.json 不存在，先跑 python build_app_payload.py）")
+else:
+    import json
+    payload = json.load(io.open(PAYLOAD, encoding="utf-8"))
+    truth_by_date = {}
+    for feat in rows:
+        graded = ev.evaluate_night(feat)
+        truth_by_date[feat["date"]] = {
+            k for k in ("duration", "efficiency", "waso", "deep", "rem")
+            if graded[k + "_score"] is not None
+        }
+
+    hist = payload.get("history") or []
+    ok("history 逐夜都有 composition",
+       bool(hist) and all(r.get("composition") for r in hist),
+       f"{len(hist)} 晚")
+
+    mismatch = [
+        (r["date"], sorted(truth_by_date[r["date"]]), sorted(r["composition"]["scored"]))
+        for r in hist
+        if r.get("composition") and r["date"] in truth_by_date
+        and set(r["composition"]["scored"]) != truth_by_date[r["date"]]
+    ]
+    check("打包檔與評分器不一致的夜晚數", len(mismatch), 0)
+    for m in mismatch[:5]:
+        print(f"      {m[0]}  評分器 {m[1]}  打包檔 {m[2]}")
+
+    ok("打包檔的 scored 不可以是空的（欄位名打錯就會這樣）",
+       all(r["composition"]["scored"] for r in hist if r.get("composition")))
+
+    # 反向對照：樣本裡真的要有兩種組成，否則上面兩條可能假性通過
+    kinds = {tuple(r["composition"]["scored"]) for r in hist if r.get("composition")}
+    ok("反向對照：打包檔裡有 2 種以上的組成", len(kinds) >= 2,
+       f"{len(kinds)} 種")
+
+    top = payload.get("scoring", {}).get("composition")
+    ok("scoring.composition 也要有（首頁分數讀這個）", bool(top))
+    if top:
+        check("最上層的 primary_component", top["primary_component"], "duration")
+        # ⚠️ 最上層講的必須是**最新那一晚**，不是隨便一晚
+        ok("最上層的組成與 history 最後一晚相同",
+           hist and top["scored"] == hist[-1]["composition"]["scored"])
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)
