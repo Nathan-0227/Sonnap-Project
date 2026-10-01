@@ -715,6 +715,15 @@ async def get_home(
                 (w_row or {}).get("duration_min"),
                 b_row["time_in_bed_minutes"] if b_row else None,
             ),
+            # ⚠️ 並列的第二個：結束時刻改用**手錶認定的起床**，所以忘了按
+            #    Out of bed 的夜晚也算得出來（實測 3 晚 → 6 晚）。
+            #    **兩個都要回**：它們的分母不一樣，少了任何一個，前端就只能
+            #    拿到半邊的事實。各自帶 basis，不會被混為一談。
+            **sleep_efficiency.watch_wake_efficiency(
+                (w_row or {}).get("duration_min"),
+                b_row["bed_start_at"] if b_row else None,
+                (w_row or {}).get("wake_time"),
+            ),
             "late_night_ratio": ratio,
             "late_nights": late_nights,
             "recorded_nights": recorded,
@@ -868,6 +877,12 @@ async def get_insights(
                     **sleep_efficiency.measured_efficiency(
                         (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
                         r["time_in_bed_minutes"],
+                    ),
+                    # 並列的第二個，理由同 /home。
+                    **sleep_efficiency.watch_wake_efficiency(
+                        (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
+                        r["bed_start_at"],
+                        (_row_for(wearable_rows, r["date"]) or {}).get("wake_time"),
                     ),
                 }
                 for r in behavior_rows

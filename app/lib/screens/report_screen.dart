@@ -2342,6 +2342,11 @@ class _ReportScreenState extends State<ReportScreen>
     final value = summary.measuredEfficiency;
     final basis = summary.measuredEfficiencyBasis;
 
+    // 並列的第二個：終點改用手錶認定的起床（忘了按 Out of bed 的夜晚也有數字）。
+    final wwValue = summary.watchWakeEfficiency;
+    final wwBasis = summary.watchWakeEfficiencyBasis;
+    final wwNote = summary.watchWakeEfficiencyNote;
+
     return _insightCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2373,41 +2378,81 @@ class _ReportScreenState extends State<ReportScreen>
 
           const SizedBox(height: 10),
 
-          if (value == null)
-            // 原因照抄後端。⚠️ 不要在這裡改成「尚無資料」——
-            //    「沒按按鈕」與「沒戴錶」要分得開，使用者只改得了前者。
-            _NoDataMessage(message: note)
-          else ...[
-            Text(
-              '${value.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                color: blueColor,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              note,
-              style: const TextStyle(
-                color: Color(0xFF9FB3D1),
-                fontSize: 9,
-                height: 1.45,
-              ),
-            ),
-          ],
+          // ① 兩端都是自述的（按 Start sleep → 按 Out of bed）。
+          _efficiencyFigure(value: value, note: note, basis: basis),
 
-          // ⚠️ basis 不能省：這個 App 同時可能顯示三、四個叫「效率」的數字，
-          //    只讀數字不讀 basis 就會把它們混為一談。
-          if (basis != null && basis.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Basis: $basis',
-              style: const TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+          // ② 終點改用手錶認定的起床。
+          // ⚠️ **兩個都要顯示。** 只留一個的話，使用者會拿它去比另一個定義下的
+          //    數字，而兩者的分母本來就不一樣（手錶認定的起床通常早於真正
+          //    離開床，所以這個偏高）。各自的 basis 是唯一分得開它們的東西。
+          if (wwNote != null && wwNote.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(color: Color(0xFF12325A), height: 1),
+            const SizedBox(height: 10),
+            const Text(
+              "Counted to your watch's wake time instead",
+              style: TextStyle(
+                color: Color(0xFFC1CEE2),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
             ),
+            const SizedBox(height: 6),
+            _efficiencyFigure(value: wwValue, note: wwNote, basis: wwBasis),
           ],
         ],
       ),
+    );
+  }
+
+  /// 一個效率數字 + 它的說明 + 它的 basis。兩個效率共用這一份版面。
+  ///
+  /// ⚠️ [value] 是 null 時顯示 [note]（後端寫的**原因**），**不畫 0%**——
+  ///    0% 會被讀成「整夜沒睡著」，而真相是我們沒量到。
+  /// ⚠️ [basis] 不論算不算得出來都要顯示：那一列講的是「這個欄位是什麼」，
+  ///    不是「這一晚的值」。
+  Widget _efficiencyFigure({
+    required double? value,
+    required String note,
+    required String? basis,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (value == null)
+          // 原因照抄後端。⚠️ 不要在這裡改成「尚無資料」——
+          //    「沒按按鈕」與「沒戴錶」要分得開，使用者只改得了前者。
+          _NoDataMessage(message: note)
+        else ...[
+          Text(
+            '${value.toStringAsFixed(1)}%',
+            style: const TextStyle(
+              color: blueColor,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            note,
+            style: const TextStyle(
+              color: Color(0xFF9FB3D1),
+              fontSize: 9,
+              height: 1.45,
+            ),
+          ),
+        ],
+
+        // ⚠️ basis 不能省：這個 App 同時可能顯示四、五個叫「效率」的數字，
+        //    只讀數字不讀 basis 就會把它們混為一談。
+        if (basis != null && basis.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Basis: $basis',
+            style: const TextStyle(color: Color(0xFF5B6E8C), fontSize: 8),
+          ),
+        ],
+      ],
     );
   }
 

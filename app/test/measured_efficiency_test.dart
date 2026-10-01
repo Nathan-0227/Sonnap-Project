@@ -41,6 +41,14 @@ const String kOkNote =
     'Out of bed. Shown for information only; it never affects your sleep '
     'score.';
 
+/// 並列的第二個效率，後端原文（`watch_wake_efficiency`）。
+/// ⚠️ 它與 kOkNote 講的是**不同的量**——終點是手錶給的，不是使用者按的。
+const String kWatchWakeNote =
+    'The same watch-measured sleep, but counted from when you tapped Start '
+    'sleep to when your watch says you woke up - so it still works on nights '
+    'you forgot to tap Out of bed. Shown for information only; it never '
+    'affects your sleep score.';
+
 /// 算不出來時後端給的原因（最常見的那一個：沒按按鈕）。
 /// ⚠️ 這句**要能讓人照著做**——「沒按按鈕」是所有失敗情況裡唯一使用者
 ///    改得了的，所以它會指名那兩個按鈕。後端的守則寫在
@@ -60,6 +68,27 @@ const Map<String, dynamic> kHomeWithEfficiency = {
     'measured_efficiency': 91.7,
     'measured_efficiency_basis': 'watch_tst__phone_tats',
     'measured_efficiency_note': kOkNote,
+    'watch_wake_efficiency': 91.5,
+    'watch_wake_efficiency_basis': 'phone_bed_start__watch_wake',
+    'watch_wake_efficiency_note': kWatchWakeNote,
+  },
+};
+
+/// 🔴 這一組是新欄位存在的全部理由：**沒按 Out of bed，但仍然有數字**。
+/// 實測 09-14（手錶睡 243 分、04:16 按 Start sleep、手錶 08:32 起床）。
+const Map<String, dynamic> kHomeOnlyWatchWake = {
+  'schema_version': 2,
+  'date': '2026-09-14',
+  'behavior': {
+    'late_night_ratio': 0.444,
+    'late_nights': 12,
+    'recorded_nights': 27,
+    'measured_efficiency': null,
+    'measured_efficiency_basis': 'watch_tst__phone_tats',
+    'measured_efficiency_note': kNoMarksNote,
+    'watch_wake_efficiency': 95.2,
+    'watch_wake_efficiency_basis': 'phone_bed_start__watch_wake',
+    'watch_wake_efficiency_note': kWatchWakeNote,
   },
 };
 
@@ -247,8 +276,10 @@ void main() {
     testWidgets('【3】那句「不計分」與 basis 都必須在', (tester) async {
       await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
 
+      // ⚠️ **兩個**數字各自都要講一次。少任何一個，使用者就會以為
+      //    「沒講的那個有進分數」——而兩個都不進。
       expect(find.textContaining('never affects your sleep score'),
-          findsOneWidget,
+          findsNWidgets(2),
           reason: '照抄後端。改寫成「參考值」就是自己發明了一種說法');
       expect(find.textContaining('you were trying to sleep'), findsOneWidget,
           reason: '分母是自述的那段窗，這句話是唯一講出來的地方');
@@ -280,6 +311,45 @@ void main() {
 
       expect(find.text('Sleep Efficiency (measured)'), findsNothing,
           reason: '沒有 note 代表後端還沒有這個欄位，不是「這一晚沒有」');
+    });
+
+    testWidgets('【7】兩個效率並列，各自帶 basis', (tester) async {
+      await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
+
+      expect(find.text('91.7%'), findsOneWidget, reason: '兩端自述的那個');
+      expect(find.text('91.5%'), findsOneWidget, reason: '終點用手錶的那個');
+      expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget);
+      expect(find.textContaining('phone_bed_start__watch_wake'), findsOneWidget,
+          reason: '⚠️ 兩個 basis 都要在——它們是唯一分得開這兩個數字的東西');
+      expect(find.textContaining("Counted to your watch's wake time"),
+          findsOneWidget,
+          reason: '要講出第二個是換了什麼算的，否則看起來只是同一個數字出現兩次');
+    });
+
+    testWidgets('🔴【8】沒按 Out of bed 時，第二個仍然有數字', (tester) async {
+      // 這一條就是新增這個欄位的全部理由：實測 22 晚裡有 2 晚只按了
+      // Start sleep，再加上 09-20 那種按完又睡著的，3 晚 → 6 晚。
+      await pump(tester, _StubHome(_parsed(kHomeOnlyWatchWake)));
+
+      expect(find.text('95.2%'), findsOneWidget,
+          reason: '忘了按 Out of bed 不該讓整晚沒有數字');
+      expect(find.textContaining('Tap Start sleep when you get into bed'),
+          findsOneWidget,
+          reason: '上面那個仍然要照實說它為什麼算不出來');
+      expect(find.text('0.0%'), findsNothing);
+    });
+
+    testWidgets('⚠️【9】舊版後端沒有第二個欄位 → 只顯示第一個，不留空殼',
+        (tester) async {
+      // kHomeWithoutMarks 沒有 watch_wake_* 三個鍵。
+      await pump(tester, _StubHome(_parsed(kHomeWithoutMarks)));
+
+      expect(find.text('Sleep Efficiency (measured)'), findsOneWidget,
+          reason: '第一個照常顯示');
+      expect(find.textContaining("Counted to your watch's wake time"),
+          findsNothing,
+          reason: '沒有資料就整段不出現，不要畫一個空的標題');
+      expect(find.textContaining('phone_bed_start__watch_wake'), findsNothing);
     });
 
     testWidgets('【6】反向對照：沒有後端時整張卡不存在', (tester) async {

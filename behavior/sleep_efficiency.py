@@ -214,6 +214,23 @@ MEASURED_EFFICIENCY_BASIS = "watch_tst__phone_tats"
 MAX_SLEEP_OVER_TATS_MINUTES = 1.0
 
 
+def _wall(value):
+    """
+    一律當**牆鐘時間**讀：有時區就把時區拿掉，不做換算。
+
+    ⚠️ 這條是必要的，因為兩張表的慣例不一樣：`wearable_nightly.wake_time`
+       帶著 `+08:00`，`nightly_behavior.bed_start_at` 不帶。直接相減會拋
+       `can't subtract offset-naive and offset-aware datetimes`（還算好，
+       至少會爆）。
+    ⚠️ **絕對不要改成 `astimezone(utc)` 之類的換算**——這些是已經記錄下來的
+       本地時刻，要的就是字串裡那個時刻本身。Flutter 端的 `parseWallClock()`
+       是同一條紀律，當初在 `main` 上出過「22:32 顯示成 14:32」的錯。
+    """
+    if value is None or value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
+
+
 def _hm(minutes):
     """
     分鐘 → 給人讀的「8 h 40 m」。
@@ -306,6 +323,104 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes):
             "you were trying to sleep - from when you tapped Start sleep to "
             "when you tapped Out of bed. Shown for information only; it never "
             "affects your sleep score."
+        ),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 第五個「睡眠效率」：結束時刻改用手錶的（2026-10-02 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 分子：手錶量到的總睡眠（同上）
+# 分母：**你按 Start sleep 的時刻 → 手錶認定你起床的時刻**
+#
+# 為什麼要有這個：`measured_efficiency` 的兩端**都是自述的**，所以
+# 「忘了按 Out of bed」或「按完又睡著」整晚就報銷。實測 22 晚裡：
+#
+#     5 晚兩個都按了 → 其中 3 晚算得出 measured_efficiency
+#     2 晚只按了 Start sleep（09-14、09-30）→ measured_efficiency 完全沒有
+#
+# 把結束換成手錶的起床時刻，那 2 晚 + 09-20（按完又睡著）就有數字了。
+#
+# ⚠️ **這不是「比較好的那個」，是另一個量。** 兩者的差別要講清楚：
+#
+#     measured_efficiency        兩端自述 → 分母是「你說你在嘗試入睡的時間」
+#     watch_wake_efficiency      起點自述、終點量測 → 分母是「你上床到錶說你醒」
+#
+#   後者的終點**使用者左右不了**（少一個可被操弄的輸入），但它也**不是 TATS**：
+#   錶認定的起床時刻通常早於你真的離開床，所以分母偏小、數字偏高。
+#   實測 3 晚兩者都算得出來：92.1→93.5、91.7→91.5、74.6→78.9。
+#
+# 🔴 **兩個都不計分。** 起點仍然是自述的，「快睡著才按 Start sleep」
+#    照樣能把數字推高——恢復計分的條件沒有因為這個欄位而改變
+#    （上床時刻必須是量測的，見 CLAUDE.md）。
+WATCH_WAKE_EFFICIENCY_BASIS = "phone_bed_start__watch_wake"
+
+
+def watch_wake_efficiency(total_sleep_minutes, bed_start_at, wake_time):
+    """
+    手錶實測睡眠 ÷（按 Start sleep → 手錶認定起床）。回傳 dict。
+
+    total_sleep_minutes：手錶量到的總睡眠
+    bed_start_at：使用者按「Start sleep」的時刻（datetime 或 ISO8601）
+    wake_time：手錶認定起床的時刻（同上）
+
+    ⚠️ **純函式**，與 measured_efficiency 同一個理由：兩份資料分屬
+       nightly_behavior 與 wearable_nightly，由呼叫端在讀取時 join。
+    """
+    def blank(reason):
+        return {
+            "watch_wake_efficiency": None,
+            "watch_wake_efficiency_basis": WATCH_WAKE_EFFICIENCY_BASIS,
+            "watch_wake_efficiency_note": reason,
+        }
+
+    # ⚠️ 這幾句同樣會原封不動顯示在手機上，規則見 measured_efficiency。
+    if total_sleep_minutes is None or wake_time is None:
+        return blank(
+            "No sleep data from your watch for this night yet, so there is "
+            "nothing to measure against."
+        )
+    if bed_start_at is None:
+        return blank(
+            "You didn't mark when you got into bed. Tap Start sleep when you "
+            "get into bed and this can be worked out for you - you don't need "
+            "to remember Out of bed for this one."
+        )
+
+    tst = float(total_sleep_minutes)
+    if tst <= 0:
+        return blank(
+            "Your watch recorded no sleep at all for this night, so there is "
+            "nothing to divide."
+        )
+
+    start, wake = _wall(_parse(bed_start_at)), _wall(_parse(wake_time))
+    window = (wake - start).total_seconds() / 60.0
+    if window <= 0:
+        # 10-01 實測：Start sleep 是早上 09:03 誤觸的，落在手錶起床之後。
+        return blank(
+            "You marked getting into bed after your watch says you already "
+            "woke up, so this night cannot be worked out."
+        )
+
+    if tst - window > MAX_SLEEP_OVER_TATS_MINUTES:
+        return blank(
+            f"Your watch recorded {_hm(tst)} of sleep, which is longer than "
+            f"the {_hm(window)} between getting into bed and waking up. "
+            f"No figure is shown for this night."
+        )
+
+    return {
+        "watch_wake_efficiency": round(min(tst / window * 100, 100.0), 1),
+        "watch_wake_efficiency_basis": WATCH_WAKE_EFFICIENCY_BASIS,
+        # ⚠️ 這句必須講清楚**終點是錶給的**——否則它看起來就像上面那個，
+        #    而兩者的分母不一樣（錶認定的起床通常早於真正離開床）。
+        "watch_wake_efficiency_note": (
+            "The same watch-measured sleep, but counted from when you tapped "
+            "Start sleep to when your watch says you woke up - so it still "
+            "works on nights you forgot to tap Out of bed. Shown for "
+            "information only; it never affects your sleep score."
         ),
     }
 

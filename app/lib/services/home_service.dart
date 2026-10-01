@@ -63,6 +63,19 @@ class BehaviorSummary {
   /// 給人看的那句說明；算不出來時它是**原因**。兩種情況都照抄，不要改寫。
   final String? measuredEfficiencyNote;
 
+  /// 並列的第二個效率：分母是「按 Start sleep → **手錶認定起床**」。
+  ///
+  /// ⚠️ **不是「比較好的那個」，是另一個量。** 上面那個兩端都是自述的，
+  ///    所以忘了按 Out of bed 的夜晚整晚就沒有數字；這個把終點換成手錶的，
+  ///    那些夜晚就算得出來（實測 3 晚 → 6 晚）。代價是分母不再是 TATS——
+  ///    手錶認定的起床通常早於真正離開床，所以數字偏高。
+  /// ⚠️ **兩個都要顯示、各自標 basis。** 只顯示其中一個，使用者就會拿它
+  ///    去比另一個定義下的數字，而兩者本來就不一樣。
+  /// ⚠️ 它一樣**不進任何分數**（起點仍然是自述的）。
+  final double? watchWakeEfficiency;
+  final String? watchWakeEfficiencyBasis;
+  final String? watchWakeEfficiencyNote;
+
   const BehaviorSummary({
     required this.lateNightRatio,
     required this.lateNights,
@@ -71,6 +84,9 @@ class BehaviorSummary {
     this.measuredEfficiency,
     this.measuredEfficiencyBasis,
     this.measuredEfficiencyNote,
+    this.watchWakeEfficiency,
+    this.watchWakeEfficiencyBasis,
+    this.watchWakeEfficiencyNote,
   });
 
   factory BehaviorSummary.fromJson(
@@ -90,6 +106,12 @@ class BehaviorSummary {
       measuredEfficiencyBasis:
           behavior['measured_efficiency_basis'] as String?,
       measuredEfficiencyNote: behavior['measured_efficiency_note'] as String?,
+      watchWakeEfficiency:
+          (behavior['watch_wake_efficiency'] as num?)?.toDouble(),
+      watchWakeEfficiencyBasis:
+          behavior['watch_wake_efficiency_basis'] as String?,
+      watchWakeEfficiencyNote:
+          behavior['watch_wake_efficiency_note'] as String?,
     );
   }
 }

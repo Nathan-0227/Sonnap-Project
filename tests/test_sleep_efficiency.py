@@ -34,7 +34,9 @@ sys.path.insert(0, str(ROOT))
 
 from behavior.sleep_efficiency import (  # noqa: E402
     evaluate_efficiency, phone_in_bed_share, measured_efficiency,
+    watch_wake_efficiency,
     EFFICIENCY_BASIS, MEASURED_EFFICIENCY_BASIS, MIN_TIME_IN_BED_MINUTES,
+    WATCH_WAKE_EFFICIENCY_BASIS,
 )
 
 fails = []
@@ -268,6 +270,87 @@ check_true("睡眠比臥床長：要提出最可能的無辜解釋（又睡著�
 #    效率，少了那半句，使用者會以為它影響了分數。
 check_true("算得出來：要說它不影響分數",
            "never affects your sleep score" in NOTES["算得出來"])
+
+# ═══════════════════════════════════════════════════════════════════
+# 【6c】watch_wake_efficiency：結束時刻改用手錶的（2026-10-02 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 存在的理由：measured_efficiency 兩端都是自述的，忘了按 Out of bed 整晚就報銷。
+# 實測 22 晚裡有 2 晚只按了 Start sleep（09-14、09-30），再加上 09-20
+# 那種「按完又睡著」，換成手錶的起床時刻就有數字了（3 晚 → 6 晚）。
+#
+# ⚠️ 這**不是比較好的那個，是另一個量**。下面每一條都在守「兩者不可混為一談」。
+print()
+print("【6c】watch_wake_efficiency：另一個分母，不是比較好的那個")
+
+# 09-11 實測：07:11 按 Out of bed、手錶說 07:06 起床 → 分母較小、數字較高
+a = measured_efficiency(307, 333.3)["measured_efficiency"]
+b = watch_wake_efficiency(307, "2026-09-11T01:37:46", "2026-09-11T07:06:00")
+check("09-11：手錶起床當結束 → 93.5%", b["watch_wake_efficiency"], 93.5)
+check_true("同一晚兩個數字不一樣（分母不同，不可互相取代）",
+           a != b["watch_wake_efficiency"])
+check_true("basis 一定不同（前端只靠它分辨）",
+           WATCH_WAKE_EFFICIENCY_BASIS != MEASURED_EFFICIENCY_BASIS)
+
+# 🔴 這是整個欄位存在的理由：沒按 Out of bed 的夜晚要算得出來
+# 09-14 的真值：手錶睡 243 分、起床 08:32（含 +08:00，與資料庫裡一樣）
+only_start = watch_wake_efficiency(243, "2026-09-14T04:16:49",
+                                   "2026-09-14T08:32:00+08:00")
+check_true("🔴 只按了 Start sleep 的夜晚也算得出來（這是新增它的全部理由）",
+           only_start["watch_wake_efficiency"] is not None)
+check("09-14：95.2%", only_start["watch_wake_efficiency"], 95.2)
+
+# ⚠️ 時區混用：手錶的 wake_time 帶 +08:00、手機的 bed_start_at 不帶。
+#    直接相減會拋 TypeError；而**換算成 UTC 會差 8 小時**——那正是 Flutter 端
+#    parseWallClock 當初修掉的那個錯。兩個都當牆鐘讀才對。
+mixed = watch_wake_efficiency(307, "2026-09-11T01:37:46",
+                              "2026-09-11T07:06:00+08:00")
+check_true("⚠️ 一邊帶時區一邊不帶時，不得爆掉",
+           mixed["watch_wake_efficiency"] is not None)
+check("⚠️ 而且答案要與不帶時區時一模一樣（當牆鐘讀，不做換算）",
+      mixed["watch_wake_efficiency"], b["watch_wake_efficiency"])
+
+# 缺任一邊都是 None
+check("沒有手錶資料 → None",
+      watch_wake_efficiency(None, "2026-09-11T01:37:46", "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+check("沒按 Start sleep → None",
+      watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+check("沒有手錶起床時刻 → None",
+      watch_wake_efficiency(307, "2026-09-11T01:37:46", None)["watch_wake_efficiency"], None)
+
+# 10-01 實測：Start sleep 是早上 09:03 誤觸的。它的視窗其實是 **+1.3 分鐘**
+# （手錶 09:05 起床），所以走的是「睡眠比視窗長」那條，不是負視窗那條。
+backwards = watch_wake_efficiency(242, "2026-10-01T09:03:43", "2026-10-01T09:05:00")
+check("⚠️ 10-01 那種誤觸 → None（不是夾平成 100）",
+      backwards["watch_wake_efficiency"], None)
+
+# ⚠️ 真正的負視窗要另外驗——而且要驗**訊息**不只驗 None。
+#    兩條路都回 None，只看值的話那道保護被整個拿掉也不會紅
+#    （第一版的測試就是這樣，mutation 驗出來的）。
+inverted = watch_wake_efficiency(300, "2026-09-11T23:00:00", "2026-09-11T08:00:00")
+check("標記落在手錶起床之後 → None", inverted["watch_wake_efficiency"], None)
+check_true("而且要講出是「標記在起床之後」，不是講成睡太久",
+           "after your watch says you already woke up"
+           in inverted["watch_wake_efficiency_note"])
+
+# 睡眠比視窗長也不夾平（與 measured_efficiency 同一條紀律）
+check("睡眠比視窗長 → None",
+      watch_wake_efficiency(600, "2026-09-11T01:37:46", "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+
+# 那幾句話同樣是給人讀的
+for label, note in {
+    "沒按 Start sleep": watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency_note"],
+    "算得出來": b["watch_wake_efficiency_note"],
+}.items():
+    check_true(f"{label}：沒有欄位名洩漏到畫面上", "_" not in note)
+    check_true(f"{label}：不說「the user」", "the user" not in note.lower())
+
+check_true("算得出來：要說它不影響分數",
+           "never affects your sleep score" in b["watch_wake_efficiency_note"])
+check_true("算得出來：要講清楚結束時刻是**手錶**給的（否則會跟上面那個混淆）",
+           "your watch says you woke up" in b["watch_wake_efficiency_note"])
+check_true("沒按 Start sleep：要說這個不需要 Out of bed",
+           "Out of bed" in watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency_note"])
 
 # ═══════════════════════════════════════════════════════════════════
 print()
