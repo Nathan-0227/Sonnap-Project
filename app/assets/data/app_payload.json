@@ -1,48 +1,48 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-10-01T03:57:17+08:00",
-  "session_id": "20260928_001",
+  "generated_at": "2026-10-02T13:52:47+08:00",
+  "session_id": "20261002_001",
   "status": {
     "pet_mood": "happy",
     "current_activity": null,
-    "energy_level": 86,
+    "energy_level": 85,
     "mood_reason": "final_quality=Good"
   },
   "metrics": {
     "motion_count": null,
     "garmin_movement": {
-      "sample_minutes": 637,
-      "level_mean": 1.254,
-      "level_max": 6.551,
-      "active_minutes": 306
+      "sample_minutes": 586,
+      "level_mean": 1.202,
+      "level_max": 5.945,
+      "active_minutes": 268
     },
-    "sleep_duration_minutes": 513,
+    "sleep_duration_minutes": 509,
     "ambient_noise_db": null,
-    "sleep_start_time": "2026-09-28T03:22:00+08:00",
-    "wake_time": "2026-09-28T11:59:00+08:00",
-    "deep_minutes": 25,
-    "rem_minutes": 183,
-    "waso_minutes": 4,
-    "sleep_efficiency": 99.23,
-    "avg_heart_rate": 69.3,
-    "resting_heart_rate": 56
+    "sleep_start_time": "2026-10-02T03:24:00+08:00",
+    "wake_time": "2026-10-02T12:05:00+08:00",
+    "deep_minutes": 42,
+    "rem_minutes": 177,
+    "waso_minutes": 12,
+    "sleep_efficiency": 97.7,
+    "avg_heart_rate": 59.29,
+    "resting_heart_rate": 59
   },
   "ai_content": {
-    "advice": "Your sleep was good overall at 8.6 hours and 99.2% efficiency, so keep your current bedtime routine tonight - no changes needed, just stick with what you did last night.",
-    "dream_summary": "I dreamt of a tree that kept growing new branches, one after another, and every time a branch appeared another bird landed on it, wings brushing close to my nose. The bark smelled damp and green. I kept trotting around the trunk trying to count the birds but new ones kept arriving before I could finish, and I did not mind at all.",
-    "trend_note": "Your sleep score has dropped over the last week compared to the month before, even though your resting heart rate has ticked down slightly.",
-    "is_ai_generated": true,
-    "content_type": "fiction+advice",
-    "source": "llm",
-    "model": "claude-sonnet-5"
+    "advice": "Sleep quality was good. Keep your current routine. ",
+    "dream_summary": null,
+    "trend_note": null,
+    "is_ai_generated": false,
+    "content_type": "advice",
+    "source": "rule_based",
+    "model": null
   },
   "scoring": {
-    "final_score": 86.4,
+    "final_score": 85.4,
     "final_quality": "Good",
-    "base_score": 82.8,
-    "total_modifier": 3.62,
-    "sri": 61.0,
+    "base_score": 87.1,
+    "total_modifier": -1.67,
+    "sri": 58.2,
     "modifier_note": "",
     "recommendation": "Sleep quality was good. Keep your current routine. ",
     "composition": {
@@ -87,7 +87,7 @@
     "streak_encouragement": "Amazing consistency!"
   },
   "streak": {
-    "streak_days": 33,
+    "streak_days": 37,
     "completed_days": 3,
     "definition": "streak_days = consecutive nights with a sleep record, counting back from the latest night. completed_days = nights rated Good or Normal within the last 7 calendar days. Nights when the watch was not worn are excluded, so a low number reflects wear rate, not sleep quality."
   },
@@ -666,7 +666,7 @@
     },
     {
       "date": "2026-06-13",
-      "final_score": 95.1,
+      "final_score": 96.2,
       "final_quality": "Good",
       "sleep_duration_hours": 7.55,
       "sleep_start_time": "2026-06-13T01:53:00+08:00",
@@ -707,7 +707,7 @@
     },
     {
       "date": "2026-06-14",
-      "final_score": 60.2,
+      "final_score": 58.7,
       "final_quality": "Poor",
       "sleep_duration_hours": 6.42,
       "sleep_start_time": "2026-06-14T03:14:00+08:00",
@@ -748,7 +748,7 @@
     },
     {
       "date": "2026-06-15",
-      "final_score": 83.0,
+      "final_score": 81.5,
       "final_quality": "Good",
       "sleep_duration_hours": 5.38,
       "sleep_start_time": "2026-06-15T04:14:00+08:00",
@@ -789,7 +789,7 @@
     },
     {
       "date": "2026-06-17",
-      "final_score": 71.4,
+      "final_score": 71.2,
       "final_quality": "Normal",
       "sleep_duration_hours": 9.12,
       "sleep_start_time": "2026-06-17T02:55:00+08:00",
@@ -830,7 +830,7 @@
     },
     {
       "date": "2026-06-18",
-      "final_score": 74.0,
+      "final_score": 74.9,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.2,
       "sleep_start_time": "2026-06-18T03:49:00+08:00",
@@ -871,7 +871,7 @@
     },
     {
       "date": "2026-06-21",
-      "final_score": 94.8,
+      "final_score": 94.7,
       "final_quality": "Good",
       "sleep_duration_hours": 6.53,
       "sleep_start_time": "2026-06-21T03:03:00+08:00",
@@ -912,7 +912,7 @@
     },
     {
       "date": "2026-06-22",
-      "final_score": 79.4,
+      "final_score": 79.1,
       "final_quality": "Normal",
       "sleep_duration_hours": 9.67,
       "sleep_start_time": "2026-06-21T23:59:00+08:00",
@@ -952,7 +952,7 @@
     },
     {
       "date": "2026-06-23",
-      "final_score": 83.6,
+      "final_score": 83.0,
       "final_quality": "Good",
       "sleep_duration_hours": 9.18,
       "sleep_start_time": "2026-06-22T23:41:00+08:00",
@@ -992,7 +992,7 @@
     },
     {
       "date": "2026-06-24",
-      "final_score": 64.6,
+      "final_score": 64.4,
       "final_quality": "Poor",
       "sleep_duration_hours": 10.28,
       "sleep_start_time": "2026-06-24T01:50:00+08:00",
@@ -1032,7 +1032,7 @@
     },
     {
       "date": "2026-06-26",
-      "final_score": 92.6,
+      "final_score": 92.4,
       "final_quality": "Good",
       "sleep_duration_hours": 7.78,
       "sleep_start_time": "2026-06-26T02:07:00+08:00",
@@ -3480,15 +3480,179 @@
         ],
         "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
       }
+    },
+    {
+      "date": "2026-09-29",
+      "final_score": 15.1,
+      "final_quality": "Bad",
+      "sleep_duration_hours": 3.73,
+      "sleep_start_time": "2026-09-29T04:39:00+08:00",
+      "wake_time": "2026-09-29T09:03:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Bad",
+      "composition": {
+        "scored": [
+          "duration",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [
+          {
+            "component": "efficiency",
+            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
+          }
+        ],
+        "scored_weight": 75,
+        "primary_component": "duration",
+        "caveats": [
+          {
+            "component": "waso",
+            "caveat": "the device's own wake-detection error is as large as the whole band this is graded on (bias +13 to +24 min in a meta-analysis of consumer wrist devices, versus a 15-min band for young adults), so which band a night falls into is driven partly by device error. The age trend itself is literature-backed."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
+    },
+    {
+      "date": "2026-09-30",
+      "final_score": 58.5,
+      "final_quality": "Poor",
+      "sleep_duration_hours": 5.38,
+      "sleep_start_time": "2026-09-30T03:07:00+08:00",
+      "wake_time": "2026-09-30T08:31:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor",
+      "composition": {
+        "scored": [
+          "duration",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [
+          {
+            "component": "efficiency",
+            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
+          }
+        ],
+        "scored_weight": 75,
+        "primary_component": "duration",
+        "caveats": [
+          {
+            "component": "waso",
+            "caveat": "the device's own wake-detection error is as large as the whole band this is graded on (bias +13 to +24 min in a meta-analysis of consumer wrist devices, versus a 15-min band for young adults), so which band a night falls into is driven partly by device error. The age trend itself is literature-backed."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
+    },
+    {
+      "date": "2026-10-01",
+      "final_score": 53.8,
+      "final_quality": "Poor",
+      "sleep_duration_hours": 4.25,
+      "sleep_start_time": "2026-10-01T04:48:00+08:00",
+      "wake_time": "2026-10-01T09:05:00+08:00",
+      "pet_mood": "tired",
+      "mood_reason": "final_quality=Poor",
+      "composition": {
+        "scored": [
+          "duration",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [
+          {
+            "component": "efficiency",
+            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
+          }
+        ],
+        "scored_weight": 75,
+        "primary_component": "duration",
+        "caveats": [
+          {
+            "component": "waso",
+            "caveat": "the device's own wake-detection error is as large as the whole band this is graded on (bias +13 to +24 min in a meta-analysis of consumer wrist devices, versus a 15-min band for young adults), so which band a night falls into is driven partly by device error. The age trend itself is literature-backed."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
+    },
+    {
+      "date": "2026-10-02",
+      "final_score": 85.4,
+      "final_quality": "Good",
+      "sleep_duration_hours": 8.48,
+      "sleep_start_time": "2026-10-02T03:24:00+08:00",
+      "wake_time": "2026-10-02T12:05:00+08:00",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
+      "composition": {
+        "scored": [
+          "duration",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [
+          {
+            "component": "efficiency",
+            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
+          }
+        ],
+        "scored_weight": 75,
+        "primary_component": "duration",
+        "caveats": [
+          {
+            "component": "waso",
+            "caveat": "the device's own wake-detection error is as large as the whole band this is graded on (bias +13 to +24 min in a meta-analysis of consumer wrist devices, versus a 15-min band for young adults), so which band a night falls into is driven partly by device error. The age trend itself is literature-backed."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
     }
   ],
   "data_sources": [
     "garmin"
   ],
   "notes": {
-    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-09-28.",
+    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-10-02.",
     "mapping": "The pet_mood / energy_level mapping is a default value, still pending PM approval. (mapping_version=1)"
   },
   "disclaimer": "Sleep scores are computed from Garmin watch data using literature-weighted rules and do not constitute a medical diagnosis. Any dream content, where generated, is an AI creation imagined from sleep data, not a record of the user’s actual dreams.",
-  "timestamp": "2026-09-28T11:59:00+08:00"
+  "timestamp": "2026-10-02T12:05:00+08:00"
 }
