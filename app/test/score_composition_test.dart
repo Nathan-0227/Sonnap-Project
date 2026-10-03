@@ -127,6 +127,27 @@ void main() {
     return SleepSession.fromJson(json);
   }
 
+  /// 真實打包檔，但 history 只留最後兩晚，並換掉它們的 composition。
+  /// 兩晚的日期相鄰，所以預設的 30 天期間一定兩晚都看得到。
+  SleepSession sessionWithTwoNights(int olderWeight, int newerWeight) {
+    final json = jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>;
+    final history = (json['history'] as List).cast<Map<String, dynamic>>();
+    final two = history.sublist(history.length - 2);
+    two[0]['composition'] = _composition(scoredWeight: olderWeight);
+    two[1]['composition'] = _composition(scoredWeight: newerWeight);
+    json['history'] = two;
+    return SleepSession.fromJson(json);
+  }
+
+  /// 真實打包檔，但**每一晚**的組成都一樣（反向對照用）。
+  SleepSession sessionWithUniformHistory(int weight) {
+    final json = jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>;
+    for (final night in (json['history'] as List).cast<Map<String, dynamic>>()) {
+      night['composition'] = _composition(scoredWeight: weight);
+    }
+    return SleepSession.fromJson(json);
+  }
+
   Future<void> pump(WidgetTester tester, SleepSession session) async {
     // 畫面很長，畫布太小會滿版溢位而蓋掉要驗的東西。
     tester.view.physicalSize = const Size(1200, 4000);
@@ -248,7 +269,10 @@ void main() {
       expect(find.text(_toggleLabel), findsNothing,
           reason: '舊的打包檔沒這個欄位，什麼都不該顯示');
       expect(find.textContaining('Mainly measures'), findsNothing);
-      expect(find.textContaining('of 100 points'), findsNothing,
+      // ⚠️ 只認卡片那一行（它後面接著分項清單，所以有「: 」）。
+      //    拿「of 100 points」當標記會誤判到趨勢圖的註腳——那一行講的是
+      //    history 每晚的組成，與 scoring.composition 在不在無關。
+      expect(find.textContaining('of 100 points: '), findsNothing,
           reason: '憑空生一個組成清單 = 對使用者謊稱分數的可信度');
     });
 
@@ -257,6 +281,78 @@ void main() {
 
       expect(find.text('/100'), findsOneWidget,
           reason: '沒有 composition 只是少一段說明，不是整張卡不能用');
+    });
+  });
+
+  group('【6】趨勢圖點到的那一晚', () {
+    /// 點趨勢圖。[fromLeft] 是距離圖形左緣的像素，決定選到第幾晚。
+    Future<void> tapTrend(WidgetTester tester, double fromLeft) async {
+      final graph = find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is SleepTrendPainter,
+      );
+      expect(graph, findsOneWidget, reason: '找不到趨勢圖就點不到任何一晚');
+      final box = tester.getRect(graph);
+      await tester.tapAt(Offset(box.left + fromLeft, box.center.dy));
+      await tester.pump();
+    }
+
+    testWidgets('顯示的是**那一晚**的 scored_weight，不是最新那晚的', (tester) async {
+      // 兩個數字刻意都不是任何分項配分的和，照抄才可能出現。
+      await pump(tester, sessionWithTwoNights(42, 99));
+
+      await tapTrend(tester, 30);
+      expect(find.textContaining('Scored on 42 of 100 pts'), findsOneWidget,
+          reason: '點左邊選到的是較舊那一晚');
+      expect(find.textContaining('99 of 100 pts'), findsNothing);
+
+      // ⚠️ 用圖形的實際寬度，不要寫死一個大數字——點到畫面外不會報錯，
+      //    只會「沒選到」，而上一次的選擇還留著，看起來像顯示錯了那一晚。
+      await tapTrend(tester, tester.getRect(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is SleepTrendPainter,
+          )).width -
+          10);
+      expect(find.textContaining('Scored on 99 of 100 pts'), findsOneWidget,
+          reason: '點右邊換成較新那一晚——每晚各自一份組成');
+    });
+
+    testWidgets('沒有 composition 的夜晚：不顯示，也不顯示 0', (tester) async {
+      // ⚠️ 一條測試只 pump 一次：同型別的 widget 第二次 pump 會**重用
+      //    State**，`_sessionFuture` 還是 initState 時建的那個，
+      //    第二份資料根本沒進畫面（這個坑踩過一次，症狀是測試莫名其妙地紅）。
+      // sessionWith(null) 只拿掉 scoring.composition，history 的還在，
+      // 所以這裡要自己把 history 的也拿掉，才是「舊打包檔」的樣子。
+      final json = jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>;
+      for (final n in (json['history'] as List).cast<Map<String, dynamic>>()) {
+        n.remove('composition');
+      }
+      await pump(tester, SleepSession.fromJson(json));
+
+      await tapTrend(tester, 30);
+      expect(find.textContaining('of 100 pts'), findsNothing,
+          reason: '沒有資料就什麼都不說，不要畫成 0 分');
+    });
+  });
+
+  group('【7】期間內組成不一致時要講出來', () {
+    testWidgets('真實打包檔的預設 30 天裡就有兩種組成 → 要出現範圍', (tester) async {
+      final session = SleepSession.fromJson(
+        jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>,
+      );
+      await pump(tester, session);
+
+      // 實測 83 晚：69 晚算四項（75）、14 晚手錶沒測到 REM（65）。
+      expect(find.textContaining('65-75 of 100 points'), findsOneWidget,
+          reason: '這一行就是「分數不能逐夜直接比」的具體證據');
+      expect(find.textContaining('depending on what each night measured'),
+          findsOneWidget);
+    });
+
+    testWidgets('⚠️ 反向對照：每晚組成都一樣時不得出現', (tester) async {
+      await pump(tester, sessionWithUniformHistory(75));
+
+      expect(find.textContaining('depending on what each night measured'),
+          findsNothing,
+          reason: '一致時還印等於每次都在喊狼來了，真的不一致時就沒人看了');
     });
   });
 

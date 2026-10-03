@@ -300,6 +300,16 @@ class HistoryEntry {
   /// `stress_modifier=-4.2 ≤ -3.0`）。讓畫面上的心情可以追溯到依據。
   final String? moodReason;
 
+  /// **這一晚**的分數由哪幾項組成（與 [Scoring.composition] 同一個形狀）。
+  ///
+  /// ⚠️ 每一晚可能不一樣，這正是它存在的理由：實測 83 晚裡有 14 晚手錶
+  /// 沒測到 REM，那些夜晚的分數是在**較少的項目**上重新正規化出來的。
+  /// 兩晚都是 82 分，可能一晚算了四項、另一晚只算了三項——
+  /// 「分數不能逐夜直接比」這句話的具體證據就在這個欄位裡。
+  ///
+  /// ⚠️ 可以是 null（舊的打包檔沒有這個欄位）→ 畫面什麼都不顯示。
+  final ScoreComposition? composition;
+
   const HistoryEntry({
     required this.date,
     this.finalScore,
@@ -309,6 +319,7 @@ class HistoryEntry {
     this.wakeTime,
     this.petMood,
     this.moodReason,
+    this.composition,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) {
@@ -322,6 +333,7 @@ class HistoryEntry {
       wakeTime: json['wake_time'] as String?,
       petMood: json['pet_mood'] as String?,
       moodReason: json['mood_reason'] as String?,
+      composition: ScoreComposition.fromJsonOrNull(json['composition']),
     );
   }
 }

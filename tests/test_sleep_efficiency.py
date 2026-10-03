@@ -34,7 +34,9 @@ sys.path.insert(0, str(ROOT))
 
 from behavior.sleep_efficiency import (  # noqa: E402
     evaluate_efficiency, phone_in_bed_share, measured_efficiency,
+    watch_wake_efficiency,
     EFFICIENCY_BASIS, MEASURED_EFFICIENCY_BASIS, MIN_TIME_IN_BED_MINUTES,
+    WATCH_WAKE_EFFICIENCY_BASIS,
 )
 
 fails = []
@@ -211,6 +213,186 @@ check("睡眠比臥床多 0.5 分（四捨五入）→ 仍算得出來",
 check_true("算不出來時 basis 仍然存在",
            measured_efficiency(None, None)["measured_efficiency_basis"]
            == MEASURED_EFFICIENCY_BASIS)
+
+# ═══════════════════════════════════════════════════════════════════
+# 【6b】那幾句 note 是**使用者會直接讀到的字**，不是 log（2026-10-01）
+# ═══════════════════════════════════════════════════════════════════
+#
+# App 的「Sleep Efficiency (measured)」卡片**原封不動顯示** note，一個字都
+# 不改寫（改寫就會有第二份說法）。所以寫法壞掉時不會有任何錯誤訊息——
+# 只會讓使用者在畫面上讀到一行像 log 的句子。
+# 這幾條就是在守那件事；每一條都用「把舊寫法放回去、確認會紅」驗證過。
+print()
+print("【6b】那幾句話要寫得像話（會直接顯示在手機上）")
+
+NOTES = {
+    "沒有手錶資料": measured_efficiency(None, 333.3)["measured_efficiency_note"],
+    "沒按按鈕": measured_efficiency(307, None)["measured_efficiency_note"],
+    "手錶測到 0 睡眠": measured_efficiency(0, 333.3)["measured_efficiency_note"],
+    "睡眠比臥床長": measured_efficiency(520, 422.2)["measured_efficiency_note"],
+    "算得出來": measured_efficiency(307, 333.3)["measured_efficiency_note"],
+}
+
+for label, note in NOTES.items():
+    # ① 不得出現欄位名／底線識別字——那是 API 的語言，不是人的語言
+    check_true(f"{label}：沒有欄位名洩漏到畫面上",
+               "_" not in note)
+    # ② 不得用第三人稱講使用者本人
+    check_true(f"{label}：不說「the user」，要對著使用者說話",
+               "the user" not in note.lower())
+    # ③ 要是完整的句子（句點結尾）
+    check_true(f"{label}：是一句話不是片語", note.strip().endswith("."))
+
+# ④ 做得到的事要講出來，而且照抄 App 上按鈕的字。
+#    ⚠️ 「沒按按鈕」是這幾種情況裡**唯一使用者改得了的**，所以它必須給指示；
+#       少了這句，忘記按的人只會知道「沒有數字」，不知道那是自己可以補的。
+check_true("沒按按鈕：要指出按哪兩個鈕（照抄 App 上的字）",
+           "Start sleep" in NOTES["沒按按鈕"]
+           and "Out of bed" in NOTES["沒按按鈕"])
+
+# ⑤ 矛盾的那一晚要把**兩個時長都講出來**，使用者才看得出是哪一邊不對勁。
+#    只說「資料有誤」等於要人家自己去猜。
+check_true("睡眠比臥床長：兩個時長都要出現（換算成時分）",
+           "8 h 40 m" in NOTES["睡眠比臥床長"]
+           and "7 h 2 m" in NOTES["睡眠比臥床長"])
+
+# ⑥ ⚠️ **不得斷定使用者按錯**。2026-09-20 實測那一晚兩個標記都是誠實的，
+#    是本人按完 Out of bed 之後又睡著（手錶多記錄 148 分鐘）。
+#    說「標記是錯的」會讓使用者不敢相信自己按的紀錄，而那正是我們要他每天按的東西。
+leak = NOTES["睡眠比臥床長"].lower()
+check_true("睡眠比臥床長：不得斷定標記按錯了",
+           "probably off" not in leak and "wrong" not in leak
+           and "incorrect" not in leak)
+check_true("睡眠比臥床長：要提出最可能的無辜解釋（又睡著了）",
+           "fallen asleep again" in leak)
+
+# ⑥ 算得出來的那句**必須講「不進分數」**。這個數字看起來就像一般的睡眠
+#    效率，少了那半句，使用者會以為它影響了分數。
+check_true("算得出來：要說它不影響分數",
+           "never affects your sleep score" in NOTES["算得出來"])
+
+# ═══════════════════════════════════════════════════════════════════
+# 【6d】「沒按」與「按了但那一對不能用」必須講不同的話（2026-10-02）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 10-01 實機截圖抓到的：卡片上半說「You didn't mark this night」，
+# 下半（並列的第二個效率）同時說「getting into bed 到 waking up 之間有 1 分鐘」
+# ——**兩句話當場打架**，而使用者其實有按，只是兩下差 1.8 秒。
+# 對②講「你沒有標記」是假話，而且會讓人以為按鈕沒作用。
+print()
+print("【6d】算不出來的三種情況要分得開")
+
+none_at_all = measured_efficiency(300, None)["measured_efficiency_note"]
+mistap = measured_efficiency(
+    242, None, "2026-10-01T09:03:43", "2026-10-01T09:03:44.864794",
+)["measured_efficiency_note"]
+unusable = measured_efficiency(
+    300, None, "2026-09-20T04:03:22", "2026-09-20T11:05:33",
+)["measured_efficiency_note"]
+
+check_true("① 完全沒按：要說「你沒有標記這一晚」",
+           "didn't mark this night" in none_at_all)
+check_true("② 按了但兩下太近：**不得**說成沒有標記",
+           "didn't mark this night" not in mistap)
+check_true("② 要講出兩個標記差多久（1.8 秒要講成秒，不是「0 m」）",
+           "2 seconds apart" in mistap)
+check_true("② 仍然要講得出可以怎麼做",
+           "Tap Start sleep" in mistap and "Out of bed" in mistap)
+check_true("③ 標記在、間隔也夠，但對不起來：三種話都不一樣",
+           unusable not in (none_at_all, mistap)
+           and "didn't mark this night" not in unusable)
+check_true("⚠️ 三句互不相同（任何兩種情況講一樣的話就等於沒分）",
+           len({none_at_all, mistap, unusable}) == 3)
+
+# 不給標記時要退回舊行為（呼叫端還沒傳的話不能爆）
+check_true("沒傳標記參數時照舊（向後相容）",
+           measured_efficiency(300, None)["measured_efficiency"] is None)
+
+# 這三句同樣是給人讀的
+for label, note in {"①": none_at_all, "②": mistap, "③": unusable}.items():
+    check_true(f"{label} 沒有欄位名洩漏到畫面上", "_" not in note)
+    check_true(f"{label} 不說「the user」", "the user" not in note.lower())
+
+# ═══════════════════════════════════════════════════════════════════
+# 【6c】watch_wake_efficiency：結束時刻改用手錶的（2026-10-02 新增）
+# ═══════════════════════════════════════════════════════════════════
+#
+# 存在的理由：measured_efficiency 兩端都是自述的，忘了按 Out of bed 整晚就報銷。
+# 實測 22 晚裡有 2 晚只按了 Start sleep（09-14、09-30），再加上 09-20
+# 那種「按完又睡著」，換成手錶的起床時刻就有數字了（3 晚 → 6 晚）。
+#
+# ⚠️ 這**不是比較好的那個，是另一個量**。下面每一條都在守「兩者不可混為一談」。
+print()
+print("【6c】watch_wake_efficiency：另一個分母，不是比較好的那個")
+
+# 09-11 實測：07:11 按 Out of bed、手錶說 07:06 起床 → 分母較小、數字較高
+a = measured_efficiency(307, 333.3)["measured_efficiency"]
+b = watch_wake_efficiency(307, "2026-09-11T01:37:46", "2026-09-11T07:06:00")
+check("09-11：手錶起床當結束 → 93.5%", b["watch_wake_efficiency"], 93.5)
+check_true("同一晚兩個數字不一樣（分母不同，不可互相取代）",
+           a != b["watch_wake_efficiency"])
+check_true("basis 一定不同（前端只靠它分辨）",
+           WATCH_WAKE_EFFICIENCY_BASIS != MEASURED_EFFICIENCY_BASIS)
+
+# 🔴 這是整個欄位存在的理由：沒按 Out of bed 的夜晚要算得出來
+# 09-14 的真值：手錶睡 243 分、起床 08:32（含 +08:00，與資料庫裡一樣）
+only_start = watch_wake_efficiency(243, "2026-09-14T04:16:49",
+                                   "2026-09-14T08:32:00+08:00")
+check_true("🔴 只按了 Start sleep 的夜晚也算得出來（這是新增它的全部理由）",
+           only_start["watch_wake_efficiency"] is not None)
+check("09-14：95.2%", only_start["watch_wake_efficiency"], 95.2)
+
+# ⚠️ 時區混用：手錶的 wake_time 帶 +08:00、手機的 bed_start_at 不帶。
+#    直接相減會拋 TypeError；而**換算成 UTC 會差 8 小時**——那正是 Flutter 端
+#    parseWallClock 當初修掉的那個錯。兩個都當牆鐘讀才對。
+mixed = watch_wake_efficiency(307, "2026-09-11T01:37:46",
+                              "2026-09-11T07:06:00+08:00")
+check_true("⚠️ 一邊帶時區一邊不帶時，不得爆掉",
+           mixed["watch_wake_efficiency"] is not None)
+check("⚠️ 而且答案要與不帶時區時一模一樣（當牆鐘讀，不做換算）",
+      mixed["watch_wake_efficiency"], b["watch_wake_efficiency"])
+
+# 缺任一邊都是 None
+check("沒有手錶資料 → None",
+      watch_wake_efficiency(None, "2026-09-11T01:37:46", "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+check("沒按 Start sleep → None",
+      watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+check("沒有手錶起床時刻 → None",
+      watch_wake_efficiency(307, "2026-09-11T01:37:46", None)["watch_wake_efficiency"], None)
+
+# 10-01 實測：Start sleep 是早上 09:03 誤觸的。它的視窗其實是 **+1.3 分鐘**
+# （手錶 09:05 起床），所以走的是「睡眠比視窗長」那條，不是負視窗那條。
+backwards = watch_wake_efficiency(242, "2026-10-01T09:03:43", "2026-10-01T09:05:00")
+check("⚠️ 10-01 那種誤觸 → None（不是夾平成 100）",
+      backwards["watch_wake_efficiency"], None)
+
+# ⚠️ 真正的負視窗要另外驗——而且要驗**訊息**不只驗 None。
+#    兩條路都回 None，只看值的話那道保護被整個拿掉也不會紅
+#    （第一版的測試就是這樣，mutation 驗出來的）。
+inverted = watch_wake_efficiency(300, "2026-09-11T23:00:00", "2026-09-11T08:00:00")
+check("標記落在手錶起床之後 → None", inverted["watch_wake_efficiency"], None)
+check_true("而且要講出是「標記在起床之後」，不是講成睡太久",
+           "after your watch says you already woke up"
+           in inverted["watch_wake_efficiency_note"])
+
+# 睡眠比視窗長也不夾平（與 measured_efficiency 同一條紀律）
+check("睡眠比視窗長 → None",
+      watch_wake_efficiency(600, "2026-09-11T01:37:46", "2026-09-11T07:06:00")["watch_wake_efficiency"], None)
+
+# 那幾句話同樣是給人讀的
+for label, note in {
+    "沒按 Start sleep": watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency_note"],
+    "算得出來": b["watch_wake_efficiency_note"],
+}.items():
+    check_true(f"{label}：沒有欄位名洩漏到畫面上", "_" not in note)
+    check_true(f"{label}：不說「the user」", "the user" not in note.lower())
+
+check_true("算得出來：要說它不影響分數",
+           "never affects your sleep score" in b["watch_wake_efficiency_note"])
+check_true("算得出來：要講清楚結束時刻是**手錶**給的（否則會跟上面那個混淆）",
+           "your watch says you woke up" in b["watch_wake_efficiency_note"])
+check_true("沒按 Start sleep：要說這個不需要 Out of bed",
+           "Out of bed" in watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency_note"])
 
 # ═══════════════════════════════════════════════════════════════════
 print()
