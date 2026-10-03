@@ -22,7 +22,7 @@ analyze → evaluate，漏掉中間的 extract_sleep_features。evaluate 照樣
 ═══════════════════════════════════════════════════════════════════
     python run_pipeline.py                # 跑步驟 2-6（用現有的原始資料重算）
     python run_pipeline.py --fetch        # 含步驟 1，重新從 Garmin API 抓資料
-    python run_pipeline.py --fetch --days 30    # 抓最近 30 天
+    python run_pipeline.py --fetch --days 30    # 抓最近 30 天（併進既有的，更早的不動）
 
 預設不含步驟 1（抓取），因為抓取要連 Garmin 伺服器、耗時且有頻率限制，
 多數情況下你只是改了評分邏輯要重算，不需要重抓原始資料。

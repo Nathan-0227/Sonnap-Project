@@ -668,44 +668,48 @@ generated plugin 檔**。那是雜訊（這個專案不出那三個平台），c
 ⚠️ **`adb` 在 Git Bash 底下要 `MSYS_NO_PATHCONV=1`**，否則 `/sdcard/x.png`
 會被改寫成 `C:/Program Files/Git/sdcard/x.png`。
 
-### ⚠️ 重抓資料是**覆寫**不是增量（2026-08-26 補記）
+### ⚠️ 重抓資料是**合併**：只換這次抓的日子（2026-10-03 改）
 
-`garmin_connect_fetch.py` 寫檔用 `open(args.output, "w")`，
-所以 **`--days N` 會把整個 `garmin_standard_data.json` 換掉**，只留最近 N 天。
-`--days 7` 這種用法會**弄丟前面所有歷史**，而且不會有任何警告。
-⚠️ `--days` **預設是 1**，所以 `run_pipeline.py --fetch` 不帶天數＝整份歷史只剩一天。
+`garmin_connect_fetch.py` 預設把新抓的併進既有的 `garmin_standard_data.json`：
+**只換這次抓的那幾天，其餘原樣保留**。`--days 1` 不會再讓歷史變少。
+規則寫在 `garmin/merge_standard_data.py` 檔頭（純函式），三條：
 
-→ **每天早上用 `morning_import.py`**（2026-09-15 新增）：它帶完整區間抓、
-  抓之前備份、抓完比對「原本的夜晚都還在」，沒過就還原並停下，
-  分數變了的夜晚也會列出來。
+| 規則 | 不遵守的後果 |
+|---|---|
+| **切點不落在一段睡眠中間**，落進去就往視窗內縮，那一晚整晚留舊的 | 那一晚前半舊後半新；Garmin 修正過入睡時刻的話，同一晚會有兩筆 `sleep_start_time`。這份資料作息很晚（入睡 22:00~08:00、起床最晚 16:00），午夜或中午切都會切到人 |
+| **視窗內新的贏** | 最近幾天會晚到補齊（09-29：55 → 1578 筆），留舊的就永遠拿不到完整版 |
+| **某天某個來源（睡眠／心率／壓力／步數）這次一筆都沒抓到 → 留舊的**，並印出來 | API 那一次沒回東西，會把有值的日子洗成空的 |
 
-要手動抓的話給完整區間：
+⚠️ **不要加 `--replace`**——那是舊的整份覆寫行為，沒抓到的日子全部消失。
+⚠️ 舊檔讀不出來時 fetch 會**直接停下**，不會退回覆寫。
+
+→ **每天早上用 `morning_import.py`**：它只抓「最近 7 天，或從上次抓到的那天起」
+  （取較早者——停跑很久之後只抓 7 天會留下永遠補不上的空洞），抓之前備份、
+  抓完比對「原本的夜晚都還在」，沒過就還原並停下。
+
+要手動抓：
 
 ```bash
-python garmin/garmin_connect_fetch.py --start-date 2026-05-28 --end-date <今天>
+python garmin/garmin_connect_fetch.py --days 7
 python garmin/run_pipeline.py          # 再跑後四步
 ```
 
-抓之前先備份 `garmin_standard_data.json` 與 `garmin_sleep_quality_final.csv`，
-抓完**一定要比對歷史夜晚的分數有沒有被改寫**（2026-08-26 那次比對過，
-46 晚逐欄未變，只是往後長了 5 晚——那是正確結果）。
+🔴 **為什麼不能每次重抓全部：Garmin 會把約 4 個月前的日子的細節收掉。**
+2026-10-02 那次全區間重抓（83 → 87 晚），05-28 ~ 05-31 從 4768 筆掉到 441 筆
+（心率、壓力、動作、睡眠分段幾乎全沒了），10 個六月夜晚的分數跟著變
+（那 10 晚的 Tier3 基線窗格往前 28 日曆天涵蓋那幾天）。
 
-🔴 **但「逐欄未變」不是每次都成立——Garmin 會把舊日子的細節資料收掉。**
-2026-10-02 那次重抓（83 → 87 晚）實測：
+✅ **那 4 天已於 2026-10-03 從備份救回**，07-15 之前所有夜晚的分數與 10-02
+重抓前逐晚相同。最早的完整版本另存在
+`C:/Users/user/Projects/sonnap-data/garmin-earliest-full/`（不參與自動清除）。
 
-| | |
-|---|---|
-| 原始彙總被改寫 | **6 晚 / 124**。05-28 ~ 06-01 那五晚的 `max/min_heart_rate`、`avg_stress_score`、`movement_level_max` **全部變成 None**，`awake_count` 從 9→1、5→1；09-29 則是反方向（這次才補齊，deep 0 → 12 分） |
-| 連帶影響 | **10 個六月夜晚的分數變了**（−1.5 ~ +1.1），**0 晚換品質等級** |
-| 根因 | 那 10 晚的 **Tier3 基線窗格（往前 28 日曆天）涵蓋 05-28~06-01**，那幾晚的值消失 → 中位數變了。**我方算法沒變，是上游資料少了** |
+⚠️ 代價：視窗外的日子**完全凍結**。Garmin 事後修正了舊日子，或解析程式
+多抓一種指標，舊日子都拿不到——而此時去重抓，拿到的是被收掉細節的版本。
+要做的話得另外寫「只增不減」的模式（刻意沒做，目前沒有需求）。
 
-→ 所以比對時要分清楚兩件事：**夜晚有沒有少**（這是必須擋的）與
-  **舊夜晚的分數有沒有動**（可能只是上游收掉了細節）。查法：
-  `git show HEAD:garmin/data/garmin_sleep_summary.json` 和現檔逐欄 diff，
-  先看**原始彙總**有沒有變，再看分數——倒過來看會誤判成自己的程式壞了。
-
-⚠️ 這也代表**越舊的夜晚，每重抓一次就可能再少一點**。
-  `garmin/data/_backup_20260811/`（桌面那份舊副本裡）留著最早的版本。
+⚠️ 舊夜晚的分數若又變了，先看**原始彙總**有沒有變、再看分數
+（`git show HEAD:garmin/data/garmin_sleep_summary.json` 和現檔逐欄 diff），
+倒過來看會誤判成自己的程式壞了。
 
 分支盤點（2026-08-28 晚間用 `git ls-remote --heads origin` 實測，4 條遠端分支）：
 
@@ -1073,18 +1077,9 @@ API 讀資料庫，拿不到同一份資料），由 `tests/test_score_compositi
 
 ### 兩個 pipeline 層級的坑
 
-**① 重抓資料是覆寫不是增量。**
-`garmin_connect_fetch.py:778` 用 `open(args.output, "w")`，
-所以 `--days N` 會把整個 `garmin_standard_data.json` 換掉、只留最近 N 天，
-**弄丟前面所有歷史且沒有任何警告**。正確用法是給完整區間：
-
-```bash
-python garmin/garmin_connect_fetch.py --start-date 2026-05-28 --end-date <今天>
-python garmin/run_pipeline.py          # 再跑後四步
-```
-
-抓之前先備份 `garmin_standard_data.json` 與 `garmin_sleep_quality_final.csv`，
-抓完**一定要比對歷史夜晚的分數有沒有被改寫**。
+**① 重抓資料是合併，不要加 `--replace`。**
+`garmin_connect_fetch.py` 只換這次抓的那幾天；加了 `--replace` 才會整份覆寫，
+**弄丟沒抓到的日子且沒有任何警告**。規則與理由見交接區「重抓資料是合併」那一節。
 
 **② `summary` 與 `features` 的有效性標準不同。**
 `extract_sleep_features.py` 會濾掉 06-02 那筆異常列（`sleep_start == wake == 00:00:00`），
@@ -1228,7 +1223,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的夜晚**不覆蓋**。
   ⚠️ 在此之前所有夜晚都在研究者帳號，所以手機 App 依帳號撈手錶資料的功能一晚都拿不到。
 - **`morning_import.py`（2026-09-15 新增）— 每天早上一條指令。**
-  資料庫連線 → 昨晚的錄影檢查 → 抓 Garmin＋評分＋晚數檢查 → 全部過了才寫入
+  資料庫連線 → 昨晚的錄影檢查 → 抓 Garmin（最近 7 天，併進既有的）＋評分＋晚數檢查 → 全部過了才寫入
   （手錶、攝影機、夢境、App 資料檔）。**任何一項沒過就停，資料庫一筆都不寫**；
   手錶那段停下來時會先把檔案還原。
   攝影機排在抓手錶**之前**檢查（本機檔案、幾秒查完），擋法是
@@ -1266,7 +1261,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 17 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 19 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1275,7 +1270,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 17 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 19 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1298,7 +1293,8 @@ python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）
-python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料帶完整區間
+python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫
+python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
