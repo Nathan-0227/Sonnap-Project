@@ -11,7 +11,9 @@ tests/test_morning_import.py — 早上那支匯入腳本的檢查有沒有真�
    但手錶資料已經被覆寫、備份也建了——使用者看到「停下來了」會以為什麼都沒動。
 2. **手錶少了夜晚時要還原，而且一筆都不寫。** 只停不還原的話，
    App 讀的資料檔已經是少了歷史的那一份，後端會照樣對外服務它。
-3. **抓資料一定帶完整區間，不帶 --fetch。** 少一個參數就是整份歷史被換掉。
+3. **抓資料只抓最近幾天、不加 --replace、不帶 --fetch。** 加了 --replace
+   就是整份歷史被換掉；而停跑很久之後要從上次抓到的那天接著抓，
+   只抓最近 7 天的話中間會留下一段永遠補不上的空洞。
 4. **正常的夜晚不能被擋。** 門檻訂太嚴的話，使用者每天早上都得加
    --skip-camera，那這個檢查很快就會被習慣性地繞過。
    （09-12 那晚是 0.91，是真實存在的「正常但不完美」。）
@@ -85,15 +87,22 @@ def nights_json(dates):
     return [{"date": d, "final_score": 70.0 + i} for i, d in enumerate(dates)]
 
 
-def make_project(tmp, dates):
+# 既有的原始資料檔。最晚一筆是 09-13——「上次抓到哪一天」是從這裡讀的。
+ORIGINAL_STANDARD = json.dumps({"records": [
+    {"timestamp": "2026-09-13T09:00:00+08:00", "metric": "heart_rate", "value": 60, "unit": "bpm"},
+]})
+
+
+def make_project(tmp, dates, standard=ORIGINAL_STANDARD):
     root = tmp / "project"
     (root / "garmin" / "data").mkdir(parents=True)
     (root / "app" / "assets" / "data").mkdir(parents=True)
     (root / "tapo_metrics").mkdir()
     (root / "garmin" / "data" / "garmin_sleep_quality_final.json").write_text(
         json.dumps(nights_json(dates)), encoding="utf-8")
-    (root / "garmin" / "data" / "garmin_standard_data.json").write_text(
-        '{"original": true}', encoding="utf-8")
+    if standard is not None:
+        (root / "garmin" / "data" / "garmin_standard_data.json").write_text(
+            standard, encoding="utf-8")
     (root / "app" / "assets" / "data" / "app_payload.json").write_text(
         '{"payload": "original"}', encoding="utf-8")
     return mi.Paths(root=root, backup_root=tmp / "backups")
@@ -233,7 +242,7 @@ with tempfile.TemporaryDirectory() as d:
        str(runner.scripts()))
     ok("評分結果還原成跑之前的", paths.final_json.read_bytes() == original_final)
     ok("手錶原始資料也還原了",
-       (paths.garmin_data / "garmin_standard_data.json").read_text(encoding="utf-8") == '{"original": true}')
+       (paths.garmin_data / "garmin_standard_data.json").read_text(encoding="utf-8") == ORIGINAL_STANDARD)
     ok("App 資料檔也還原了", paths.payload.read_text(encoding="utf-8") == '{"payload": "original"}')
     ok("有講出是哪幾晚不見", "2026-09-12" in out and "2026-09-13" in out)
 
@@ -247,9 +256,9 @@ for label, kw in (("抓資料失敗", {"fetch_rc": 1}), ("評分失敗", {"pipel
         ok(f"{label} → exit code 不是 0、沒有寫入",
            rc != 0 and "migrate_garmin_to_db.py" not in runner.scripts(), str(runner.scripts()))
         ok(f"  {label} → 原始資料還原",
-           (paths.garmin_data / "garmin_standard_data.json").read_text(encoding="utf-8") == '{"original": true}')
+           (paths.garmin_data / "garmin_standard_data.json").read_text(encoding="utf-8") == ORIGINAL_STANDARD)
 
-print("\n【6】全部通過 → 照順序寫入；抓資料帶完整區間、不用 --fetch")
+print("\n【6】全部通過 → 照順序寫入；抓資料只抓最近幾天、不覆寫")
 with tempfile.TemporaryDirectory() as d:
     d = Path(d)
     paths = make_project(d, BEFORE)
@@ -264,15 +273,44 @@ with tempfile.TemporaryDirectory() as d:
                             "ai/generate_advice.py", "build_app_payload.py"],
        str(runner.scripts()))
     fetch = runner.calls[0]
-    ok("抓資料帶 --start-date 第一個戴錶者分段的起日",
-       fetch[fetch.index("--start-date") + 1] == "2026-05-28" if "--start-date" in fetch else False,
+    ok("抓資料從 7 天前抓起（今天 09-14 → 09-07）",
+       fetch[fetch.index("--start-date") + 1] == "2026-09-07" if "--start-date" in fetch else False,
        str(fetch))
     ok("  --end-date 是今天", "--end-date" in fetch and fetch[fetch.index("--end-date") + 1] == "2026-09-14")
-    ok("  沒有用 --days（那是覆寫成最近幾天）", "--days" not in fetch)
+    ok("  沒有 --replace（那會把整份歷史換成這幾天）", "--replace" not in fetch)
     ok("任何一步都沒有 --fetch", all("--fetch" not in c for c in runner.calls))
     cam = runner.calls[3]
     ok("攝影機只匯入挑中的那一份", cam == ["migrate_camera_to_db.py", "--csv", str(csv_path)], str(cam))
     ok("有列出新增的夜晚", "2026-09-14" in out)
+
+print("\n【6b】從哪一天抓起")
+
+
+def start_for(standard, now=NOW):
+    with tempfile.TemporaryDirectory() as d:
+        paths = make_project(Path(d), BEFORE, standard=standard)
+        runner = FakeRunner(paths, AFTER)
+        rc, out = quiet(mi.run, args(skip_camera=True), paths, now, DB_ENV, runner=runner, db_check=db_ok)
+        fetch = next((c for c in runner.calls if c[0] == "garmin/garmin_connect_fetch.py"), None)
+        return rc, out, (fetch[fetch.index("--start-date") + 1] if fetch else None), runner
+
+
+def standard_ending(day):
+    return json.dumps({"records": [
+        {"timestamp": "2026-08-01T09:00:00+08:00", "metric": "heart_rate", "value": 60, "unit": "bpm"},
+        {"timestamp": f"{day}T09:00:00+08:00", "metric": "heart_rate", "value": 60, "unit": "bpm"},
+    ]})
+
+
+rc, _, start, _ = start_for(standard_ending("2026-08-20"))
+ok("停跑三週（上次抓到 08-20）→ 從 08-20 接著抓，不留空洞", start == "2026-08-20", str(start))
+rc, _, start, _ = start_for(standard_ending("2026-09-13"))
+ok("昨天才抓過 → 仍然往回 7 天（最近幾天會晚到補齊）", start == "2026-09-07", str(start))
+rc, _, start, _ = start_for(None)
+ok("還沒有資料檔 → 從第一個戴錶者分段的起日抓", start == "2026-05-28", str(start))
+rc, out, start, runner = start_for("{ not json")
+ok("資料檔讀不出來 → 停，一支都沒跑（不退回從頭抓）", rc != 0 and runner.calls == [], str(runner.scripts()))
+ok("  有講是哪個檔", "garmin_standard_data.json" in out)
 
 print("\n【7】不擋的狀況：分數變了、沒有新夜晚、夢境失敗")
 with tempfile.TemporaryDirectory() as d:

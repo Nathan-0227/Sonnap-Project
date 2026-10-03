@@ -6,6 +6,8 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+import merge_standard_data as merge
+
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，讓 garmin/ 目錄下只留程式碼。
 # 用 Path(__file__).parent 而非相對路徑字串，這樣不管從哪個工作目錄執行都能正確定位。
 DATA_DIR = Path(__file__).parent / "data"
@@ -162,6 +164,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=1,
         help="How many recent days to fetch (including today).",
+    )
+    # 【2026-10-03】預設改成合併：只換這次抓的那幾天，其餘原樣保留。
+    # 規則與理由在 merge_standard_data.py 檔頭。
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="整份覆寫 --output（舊行為）。⚠️ 沒抓到的日子會全部消失；"
+             "Garmin 已經收掉細節的舊日子也救不回來。",
     )
     parser.add_argument(
         "--start-date",
@@ -759,10 +769,28 @@ def main() -> None:
         debug_rows.append(debug_row)
 
     _inject_movement_proxy(records)
+
+    merge_report = None
+    output_path = Path(args.output)
+    if not args.replace and output_path.exists():
+        # ⚠️ 讀不出來就讓它拋例外停下，**不要**退回覆寫——
+        #    那正是「舊檔壞了一點 → 整份歷史被換成最近幾天」的路徑。
+        with open(output_path, encoding="utf-8") as f:
+            existing = json.load(f)["records"]
+        empty = {
+            (date.fromisoformat(row["date"]), source)
+            for row in debug_rows for source in merge.SOURCES
+            if row[source]["records_added"] == 0
+        }
+        records, merge_report = merge.merge_records(
+            existing, records, fetched_days, empty, merge.parse_tz(args.tz))
     standard_payload = build_standard_payload(args.device_id, records)
 
-    with open(args.output, "w", encoding="utf-8") as f:
+    # 先寫暫存檔再換名：寫到一半被中斷時，原檔還在。
+    tmp_path = output_path.with_name(output_path.name + ".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(standard_payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, output_path)
 
     if args.raw_debug_output:
         raw_debug_payload = {
@@ -776,6 +804,15 @@ def main() -> None:
     print("Garmin Connect fetch complete.")
     print(f"- fetched_days: {len(fetched_days)}")
     print(f"- records: {standard_payload['total_records']}")
+    if merge_report is None:
+        print("- mode: replace (the whole output file was rewritten)")
+    else:
+        lo, hi = merge_report["window"]
+        print(f"- mode: merge  window {lo} .. {hi}")
+        print(f"    kept untouched: {merge_report['kept']}  "
+              f"replaced: {merge_report['replaced']}  new: {merge_report['taken']}")
+        for day, source, count in merge_report["kept_when_empty"]:
+            print(f"    ! {day} {source}: fetched nothing this time, kept the {count} existing records")
     print(f"- standard output: {args.output}")
     if args.raw_debug_output:
         print(f"- raw debug:       {args.raw_debug_output}")

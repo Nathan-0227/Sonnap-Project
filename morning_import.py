@@ -3,7 +3,7 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
 
     ① 資料庫連得上嗎                                   ← 沒過就停，什麼都沒動
     ② 昨晚的錄影：還在錄？太短？後半夜斷線？             ← 沒過就停，什麼都沒動
-    ③ 手錶：備份 → 抓 Garmin（完整區間）→ 評分 → 晚數檢查 ← 沒過就還原檔案再停
+    ③ 手錶：備份 → 抓 Garmin（最近幾天，併進既有的）→ 評分 → 晚數檢查 ← 沒過就還原檔案再停
     ④ 全部過了才寫：手錶 → DB、攝影機 → DB、補夢境、重建 App 資料檔
 
 ═══════════════════════════════════════════════════════════════════
@@ -11,9 +11,9 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
 ═══════════════════════════════════════════════════════════════════
 早上那一串原本是九條要照順序打的指令，其中兩個錯**不會報錯**：
 
-1. **抓資料是覆寫。** 少給日期範圍（或用 `run_pipeline.py --fetch`——
-   `garmin_connect_fetch.py` 的 `--days` 預設是 1）會把整份歷史換成
-   最近一天，之後的評分、匯入全部照常成功。
+1. **抓資料曾經是覆寫。** 少給日期範圍會把整份歷史換成最近一天，
+   之後的評分、匯入全部照常成功。（2026-10-03 起 fetch 預設改成合併，
+   這條路已經堵住；這裡的晚數檢查留著當第二道。）
 2. **攝影機半夜斷線時，臥床時間會被算短，而且短得很合理。**
    09-13 那晚錄了 304 分鐘，後半段串流沒回來，算出 124 分鐘——
    剛好過了「不到 120 分鐘不算一晚」的門檻，會被當成正常的一晚寫進去。
@@ -66,15 +66,24 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "garmin"))
 
 import db_backend                                   # noqa: E402
+import merge_standard_data                          # noqa: E402
 import migrate_camera_to_db                         # noqa: E402
 import tapo_sleep_onset as onset                    # noqa: E402
 from apply_recovery_modifier import WEARER_SEGMENTS  # noqa: E402
 from behavior import adherence                      # noqa: E402
 from tapo_metric_logger import read_started         # noqa: E402
 
-# 從第一個戴錶者分段的起日抓起。不另外寫一個日期：分段表是唯一定義處，
-# 哪天往前補資料時兩邊才不會各說各話。
+# 還沒有任何手錶資料時，從第一個戴錶者分段的起日抓起。不另外寫一個日期：
+# 分段表是唯一定義處，哪天往前補資料時兩邊才不會各說各話。
 FETCH_START = WEARER_SEGMENTS[0][0]
+
+# 已經有資料時只重抓最近這幾天，更早的原樣保留（2026-10-03）。
+#
+# 為什麼不再每次抓全部：Garmin 會把約 4 個月前的日子的細節收掉。10-02 那次
+# 全區間重抓，05-28 ~ 05-31 從 4768 筆掉到 441 筆，10 個六月夜晚的分數跟著變。
+# 為什麼不是只抓今天：最近幾天會晚到補齊——實測 09-08、09-12、09-29 都是
+# 隔幾天重抓才完整（09-29：55 → 1578 筆）。
+REFETCH_DAYS = 7
 
 # 臥床時間 ÷ 錄影時長低於這個比例，就當成「後半段沒有資料」。
 #
@@ -116,6 +125,10 @@ class Paths:
     @property
     def garmin_data(self):
         return self.root / "garmin" / "data"
+
+    @property
+    def standard_json(self):
+        return self.garmin_data / "garmin_standard_data.json"
 
     @property
     def final_json(self):
@@ -297,6 +310,30 @@ def prune_backups(backup_root, keep=KEEP_BACKUPS):
 # 主流程
 # ═══════════════════════════════════════════════════════════════════
 
+def fetch_start(standard_json, today):
+    """
+    這次從哪一天抓起（ISO 日期字串）。
+
+    最近 REFETCH_DAYS 天，或「檔案裡最晚的那一天」，取較早者。後者是為了
+    停跑很久之後：只抓最近 7 天的話，中間那段會是永遠補不上的空洞，
+    而且不會有任何錯誤訊息（晚數檢查只看「原本有的還在不在」）。
+    """
+    if not standard_json.exists():
+        return FETCH_START
+    try:
+        records = json.loads(standard_json.read_text(encoding="utf-8"))["records"]
+        last = merge_standard_data.last_record_day(
+            records, merge_standard_data.parse_tz("+08:00"))
+    except (ValueError, KeyError, TypeError) as exc:
+        # 不退回「從頭抓」：fetch 那邊讀不出舊檔會直接停下（它不會覆寫），
+        # 在這裡先講清楚比讓使用者看一段 traceback 好。
+        raise Stop(f"讀不出既有的手錶資料檔 {standard_json}（{exc}）。\n"
+                   "  先確認那個檔案，或從備份還原，再重跑。")
+    if last is None:
+        return FETCH_START
+    return min(today - timedelta(days=REFETCH_DAYS), last).isoformat()
+
+
 def run_script(argv, root, env):
     """跑一支專案裡的 Python 腳本，回傳 exit code。輸出直接印在畫面上。"""
     print(f"\n$ python {' '.join(argv)}", flush=True)
@@ -364,10 +401,12 @@ def _run(args, paths, now, runner, db_check, env, analyse):
         return Stop(f"{reason}\n  已經把手錶資料還原成跑之前的樣子，資料庫一筆都沒寫。\n"
                     f"  備份在 {backup}")
 
-    # ⚠️ 一定要給完整區間。只給 --days（或不給）會把整份歷史換成最近幾天。
+    # fetch 預設是合併：只換這次抓的日子，更早的原樣保留。
+    # ⚠️ 不可以加 --replace，那會把整份歷史換成這幾天。
+    start = fetch_start(paths.standard_json, now.date())
     fetch = ["garmin/garmin_connect_fetch.py",
-             "--start-date", FETCH_START, "--end-date", now.date().isoformat()]
-    print(f"● 從 {FETCH_START} 抓到今天，要連 Garmin 伺服器，會跑幾分鐘")
+             "--start-date", start, "--end-date", now.date().isoformat()]
+    print(f"● 從 {start} 抓到今天（更早的日子不動），要連 Garmin 伺服器")
     if runner(fetch) != 0:
         raise fail_and_restore("抓手錶資料失敗（上面有錯誤訊息）。")
     if runner(["garmin/run_pipeline.py"]) != 0:
@@ -378,7 +417,8 @@ def _run(args, paths, now, runner, db_check, env, analyse):
     if missing:
         shown = "、".join(missing[:10]) + ("…" if len(missing) > 10 else "")
         raise fail_and_restore(f"原本有的 {len(missing)} 晚不見了：{shown}。"
-                               "多半是抓資料的日期範圍不完整。")
+                               "抓資料是合併的，不該少夜晚——"
+                               "看上面抓取那一段的輸出是不是有人加了 --replace。")
     print(f"\n✓ 手錶：{len(before)} 晚 → {len(after)} 晚，原本的夜晚都還在")
     if added:
         print(f"  新增：{'、'.join(added)}")
