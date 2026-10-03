@@ -43,7 +43,7 @@ Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/�
 
 ---
 
-## 🔖 交接區：現在在哪、下一步做什麼（2026-09-03 更新．新對話先讀這段）
+## 🔖 交接區：現在在哪、下一步做什麼（2026-10-03 更新．新對話先讀這段）
 
 ### 現在在哪：Tier A 行為迴圈已經通了
 
@@ -265,7 +265,6 @@ Health Connect 常是**同一支錶**（Garmin Connect 會同步進 Health Conne
 
 | 事情 | 卡在誰 |
 |---|---|
-| **合併 PR #30**（Tier A 行為迴圈） | 使用者。已合過 `origin/main` 重跑，120 條全過 |
 | **換 RTSP／MySQL 密碼**（見上方 🔴） | 影像組。**移除檔案不等於止血** |
 | **TAPO 的 8 個問題**（門檻沒記錄、`video_events` 被丟棄、連續翻身不進 timeline、`MOTION_MICRO` 太靈敏…） | 影像組。清單與偵測層規格見 **[TAPO_HANDOFF.md](docs/TAPO_HANDOFF.md)**，每一條都可用 `python inspect_tapo_score.py` 重現。⚠️ **調 `.env` 救不回歷史資料**：實測 99.3% 的 micro_motion 強度低於現行 `MOTION_MICRO`，那批資料是用另一組沒記錄的門檻寫的 |
 | ~~`SLEEP_START=01:00` 太晚~~ | ✅ **已改成 `22:00`**（2026-09-04）。57 晚實測：01:00 錄不到 7 晚（12%），22:00 涵蓋 57/57、只多錄 3 小時，再往前沒有額外好處。改了 `.env`／`.env.example`／程式預設三處。長期仍朝「App 點開始睡眠」走（那對 D2 受測者才通用） |
@@ -493,12 +492,7 @@ fallback**（同日重抓 Garmin 到 09-12 多出四晚無夢境，當天補生�
 **真正的 git clone：`C:\Users\user\Projects\Sonnap-Project`**
 
 ⚠️ **多開 session 時用 git worktree**，那是**安全措施不是便利措施**。
-現在有一個：
-
-| 目錄 | 用途 | 分支 |
-|---|---|---|
-| `Sonnap-Project` | 主 clone | 看 `git -C . branch` |
-| `Sonnap-app` | 只動 `app/` | `feature/lights-out-event` |
+目前有哪些 worktree，**看 `git worktree list`**，這裡不列，列了就會過期。
 
 理由是這個 repo 已經因為兩個 session 共用一份 working copy 而外洩過密碼
 （`8c52874` 的 `git add -A` 把另一個 session 沒 commit 的 `tapo 2.0/.env`
@@ -618,10 +612,9 @@ server 說的晚數跟你讀檔讀到的對不上，就是讀錯地方了。
 更早的 PR #11（多使用者後端）、#12~15（文件與英文化）、#16（Jeremy 的
 Insights 頁）也都在裡面。
 
-**開著的：PR #30**（Tier A 行為迴圈，見交接區開頭）。
+**目前沒有開著的 PR。** 最近一次合併是 PR #75（分數組成、兩個效率並列、文件與資料 87 晚）。
 
-遠端另有三條別人的：`flutter`、`second-flutter-integration`（都已併入、可刪）
-與 `feature/opencv-motion-garmin`（影像組，整條不能合，見下）。
+遠端還有幾條非 main 分支，**以 `git ls-remote --heads origin` 為準**。其中 `feature/opencv-motion-garmin` 是影像組的，整條不能合，見下。
 **別人的分支不代刪。**
 
 > ### ⚠️ 遠端狀態要問 git，不要問文件（這一輪踩了兩次）
@@ -707,17 +700,8 @@ python garmin/run_pipeline.py          # 再跑後四步
 ⚠️ 這也代表**越舊的夜晚，每重抓一次就可能再少一點**。
   `garmin/data/_backup_20260811/`（桌面那份舊副本裡）留著最早的版本。
 
-分支盤點（2026-08-28 晚間用 `git ls-remote --heads origin` 實測，4 條遠端分支）：
-
-| 遠端分支 | 作者 | 狀態 |
-|---|---|---|
-| `main` | — | `18aa8ed`（PR #21 合併點） |
-| `second-flutter-integration` | Jeremy | ✅ **內容已於 PR #16 併入 main**（走的是新分支 `merge/jeremy-report-screen`，不是直接合這條）。這條本身沒人刪，**可以刪了** |
-| `flutter` | Jeremy | 已全數合併，可刪 |
-| `feature/opencv-motion-garmin` | 影像組 | 12 個 commit 從沒合併，整條不能合，見下方 |
-
-✅ 自己開過的分支全部合完並刪除（遠端與本地都只剩 `main`）。
-剩下那兩條 Jeremy 的沒動——**別人的分支不代刪**。
+分支現況不在這裡列（會過期），**以 `git ls-remote --heads origin` 為準**。
+`feature/opencv-motion-garmin` 整條不能合；其他人的分支不代刪。
 
 ### ⚠️ TAPO 資料：哪些能引用、哪些不能
 
@@ -1309,7 +1293,7 @@ python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**433 條全過**，2026-10-02 在 `feat/composition-in-app` 實測）：
+Flutter（在 `app/` 底下跑，**433 條全過**，2026-10-02 在 PR #75 分支實測）：
 
 ```bash
 flutter test
