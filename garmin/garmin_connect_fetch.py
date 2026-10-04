@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import merge_standard_data as merge
+from migrate_daily_series_tz import TZ_MARKER_KEY, TZ_MARKER_VALUE, is_converted
 
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，讓 garmin/ 目錄下只留程式碼。
 # 用 Path(__file__).parent 而非相對路徑字串，這樣不管從哪個工作目錄執行都能正確定位。
@@ -97,6 +98,9 @@ def build_standard_payload(device_id: str, records: List[Dict[str, Any]]) -> Dic
         "device_id": device_id,
         "source": "garmin_connect_api",
         "date": datetime.now().strftime("%Y-%m-%d"),
+        # 每日心率／壓力的時刻是真正的當地時間（2026-10-04 起）。
+        # 沒有這個標記的舊檔，那兩種紀錄早了 8 小時——見 migrate_daily_series_tz.py。
+        TZ_MARKER_KEY: TZ_MARKER_VALUE,
         "total_records": len(records),
         "records": sorted(records, key=lambda x: x["timestamp"]),
     }
@@ -216,7 +220,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _gmt_labelled_to_local(records: List[Dict[str, Any]], tz: str) -> List[Dict[str, Any]]:
+    """
+    把一批「UTC 鐘面、卻貼著當地時區標籤」的紀錄換算成真正的當地時間。
+
+    為什麼需要：下面的 `_iso_from_epoch_ms` 產生的就是那種時刻（見它的註解）。
+    睡眠那幾段各自過了 `gmt_to_local_iso`；每日心率與壓力原本**沒有**過，
+    所以整批早了 8 小時，直到 2026-10-03 才發現（證據與影響見
+    migrate_daily_series_tz.py 檔頭）。整批在出口換算，而不是逐個呼叫點改——
+    那兩支解析函式各有四、五個分支，漏改一個不會有任何錯誤訊息。
+    """
+    hours = merge.parse_tz(tz).utcoffset(None).total_seconds() / 3600
+    out = []
+    for record in records:
+        local = gmt_to_local_iso(record["timestamp"], hours)
+        if local:
+            out.append({**record, "timestamp": local})
+    return out
+
+
+def _drop_sleep_hr_covered_by_daily(
+    records: List[Dict[str, Any]], sleep_idx: set, daily_idx: set
+) -> List[Dict[str, Any]]:
+    """
+    同一個時刻的心率，睡眠 API 與每日心率 API 都會給。兩份都留的話，
+    睡眠時段在平均值裡的權重等於變兩倍。以每日那份為準，睡眠那份只在
+    每日沒有讀數的時刻留著。
+
+    ⚠️ 時刻修正之前不需要這一步——兩份錯開 8 小時，根本不會重疊。
+    """
+    daily_stamps = {records[i]["timestamp"] for i in daily_idx if records[i]["metric"] == "heart_rate"}
+    return [r for i, r in enumerate(records)
+            if not (i in sleep_idx and r["metric"] == "heart_rate" and r["timestamp"] in daily_stamps)]
+
+
 def _iso_from_epoch_ms(epoch_ms: Any, tz: str) -> Optional[str]:
+    # ⚠️ 回傳的是 **UTC 的鐘面時間貼上 tz 標籤**，不是當地時間。
+    #    不要「修好」它：睡眠那幾段把它的輸出再餵給 gmt_to_local_iso
+    #    （那支把鐘面當 UTC 再加時差），這裡改對了那邊就會多加一次。
     try:
         ms = int(epoch_ms)
     except (TypeError, ValueError):
@@ -466,6 +507,12 @@ def _parse_sleep_data(day_str: str, raw: Any, tz: str, records: List[Dict[str, A
 
 
 def _parse_heart_rate_data(raw: Any, tz: str, records: List[Dict[str, Any]]) -> None:
+    parsed: List[Dict[str, Any]] = []
+    _parse_heart_rate_gmt(raw, tz, parsed)
+    records.extend(_gmt_labelled_to_local(parsed, tz))
+
+
+def _parse_heart_rate_gmt(raw: Any, tz: str, records: List[Dict[str, Any]]) -> None:
     if isinstance(raw, list):
         for item in raw:
             if isinstance(item, dict):
@@ -531,6 +578,12 @@ def _parse_heart_rate_data(raw: Any, tz: str, records: List[Dict[str, Any]]) -> 
 
 
 def _parse_stress_data(raw: Any, tz: str, records: List[Dict[str, Any]], keep_negative_stress: bool) -> None:
+    parsed: List[Dict[str, Any]] = []
+    _parse_stress_gmt(raw, tz, parsed, keep_negative_stress)
+    records.extend(_gmt_labelled_to_local(parsed, tz))
+
+
+def _parse_stress_gmt(raw: Any, tz: str, records: List[Dict[str, Any]], keep_negative_stress: bool) -> None:
     if isinstance(raw, list):
         for item in raw:
             if not isinstance(item, dict):
@@ -692,6 +745,8 @@ def main() -> None:
     client.login()
 
     records: List[Dict[str, Any]] = []
+    sleep_idx: set = set()
+    daily_hr_idx: set = set()
     debug_rows: List[Dict[str, Any]] = []
     fetched_days = _resolve_fetch_days(args)
 
@@ -715,10 +770,12 @@ def main() -> None:
         before = len(records)
         _parse_sleep_data(day_str, sleep_data, args.tz, records)
         sleep_count = len(records) - before
+        sleep_idx.update(range(before, len(records)))
 
         before = len(records)
         _parse_heart_rate_data(heart_rate_data, args.tz, records)
         hr_count = len(records) - before
+        daily_hr_idx.update(range(before, len(records)))
 
         before = len(records)
         _parse_stress_data(stress_data, args.tz, records, args.keep_negative_stress)
@@ -768,6 +825,7 @@ def main() -> None:
             }
         debug_rows.append(debug_row)
 
+    records = _drop_sleep_hr_covered_by_daily(records, sleep_idx, daily_hr_idx)
     _inject_movement_proxy(records)
 
     merge_report = None
@@ -776,7 +834,15 @@ def main() -> None:
         # ⚠️ 讀不出來就讓它拋例外停下，**不要**退回覆寫——
         #    那正是「舊檔壞了一點 → 整份歷史被換成最近幾天」的路徑。
         with open(output_path, encoding="utf-8") as f:
-            existing = json.load(f)["records"]
+            existing_payload = json.load(f)
+        existing = existing_payload["records"]
+        # 舊檔的每日心率／壓力早 8 小時，這次抓的是對的。併在一起會是一份
+        # 前半錯位、後半正確的檔案，交界處的夜晚基線會安靜地算錯。
+        if not is_converted(existing_payload):
+            raise ValueError(
+                f"{output_path} predates the daily heart-rate/stress timezone fix. "
+                "Run `python garmin/migrate_daily_series_tz.py` once, then fetch again."
+            )
         empty = {
             (date.fromisoformat(row["date"]), source)
             for row in debug_rows for source in merge.SOURCES

@@ -210,7 +210,8 @@ def run_fetch(output, *extra):
 
 
 def write_old(path):
-    path.write_text(json.dumps({"device_id": "d", "records": OLD}), encoding="utf-8")
+    path.write_text(json.dumps({"device_id": "d", "daily_series_tz": "local", "records": OLD}),
+                    encoding="utf-8")
 
 
 def read(path):
