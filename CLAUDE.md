@@ -1243,8 +1243,15 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   `unverified` → 研究者帳號（「無法歸屬」的桶子，不當成任何一個人）；
   `wearer_c`（本人）→ **手機一直在上傳的那個帳號**，執行時用 `db.resolve_phone_account()` 找，
   跟攝影機匯入共用同一個判準——兩邊各寫一份的話同一晚的攝影機與手錶資料會分在兩個帳號。
-  搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的夜晚**不覆蓋**。
+  搬家後會清掉舊帳號裡的副本；手機 Health Connect 已經送過的同一晚會被 Garmin **蓋掉**
+  （見「同一晚兩個來源」）。
   ⚠️ 在此之前所有夜晚都在研究者帳號，所以手機 App 依帳號撈手錶資料的功能一晚都拿不到。
+  ⚠️ **評分檔已經沒有的手錶夜晚會被清掉**（2026-10-04）。某一晚被有效性檢查排除之後
+  （06-27 是實例），資料庫那一列不會自己消失，API 會繼續對外回它，而早晨匯入會卡在
+  「90 對 89」。現在寫入後會先把那些列備份到 `sonnap-data/deleted-rows/` 再刪，並印出日期。
+  **一次超過 `MAX_PRUNE_NIGHTS`（3）晚就停、一列都不刪**——那多半是評分檔少了歷史，
+  不是夜晚被排除。只刪 `garmin` 來源的；`--verify` 只核對不刪。
+  ⚠️ 備份檔含帳號 id，所以放在專案外面，不要搬進 repo。
 - **`morning_import.py`（2026-09-15 新增）— 每天早上一條指令。**
   資料庫連線 → 昨晚的錄影檢查 → 抓 Garmin（最近 7 天，併進既有的）＋評分＋晚數檢查 → 全部過了才寫入
   （手錶、攝影機、夢境、App 資料檔）。**任何一項沒過就停，資料庫一筆都不寫**；
@@ -1315,7 +1322,7 @@ python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
-python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）
+python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉
 python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫
 python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／壓力是當地時間、睡眠那幾段沒被多加 8 小時、舊檔轉換可重複執行
