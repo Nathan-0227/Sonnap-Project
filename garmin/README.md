@@ -166,8 +166,9 @@ python garmin_connect_fetch.py --days 3 --raw-debug-output data/raw_debug.json  
 - **`movement_sample_minutes`（原名 `movement_count`）是取樣分鐘數，不是動作量。**
   每分鐘一筆，99.98% 的間隔正好 60 秒；與睡眠時長 r=+0.929、與 WASO 只有 r=−0.138。
   改名就是因為舊名字會被讀成「翻身次數」。不要拿去跟 App 對照。
-- **`avg_stress_score` 不是睡眠期間的壓力**，是該日曆日**白天**的平均
-  （11439 筆讀數只有 8.6% 落在睡眠期間）。**已不計分**；Tier3 用的是
+- **`avg_stress_score` 混了兩段**：睡眠區間內的讀數歸起床日、其餘照日曆日歸
+  （24994 筆讀數裡 46.6% 落在睡眠期間；先前寫的 8.6% 是時刻早 8 小時那時算的）。
+  **已不計分**；Tier3 用的是
   `presleep_stress_score`（上一次起床 → 這一次入睡那整段清醒時段）。
 - **`movement_level_mean/max` 與 `movement_active_minutes` 永不進評分**——
   `MOVEMENT_ACTIVE_THRESHOLD = 1.0` 是看資料分布訂的、沒有文獻依據，
