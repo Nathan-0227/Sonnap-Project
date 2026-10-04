@@ -19,12 +19,13 @@ python run_pipeline.py
 `run_pipeline.py` 跑完 ②~⑤ 之後**還會順便跑 `build_app_payload.py`**
 產生 App 讀的 `app/assets/data/app_payload.json`；加 `--ai` 才會另外呼叫 Claude 重生夢境。
 
-⚠️ **重抓資料是覆寫不是增量。** `garmin_connect_fetch.py` 用 `open(output, "w")`，
-所以 `--days N` 會把整個 `garmin_standard_data.json` 換掉、只留最近 N 天，
-**弄丟前面所有歷史且沒有任何警告**。要重抓請給完整區間：
+⚠️ **重抓資料是合併（2026-10-03 起）。** `garmin_connect_fetch.py` 只換這次抓的
+那幾天，其餘原樣保留——Garmin 會把約 4 個月前的日子的細節收掉，重抓到那些日子
+就是把遺失抄進來。規則在 `merge_standard_data.py` 檔頭。
+**不要加 `--replace`**（舊的整份覆寫行為）。平常只抓最近幾天：
 
 ```bash
-python garmin/garmin_connect_fetch.py --start-date 2026-05-28 --end-date <今天>
+python garmin/garmin_connect_fetch.py --days 7
 python garmin/run_pipeline.py
 ```
 
