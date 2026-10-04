@@ -17,6 +17,12 @@ tests/test_morning_import.py — 早上那支匯入腳本的檢查有沒有真�
 4. **正常的夜晚不能被擋。** 門檻訂太嚴的話，使用者每天早上都得加
    --skip-camera，那這個檢查很快就會被習慣性地繞過。
    （09-12 那晚是 0.91，是真實存在的「正常但不完美」。）
+5. **錄影中間斷掉時，首尾相減與「臥床 ÷ 錄影時長」兩個都看不出來。**
+   09-20 那晚筆電進待機九小時又醒來繼續寫同一個檔案：首尾 625 分鐘、
+   實際 18 分鐘，而比例是**完美的 1.00**（分子分母都是首尾相減，
+   中間的洞互相抵銷）。那一晚通過了全部檢查、什麼異狀都沒顯示。
+   ⚠️ 兩條規則缺一不可，【1b】最後一條就是在守這件事：09-13 那種
+   「尾段斷線」的最長連續片段是 124 分鐘，**過得了**新規則。
 
 執行：python tests/test_morning_import.py
 """
@@ -79,6 +85,37 @@ def write_recording(path, started, usable_minutes, dead_minutes=0, step_s=5):
         t += timedelta(minutes=10)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     old = time.time() - 3600          # 一小時前寫完的，不算「還在錄」
+    os.utime(path, (old, old))
+    return path
+
+
+def write_segmented(path, started, spans, step_s=5):
+    """
+    照 tapo_metric_logger 的格式寫一份**中間斷掉**的錄影。
+
+    spans：[(距開始第幾分鐘, 這一段有幾分鐘), ...]
+
+    ⚠️ 空隙裡**完全沒有列**——那是筆電進待機的長相（09-20）。
+       跟 write_recording 的 dead_minutes（有列、但全是空值，每 10 分鐘一列）
+       不是同一件事，兩種失效模式由不同的規則擋。
+    """
+    lines = [
+        f"# tapo_metric_logger  started={started.isoformat()}",
+        "# size=640x360 fps=5.0 blur=7 mog2_history=500 var=16 lr=0.002000 open=5",
+        "# roi=full",
+        "# source=rtsp://…@test/stream2",
+        COLUMNS,
+    ]
+    for offset_min, length_min in spans:
+        t = started + timedelta(minutes=offset_min)
+        end = t + timedelta(minutes=length_min)
+        while t <= end:
+            warm = 1 if (t - started).total_seconds() < 90 else 0
+            lines.append(f"{t.isoformat(timespec='milliseconds')},"
+                         f"50.00,0,0,0,0,0,0,0,0,0,{warm},,,,,,")
+            t += timedelta(seconds=step_s)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    old = time.time() - 3600
     os.utime(path, (old, old))
     return path
 
@@ -190,6 +227,82 @@ with tempfile.TemporaryDirectory() as d:
     os.utime(live, None)                      # 剛剛才寫過
     v = mi.check_camera(live)
     ok("錄影還在寫入 → 擋下", not v.ok and "Ctrl+C" in v.reason)
+
+print("\n【1b】錄影中間斷掉：首尾相減與比例兩個都看不出來的那種（09-20）")
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    start = datetime(2026, 9, 20, 3, 17, 14)
+
+    # 09-20 的形狀：開錄 12 秒就進待機，中間醒來兩次各幾秒，最後下午錄到 18 分鐘。
+    frag = write_segmented(d / "20260920_031711.csv", start,
+                           [(0, 0.2), (6, 0.02), (229, 0.07), (607, 17.9)])
+    v = mi.check_camera(frag)
+    ratio = v.time_in_bed_minutes / v.recorded_minutes if v.recorded_minutes else 0
+    ok("中間斷成四段、最長連續 18 分鐘 → 擋下", not v.ok,
+       f"最長 {v.continuity.longest_minutes:.1f} 分 / {v.continuity.segments} 段")
+    ok("  舊的比例規則放行它（證明擋下它的是新規則）", ratio >= mi.MIN_BED_COVERAGE,
+       f"比例 {ratio:.2f}")
+    ok("  臥床時間那條也放行它",
+       v.time_in_bed_minutes >= mi.migrate_camera_to_db.MIN_NIGHT_MINUTES,
+       f"臥床 {v.time_in_bed_minutes:.0f} 分")
+    ok("  理由講出片段數與最長連續", "斷成" in v.reason and "最長連續" in v.reason)
+    ok("  理由指向最常見的原因（電源）", "插電" in v.reason)
+    ok("  但沒把原因說死（熱點掉線也會這樣）",
+       "最常見" in v.reason and "熱點" in v.reason)
+
+    intact = write_segmented(d / "20260921_035638.csv", start, [(0, 293)])
+    v = mi.check_camera(intact)
+    ok("一整段 293 分鐘 → 通過，而且算作完整", v.ok and v.continuity.intact,
+       f"{v.continuity.segments} 段 / 涵蓋 {v.continuity.coverage:.0%}")
+
+    # ⚠️ 判準是「最長連續片段」不是「總有效時間」。這一份總共錄到 210 分鐘，
+    #    但沒有任何一段超過 70 分鐘。下游的 tapo_sleep_onset 要從一段連續資料
+    #    裡找入睡時刻，三段碎片湊出來的 210 分鐘對它沒有用。
+    #    改成用總有效時間判斷的話，這一條會紅。
+    v = mi.check_camera(write_segmented(d / "20260922_030000.csv", start,
+                                        [(0, 70), (120, 70), (240, 70)]))
+    ok("三段各 70 分（總共 210 分）→ 擋下，因為沒有一段夠長", not v.ok,
+       f"總共 {v.continuity.covered_minutes:.0f} 分 / 最長 "
+       f"{v.continuity.longest_minutes:.0f} 分")
+
+    # ⚠️ 排序：短但沒斷的夜晚要聽到「不到 120 分鐘」，不是「中間斷掉」。
+    #    新規則排在最後就是為了這件事——一段 60 分鐘、完全沒斷的錄影
+    #    不是斷線問題，是錄太短，說錯了會把人送去查電源。
+    v = mi.check_camera(write_recording(d / "20260909_021654.csv", start, 60))
+    ok("短但沒斷（60 分）→ 說的是「臥床時間只有」，不是「中間斷掉」",
+       not v.ok and "斷成" not in v.reason and "臥床時間只有" in v.reason)
+
+    # ⚠️ 兩條規則缺一不可：這一種新規則擋不住。
+    v = mi.check_camera(write_recording(d / "20260913_045549.csv", start, 124,
+                                        dead_minutes=180))
+    ok("09-13 型（尾段斷線）→ 最長連續過得了新規則，必須由比例規則擋下",
+       not v.ok and "斷成" not in v.reason and
+       v.continuity.longest_minutes >= mi.migrate_camera_to_db.MIN_NIGHT_MINUTES,
+       f"最長 {v.continuity.longest_minutes:.0f} 分")
+    # ⚠️ 被前面的規則擋下時，連續性也要是真的數字。不然 --check-camera 會把
+    #    17 個片段的檔案印成「1 片段、0 分鐘」——正是這次要修的那種毛病。
+    ok("  被別條規則擋下時，連續性仍是真的數字（不是全 0 的預設值）",
+       v.continuity.span_minutes > 0 and v.continuity.segments > 1,
+       f"{v.continuity.segments} 段 / 首尾 {v.continuity.span_minutes:.0f} 分")
+
+
+print("\n【1c】--check-camera：單獨查一份，不碰資料庫也不匯入")
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    start = datetime(2026, 9, 20, 3, 17, 14)
+    frag = write_segmented(d / "20260920_031711.csv", start,
+                           [(0, 0.2), (6, 0.02), (229, 0.07), (607, 17.9)])
+    rc, out = quiet(mi.report_camera, frag)
+    ok("擋得下的檔案 → 回非 0", rc != 0, str(rc))
+    ok("  印出真的片段數（4 段）", "片段數" in out and "4" in out)
+    ok("  印出涵蓋率與最長連續", "涵蓋" in out and "最長連續" in out)
+
+    rc, out = quiet(mi.report_camera, write_segmented(d / "ok.csv", start, [(0, 293)]))
+    ok("過得了的檔案 → 回 0", rc == 0, str(rc))
+
+    rc, out = quiet(mi.report_camera, d / "不存在.csv")
+    ok("檔案不存在 → 回非 0，不丟例外", rc != 0)
+
 
 print("\n【2】挑昨晚的錄影：挑最長的那份，前幾天的不拿出來重匯")
 with tempfile.TemporaryDirectory() as d:
