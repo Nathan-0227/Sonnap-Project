@@ -244,28 +244,37 @@ void main() {
       expect(night.finalQuality, 'Normal');
     });
 
-    test('07-12 是 anxious，而且同一個品質等級裡有別的心情', () {
-      final night = nightOf('2026-07-12');
-      expect(night, isNotNull, reason: '07-12 不在 history 裡——窗格又滑了');
-      expect(night!.petMood, 'anxious');
+    test('07-12 還在 history 裡；有 anxious 的品質等級底下也有別的心情', () {
+      expect(nightOf('2026-07-12'), isNotNull,
+          reason: '07-12 不在 history 裡——窗格又滑了');
 
-      // 這才是這一晚存在的理由：**同一個品質等級底下有不同的心情**。
-      // 釘住「它是 Poor」每次分數位移都會紅，而那不是程式壞了；
-      // 改成從資料推導之後，只有拿掉 anxious 覆寫才會讓它紅。
-      final sameQuality = sample.history
-          .where((e) => e.finalQuality == night.finalQuality)
-          .map((e) => e.petMood)
-          .toSet();
-      expect(
-        sameQuality.length,
-        greaterThan(1),
-        reason: '${night.finalQuality} 這一級底下只剩一種心情，'
-            '「心情不是從品質推出來的」就沒有素材可以證明了',
-      );
+      // ⚠️ 這條原本釘住「07-12 是 anxious」。2026-10-04 每日心率與壓力的
+      // 時刻修正了 8 小時（在此之前一律早 8 小時），那一晚的心率修正值
+      // 不再過門檻，變成 Bad／tired；anxious 的夜晚則從 8 晚變成 15 晚。
+      // **哪一晚 anxious 變了不代表心情的來源壞了**，所以不再釘日期，
+      // 連「哪一晚」也改成由資料推導。
+      final anxious =
+          sample.history.where((e) => e.petMood == 'anxious').toList();
+      expect(anxious, isNotEmpty);
+
+      // 這才是這條存在的理由：**同一個品質等級底下有不同的心情**。
+      // 只有拿掉 anxious 覆寫才會讓它紅。
+      for (final quality in anxious.map((e) => e.finalQuality).toSet()) {
+        final moods = sample.history
+            .where((e) => e.finalQuality == quality)
+            .map((e) => e.petMood)
+            .toSet();
+        expect(
+          moods.length,
+          greaterThan(1),
+          reason: '$quality 這一級底下只剩一種心情，'
+              '「心情不是從品質推出來的」就沒有素材可以證明了',
+        );
+      }
     });
 
     test('⚠️ anxious 橫跨多個品質等級（所以心情不可能是從品質查表來的）', () {
-      // 實測 83 晚：Good 1、Normal 1、Poor 4、Bad 2 都有 anxious。
+      // 實測 87 晚（2026-10-04）：Good 3、Normal 7、Poor 3、Bad 2 都有 anxious。
       // 這條紅了代表 Tier3 的生理覆寫實質上失效，或 payload 的來源變了。
       final levels = sample.history
           .where((e) => e.petMood == 'anxious')
