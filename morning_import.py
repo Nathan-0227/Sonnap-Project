@@ -2,14 +2,14 @@
 morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機資料寫進資料庫。
 
     ① 資料庫連得上嗎                                   ← 沒過就停，什麼都沒動
-    ② 昨晚的錄影：還在錄？太短？後半夜斷線？             ← 沒過就停，什麼都沒動
+    ② 昨晚的錄影：還在錄？太短？後半夜斷線？中間斷成好幾段？ ← 沒過就停，什麼都沒動
     ③ 手錶：備份 → 抓 Garmin（最近幾天，併進既有的）→ 評分 → 晚數檢查 ← 沒過就還原檔案再停
     ④ 全部過了才寫：手錶 → DB、攝影機 → DB、補夢境、重建 App 資料檔
 
 ═══════════════════════════════════════════════════════════════════
 為什麼要包成一支
 ═══════════════════════════════════════════════════════════════════
-早上那一串原本是九條要照順序打的指令，其中兩個錯**不會報錯**：
+早上那一串原本是九條要照順序打的指令，其中三個錯**不會報錯**：
 
 1. **抓資料曾經是覆寫。** 少給日期範圍會把整份歷史換成最近一天，
    之後的評分、匯入全部照常成功。（2026-10-03 起 fetch 預設改成合併，
@@ -18,7 +18,13 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
    09-13 那晚錄了 304 分鐘，後半段串流沒回來，算出 124 分鐘——
    剛好過了「不到 120 分鐘不算一晚」的門檻，會被當成正常的一晚寫進去。
 
-兩個都得靠人看數字才擋得住，而早上剛起床正是最不會仔細看的時候。
+3. **錄影中間斷掉時，連「錄了多久」都是假的。**
+   09-20 那晚筆電在電池模式下進了待機（4 分鐘就會進），醒來繼續寫同一個檔案，
+   所以首尾相減是 625 分鐘、實際只錄到 17.9 分鐘。更糟的是當時那條
+   「臥床 ÷ 錄影時長」的擋法**完全失效**——分子分母都是首尾相減，
+   中間的空洞在兩邊同時出現、互相抵銷，比率算出來是完美的 1.00。
+
+三個都得靠人看數字才擋得住，而早上剛起床正是最不會仔細看的時候。
 
 ═══════════════════════════════════════════════════════════════════
 停下來的規則
@@ -26,7 +32,7 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
 | 檢查 | 什麼時候停 | 停下來時的狀態 |
 |---|---|---|
 | 資料庫 | 沒設 `SONNAP_DB_URL`，或 5 秒內連不上 | 什麼都還沒動 |
-| 攝影機 | 還在錄、不到 120 分鐘、臥床 ÷ 錄影時長 < 0.8 | 什麼都還沒動（排在抓手錶**之前**） |
+| 攝影機 | 還在錄、不到 120 分鐘、臥床 ÷ 錄影時長 < 0.8、最長連續片段 < 120 分鐘 | 什麼都還沒動（排在抓手錶**之前**） |
 | 手錶 | 抓取或評分失敗、原本有的夜晚不見了 | 還原成跑之前的檔案 |
 
 **任何一項沒過，資料庫一筆都不寫。**
@@ -45,6 +51,7 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
     --skip-camera          昨晚沒錄、或錄壞了，只匯手錶
     --camera-csv <路徑>    指定要匯入哪一份錄影（預設挑昨晚最長的那份）
     --no-ai                不補夢境（夢境要花 Claude API 額度）
+    --check-camera <路徑>  只檢查一份錄影的連續性就結束，不匯入任何東西
 """
 import argparse
 import json
@@ -54,7 +61,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -99,6 +106,27 @@ REFETCH_DAYS = 7
 #    臥床時間則只算到最後一筆**可用**資料（tapo_sleep_onset.analyse）。
 #    兩者的差就是「錄了但沒有資料」的那一段。
 MIN_BED_COVERAGE = 0.8
+
+# 兩筆資料的間隔超過這麼多秒，就當成「中間斷掉了」。
+#
+# 校準（2026-10-04，tapo_metrics/ 裡全部的整夜錄影）：
+#   正常錄影（約 4 幀/秒）         最大間隔 1.3 秒         ← 不能算斷
+#   09-20（筆電進待機）            349 / 13369 / 22690 秒  ← 要算斷
+# 60 秒比正常值大 46 倍、比最小的真空洞小 5.8 倍，兩邊都有餘裕。
+#
+# ⚠️ 這條只看**時間上有沒有列**，不管那些列裡有沒有可用資料。
+#    「有列但全是空值」（串流斷掉但 logger 還活著，約 25 秒寫一列標記）
+#    這條看不到——那是 MIN_BED_COVERAGE 在守。兩條各守一個失效模式：
+#
+#      筆電睡著 → 完全沒有列、時間上有空隙      → MAX_SAMPLE_GAP_SECONDS
+#      串流斷掉 → 有列但沒資料、間隔 < 60 秒    → MIN_BED_COVERAGE
+#
+#    ⚠️ 缺一不可，不要以為新的那條涵蓋了舊的。實測既有的 09-13 測試案例
+#       （可用 124 分 + 斷線 180 分）最長連續片段是 124 分鐘，**過得了**
+#       這條，只有 MIN_BED_COVERAGE 擋得住。
+#    ⚠️ 所以兩條的分工依賴 logger 的重試間隔。那個間隔若改成大於 60 秒，
+#       串流斷線會變成這條看得到的空隙，分工就變了。
+MAX_SAMPLE_GAP_SECONDS = 60
 
 # CSV 在這麼多秒內還被寫過，就當成錄影還開著。
 # logger 每 100 列 flush 一次，約 4 幀/秒 → 25 秒一次，120 秒夠寬。
@@ -204,6 +232,67 @@ def recording_minutes(csv_path):
     return (last - recording_started(csv_path)).total_seconds() / 60
 
 
+@dataclass
+class Continuity:
+    """
+    錄影在時間上的連續性。
+
+    「片段」= 被超過 MAX_SAMPLE_GAP_SECONDS 的空隙隔開的一段資料。
+    斷線標記列（每 10 分鐘一列）各自會成為一個長度 0 的片段，所以
+    片段數會把它們算進去——那是刻意的，片段數本身就是在講「斷了幾次」。
+    """
+    segments: int = 1
+    longest_minutes: float = 0.0
+    covered_minutes: float = 0.0
+    span_minutes: float = 0.0
+
+    @property
+    def coverage(self):
+        """實際錄到的時間 ÷ 首尾橫跨的時間。沒有資料時回 1.0（交給別的檢查擋）。"""
+        return self.covered_minutes / self.span_minutes if self.span_minutes > 0 else 1.0
+
+    @property
+    def intact(self):
+        """一整段沒斷過。成功訊息只在**不是**這樣的時候才多印一行。"""
+        return self.segments == 1 and self.coverage >= 0.999
+
+
+def recording_continuity(csv_path):
+    """
+    這份錄影中間有沒有斷掉。
+
+    ⚠️ 為什麼不能用首尾相減：09-20 那晚筆電進待機九小時又醒來繼續寫同一個
+       檔案，首尾相減 625 分鐘、實際只錄到 17.9 分鐘。**首尾相減看不到中間的洞。**
+
+    ⚠️ 讀的是**所有**列、包含斷線標記列（與 recording_last_row 一致）。
+       判準是「時間上有沒有列」，不是「列裡有沒有資料」——後者是
+       MIN_BED_COVERAGE 的工作，理由寫在那個常數上面。
+    """
+    times = []
+    with csv_path.open(encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("#") or line.startswith("t,") or not line.strip():
+                continue
+            times.append(datetime.fromisoformat(line.split(",", 1)[0]))
+    if not times:
+        return Continuity(segments=0)
+
+    bounds = []
+    start = prev = times[0]
+    for t in times[1:]:
+        if (t - prev).total_seconds() > MAX_SAMPLE_GAP_SECONDS:
+            bounds.append((start, prev))
+            start = t
+        prev = t
+    bounds.append((start, prev))
+
+    lengths = [(b - a).total_seconds() for a, b in bounds]
+    return Continuity(segments=len(bounds),
+                      longest_minutes=max(lengths) / 60,
+                      covered_minutes=sum(lengths) / 60,
+                      span_minutes=(times[-1] - times[0]).total_seconds() / 60)
+
+
 def last_night_recording(metrics_dir, now):
     """
     回 (那一晚的起床日, 要匯入的那份, 同一晚被略過的其他份)。找不到回 (None, None, [])。
@@ -234,6 +323,7 @@ class CameraVerdict:
     reason: str
     recorded_minutes: float = 0.0
     time_in_bed_minutes: float = 0.0
+    continuity: Continuity = field(default_factory=Continuity)
 
 
 def check_camera(csv_path, analyse=onset.analyse):
@@ -250,16 +340,35 @@ def check_camera(csv_path, analyse=onset.analyse):
 
     tib = result["time_in_bed_minutes"] or 0.0
     recorded = recording_minutes(csv_path)
+    # ⚠️ 連續性在這裡就算好，不是等到要用它的那條規則才算。
+    #    不然被前面的規則擋下的夜晚，verdict.continuity 會是一組全 0 的預設值，
+    #    而 --check-camera 會把 18 個片段的檔案印成「1 片段、0 分鐘」——
+    #    那正是這次要修的那種「看起來正常」的毛病。
+    cont = recording_continuity(csv_path)
     if tib < migrate_camera_to_db.MIN_NIGHT_MINUTES:
         return CameraVerdict(False, f"{csv_path.name} 的臥床時間只有 {tib:.0f} 分鐘，"
                                     f"不到 {migrate_camera_to_db.MIN_NIGHT_MINUTES} 分鐘不算一晚。",
-                             recorded, tib)
+                             recorded, tib, cont)
     if recorded > 0 and tib / recorded < MIN_BED_COVERAGE:
         return CameraVerdict(False, f"{csv_path.name} 錄了 {recorded:.0f} 分鐘，臥床時間卻只算出 "
                                     f"{tib:.0f} 分鐘（{tib / recorded:.0%}）——"
                                     "多半是半夜斷線、後段沒有資料，寫進去會是一個偏短的臥床時間。",
-                             recorded, tib)
-    return CameraVerdict(True, "", recorded, tib)
+                             recorded, tib, cont)
+    # ⚠️ 這條**刻意排在最後**。短的夜晚（最長連續片段本來就 < 120）應該聽到
+    #    「臥床時間只有 N 分鐘」那個說法，而不是被這條搶著說「中間斷掉」——
+    #    一段 60 分鐘、完全沒斷的錄影不是斷線問題，是錄太短。
+    #    排在最後之後，會走到這裡的只剩「首尾夠長、比率也正常，但中間有洞」
+    #    那一種，也就是這條專門要擋的那一種。
+    if cont.longest_minutes < migrate_camera_to_db.MIN_NIGHT_MINUTES:
+        return CameraVerdict(False, "\n".join([
+            f"{csv_path.name} 首尾橫跨 {cont.span_minutes:.0f} 分鐘，但中間斷成 "
+            f"{cont.segments} 段，最長連續只錄到 {cont.longest_minutes:.0f} 分鐘"
+            f"（涵蓋 {cont.coverage:.0%}）——不到 "
+            f"{migrate_camera_to_db.MIN_NIGHT_MINUTES} 分鐘不算一晚。",
+            "  最常見的原因是筆電沒插電（電池模式下 4 分鐘就會進待機），"
+            "但熱點掉線也會這樣，兩個都查一下。",
+        ]), recorded, tib, cont)
+    return CameraVerdict(True, "", recorded, tib, cont)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -388,6 +497,14 @@ def _run(args, paths, now, runner, db_check, env, analyse):
                 ]))
             print(f"✓ {camera_csv.name}：錄了 {verdict.recorded_minutes:.0f} 分鐘，"
                   f"臥床 {verdict.time_in_bed_minutes:.0f} 分鐘")
+            # 完整的夜晚不多印一行；斷過的要講出來——09-20 的教訓是
+            # 「看起來正常」最危險，而那一晚通過檢查時什麼異狀都沒顯示。
+            if not verdict.continuity.intact:
+                cont = verdict.continuity
+                print(f"  ⚠ 中間斷成 {cont.segments} 段（實際錄到 "
+                      f"{cont.covered_minutes:.0f} 分鐘、涵蓋 {cont.coverage:.0%}），"
+                      f"最長連續 {cont.longest_minutes:.0f} 分鐘。"
+                      "不擋，但這一晚不是完整的一段")
             for other in skipped:
                 print(f"  （同一晚另有 {other.name}，錄得較短，不匯入）")
 
@@ -453,11 +570,41 @@ def _run(args, paths, now, runner, db_check, env, analyse):
     return 0
 
 
+def report_camera(csv_path):
+    """
+    單獨檢查一份錄影並印出結果，不碰資料庫、不匯入任何東西。
+    回 0 代表這份過得了早上匯入的檢查。
+
+    存在的理由：同一段連續性檢查在 2026-10-03~04 被手寫了三次（查 09-20、
+    查 09-21、回頭查 09-09/12/13）。手寫第三次就該變成工具。
+    """
+    path = Path(csv_path)
+    if not path.exists():
+        print(f"✗ 找不到 {path}")
+        return 1
+    verdict = check_camera(path)
+    cont = verdict.continuity
+    print(f"● {path.name}")
+    print(f"  首尾橫跨   {cont.span_minutes:8.1f} 分鐘")
+    print(f"  片段數     {cont.segments:8d}   （間隔超過 {MAX_SAMPLE_GAP_SECONDS} 秒算斷一次）")
+    print(f"  最長連續   {cont.longest_minutes:8.1f} 分鐘   （門檻 "
+          f"{migrate_camera_to_db.MIN_NIGHT_MINUTES} 分鐘）")
+    print(f"  實際錄到   {cont.covered_minutes:8.1f} 分鐘   （涵蓋 {cont.coverage:.1%}）")
+    print(f"  臥床時間   {verdict.time_in_bed_minutes:8.1f} 分鐘")
+    if verdict.ok:
+        print("  ✓ 過得了早上匯入的檢查")
+        return 0
+    print(f"  ✗ 擋下：{verdict.reason}")
+    return 1
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="每天早上：手錶與攝影機 → 資料庫（有檢查、沒過就停）")
     ap.add_argument("--skip-camera", action="store_true", help="不匯入攝影機")
     ap.add_argument("--camera-csv", help="指定要匯入的錄影 CSV（預設挑昨晚最長的那份）")
     ap.add_argument("--no-ai", action="store_true", help="不補夢境（夢境要花 Claude API 額度）")
+    ap.add_argument("--check-camera",
+                    help="只檢查一份錄影的連續性就結束，不匯入任何東西")
     ap.add_argument("--backup-dir", type=Path,
                     default=ROOT.parent / "sonnap-data" / "morning-backups",
                     help="手錶資料的備份放哪（預設在專案外面的 sonnap-data）")
@@ -466,6 +613,10 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
+    # ⚠️ 排在建 Paths 與連資料庫之前：只查一份檔案不需要那些東西，
+    #    而且在主 clone 之外的目錄也要能用。
+    if args.check_camera:
+        sys.exit(report_camera(args.check_camera))
     paths = Paths(root=ROOT, backup_root=args.backup_dir)
     sys.exit(run(args, paths, datetime.now(), dict(os.environ)))
 
