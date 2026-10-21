@@ -117,9 +117,18 @@ QUALITY_TO_MOOD = {
 # Tier3 量的正是「相對個人 baseline 的自律神經偏離」——壓力分數與心率
 # 同時高於自己的常態，語意上就是焦慮，而這件事總分看不出來
 # （總分可能因為睡得夠久而仍然不低）。
-# 用法：其中一個過門檻、另一個也 < 0 才成立（見 map_pet_mood）。
+# 用法：其中一個過門檻、另一個也至少差到 ANXIOUS_CONFIRM 才成立（見 map_pet_mood）。
 ANXIOUS_STRESS_THRESHOLD = -3.0  # stress_modifier 低於此值
 ANXIOUS_HR_THRESHOLD = -3.0      # rhr_modifier + avg_hr_modifier 低於此值
+# 「另一個也比平常差」的最小幅度 = 手錶的一個量測單位。
+#   心率與壓力讀數都是整數（bpm／壓力分數），兩者的換算都是每單位 0.4 分
+#   （apply_recovery_modifier 的 *_POINTS_PER_BPM／STRESS_POINTS_PER_UNIT），
+#   所以 −0.4 = 比個人 baseline 差 1 bpm 或 1 分壓力。差不到一個單位
+#   落在讀數的解析度以內，不算「同向」——與 MAX_SLEEP_OVER_PERIOD_MINUTES
+#   用「量化到整分鐘」訂容差是同一個理由，不是新的調參。
+#   實測 89 晚：−0.4 與 −1.0 結果相同（7 → 6 晚，只差 09-16 的 −0.09），
+#   結論對這個值不敏感。
+ANXIOUS_CONFIRM = -0.4
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -242,20 +251,20 @@ def map_pet_mood(quality_row):
     ), 2)
 
     # ⚠️【2026-10-22】兩個訊號要**同向**才算焦慮：一個明顯偏離（過門檻），
-    #    另一個也比平常差（< 0）。原本是「任一個過門檻」，與上方常數區
-    #    「壓力分數與心率**同時**高於常態」的定義、以及 Garmin手錶分數.md
-    #    G 節「多個訊號同時出現才判定壓力高」的設計都不一致。
-    #    實測 89 晚：15 → 7 晚。被拿掉的 8 晚裡 6 晚是壓力扣滿 −4、心率卻
+    #    另一個也比平常差至少一個量測單位（ANXIOUS_CONFIRM）。原本是「任一個
+    #    過門檻」，與上方常數區「壓力分數與心率**同時**高於常態」的定義、
+    #    以及 Garmin手錶分數.md G 節「多個訊號同時出現才判定壓力高」的設計都不一致。
+    #    實測 89 晚：15 → 6 晚。被拿掉的 9 晚裡 6 晚是壓力扣滿 −4、心率卻
     #    比平常好（例：10-02 Good 83.8 分）——兩個訊號方向相反，不是焦慮。
     #    另一項未啟用（None → 0）時無從確認，不判焦慮。
-    if stress <= ANXIOUS_STRESS_THRESHOLD and hr_total < 0:
+    if stress <= ANXIOUS_STRESS_THRESHOLD and hr_total <= ANXIOUS_CONFIRM:
         mood = "anxious"
         reason = (f"stress_modifier={stress} ≤ {ANXIOUS_STRESS_THRESHOLD}"
-                  f" and rhr+avg_hr modifier={hr_total} < 0")
-    elif hr_total <= ANXIOUS_HR_THRESHOLD and stress < 0:
+                  f" and rhr+avg_hr modifier={hr_total} ≤ {ANXIOUS_CONFIRM}")
+    elif hr_total <= ANXIOUS_HR_THRESHOLD and stress <= ANXIOUS_CONFIRM:
         mood = "anxious"
         reason = (f"rhr+avg_hr modifier={hr_total} ≤ {ANXIOUS_HR_THRESHOLD}"
-                  f" and stress_modifier={stress} < 0")
+                  f" and stress_modifier={stress} ≤ {ANXIOUS_CONFIRM}")
 
     return mood, reason
 

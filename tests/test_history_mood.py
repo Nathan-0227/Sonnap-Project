@@ -179,6 +179,9 @@ check("心率過門檻、壓力也偏高 → anxious", mood_of(-1.0, -2.0, -1.5)
 check("壓力過門檻、心率比平常好 → 不焦慮", mood_of(-4.0, 1.0, 0.5), "happy")
 check("心率過門檻、壓力比平常好 → 不焦慮", mood_of(1.0, -2.0, -2.0), "happy")
 check("壓力過門檻、心率未啟用 → 不焦慮", mood_of(-4.0, None, None), "happy")
+# 差不到一個量測單位（1 bpm = 0.4 分）不算同向。09-16 那晚就是 −0.09。
+check("壓力過門檻、心率只差 0.09 → 不焦慮", mood_of(-4.0, -0.05, -0.04), "happy")
+check("壓力過門檻、心率剛好差 1 bpm → anxious", mood_of(-4.0, -0.4, 0.0), "anxious")
 
 print()
 print("=" * 78)

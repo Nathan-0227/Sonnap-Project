@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-10-22T01:48:28+08:00",
+  "generated_at": "2026-10-22T02:07:52+08:00",
   "session_id": "20261004_001",
   "status": {
     "pet_mood": "happy",
@@ -836,7 +836,7 @@
       "sleep_start_time": "2026-06-18T03:49:00+08:00",
       "wake_time": "2026-06-18T09:02:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-1.85 < 0",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-1.85 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
@@ -1284,7 +1284,7 @@
       "sleep_start_time": "2026-07-07T03:28:00+08:00",
       "wake_time": "2026-07-07T12:14:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-3.3 < 0",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-3.3 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
@@ -2753,7 +2753,7 @@
       "sleep_start_time": "2026-09-11T01:59:00+08:00",
       "wake_time": "2026-09-11T07:06:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-2.6 < 0",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-2.6 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
@@ -2957,8 +2957,8 @@
       "sleep_duration_hours": 5.48,
       "sleep_start_time": "2026-09-15T23:00:00+08:00",
       "wake_time": "2026-09-16T04:30:00+08:00",
-      "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-0.09 < 0",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
@@ -3161,7 +3161,7 @@
       "sleep_start_time": "2026-09-21T04:26:00+08:00",
       "wake_time": "2026-09-21T08:27:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-1.19 < 0",
+      "mood_reason": "stress_modifier=-4.0 ≤ -3.0 and rhr+avg_hr modifier=-1.19 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
@@ -3243,7 +3243,7 @@
       "sleep_start_time": "2026-09-22T23:36:00+08:00",
       "wake_time": "2026-09-23T03:17:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-3.96 ≤ -3.0 and rhr+avg_hr modifier=-1.06 < 0",
+      "mood_reason": "stress_modifier=-3.96 ≤ -3.0 and rhr+avg_hr modifier=-1.06 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
@@ -3325,7 +3325,7 @@
       "sleep_start_time": "2026-09-25T03:47:00+08:00",
       "wake_time": "2026-09-25T10:08:00+08:00",
       "pet_mood": "anxious",
-      "mood_reason": "stress_modifier=-3.11 ≤ -3.0 and rhr+avg_hr modifier=-1.6 < 0",
+      "mood_reason": "stress_modifier=-3.11 ≤ -3.0 and rhr+avg_hr modifier=-1.6 ≤ -0.4",
       "composition": {
         "scored": [
           "duration",
