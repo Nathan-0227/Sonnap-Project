@@ -292,10 +292,20 @@ RHR_POINTS_PER_BPM = 0.4
 #   跟 RHR 用同一套比例邏輯（偏離 5 bpm 打滿 ±2），因為兩者同屬心率訊號、
 #   沒有理由用不同敏感度。
 AVG_HR_POINTS_PER_BPM = 0.4
-# STRESS_POINTS_PER_UNIT：Garmin 壓力分數每偏離 baseline 1 分，給/扣多少分。
-#   0.4 分/單位 → 偏離 10 分（Garmin 壓力分數尺度）打滿 ±4。
-#   （原本用百分比會被小 baseline 放大，見檔頭修正記錄第 3 點）
-STRESS_POINTS_PER_UNIT = 0.4
+# 【2026-10-22 改版】壓力改用「偏離幾倍個人波動」換算，不再用固定的每單位 0.4 分。
+#   舊做法「偏離 10 分打滿 ±4」沒有出處；10-04 時刻修正後窗格改成真正的清醒時段，
+#   起伏變大，32 晚裡 15 晚打到上限。依據見 Garmin手錶分數.md G 節：
+#   - 以個人波動當單位：Buchheit 2014（Front Physiol）認為以個人 CV 為 SWC 的參考
+#     「直覺上是比較好的選擇」→ **有文獻**
+#   - 0.5 倍當「最小有意義變化」：Le Meur 2013 用過（轉引自 Buchheit 2014）；
+#     但 Buchheit 也明說「目前沒有證據顯示超過 CV 的任何特定倍數在實務上有意義」
+#   - 2.0 倍打滿：**設計決策，無文獻**（與 I 節配分同一性質，報告須如實標註）
+STRESS_SWC_SPREADS = 0.5
+STRESS_FULL_SPREADS = 2.0
+# MAD 換算成與標準差同尺度的常數（常態分布下 MAD × 1.4826 ≈ SD），統計慣例。
+MAD_TO_SD = 1.4826
+# 波動的下限 = Garmin 壓力分數的一個單位（讀數是整數），見 rolling_spread()。
+STRESS_SPREAD_FLOOR = 1.0
 # ACTIVITY_SCALE：步數用「相對 baseline 的百分比」換算。
 # 0.2 分/百分比 → 高於 baseline 10% 就打滿 +2。
 # ⚠️ 這個換算只在「baseline 夠大」時才成立，見下方 ACTIVITY_MIN_BASELINE_STEPS。
@@ -482,6 +492,20 @@ def rolling_baseline(history, current_date):
        MAX_BASELINE_DAYS 管「多舊的資料還算數」（日曆天），
        MIN_BASELINE_NIGHTS 管「要有幾晚才夠穩」（有效晚數）。
     """
+    valid = baseline_window(history, current_date)
+    if valid is None:
+        return None
+    return _median(valid)
+
+
+def baseline_window(history, current_date):
+    """
+    rolling_baseline() 與 rolling_spread() 共用的窗格：當晚之前、最近
+    MAX_BASELINE_DAYS 個日曆天內的有效數值。不足 MIN_BASELINE_NIGHTS 筆回 None。
+
+    ⚠️ 兩者必須用**同一個窗格**——「偏離幾倍個人波動」的分子（偏離 baseline）
+       與分母（波動）若取自不同的夜晚，比值就沒有意義，而且不會報錯。
+    """
     try:
         cutoff = datetime.fromisoformat(current_date).date() - timedelta(days=MAX_BASELINE_DAYS)
     except (TypeError, ValueError):
@@ -503,14 +527,53 @@ def rolling_baseline(history, current_date):
 
     if len(valid) < MIN_BASELINE_NIGHTS:
         return None
+    return valid
 
-    valid_sorted = sorted(valid)
+
+def _median(values):
+    valid_sorted = sorted(values)
     mid = len(valid_sorted) // 2
     # 奇數筆：正中間那個就是中位數
     if len(valid_sorted) % 2 == 1:
         return valid_sorted[mid]
     # 偶數筆：取中間兩個的平均
     return (valid_sorted[mid - 1] + valid_sorted[mid]) / 2.0
+
+
+def rolling_spread(history, current_date, floor):
+    """
+    個人波動：baseline 窗格內的 MAD × MAD_TO_SD（換算成與標準差同尺度）。
+
+    為什麼用 MAD 不用標準差：理由與 baseline 用中位數相同——單一晚的極端值
+    （壓力 46 分那種）會把標準差整個撐大，讓之後幾週的偏離都顯得「正常」。
+
+    floor：波動的下限（一個量測單位）。窗格內數值幾乎相同時 MAD 會趨近 0，
+    除以它會把雜訊放大成扣滿；差距小於讀數解析度本來就分不出來。
+    """
+    valid = baseline_window(history, current_date)
+    if valid is None:
+        return None
+    med = _median(valid)
+    mad = _median([abs(v - med) for v in valid])
+    return max(mad * MAD_TO_SD, floor)
+
+
+def score_lower_is_better_vs_spread(current, baseline, spread, cap):
+    """
+    數值越低越好、以「偏離幾倍個人波動」換算（2026-10-22，目前只有壓力用）。
+
+    |偏離| ≤ STRESS_SWC_SPREADS × 波動 → 0 分（在個人正常起伏以內，當雜訊）
+    之後線性增加，到 STRESS_FULL_SPREADS × 波動 時打滿 ±cap。
+    依據與「哪一半有文獻、哪一半是設計決策」見 Garmin手錶分數.md G 節。
+    """
+    if current is None or baseline is None or spread is None:
+        return None
+    diff = baseline - current          # 正值 = 比平常低 = 比平常好
+    z = abs(diff) / spread
+    if z <= STRESS_SWC_SPREADS:
+        return 0.0
+    frac = min(1.0, (z - STRESS_SWC_SPREADS) / (STRESS_FULL_SPREADS - STRESS_SWC_SPREADS))
+    return cap * frac if diff > 0 else -cap * frac
 
 
 def score_lower_is_better(current, baseline, cap, points_per_unit):
@@ -950,7 +1013,8 @@ def compute_modifiers(summary_rows):
         # （見檔頭 2026-07-31 修正記錄，避免同一生理面向重複計分）
         rhr_score = score_lower_is_better(rhr, rhr_baseline, RHR_CAP, RHR_POINTS_PER_BPM)
         avg_hr_score = score_lower_is_better(avg_hr, avg_hr_baseline, AVG_HR_CAP, AVG_HR_POINTS_PER_BPM)
-        stress_score = score_lower_is_better(stress, stress_baseline, STRESS_CAP, STRESS_POINTS_PER_UNIT)
+        stress_spread = rolling_spread(stress_history, row_date, STRESS_SPREAD_FLOOR)
+        stress_score = score_lower_is_better_vs_spread(stress, stress_baseline, stress_spread, STRESS_CAP)
         # 活動量：數值越高越好、只加分不扣分，用百分比換算。
         # 若 baseline 低於 ACTIVITY_MIN_BASELINE_STEPS，score_higher_is_better_bonus_only()
         # 會回傳 None（判定為「手錶沒整天戴，資料無法反映活動量」而停用該項）。
