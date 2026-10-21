@@ -9,6 +9,8 @@ tests/test_scoring_guards.py
   【2】沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
   【3】baseline 窗格是「日曆天」不是「筆數」
   【4】MOTIF_FAMILIES 必須與夢境調色盤的選項一對一
+  【5】階段時長超出睡眠視窗的夜晚必須被排除
+  【6】壓力修正值依個人波動換算（2026-10-22）
 
 執行：python tests/test_scoring_guards.py
 """
@@ -246,6 +248,48 @@ if real_bad:
     ok("真實資料 2026-06-27 被排除", esf.is_valid_night(real_bad[0])[0] is False)
 else:
     print("  - 跳過真實資料回歸（summary 裡沒有 2026-06-27）")
+
+print()
+print("=" * 78)
+print("【6】壓力修正值依個人波動換算（2026-10-22）")
+print("=" * 78)
+
+# 14 晚、日期連續、數值 20/30 交錯 → 中位數 25、MAD 5、波動 5×1.4826≈7.41。
+hist = [(f"2026-09-{d:02d}", 20.0 if d % 2 else 30.0) for d in range(1, 15)]
+spread = arm.rolling_spread(hist, "2026-09-15", arm.STRESS_SPREAD_FLOOR)
+check("波動 = MAD × 1.4826", round(spread, 2), round(5 * arm.MAD_TO_SD, 2))
+base = arm.rolling_baseline(hist, "2026-09-15")
+f = lambda cur: arm.score_lower_is_better_vs_spread(cur, base, spread, arm.STRESS_CAP)
+# 0.5 倍以內是雜訊：偏離 3（0.4 倍）不扣分。改回固定每單位 0.4 分的話會是 −1.2。
+check("偏離 0.4 倍個人波動 → 0", f(base + 0.4 * spread), 0.0)
+check("偏離 2 倍 → 扣滿", round(f(base + 2 * spread), 6), -arm.STRESS_CAP)
+check("偏離 1.25 倍 → 扣一半", round(f(base + 1.25 * spread), 6), -arm.STRESS_CAP / 2)
+check("比平常低 2 倍 → 加滿（對稱）", round(f(base - 2 * spread), 6), arm.STRESS_CAP)
+
+# 同樣偏離 10 分：波動大的人扣得少——這正是改版的目的。舊換算兩人都扣滿 −4。
+wide = [(d, v * 2 - 25) for d, v in hist]          # 中位數仍 25，波動變兩倍
+s_wide = arm.rolling_spread(wide, "2026-09-15", arm.STRESS_SPREAD_FLOOR)
+narrow_pts = arm.score_lower_is_better_vs_spread(35, 25, spread, arm.STRESS_CAP)
+wide_pts = arm.score_lower_is_better_vs_spread(35, 25, s_wide, arm.STRESS_CAP)
+ok("同樣偏離 10 分，平常起伏大的人扣得少", wide_pts > narrow_pts,
+   f"起伏小 {narrow_pts:.2f}／起伏大 {wide_pts:.2f}")
+
+# 窗格內數值全相同時 MAD = 0。沒有下限的話，偏離 1 分就會被除以 0 放大成扣滿。
+flat = [(d, 25.0) for d, _ in hist]
+s_flat = arm.rolling_spread(flat, "2026-09-15", arm.STRESS_SPREAD_FLOOR)
+check("MAD = 0 時波動取下限（一個量測單位）", s_flat, arm.STRESS_SPREAD_FLOOR)
+
+# 波動與 baseline 必須用同一個窗格：28 天前的值不得進入波動。
+old = [("2026-07-01", 999.0)] + hist
+check("太舊的夜晚不進波動", round(arm.rolling_spread(old, "2026-09-15", 1.0), 2), round(spread, 2))
+check("不足 14 晚 → None（冷啟動）", arm.rolling_spread(hist[:13], "2026-09-15", 1.0), None)
+
+# 上面只驗函式本身。主迴圈改回舊的 score_lower_is_better(stress, ...) 的話，
+# 那幾條照樣全綠，而 pipeline 照跑、沒有錯誤訊息。
+src = (ROOT / "garmin" / "apply_recovery_modifier.py").read_text(encoding="utf-8")
+ok("主迴圈的壓力用新換算",
+   "score_lower_is_better_vs_spread(stress," in src
+   and "score_lower_is_better(stress," not in src)
 
 print()
 print("=" * 78)
