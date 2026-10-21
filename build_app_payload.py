@@ -117,6 +117,7 @@ QUALITY_TO_MOOD = {
 # Tier3 量的正是「相對個人 baseline 的自律神經偏離」——壓力分數與心率
 # 同時高於自己的常態，語意上就是焦慮，而這件事總分看不出來
 # （總分可能因為睡得夠久而仍然不低）。
+# 用法：其中一個過門檻、另一個也 < 0 才成立（見 map_pet_mood）。
 ANXIOUS_STRESS_THRESHOLD = -3.0  # stress_modifier 低於此值
 ANXIOUS_HR_THRESHOLD = -3.0      # rhr_modifier + avg_hr_modifier 低於此值
 
@@ -236,16 +237,25 @@ def map_pet_mood(quality_row):
     # 覆寫：生理訊號顯示自律神經明顯偏離個人 baseline
     # None 代表該項修正值因冷啟動或資料無效而未啟用，當 0 處理（不觸發覆寫）
     stress = quality_row.get("stress_modifier") or 0.0
-    hr_total = (quality_row.get("rhr_modifier") or 0.0) + (
+    hr_total = round((quality_row.get("rhr_modifier") or 0.0) + (
         quality_row.get("avg_hr_modifier") or 0.0
-    )
+    ), 2)
 
-    if stress <= ANXIOUS_STRESS_THRESHOLD:
+    # ⚠️【2026-10-22】兩個訊號要**同向**才算焦慮：一個明顯偏離（過門檻），
+    #    另一個也比平常差（< 0）。原本是「任一個過門檻」，與上方常數區
+    #    「壓力分數與心率**同時**高於常態」的定義、以及 Garmin手錶分數.md
+    #    G 節「多個訊號同時出現才判定壓力高」的設計都不一致。
+    #    實測 89 晚：15 → 7 晚。被拿掉的 8 晚裡 6 晚是壓力扣滿 −4、心率卻
+    #    比平常好（例：10-02 Good 83.8 分）——兩個訊號方向相反，不是焦慮。
+    #    另一項未啟用（None → 0）時無從確認，不判焦慮。
+    if stress <= ANXIOUS_STRESS_THRESHOLD and hr_total < 0:
         mood = "anxious"
-        reason = f"stress_modifier={stress} ≤ {ANXIOUS_STRESS_THRESHOLD}"
-    elif hr_total <= ANXIOUS_HR_THRESHOLD:
+        reason = (f"stress_modifier={stress} ≤ {ANXIOUS_STRESS_THRESHOLD}"
+                  f" and rhr+avg_hr modifier={hr_total} < 0")
+    elif hr_total <= ANXIOUS_HR_THRESHOLD and stress < 0:
         mood = "anxious"
-        reason = f"rhr+avg_hr modifier={hr_total} ≤ {ANXIOUS_HR_THRESHOLD}"
+        reason = (f"rhr+avg_hr modifier={hr_total} ≤ {ANXIOUS_HR_THRESHOLD}"
+                  f" and stress_modifier={stress} < 0")
 
     return mood, reason
 
