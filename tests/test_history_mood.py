@@ -164,6 +164,27 @@ ok("樣本涵蓋 2 種以上的心情", len(distinct) >= 2, f"{sorted(distinct)}
 
 print()
 print("=" * 78)
+print("【4】anxious 要兩個訊號同向（2026-10-22）")
+print("=" * 78)
+
+# ⚠️ 改回「任一個過門檻」不會報錯，只會讓 10-02 那種 Good 83.8 分的夜晚
+#    （壓力扣滿 −4、心率比平常好）又顯示焦慮寵物。用合成列驗規則本身，
+#    不釘住真實夜晚——資料重算時分數會位移。
+def mood_of(stress, rhr, avg_hr):
+    return bap.map_pet_mood({"final_quality": "Good", "stress_modifier": stress,
+                             "rhr_modifier": rhr, "avg_hr_modifier": avg_hr})[0]
+
+check("壓力過門檻、心率也偏高 → anxious", mood_of(-4.0, -0.5, -0.5), "anxious")
+check("心率過門檻、壓力也偏高 → anxious", mood_of(-1.0, -2.0, -1.5), "anxious")
+check("壓力過門檻、心率比平常好 → 不焦慮", mood_of(-4.0, 1.0, 0.5), "happy")
+check("心率過門檻、壓力比平常好 → 不焦慮", mood_of(1.0, -2.0, -2.0), "happy")
+check("壓力過門檻、心率未啟用 → 不焦慮", mood_of(-4.0, None, None), "happy")
+# 差不到一個量測單位（1 bpm = 0.4 分）不算同向。09-16 那晚就是 −0.09。
+check("壓力過門檻、心率只差 0.09 → 不焦慮", mood_of(-4.0, -0.05, -0.04), "happy")
+check("壓力過門檻、心率剛好差 1 bpm → anxious", mood_of(-4.0, -0.4, 0.0), "anxious")
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)
