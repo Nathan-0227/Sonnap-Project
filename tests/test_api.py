@@ -210,7 +210,7 @@ check("/insights 逐夜都帶 composition",
 check("回傳 primary_component", comp5["primary_component"], "duration")
 check("有計分但門檻效度存疑的分項要掛警語",
       sorted(c["component"] for c in comp5["caveats"]),
-      ["deep", "rem", "waso"])
+      ["deep", "rem"])   # waso 2026-10-22 起不掛警語（使用者決定，見 score_claim.py）
 check("duration 刻意沒有警語",
       "duration" in [c["component"] for c in comp5["caveats"]], False)
 check("mood 由行為驅動（不是由分數）", h5["status"]["mood_driver"], "behavior")

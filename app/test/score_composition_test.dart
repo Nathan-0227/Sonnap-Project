@@ -374,7 +374,8 @@ void main() {
 
       // 逐條比對打包檔裡的原文。這條把 pipeline → payload → 畫面整條接起來。
       expect(composition!.caveats, isNotEmpty,
-          reason: '實測的夜晚至少有 waso/deep/rem 三條警語');
+          reason: '實測的夜晚至少有 deep/rem 的警語'
+              '（waso 2026-10-22 起不掛警語，見 score_claim.py）');
       for (final caveat in composition.caveats) {
         expect(find.textContaining(caveat.text), findsOneWidget,
             reason: '${caveat.component} 的警語要逐字出現');
