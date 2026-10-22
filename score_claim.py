@@ -68,14 +68,11 @@ NOT_MEASURED_REASON = "not measured on this night"
 #    但那個門檻能不能套在這支錶的量測上，證據不足」。
 # ⚠️ duration 刻意不在這裡：它的偏差（−16.9 分）只佔級距（120 分）的 14%，
 #    是唯一誤差明確小於級距的分項。**每一項都掛警語的話，警語就沒有意義。**
+# ⚠️ waso 也刻意不在這裡（2026-10-22 使用者決定）：WASO 以手錶原始值計分、
+#    不校正裝置偏差，App 上不再掛警語。**這不代表問題解決了**——手錶多算
+#    清醒時間（+13~24 分）與 15 分鐘的級距一樣大，約一成夜晚可能被低估一級。
+#    這個限制改由報告交代（docs/REPORT_CAVEATS.md），不在產品畫面上講。
 SCORED_COMPONENT_CAVEATS = {
-    "waso": (
-        "the device's own wake-detection error is as large as the whole "
-        "band this is graded on (bias +13 to +24 min in a meta-analysis of "
-        "consumer wrist devices, versus a 15-min band for young adults), so "
-        "which band a night falls into is driven partly by device error. "
-        "The age trend itself is literature-backed."
-    ),
     "deep": (
         "consumer wrist devices are 60-75% accurate at four-class sleep "
         "staging and are known to over-report deep sleep; no pooled bias in "
