@@ -87,4 +87,31 @@
 2026-10-01,56.1,Poor,-1.6,0.01,0.87,0.0,0.17,0.35,59.3,27,-0.2,,55.9,Poor,Sleep quality was below average; consider adjusting your routine. Sleep was short (4.25 h). Try going to bed earlier; aim for 7.0–9.0 h.
 2026-10-02,87.4,Good,-1.0,2.0,-4.0,0.0,-0.17,-0.4,58.2,27,-3.57,,83.8,Good,Sleep quality was good. Keep your current routine. 
 2026-10-03,95.2,Good,-0.8,0.47,2.34,0.0,-0.51,-0.75,59.0,27,0.76,,96.0,Good,Sleep quality was good. Keep your current routine. 
-2026-10-04,96.6,Good,0.8,2.0,4.0,0.0,0.17,-0.4,60.1,27,6.57,,100.0,Good,Sleep quality was good. Keep your current routine. 
+2026-10-04,88.9,Good,0.8,1.61,4.0,0.0,-0.17,0.0,60.1,27,6.24,,95.1,Good,Sleep quality was good. Keep your current routine. 
+2026-10-06,58.8,Poor,1.6,-0.83,,2.0,0.34,0.4,58.1,25,3.51,"Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",62.3,Poor,Sleep quality was below average; consider adjusting your routine. Sleep was short (3.8 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-10-08,66.7,Normal,1.6,0.14,,2.0,-0.34,-0.05,56.8,23,3.35,"Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",70.0,Normal,"Sleep quality was acceptable, with room to improve. Sleep was short (4.53 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-10-09,65.1,Normal,-1.6,-2.0,3.47,2.0,0.68,0.5,57.6,23,3.05,,68.1,Normal,"Sleep quality was acceptable, with room to improve. Sleep was short (5.02 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-10-11,90.1,Good,-1.6,-0.86,,2.0,0.34,-0.3,58.7,21,-0.42,"Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",89.7,Good,Sleep quality was good. Keep your current routine. 
+2026-10-12,56.3,Poor,0.8,0.36,1.86,0.0,-0.34,0.1,56.7,21,2.78,,59.1,Poor,Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.
+2026-10-13,40.4,Bad,1.2,1.26,4.0,0.0,-1.0,-0.3,59.9,21,5.16,,45.6,Bad,Sleep quality was poor; this is worth addressing. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.
+2026-10-14,49.4,Bad,1.6,0.38,4.0,0.0,0.34,0.6,63.5,21,6.92,,56.3,Poor,Sleep quality was poor; this is worth addressing. Sleep was short (4.15 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-10-15,60.0,Poor,-1.6,-0.46,4.0,0.78,0.34,0.8,65.7,21,3.87,,63.9,Poor,Sleep quality was below average; consider adjusting your routine. Sleep was short (3.32 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-10-16,84.3,Good,1.2,0.96,4.0,2.0,0.0,0.6,65.1,21,8.76,,93.1,Good,Sleep quality was good. Keep your current routine. 
+2026-10-17,93.6,Good,0.0,2.0,4.0,2.0,0.68,-0.2,62.3,21,8.48,,100.0,Good,Sleep quality was good. Keep your current routine. 
+2026-10-18,97.0,Good,1.6,2.0,0.8,0.0,0.0,-0.1,62.5,21,4.3,,100.0,Good,Sleep quality was good. Keep your current routine. 
+2026-10-19,62.8,Poor,0.8,0.34,2.64,0.0,0.0,0.1,61.1,21,3.88,,66.7,Normal,Sleep quality was below average; consider adjusting your routine. Sleep was short (5.07 h). Try going to bed earlier; aim for 7.0–9.0 h.
+2026-10-20,82.6,Good,2.0,1.86,1.52,2.0,0.68,0.6,63.6,21,8.67,,91.3,Good,Sleep quality was good. Keep your current routine. 
+2026-10-21,69.7,Normal,0.4,-1.37,-3.33,0.0,0.34,0.4,65.5,21,-3.56,,66.1,Normal,"Sleep quality was acceptable, with room to improve. Sleep was short (4.73 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-10-22,74.2,Normal,-0.4,1.6,-0.35,2.0,0.34,0.1,66.8,21,3.29,,77.5,Normal,"Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+2026-10-25,81.2,Good,0.4,2.0,,,0.68,-0.2,68.3,18,2.88,"Building personal baseline (activity below 14 nights within the last 28 days); this modifier is paused. Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",84.1,Good,Sleep quality was good. Keep your current routine. 
+2026-10-26,81.1,Good,1.6,0.64,2.1,0.0,-0.34,0.1,69.7,18,4.11,,85.2,Good,Sleep quality was good. Keep your current routine. 
+2026-10-27,87.6,Good,-1.2,-1.41,-1.42,0.0,0.34,0.4,69.0,18,-3.3,,84.3,Good,Sleep quality was good. Keep your current routine. 
+2026-10-28,68.8,Normal,0.0,-1.09,-4.0,2.0,-0.68,0.0,67.9,18,-3.77,,65.0,Normal,"Sleep quality was acceptable, with room to improve. Sleep was short (5.22 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-10-29,78.9,Normal,0.0,2.0,-2.11,2.0,-1.0,-0.5,66.4,18,0.39,,79.3,Normal,"Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
+2026-10-30,68.0,Normal,1.2,0.49,-4.0,0.0,0.68,0.6,64.8,18,-1.03,,67.0,Normal,"Sleep quality was acceptable, with room to improve. Sleep was short (5.42 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-10-31,94.1,Good,-0.4,0.88,-1.32,2.0,-0.68,-0.4,64.5,18,0.08,,94.2,Good,Sleep quality was good. Keep your current routine. 
+2026-11-01,67.1,Normal,-2.0,0.56,-4.0,0.0,-0.68,-0.3,62.8,19,-6.42,,60.7,Poor,"Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+2026-11-02,47.6,Bad,0.4,-1.66,0.9,0.0,0.34,0.8,62.7,20,0.78,,48.4,Bad,Sleep quality was poor; this is worth addressing. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep.
+2026-11-04,84.6,Good,0.4,-1.43,,2.0,0.34,0.3,62.7,20,1.61,"Stress modifier not applied: this night has no pre-sleep wake-window data (the previous night was not recorded, so the start of that window cannot be determined).",86.2,Good,Sleep quality was good. Keep your current routine. 
+2026-11-05,87.8,Good,-2.0,0.44,-4.0,2.0,0.0,0.3,62.2,20,-3.26,,84.5,Good,Sleep quality was good. Keep your current routine. 
+2026-11-06,62.1,Poor,-0.2,0.5,-1.17,0.0,0.0,0.25,61.1,21,-0.62,,61.5,Poor,Sleep quality was below average; consider adjusting your routine. Sleep was short (4.3 h). Try going to bed earlier; aim for 7.0–9.0 h.
