@@ -5,7 +5,7 @@ tests/test_score_composition.py
 
   【1】main.score_composition() 與 evaluate_sleep_quality.evaluate_night()
       對同一晚必須給出相同的答案（拿真實資料逐夜比對）
-  【2】效率一律不計分，而且理由要跟著走
+  【2】效率三段式（2026-11-07 恢復計分）：每晚都有算、basis 跟著走、警語依 basis 挑
   【3】WASO 0 分鐘、深睡 0 分鐘是「有測到」，不可被當成沒資料
   【4】scored_weight 要等於實際有算的項目的配分總和
 
@@ -79,7 +79,7 @@ def db_row_from_features(feat):
        實際寫進去的語意**：duration_min / waso_min / deep_min 是分鐘數，
        rem_measured 是評分器自己的判定（Tier1/2 那份輸出帶過來的）。
     """
-    graded = ev.evaluate_night(feat)
+    graded = ev.evaluate_night(feat, MARKS)
     deep_ratio = to_f(feat.get("deep_ratio"))
     total = to_f(feat.get("total_sleep_minutes"))
     return {
@@ -87,10 +87,14 @@ def db_row_from_features(feat):
         "waso_min": to_f(feat.get("waso_minutes")),
         "deep_min": None if (deep_ratio is None or total is None) else deep_ratio * total,
         "rem_measured": 1 if graded["rem_measured"] else 0,
+        # 同 rem_measured：評分器自己的判定，migrate_garmin_to_db.py 帶進資料庫
+        "efficiency_basis": graded["efficiency_basis"],
     }
 
 
 FEATURES = ROOT / "garmin" / "data" / "garmin_sleep_features.csv"
+# 真的按鈕檔（pipeline 用的同一份），三段式的三種夜晚才都會出現
+MARKS = ev.load_bed_marks(ev.DEFAULT_BED_MARKS)
 with io.open(FEATURES, encoding="utf-8-sig") as f:
     rows = list(csv.DictReader(f))
 
@@ -101,7 +105,7 @@ print(f"  features 列數：{len(rows)}")
 
 disagree = []
 for feat in rows:
-    graded = ev.evaluate_night(feat)
+    graded = ev.evaluate_night(feat, MARKS)
     # 評分器實際上算了哪幾項
     truth = {k for k in ("duration", "efficiency", "waso", "deep", "rem")
              if graded[k + "_score"] is not None}
@@ -121,19 +125,33 @@ ok("反向對照：樣本裡有 2 種以上的組成", len(comps) >= 2,
 
 print()
 print("=" * 78)
-print("【2】效率一律不計分，且理由要跟著走")
+print("【2】效率三段式：每晚都有算、basis 跟著走、警語依 basis 挑")
 print("=" * 78)
-check("EFFICIENCY_SCORING_ENABLED 是 False", ev.EFFICIENCY_SCORING_ENABLED, False)
-n_eff = sum(1 for r in rows if ev.evaluate_night(r)["efficiency_score"] is not None)
-check("有 efficiency 分數的夜晚數", n_eff, 0)
+import score_claim  # noqa: E402
+check("EFFICIENCY_SCORING_ENABLED 是 True（2026-11-07 恢復）", ev.EFFICIENCY_SCORING_ENABLED, True)
+graded_all = [(r, ev.evaluate_night(r, MARKS)) for r in rows]
+n_eff = sum(1 for _, g in graded_all if g["efficiency_score"] is not None)
+n_has = sum(1 for r, _ in graded_all if to_f(r.get("sleep_efficiency")) is not None)
+check("有手錶效率的夜晚都有 efficiency 分數", n_eff, n_has)
+bases = {g["efficiency_basis"] for _, g in graded_all if g["efficiency_basis"]}
+# 反向對照：三種都要出現在真實資料裡，否則「依 basis 挑警語」等於沒測
+check("真實資料裡三種 basis 都有", bases, set(score_claim.EFFICIENCY_CAVEATS))
 
-sample = main.score_composition(db_row_from_features(rows[0]))
-ok("efficiency 不在 scored 裡", "efficiency" not in sample["scored"])
-eff_reason = next((u["reason"] for u in sample["unscored"]
-                   if u["component"] == "efficiency"), None)
-ok("efficiency 有附不計分的理由", bool(eff_reason))
-ok("理由要講到分母的問題（不是只說『沒測到』）",
-   eff_reason is not None and "time in bed" in eff_reason)
+by_basis = {}
+for r, g in graded_all:
+    by_basis.setdefault(g["efficiency_basis"], r)
+for basis, feat in sorted((k, v) for k, v in by_basis.items() if k):
+    comp = main.score_composition(db_row_from_features(feat))
+    cav = next((c["caveat"] for c in comp["caveats"] if c["component"] == "efficiency"), None)
+    ok(f"{basis}：efficiency 在 scored 裡、不在 unscored 裡",
+       "efficiency" in comp["scored"] and all(u["component"] != "efficiency" for u in comp["unscored"]))
+    ok(f"{basis}：警語是**這一種**的那一段", cav == score_claim.EFFICIENCY_CAVEATS[basis])
+    ok(f"{basis}：組成裡帶著 basis", comp["efficiency_basis"] == basis)
+ok("三段警語彼此不同（不是同一句籠統的話）",
+   len(set(score_claim.EFFICIENCY_CAVEATS.values())) == 3)
+watch_only = score_claim.EFFICIENCY_CAVEATS["watch_tst__watch_onset_to_wake"]
+ok("沒按按鈕的那段要講出它偏高、門檻不是為它訂的",
+   "reads high" in watch_only and "not written for it" in watch_only)
 
 print()
 print("=" * 78)
@@ -233,7 +251,7 @@ else:
     payload = json.load(io.open(PAYLOAD, encoding="utf-8"))
     truth_by_date = {}
     for feat in rows:
-        graded = ev.evaluate_night(feat)
+        graded = ev.evaluate_night(feat, MARKS)
         truth_by_date[feat["date"]] = {
             k for k in ("duration", "efficiency", "waso", "deep", "rem")
             if graded[k + "_score"] is not None

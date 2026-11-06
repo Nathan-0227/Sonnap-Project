@@ -53,9 +53,13 @@ behavior/sleep_efficiency.py — 睡眠效率（行為版，Tier A）
 
 | 欄位 | 分子 | 分母 | 有文獻嗎 | 進 final_score 嗎 |
 |---|---|---|---|---|
-| `wearable_nightly.efficiency`（Garmin） | 手錶量的總睡眠 | 起床 − **入睡** | 🔴 門檻套錯量 | ❌ **2026-10-01 起停止計分** |
+| `wearable_nightly.efficiency`（Garmin） | 手錶量的總睡眠 | 起床 − **入睡** | 🔴 門檻套錯量 | ⚠️ 只在沒按按鈕的夜晚，見 scoring_efficiency() |
+| `measured_efficiency`（本檔） | 手錶量的總睡眠 | Out of bed − Start sleep（自述） | ✅ TATS | ✅ 算得出來就用它 |
+| `watch_wake_efficiency`（本檔） | 手錶量的總睡眠 | 手錶起床 − Start sleep | ⚠️ 無常模 | ✅ 上面那個算不出來時 |
 | `wearable_nightly.clinical_efficiency`（Health Connect） | 手錶量的總睡眠 | 起床 − **上床** | ✅ | ❌ 只供呈現 |
-| **本模組**（手機／行為） | **假定**睡眠 | 結束 − 開始（自述） | ❌ | ❌ **絕不** |
+| **evaluate_efficiency()**（手機／行為） | **假定**睡眠 | 結束 − 開始（自述） | ❌ | ❌ **絕不** |
+
+（2026-11-07 起睡眠效率恢復計分，三段式的選擇規則在 scoring_efficiency()。）
 
 → 所以本模組的輸出**一定**帶著 `efficiency_basis` 一起走。
   只傳數字不傳 basis，下游就分不出它是哪一種——而三者在同一個
@@ -64,7 +68,9 @@ behavior/sleep_efficiency.py — 睡眠效率（行為版，Tier A）
 ═══════════════════════════════════════════════════════════════════
 ⚠️ 架構紅線：本套件（behavior/）絕不 import 評分層
 ═══════════════════════════════════════════════════════════════════
-見 behavior/__init__.py。這個數字**不進任何分數**，只供呈現與行為迴圈。
+見 behavior/__init__.py。evaluate_efficiency() 那個數字**不進任何分數**，
+只供呈現與行為迴圈。（評分層反過來 import 本檔的 scoring_efficiency() 是允許的：
+那是評分讀行為資料，不是行為層去改分數。）
 """
 
 from datetime import datetime
@@ -195,12 +201,11 @@ def evaluate_efficiency(bed_start_at, lights_out_at, bed_end_at, source="phone")
 #    「我起來了」的區間，在構念上**直接對應 TATS**，不是 TIB 的粗略代理。
 #    因此 Ohayon 2017 的 ≥85% 切點對這個數字是適用的。
 #
-# 🔴 **但它仍然不進 final_score。** 兩個阻礙（見 B-5、B-6）：
-#    ① 樣本：同時有手錶睡眠與按鈕區間的夜晚極少，無法驗證門檻
-#    ② 公平性：不是每晚都有人按按鈕。有按的夜晚分母較大、數字較低，
-#       與沒按的夜晚餵進同一組 EFFICIENCY_GOOD=85，會**系統性扣按按鈕者的分**，
-#       而差異來自「有沒有按」不是睡眠本身。
-#    → 照 SRI 的先例：照算、照顯示、標 basis、不進 total_modifier。
+# ✅ **2026-11-07 起進 final_score**（使用者決定），三段式見 scoring_efficiency()。
+#    原本不計分的兩個阻礙（B-5、B-6）**並沒有消失**，是使用者看過數字後接受：
+#    ① 樣本：同時有手錶睡眠與按鈕區間的夜晚仍少（實測 6 晚）
+#    ② 公平性：沒按的夜晚退回手錶效率（幾乎都拿滿），有按的分母較大、數字較低
+#       → 實測沒按的夜晚平均 +6.9、兩個都按的 −1.6。詳見 Garmin手錶分數.md B-7。
 
 MEASURED_EFFICIENCY_BASIS = "watch_tst__phone_tats"
 
@@ -359,13 +364,13 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes,
         "measured_efficiency_basis": MEASURED_EFFICIENCY_BASIS,
         # ⚠️ 這句會送到前端。它說明分子分母各自從哪來——前端同時拿得到
         #    三、四個叫「效率」的數字，只有 basis 與這句話分得開它們。
-        # ⚠️ 「不進分數」那半句不能省：這個數字看起來就像一般的睡眠效率，
-        #    少了那半句，使用者會以為它影響了分數。
+        # ⚠️ 「跟分數的關係」那半句不能省（2026-11-07 前是「不進分數」，
+        #    之後是「分數用這個」）：兩個效率並列時，少講的那個會被猜錯。
         "measured_efficiency_note": (
             "The sleep your watch measured, as a share of the time you said "
             "you were trying to sleep - from when you tapped Start sleep to "
-            "when you tapped Out of bed. Shown for information only; it never "
-            "affects your sleep score."
+            "when you tapped Out of bed. Your sleep score uses this figure "
+            "whenever it can be worked out."
         ),
     }
 
@@ -394,9 +399,10 @@ def measured_efficiency(total_sleep_minutes, time_in_bed_minutes,
 #   錶認定的起床時刻通常早於你真的離開床，所以分母偏小、數字偏高。
 #   實測 3 晚兩者都算得出來：92.1→93.5、91.7→91.5、74.6→78.9。
 #
-# 🔴 **兩個都不計分。** 起點仍然是自述的，「快睡著才按 Start sleep」
-#    照樣能把數字推高——恢復計分的條件沒有因為這個欄位而改變
-#    （上床時刻必須是量測的，見 CLAUDE.md）。
+# ✅ 2026-11-07 起，這個在 measured_efficiency 算不出來時進分數
+#    （scoring_efficiency() 的第二段）。⚠️ 起點仍是自述的，
+#    「快睡著才按 Start sleep」照樣能把數字推高；而且這個分母**沒有常模**，
+#    ≥85% 是借用 TATS 的門檻。使用者知悉後決定，見 Garmin手錶分數.md B-7。
 WATCH_WAKE_EFFICIENCY_BASIS = "phone_bed_start__watch_wake"
 
 
@@ -462,8 +468,9 @@ def watch_wake_efficiency(total_sleep_minutes, bed_start_at, wake_time):
         "watch_wake_efficiency_note": (
             "The same watch-measured sleep, but counted from when you tapped "
             "Start sleep to when your watch says you woke up - so it still "
-            "works on nights you forgot to tap Out of bed. Shown for "
-            "information only; it never affects your sleep score."
+            "works on nights you forgot to tap Out of bed. Your sleep score "
+            "uses this figure only on nights the Start sleep to Out of bed "
+            "figure could not be worked out."
         ),
     }
 
@@ -482,3 +489,48 @@ def phone_in_bed_share(row):
     if not tib or phone is None:
         return None
     return round(phone / tib * 100, 1)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 進分數的那一個效率：三段式（2026-11-07 使用者決定）
+# ═══════════════════════════════════════════════════════════════════
+#
+#   ① measured_efficiency     兩個按鈕都按了、而且算得出來
+#   ② watch_wake_efficiency   ① 算不出來、但有按 Start sleep
+#   ③ 手錶自己的效率          完全沒按（或 ①② 都算不出來）
+#
+# ⚠️ 已知且接受的代價（實測 116 晚，Garmin手錶分數.md B-7）：
+#    ③ 的分母不含入睡潛伏期，102 晚裡 100 晚拿滿 25 分；① 的分母大、數字低。
+#    → **沒按按鈕的夜晚平均比按了的高 8.5 分**，誘因是「別按」。
+#    這是使用者在 11-06、11-07 看過數字之後的決定，不是疏忽。
+# ⚠️ 這裡**不重寫** ①② 的算法，直接呼叫上面兩個函式——App 顯示的那兩個數字
+#    與進分數的數字必須是同一份計算。
+# ⚠️ 回傳的 basis 會一路帶到 API 與 App 的分數卡（score_claim.py 依它挑警語），
+#    「這晚的效率是哪一種」只有它分得開。
+
+WATCH_ONLY_EFFICIENCY_BASIS = "watch_tst__watch_onset_to_wake"
+
+
+def scoring_efficiency(total_sleep_minutes, watch_efficiency, wake_time=None,
+                       bed_start_at=None, bed_end_at=None, time_in_bed_minutes=None):
+    """
+    回傳 {"value": 百分比或 None, "basis": 上面三種 basis 之一或 None}。
+
+    total_sleep_minutes / wake_time / watch_efficiency 來自手錶那一晚；
+    bed_start_at / bed_end_at / time_in_bed_minutes 來自按鈕
+    （nightly_behavior 那一列，沒有就全是 None）。
+    三者都算不出來（連手錶效率都沒有）時 value 與 basis 都是 None。
+    """
+    if total_sleep_minutes is not None and time_in_bed_minutes:
+        m = measured_efficiency(total_sleep_minutes, time_in_bed_minutes,
+                                bed_start_at, bed_end_at)["measured_efficiency"]
+        if m is not None:
+            return {"value": m, "basis": MEASURED_EFFICIENCY_BASIS}
+    if total_sleep_minutes is not None and bed_start_at and wake_time:
+        w = watch_wake_efficiency(total_sleep_minutes, bed_start_at,
+                                  wake_time)["watch_wake_efficiency"]
+        if w is not None:
+            return {"value": w, "basis": WATCH_WAKE_EFFICIENCY_BASIS}
+    if watch_efficiency is not None:
+        return {"value": float(watch_efficiency), "basis": WATCH_ONLY_EFFICIENCY_BASIS}
+    return {"value": None, "basis": None}
