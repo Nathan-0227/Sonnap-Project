@@ -518,6 +518,59 @@ check("反向：沒有任何列的夜晚 source 是 None", db.get_wearable_sourc
 
 print()
 print("=" * 78)
+print("【額外】/insights 逐晚配對不得因兩張表晚數不同而錯開（2026-11-06）")
+print("=" * 78)
+# db.get_*_nightly(days=30) 是「最近 30 筆」不是「最近 30 天」。手錶晚數比手機多時，
+# 手錶的 30 筆回推得比較短 → 較舊的手機夜晚在畫面上說「手錶沒有資料」（實機：09-13 ~ 10-04）。
+# 反過來也會錯：手錶那晚找不到手機的行為 → 心情退回純生理規則。兩個方向各驗一次。
+from datetime import date as _d, timedelta as _td
+from behavior import sleep_efficiency as _se
+
+def _nights(end, n):
+    return [(end - _td(days=n - 1 - i)).isoformat() for i in range(n)]
+
+# ① 手機那一晚 → 手錶：手錶 40 晚，手機只有最舊的那一晚
+u12 = client.post("/users", json={"display_name": "手錶比較多", "study_cohort": "L1"}).json()["user_id"]
+w_dates = _nights(_d(2025, 12, 31), 40)
+for d in w_dates:
+    db.upsert_wearable_nightly(u12, d, source="garmin", metrics={
+        "duration_min": 420, "wake_time": f"{d}T07:30:00+08:00",
+        "final_score": 80.0, "final_quality": "Good"}, db_path=TMP)
+old = w_dates[0]
+prev = (_d.fromisoformat(old) - _td(days=1)).isoformat()
+eff = _se.evaluate_efficiency(f"{prev}T23:30:00+08:00", f"{prev}T23:40:00+08:00",
+                              f"{old}T07:30:00+08:00")
+db.upsert_nightly_behavior(u12, old, "23:30", f"{prev}T23:40:00+08:00", 10.0, False,
+                           db_path=TMP, efficiency=eff)
+ins12 = client.get("/insights", params={"user_id": u12}).json()
+h12 = [x for x in ins12["behavior"]["history"] if x["date"] == old]
+ok("前提：手錶那 30 筆真的不含這一晚（否則本條假性通過）",
+   old not in [x["date"] for x in ins12["wearable"]["history"]])
+ok("較舊的手機夜晚仍配得到手錶 → 算得出效率",
+   bool(h12) and h12[0]["measured_efficiency"] is not None,
+   f"{h12[0].get('measured_efficiency') if h12 else None}")
+ok("不得說「手錶沒有資料」",
+   bool(h12) and not (h12[0]["measured_efficiency_note"] or "").startswith("No sleep data"))
+
+# ② 手錶那一晚 → 手機：手機 40 晚（全部晚三小時），手錶只有最舊的那一晚（Good）
+u13 = client.post("/users", json={"display_name": "手機比較多", "study_cohort": "L1"}).json()["user_id"]
+b_dates = _nights(_d(2026, 1, 31), 40)
+for d in b_dates:
+    prev = (_d.fromisoformat(d) - _td(days=1)).isoformat()
+    db.upsert_nightly_behavior(u13, d, "23:30", f"{d}T02:30:00+08:00", 180.0, True, db_path=TMP)
+db.upsert_wearable_nightly(u13, b_dates[0], source="garmin", metrics={
+    "duration_min": 420, "final_score": 85.0, "final_quality": "Good"}, db_path=TMP)
+ins13 = client.get("/insights", params={"user_id": u13}).json()
+h13 = [x for x in ins13["wearable"]["history"] if x["date"] == b_dates[0]]
+b_row = [r for r in db.get_nightly_behavior(u13, days=10_000, db_path=TMP) if r["date"] == b_dates[0]][0]
+w_row = [r for r in db.get_wearable_nightly(u13, days=10_000, db_path=TMP) if r["date"] == b_dates[0]][0]
+want = main.resolve_mood(b_row, w_row)[0]
+ok("反向對照：有沒有行為資料，心情真的不同（否則本條假性通過）",
+   want != main.resolve_mood(None, w_row)[0], f"{want} vs {main.resolve_mood(None, w_row)[0]}")
+check("手錶那晚的心情有用到那晚的行為資料", h13[0]["pet_mood"] if h13 else None, want)
+
+print()
+print("=" * 78)
 print(f"結果：{'全部通過' if not fails else f'{len(fails)} 項失敗 → {fails}'}")
 print("=" * 78)
 sys.exit(1 if fails else 0)

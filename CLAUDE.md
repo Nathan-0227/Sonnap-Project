@@ -499,6 +499,27 @@ area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。�
 
 用完 `git worktree remove ../<目錄>` 收掉，不要放著長草。
 
+🔴 **收掉之前一定要查「被忽略的檔案」——`git status` 不會告訴你。**
+這個陷阱**已經踩過兩次**（2026-09-06 弄丟一份錄影；2026-10-04 差點弄丟
+09-08 整晚的錄影 336 MB 與三份人工標註）。原因是 `.gitignore` 忽略的檔案
+**既不算未提交也不算未追蹤**，所以「分支已合併 + `git status` 乾淨」
+這兩個條件同時成立時，目錄看起來完全可以刪，裡面卻有只存在那裡的資料。
+
+最容易中的是 **`data/`**（每個 worktree 各有一份 `sonnap.db`）與
+**`tapo_metrics/`**（錄影、熱區圖、人工標註）。
+
+```bash
+# ① 有哪些被忽略的東西（排掉編譯產物）
+git -C ../<目錄> status --porcelain --ignored | grep '^!!' |
+  grep -Ev '__pycache__|\.dart_tool|\.gradle|app/build|app/ios|app/linux|app/macos|app/windows|local\.properties|gradlew|gradle-wrapper|src/main/java'
+
+# ② 錄影有沒有只存在那裡（比對檔名，不要只看資料夾在不在）
+comm -23 <(ls ../<目錄>/tapo_metrics | sort) <(ls tapo_metrics | sort)
+```
+
+有獨有檔案就先**複製出來、逐一核對大小相符**，再刪目錄。
+`sonnap.db` 放到 `sonnap-data/` 底下**另開的子資料夾**，不要蓋掉現行那一份。
+
 ⚠️ 唯一跨疆界的檔案是 `app/assets/data/app_payload.json`——它是 pipeline 產物。
 **動 `app/` 的 session 永遠不跑 `build_app_payload.py`**，只從 main 拿。
 它被重新產生時 history 的 30 晚窗格會整個滑動（09-03 那次多了 5 晚），
@@ -1222,16 +1243,17 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **後端（根目錄）**
 
-- `main.py` — FastAPI。20 個端點：
+- `main.py` — FastAPI。21 個端點：
   使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
   上傳 `POST /nightly /wearable`；
   讀取 `GET /home /insights /challenges /get-sleep-data /health`；
+  攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
   遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
   助理 `POST /chat`。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — 13 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+- `db.py` — 15 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
   設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
   自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
@@ -1256,10 +1278,57 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   資料庫連線 → 昨晚的錄影檢查 → 抓 Garmin（最近 7 天，併進既有的）＋評分＋晚數檢查 → 全部過了才寫入
   （手錶、攝影機、夢境、App 資料檔）。**任何一項沒過就停，資料庫一筆都不寫**；
   手錶那段停下來時會先把檔案還原。
-  攝影機排在抓手錶**之前**檢查（本機檔案、幾秒查完），擋法是
-  「不到 120 分鐘」或「臥床 ÷ 錄影時長 < 0.8」——後者專擋 09-13 那種
-  後半夜斷線、臥床被算短卻剛好過 120 分鐘的夜晚，校準數字寫在檔案裡。
+  攝影機排在抓手錶**之前**檢查（本機檔案、幾秒查完），**三條擋法**，
+  校準數字都寫在檔案裡：
+
+  | 擋法 | 專擋哪種失效 |
+  |---|---|
+  | 臥床 < 120 分鐘 | 錄太短 |
+  | 臥床 ÷ 錄影時長 < 0.8 | 09-13 那種**尾段**斷線——臥床被算短卻剛好過 120 分鐘 |
+  | **最長連續片段 < 120 分鐘**（2026-10-04 新增） | 09-20 那種**中間**斷線 |
+
+  ⚠️ **三條缺一不可，新的那條沒有涵蓋舊的。** 09-20 那晚筆電在電池模式下
+  進了待機（4 分鐘就會進）、醒來繼續寫同一個檔案：首尾 625 分鐘、實際只錄到
+  17.9 分鐘，而「臥床 ÷ 錄影時長」是**完美的 1.00**——分子分母都是首尾相減，
+  中間的洞在兩邊同時出現、互相抵銷。反過來，09-13 那種尾段斷線的最長連續片段
+  是 124 分鐘，**過得了**新那條（`tests/test_morning_import.py`【1b】有一條在守）。
+  ⚠️ 間隔超過 `MAX_SAMPLE_GAP_SECONDS = 60` 秒算斷一次。這條只看「時間上有沒有列」，
+  不管列裡有沒有資料——「有列但全是空值」（串流斷掉但 logger 還活著，約 25 秒
+  寫一列標記）由 `MIN_BED_COVERAGE` 守。**所以兩條的分工依賴 logger 的重試間隔。**
+  ⚠️ 新那條**刻意排在最後**：一段 60 分鐘、完全沒斷的錄影是「錄太短」不是「斷線」，
+  排前面會把人送去查電源。
+  ⚠️ 120 分鐘這個門檻**沒有針對新判準校準過**，是沿用既有常數。五晚實測落在
+  16.0 / 78.9 / 17.9（該擋）與 293.5 / 611.5（該過），**78.9 到 293.5 之間是空的**，
+  所以現在怎麼訂都對；將來出現落在那個區間的夜晚時要重新校準。
+
+  單獨查一份錄影（不碰資料庫、不匯入）：
+
+  ```bash
+  python morning_import.py --check-camera tapo_metrics/<那一份>.csv
+  ```
+
   要在主 clone 跑（`.env` 只在那裡），並先設 `SONNAP_DB_URL`。
+  ⚠️ **但事後檢查只能告訴你「昨晚沒了」。** 真正的預防是開錄前擋「筆電沒插電」，
+  那還沒做（要改 `tapo_metric_logger.py`）。
+- **`demo_accounts.py`（2026-11-06 新增）— 成果展用的 4 個示範帳號。**
+  `--create`／`--status`／`--remove`，加成手機帳號的好友，讓好友頁有東西看。
+  🔴 **資料是腳本產生的，不是受測者**：暱稱帶 `(demo)`、`study_cohort = db.DEMO_COHORT`，
+  畫面出現時要標 Demo accounts，**不得當成 D2 結果或算進使用者數**。
+  ⚠️ 任何掃過所有使用者的查詢都要排除 `DEMO_COHORT`——`resolve_phone_account()`
+  靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
+  只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
+- **`camera_clips.py`（2026-11-07 新增）— 攝影機動作片段。** 一晚挑動作最大的 3 段、
+  每段 10 秒，做成 GIF（**原始畫面**＋在動區域疊暖色＋「02:41 · moved for 6 s」），
+  App 的 Insights 攝影機卡跟著趨勢圖點選的那一晚顯示。早上匯入會自動跑；
+  補舊的：`python camera_clips.py --all`（先加 `--dry-run` 看會挑哪幾段）。
+  🔴 **錄影要加 `--save-video`**（`tapo_metric_logger.py --save-video 600`），
+  09-15 之後的夜晚都只有 CSV、沒有畫面可剪。
+  ⚠️ 片段是原始畫面，所以：檔案在 `sonnap-data/camera_clips/`（所有 worktree 之外、
+  `SONNAP_CLIPS_DIR` 可改）；網址只用隨機 clip_id、**不含 user_id**（uvicorn 會把網址印進 log）；
+  `DELETE /users` 先刪檔再刪列（CASCADE 清不到檔案）。
+  ⚠️ 「哪裡算在動」**呼叫時才讀** `tapo_sleep_onset.MOTION_THRESHOLD` 與它的 `episodes()`，
+  不抄一份。⚠️ 標籤不寫「翻身」類分類（沒校準過）。保留最近 14 個**有片段的夜晚**，
+  原始影片不自動刪（早上匯入超過 30 GB 會提醒）。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1291,7 +1360,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 20 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 22 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1300,7 +1369,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 20 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 22 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1323,9 +1392,11 @@ python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉
-python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫
+python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫；【1b】守錄影中間斷掉（三條擋法缺一不可）
 python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／壓力是當地時間、睡眠那幾段沒被多加 8 小時、舊檔轉換可重複執行
+python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
+python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
@@ -1357,6 +1428,7 @@ flutter analyze     # No issues found
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
+| `camera_card_test.dart`（動作片段那組） | 標籤與「為什麼沒有片段」照抄後端（哨兵字串）；網址接上 baseUrl、不出現 `//`；舊版後端沒有 `clips` 欄位時整段不出現（講「沒有片段」是假話）；點了某一晚卻沒有那晚的錄影時**不退回最近一晚** |
 | `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」 |
 | `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
 | `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |
