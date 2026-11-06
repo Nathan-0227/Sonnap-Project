@@ -334,17 +334,52 @@ void main() {
   });
 
   group('【7】期間內組成不一致時要講出來', () {
-    testWidgets('真實打包檔的預設 30 天裡就有兩種組成 → 要出現範圍', (tester) async {
-      final session = SleepSession.fromJson(
-        jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>,
-      );
-      await pump(tester, session);
+    // ⚠️ 2026-11-07 改寫：原本把「真實打包檔的預設 30 天裡有 65 與 75 兩種組成」
+    //    寫死在測試裡。#87 重抓資料後，最近 30 晚剛好每晚都量到 REM（全是 75），
+    //    畫面**正確地**不再顯示範圍，測試卻紅了——錯的是測試釘住了某一份資料。
+    //    （history_pet_test.dart 2026-10-01 也是同一種失敗，見 CLAUDE.md。）
+    //    → 拆成兩條：正向案例用合成資料，**一定**會被測到；真實資料改成由資料推導。
+    testWidgets('期間內真的有兩種組成 → 要出現範圍', (tester) async {
+      // 實測的兩種：算四項（75）、手錶沒測到 REM 時只算三項（65）。
+      await pump(tester, sessionWithTwoNights(65, 75));
 
-      // 實測 83 晚：69 晚算四項（75）、14 晚手錶沒測到 REM（65）。
       expect(find.textContaining('65-75 of 100 points'), findsOneWidget,
           reason: '這一行就是「分數不能逐夜直接比」的具體證據');
       expect(find.textContaining('depending on what each night measured'),
           findsOneWidget);
+    });
+
+    testWidgets('真實打包檔：有沒有範圍那一行，要跟資料本身一致', (tester) async {
+      final session = SleepSession.fromJson(
+        jsonDecode(jsonEncode(rawPayload)) as Map<String, dynamic>,
+      );
+      // 預設期間 = 最新那一晚往回 30 天（含當晚），只算有睡眠時長的夜晚——
+      // 與趨勢卡顯示的那一段相同。
+      final nights = session.history
+          .where((e) => e.sleepDurationHours != null)
+          .toList()
+        ..sort((a, b) => a.date.compareTo(b.date));
+      final latest = DateTime.parse(nights.last.date);
+      final start = latest.subtract(const Duration(days: 29));
+      final weights = nights
+          .where((e) => !DateTime.parse(e.date).isBefore(start))
+          .map((e) => e.composition?.scoredWeight)
+          .whereType<int>()
+          .where((w) => w > 0)
+          .toSet();
+
+      await pump(tester, session);
+
+      final line = find.textContaining('depending on what each night measured');
+      if (weights.length >= 2) {
+        final lo = weights.reduce((a, b) => a < b ? a : b);
+        final hi = weights.reduce((a, b) => a > b ? a : b);
+        expect(find.textContaining('$lo-$hi of 100 points'), findsOneWidget,
+            reason: '資料裡有 $weights，畫面要講出範圍');
+      } else {
+        expect(line, findsNothing,
+            reason: '資料裡只有 $weights 一種組成，印範圍就是喊狼來了');
+      }
     });
 
     testWidgets('⚠️ 反向對照：每晚組成都一樣時不得出現', (tester) async {
