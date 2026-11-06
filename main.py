@@ -44,9 +44,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+import camera_clips
 import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine, pet_state,
@@ -87,6 +89,16 @@ PAYLOAD_PATH = Path(__file__).parent / "app" / "assets" / "data" / "app_payload.
 
 # /home 與 /insights 預設回幾晚
 DEFAULT_HISTORY_DAYS = 30
+
+# 逐晚配對（手機那一晚 ↔ 手錶那一晚）時，查找用的資料要取多少筆。
+#
+# ⚠️ db.get_*_nightly(days=N) 的 N 是「最近 N 筆」，不是「最近 N 天」。
+#    兩張表各取最近 30 筆時，晚數多的那張回推得比較短，兩邊的窗格就錯開了。
+#    2026-11-06 實測：手錶 65 晚、手機 37 晚 → 手錶的 30 筆只到 10 月初，
+#    手機的 30 筆回到 09-13，於是 09-13 ~ 10-04 每一晚的手機畫面都說
+#    「No sleep data from your watch」，而手錶其實有資料（沒有任何錯誤訊息）。
+#    → 顯示用的列表照舊取 N 筆；**配對一律從這個大窗格按日期查**。
+JOIN_LOOKUP_ROWS = 3650
 
 SCHEMA_VERSION = 2   # 1 = build_app_payload 的 asset 格式；2 = 多使用者 API 格式
 
@@ -419,6 +431,10 @@ async def delete_user(user_id: str):
        （前提是 PRAGMA foreign_keys 有開，見 db.connect()）。
     """
     require_user(user_id)
+    # ⚠️ 先刪片段檔案再刪資料列：CASCADE 會把 camera_clips 的列一起清掉，
+    #    之後就再也查不到這個人有哪些檔案了。片段是**原始畫面**，
+    #    留在磁碟上就違反「退出即刪除」。
+    camera_clips.delete_user_clips(user_id)
     db.delete_user(user_id)
     return {"deleted": True, "user_id": user_id}
 
@@ -814,6 +830,7 @@ async def get_insights(
     behavior_rows = db.get_nightly_behavior(user_id, days=days)
     wearable_rows = db.get_wearable_nightly(user_id, days=days)
     camera_rows = db.get_camera_nightly(user_id, days=days)
+    clip_nights = db.get_camera_clip_nights(user_id) if camera_rows else {}
 
     ratio, late_nights, recorded = adherence.late_night_ratio(behavior_rows)
     spread, spread_n = adherence.bedtime_spread_minutes(behavior_rows)
@@ -828,8 +845,16 @@ async def get_insights(
     #
     # ⚠️ 心情不在 Dart 端推。history 沒有 stress/rhr/avg_hr modifier 三欄，
     #    照 final_quality 硬推會把 anxious 的夜晚畫成 happy。
+    # ⚠️ 配對用的查找表從大窗格取，理由見 JOIN_LOOKUP_ROWS。
+    #    兩個方向都會錯：手機那晚找不到手錶（效率說沒資料），
+    #    手錶那晚找不到手機（心情退回純生理規則，與首頁不一致）。
+    behavior_by_date = {
+        r["date"]: r for r in db.get_nightly_behavior(user_id, days=JOIN_LOOKUP_ROWS)}
+    wearable_by_date = {
+        r["date"]: r for r in db.get_wearable_nightly(user_id, days=JOIN_LOOKUP_ROWS)}
+
     moods = {
-        r["date"]: resolve_mood(_row_for(behavior_rows, r["date"]), r)
+        r["date"]: resolve_mood(behavior_by_date.get(r["date"]), r)
         for r in wearable_rows
     }
 
@@ -879,16 +904,16 @@ async def get_insights(
                     #    跑 morning_import），寫入時算的話手錶晚到的夜晚會永遠是
                     #    null 且不會回頭補。讀取時算則手錶哪天進來哪天就對。
                     **sleep_efficiency.measured_efficiency(
-                        (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
+                        wearable_by_date.get(r["date"], {}).get("duration_min"),
                         r["time_in_bed_minutes"],
                         r["bed_start_at"],
                         r["bed_end_at"],
                     ),
                     # 並列的第二個，理由同 /home。
                     **sleep_efficiency.watch_wake_efficiency(
-                        (_row_for(wearable_rows, r["date"]) or {}).get("duration_min"),
+                        wearable_by_date.get(r["date"], {}).get("duration_min"),
                         r["bed_start_at"],
-                        (_row_for(wearable_rows, r["date"]) or {}).get("wake_time"),
+                        wearable_by_date.get(r["date"], {}).get("wake_time"),
                     ),
                 }
                 for r in behavior_rows
@@ -960,6 +985,7 @@ async def get_insights(
                     "motion_threshold_basis": r["motion_threshold_basis"],
                     "roi": r["roi"],
                     "csv_name": r["csv_name"],
+                    **_camera_clips_for(clip_nights.get(r["date"])),
                 }
                 for r in camera_rows
             ],
@@ -971,6 +997,48 @@ async def get_insights(
             ),
         },
     }
+
+
+def _camera_clips_for(night):
+    """
+    一晚的動作片段 → {clips, clips_note}。沒有片段時 clips 是空陣列、note 講原因。
+
+    ⚠️ note 的文字只在 camera_clips.py 定義，這裡與 Dart 都照抄。
+    ⚠️ 網址只有 clip_id、不含 user_id（camera_clips.py 檔頭第 2 點）。
+    """
+    if not night:
+        return {"clips": [], "clips_note": camera_clips.NOT_MADE_NOTE}
+    return {
+        "clips": [
+            {
+                "url": camera_clips.clip_url(c["clip_id"]),
+                "label": c["label"],
+                "start_at": c["start_at"],
+                "duration_seconds": c["duration_seconds"],
+                "rank": c["clip_rank"],
+            }
+            for c in night["clips"]
+        ],
+        "clips_note": None if night["clips"] else night["note"],
+    }
+
+
+@app.get("/camera/clips/{name}")
+async def get_camera_clip(name: str):
+    """
+    一段動作片段的 GIF。
+
+    ⚠️ 刻意**不收 user_id**：網址會原樣出現在 uvicorn 的 access log 裡，
+       而 user_id 是憑證。片段靠 clip_id（隨機 128 位元）本身擋人——
+       只有 /insights（要 user_id）會告訴你自己的片段叫什麼。
+    ⚠️ 格式不對、查無此片段、檔案不見，一律回同一個 404，不透露是哪一種。
+    """
+    clip_id = name[:-4] if name.endswith(".gif") else None
+    path = camera_clips.clip_path(clip_id)
+    if path is None or db.get_camera_clip(clip_id) is None or not path.exists():
+        raise HTTPException(status_code=404, detail="Clip not found.")
+    return FileResponse(path, media_type="image/gif",
+                        headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get("/challenges")

@@ -148,12 +148,13 @@ def make_project(tmp, dates, standard=ORIGINAL_STANDARD):
 class FakeRunner:
     """記下每一次呼叫；抓取與評分那兩步照指定的方式改檔。"""
 
-    def __init__(self, paths, after_dates, fetch_rc=0, pipeline_rc=0, ai_rc=0):
+    def __init__(self, paths, after_dates, fetch_rc=0, pipeline_rc=0, ai_rc=0, clips_rc=0):
         self.paths = paths
         self.after_dates = after_dates
         self.rc = {"garmin/garmin_connect_fetch.py": fetch_rc,
                    "garmin/run_pipeline.py": pipeline_rc,
-                   "ai/generate_advice.py": ai_rc}
+                   "ai/generate_advice.py": ai_rc,
+                   "camera_clips.py": clips_rc}
         self.calls = []
 
     def __call__(self, argv):
@@ -380,9 +381,10 @@ with tempfile.TemporaryDirectory() as d:
     runner = FakeRunner(paths, AFTER)
     rc, out = quiet(mi.run, args(), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
     ok("exit code 0", rc == 0, str(rc))
-    ok("順序：抓 → 評分 → 手錶入庫 → 攝影機入庫 → 夢境 → App 資料檔",
+    ok("順序：抓 → 評分 → 手錶入庫 → 攝影機入庫 → 動作片段 → 夢境 → App 資料檔",
        runner.scripts() == ["garmin/garmin_connect_fetch.py", "garmin/run_pipeline.py",
                             "migrate_garmin_to_db.py", "migrate_camera_to_db.py",
+                            "camera_clips.py",
                             "ai/generate_advice.py", "build_app_payload.py"],
        str(runner.scripts()))
     fetch = runner.calls[0]
@@ -394,6 +396,23 @@ with tempfile.TemporaryDirectory() as d:
     ok("任何一步都沒有 --fetch", all("--fetch" not in c for c in runner.calls))
     cam = runner.calls[3]
     ok("攝影機只匯入挑中的那一份", cam == ["migrate_camera_to_db.py", "--csv", str(csv_path)], str(cam))
+    ok("動作片段做的也是同一份", runner.calls[4] == ["camera_clips.py", "--csv", str(csv_path)],
+       str(runner.calls[4]))
+
+
+# 動作片段是附加的：做不成照樣往下跑（比照夢境），已寫好的資料不作廢
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    paths = make_project(d, BEFORE)
+    write_recording(paths.metrics_dir / "20260914_041355.csv",
+                    datetime(2026, 9, 14, 4, 13, 55), 260)
+    runner = FakeRunner(paths, AFTER, clips_rc=1)
+    rc, out = quiet(mi.run, args(), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
+    ok("動作片段失敗 → exit code 仍是 0", rc == 0, str(rc))
+    ok("  之後的夢境與 App 資料檔照跑",
+       runner.scripts()[-2:] == ["ai/generate_advice.py", "build_app_payload.py"],
+       str(runner.scripts()))
+    ok("  有講出怎麼補", "camera_clips.py --csv" in out)
     ok("有列出新增的夜晚", "2026-09-14" in out)
 
 print("\n【6b】從哪一天抓起")

@@ -138,6 +138,11 @@ DB_TIMEOUT_SECONDS = 5
 
 # 每次備份整個 garmin/data（約 16 MB），留最近幾份。
 KEEP_BACKUPS = 7
+
+# 錄影開了 --save-video 之後一晚約 0.5–1 GB，而原始影片**不自動刪**
+# （2026-11-07 使用者決定：那是校準偵測門檻唯一可靠的素材）。
+# 超過這個量就在早上匯入時提醒一次，刪不刪由人決定。
+METRICS_WARN_GB = 30
 BACKUP_STAMP = re.compile(r"^\d{8}_\d{6}$")
 
 
@@ -555,6 +560,11 @@ def _run(args, paths, now, runner, db_check, env, analyse):
         if runner(["migrate_camera_to_db.py", "--csv", str(camera_csv)]) != 0:
             raise Stop("攝影機寫入資料庫失敗（上面有錯誤訊息）。手錶那份已經寫進去了。\n"
                        "  修好之後整支重跑就好。")
+        # 動作片段是附加的：做不成不該讓已經寫好的手錶與攝影機資料作廢
+        # （比照下面夢境的處理）。
+        if runner(["camera_clips.py", "--csv", str(camera_csv)]) != 0:
+            print("  ⚠ 動作片段沒做成（上面有錯誤訊息），其餘不受影響。之後可以單獨跑 "
+                  f"camera_clips.py --csv {camera_csv} 補")
     if args.no_ai:
         print("\n● --no-ai：這次不補夢境")
     elif runner(["ai/generate_advice.py"]) != 0:
@@ -564,10 +574,22 @@ def _run(args, paths, now, runner, db_check, env, analyse):
         raise Stop("重建 App 資料檔失敗（上面有錯誤訊息）。資料庫那邊已經寫好了。")
 
     prune_backups(paths.backup_root)
+    used = folder_gb(paths.metrics_dir)
+    if used >= METRICS_WARN_GB:
+        print(f"\n  ⚠ 錄影資料夾已經用了 {used:.0f} GB（{paths.metrics_dir}）。"
+              "原始影片不會自動刪，舊的不需要了可以自己清。")
     section("✓ 完成")
     print("  打開手機的 Sonnap App：它會自己上傳昨晚放下手機的時間，")
     print("  Insights 頁不應該出現「Backend unreachable」。")
     return 0
+
+
+def folder_gb(path):
+    """資料夾裡所有檔案的總大小（GB）。資料夾不存在回 0。"""
+    path = Path(path)
+    if not path.exists():
+        return 0.0
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / 1e9
 
 
 def report_camera(csv_path):
