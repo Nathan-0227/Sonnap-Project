@@ -183,18 +183,18 @@ ok("primary_component 一定在 scored 裡",
    full["primary_component"] in full["scored"])
 
 cav = {c["component"] for c in full["caveats"]}
-check("有警語的分項", sorted(cav), ["deep", "rem", "waso"])
+check("有警語的分項", sorted(cav), ["deep", "rem"])
 ok("duration 刻意沒有警語（否則警語就沒有意義）", "duration" not in cav)
+# 2026-10-22 使用者決定：WASO 以手錶原始值計分、App 不掛警語，限制改由報告交代。
+ok("waso 刻意沒有警語（限制寫在 REPORT_CAVEATS.md）", "waso" not in cav)
 ok("每條警語都有內容", all(len(c["caveat"]) > 40 for c in full["caveats"]))
 
 # ⚠️ 警語與「沒測到」是不同的兩件事，不可混為一談。
 # ⚠️ 這裡用帶預設值的 next()：警語被拿掉時要**乾淨地回報失敗**，
 #    不是丟 StopIteration 把整支測試打斷——崩掉的測試比紅掉的難診斷。
-waso_cav = next((c["caveat"] for c in full["caveats"]
-                 if c["component"] == "waso"), "")
-ok("WASO 的警語要講到「誤差和級距一樣大」這個具體理由",
-   "band" in waso_cav)
-ok("警語不可以只寫「沒測到」", bool(waso_cav) and "not measured" not in waso_cav)
+deep_cav = next((c["caveat"] for c in full["caveats"]
+                 if c["component"] == "deep"), "")
+ok("警語不可以只寫「沒測到」", bool(deep_cav) and "not measured" not in deep_cav)
 
 # 沒測到的分項不該出現在 caveats（它在 unscored，理由不一樣）
 partial = main.score_composition(
