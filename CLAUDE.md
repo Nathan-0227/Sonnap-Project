@@ -499,6 +499,27 @@ area**，`git add -A` 在結構上不可能掃到另一個 session 的檔案。�
 
 用完 `git worktree remove ../<目錄>` 收掉，不要放著長草。
 
+🔴 **收掉之前一定要查「被忽略的檔案」——`git status` 不會告訴你。**
+這個陷阱**已經踩過兩次**（2026-09-06 弄丟一份錄影；2026-10-04 差點弄丟
+09-08 整晚的錄影 336 MB 與三份人工標註）。原因是 `.gitignore` 忽略的檔案
+**既不算未提交也不算未追蹤**，所以「分支已合併 + `git status` 乾淨」
+這兩個條件同時成立時，目錄看起來完全可以刪，裡面卻有只存在那裡的資料。
+
+最容易中的是 **`data/`**（每個 worktree 各有一份 `sonnap.db`）與
+**`tapo_metrics/`**（錄影、熱區圖、人工標註）。
+
+```bash
+# ① 有哪些被忽略的東西（排掉編譯產物）
+git -C ../<目錄> status --porcelain --ignored | grep '^!!' |
+  grep -Ev '__pycache__|\.dart_tool|\.gradle|app/build|app/ios|app/linux|app/macos|app/windows|local\.properties|gradlew|gradle-wrapper|src/main/java'
+
+# ② 錄影有沒有只存在那裡（比對檔名，不要只看資料夾在不在）
+comm -23 <(ls ../<目錄>/tapo_metrics | sort) <(ls tapo_metrics | sort)
+```
+
+有獨有檔案就先**複製出來、逐一核對大小相符**，再刪目錄。
+`sonnap.db` 放到 `sonnap-data/` 底下**另開的子資料夾**，不要蓋掉現行那一份。
+
 ⚠️ 唯一跨疆界的檔案是 `app/assets/data/app_payload.json`——它是 pipeline 產物。
 **動 `app/` 的 session 永遠不跑 `build_app_payload.py`**，只從 main 拿。
 它被重新產生時 history 的 30 晚窗格會整個滑動（09-03 那次多了 5 晚），
