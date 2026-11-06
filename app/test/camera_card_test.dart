@@ -223,4 +223,104 @@ void main() {
           reason: '沒設定 API 是單機模式，不是降級，不該出現這張卡');
     });
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // 動作片段（2026-11-07）。四件壞掉時不會報錯的事：
+  //   1. 標籤與「沒有片段的原因」要**照抄後端**（camera_clips.py 是唯一定義處）
+  //   2. 網址要接上 baseUrl，而且不能出現 `//`
+  //   3. 舊版後端（沒有 clips 欄位）整段不出現，不是說「沒有片段」
+  //   4. 指定某一晚卻沒有那晚時回 null，**不偷偷換成最近一晚**
+  // ──────────────────────────────────────────────────────────────
+  group('動作片段', () {
+    // 哨兵字串：Dart 裡任何地方都不會自己寫出這兩句，畫面上出現就證明是照抄的。
+    const sentinelLabel = '02:41 · moved for 6 s [from backend 7Q]';
+    const sentinelNote = 'Sentinel note from camera_clips.py 9X';
+
+    CameraNight withClips(List<CameraClip> clips, {String? note}) => CameraNight(
+          date: _aboveFloor.date,
+          timeInBedMinutes: _aboveFloor.timeInBedMinutes,
+          eventsPerHour: _aboveFloor.eventsPerHour,
+          bedTimesProvenance: _aboveFloor.bedTimesProvenance,
+          sleepOnsetProvenance: _aboveFloor.sleepOnsetProvenance,
+          clips: clips,
+          clipsNote: note,
+          clipsSupported: true,
+        );
+
+    testWidgets('有片段：標籤照抄、圖片用完整網址', (tester) async {
+      const url = 'http://10.0.0.5:8000/camera/clips/0123456789abcdef0123456789abcdef.gif';
+      await pump(tester, _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [withClips(const [CameraClip(url: url, label: sentinelLabel)])],
+      )));
+
+      expect(find.text('Biggest movements'), findsOneWidget);
+      expect(find.text(sentinelLabel), findsOneWidget, reason: '標籤一個字都不能改');
+      final images = tester.widgetList<Image>(find.byType(Image))
+          .map((i) => i.image)
+          .whereType<NetworkImage>()
+          .map((n) => n.url)
+          .toList();
+      expect(images, contains(url));
+    });
+
+    testWidgets('沒有片段：照抄後端給的原因，不畫空框', (tester) async {
+      await pump(tester, _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [withClips(const [], note: sentinelNote)],
+      )));
+
+      expect(find.text(sentinelNote), findsOneWidget);
+      expect(
+          tester.widgetList<Image>(find.byType(Image))
+              .where((i) => i.image is NetworkImage),
+          isEmpty);
+    });
+
+    testWidgets('反向對照：舊版後端沒有 clips 欄位 → 整段不出現', (tester) async {
+      await pump(tester, const _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [_aboveFloor],          // clipsSupported 預設 false
+      )));
+
+      expect(find.text(_cardTitle), findsOneWidget, reason: '卡片本身還在');
+      expect(find.text('Biggest movements'), findsNothing,
+          reason: '不是「沒有片段」，是後端不會做——講沒有就是假話');
+    });
+
+    test('fromJson：相對網址接上 baseUrl，不出現 //', () {
+      final night = CameraNight.fromJson({
+        'date': '2026-09-13',
+        'clips': [
+          {'url': '/camera/clips/abc.gif', 'label': sentinelLabel},
+        ],
+        'clips_note': null,
+      }, baseUrl: 'http://10.0.0.5:8000/');
+      expect(night.clips.single.url, 'http://10.0.0.5:8000/camera/clips/abc.gif');
+      expect(night.clips.single.label, sentinelLabel);
+      expect(night.clipsSupported, isTrue);
+    });
+
+    test('fromJson：有 clips 欄位但是空的 → 仍算支援，原因照抄', () {
+      final night = CameraNight.fromJson({
+        'date': '2026-09-13',
+        'clips': <dynamic>[],
+        'clips_note': sentinelNote,
+      });
+      expect(night.clipsSupported, isTrue);
+      expect(night.clips, isEmpty);
+      expect(night.clipsNote, sentinelNote);
+    });
+
+    test('nightOn：沒有那一晚就回 null，不退回最近一晚', () {
+      const result = CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [_aboveFloor, _belowFloor],
+      );
+      expect(result.nightOn('2026-09-11')?.date, '2026-09-11');
+      expect(result.nightOn('2026-01-01'), isNull,
+          reason: '換成最近一晚的話，使用者會以為看到的是自己點的那晚');
+      expect(result.latest?.date, '2026-09-12');
+    });
+  });
 }
