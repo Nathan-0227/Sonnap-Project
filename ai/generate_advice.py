@@ -886,11 +886,14 @@ def make_fallback(profile):
     這是整個降級設計最漂亮的地方：因為 advice 本來就設計成「規則式文字的
     重新配音」而非取代，LLM 全掛時使用者一點實質內容都沒少，只少了語氣潤飾。
     """
+    # ⚠️ 這是 dict 不是 set：英文化（ec7bc8b）時鍵被漏掉，變成沒有鍵的 set，
+    #    LLM 一失敗就在這裡 AttributeError，整批中斷（2026-11-06 金鑰 401 時才發現）。
+    #    tests/test_advice_fallback.py 守著。
     templates = {
-        "I slept deeply, and nothing happened in the dream at all. It was just calm.",
-        "I had an ordinary dream, and most of it was gone by the time I woke up.",
-        "My dream kept breaking up. I surfaced several times in the middle of it.",
-        "I did not sleep well last night. The sky went light before the dream started.",
+        "Good": "I slept deeply, and nothing happened in the dream at all. It was just calm.",
+        "Normal": "I had an ordinary dream, and most of it was gone by the time I woke up.",
+        "Poor": "My dream kept breaking up. I surfaced several times in the middle of it.",
+        "Bad": "I did not sleep well last night. The sky went light before the dream started.",
     }
     return {
         "advice": profile.get("recommendation") or "",
