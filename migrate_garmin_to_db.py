@@ -47,6 +47,7 @@ import argparse
 import csv
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import db
@@ -278,6 +279,56 @@ def assign_owners(dates, db_path=None):
     return owners, phone, notes
 
 
+# 評分檔已經沒有、資料庫卻還留著的手錶夜晚，一次最多自動清這麼多晚。
+#
+# 被有效性檢查排除的夜晚一次通常只有一兩晚（至今唯一的實例是 2026-06-27）。
+# 一口氣少掉很多幾乎一定是評分檔出事（例如有人用 --replace 重抓），
+# 那時候照著刪就是把資料庫的歷史跟著刪掉——超過就停、一列都不刪。
+MAX_PRUNE_NIGHTS = 3
+
+# 刪掉的列備份在專案外面：內容含帳號 id（它本身就是憑證），不能進版控。
+DELETED_ROWS_DIR = ROOT.parent / "sonnap-data" / "deleted-rows"
+
+
+def find_excluded(owners, db_path=None):
+    """
+    資料庫有、評分檔沒有的 **garmin** 夜晚。回傳 [整列 dict]，依日期排序。
+
+    為什麼會有（2026-10-04）：這支腳本原本只做新增與更新。某一晚後來被
+    pipeline 的有效性檢查排除（06-27：階段時長 688 分 > 睡眠視窗 448 分）之後，
+    評分檔不再含它，但資料庫裡那一列留著——API 繼續對外回一筆已知有問題的
+    資料，而 verify() 只會說「90 對 89」，不說是哪一晚。
+
+    ⚠️ 只看 source == "garmin"。Health Connect 送的夜晚本來就不在評分檔裡，
+       那是手機上傳的另一條路，不歸這支腳本管。
+    """
+    accounts = (set(owners.values()) | {RESEARCHER_USER_ID, WEARER_A_USER_ID}) - {None}
+    extra = []
+    for uid in accounts:
+        for row in db.get_wearable_nightly(uid, days=10_000, db_path=db_path):
+            if row.get("source") == "garmin" and row["date"] not in owners:
+                extra.append(row)
+    return sorted(extra, key=lambda r: r["date"])
+
+
+def prune_excluded(extra, backup_dir, db_path=None):
+    """
+    備份後刪掉 find_excluded() 找到的列。回傳（備份檔路徑, 刪掉的列數）。
+
+    ⚠️ 先備份、備份寫成功才刪。寫不進去會直接拋例外，一列都不會刪。
+    ⚠️ 呼叫端要先檢查 MAX_PRUNE_NIGHTS——這裡不擋，要嘛全刪要嘛不呼叫。
+    """
+    backup_dir = Path(backup_dir)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"wearable_nightly_excluded_{datetime.now():%Y%m%d_%H%M%S_%f}.json"
+    backup.write_text(json.dumps(extra, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    removed = sum(
+        db.delete_wearable_nightly(row["user_id"], row["date"], source="garmin", db_path=db_path)
+        for row in extra
+    )
+    return backup, removed
+
+
 def verify(owners, db_path=None):
     """
     驗收：CSV 的每一晚都**只**掛在它該在的那一個帳號底下，
@@ -327,7 +378,11 @@ def verify(owners, db_path=None):
 
     total = sum(len(rows) for rows in stored.values())
     if total != len(expected):
-        problems.append(f"Garmin row count mismatch: {total} across accounts, CSV has {len(expected)}")
+        # 光說「90 對 89」沒辦法行動——把多出來的是哪幾晚講出來。
+        extra = sorted({d for rows in stored.values() for d in rows} - set(expected))
+        detail = f"; in the database but not in the CSV: {extra}" if extra else ""
+        problems.append(f"Garmin row count mismatch: {total} across accounts, "
+                        f"CSV has {len(expected)}{detail}")
 
     return (not problems), problems
 
@@ -489,6 +544,8 @@ def main():
     parser.add_argument("--simulate-challenges", action="store_true",
                         help="Simulate challenge difficulty over the 46 nights (no database writes).")
     parser.add_argument("--db", default=None, help="Database path (for tests).")
+    parser.add_argument("--deleted-rows-dir", type=Path, default=DELETED_ROWS_DIR,
+                        help="Where rows pruned from the database are backed up before deletion.")
     args = parser.parse_args()
 
     rows, feats = build_rows()
@@ -552,6 +609,21 @@ def main():
         if replaced:
             print(f"  Replaced Health Connect data with Garmin on {len(replaced)} nights "
                   f"(Garmin takes priority): {sorted(replaced)}")
+
+        # 評分檔已經沒有的手錶夜晚：備份後清掉（理由見 find_excluded）。
+        excluded = find_excluded(owners, args.db)
+        if len(excluded) > MAX_PRUNE_NIGHTS:
+            print(f"✗ {len(excluded)} Garmin nights are in the database but no longer in the scoring "
+                  f"files: {[r['date'] for r in excluded]}")
+            print(f"    That is more than {MAX_PRUNE_NIGHTS}, which usually means the scoring files lost "
+                  f"history rather than that many nights being excluded. Nothing was deleted.")
+            print("    Check garmin/data first. If these nights really should go, remove them by hand.")
+            sys.exit(1)
+        if excluded:
+            backup, removed = prune_excluded(excluded, args.deleted_rows_dir, args.db)
+            print(f"  Removed {removed} night(s) no longer in the scoring files: "
+                  f"{[r['date'] for r in excluded]}")
+            print(f"    Backed up first: {backup}")
 
     ok, problems = verify(owners, args.db)
     if ok:
