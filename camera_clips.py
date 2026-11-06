@@ -76,6 +76,8 @@ STATUS_NO_VIDEO = "no_video"
 STATUS_NO_MOTION = "no_motion"
 STATUS_MOTION_AFTER_VIDEO = "motion_after_video"
 STATUS_EXPIRED = "expired"
+# 不寫進資料庫的狀態：那晚沒有 camera_nightly（錄影沒被算成一晚），見 make_night()
+STATUS_NO_CAMERA_NIGHT = "no_camera_night"
 
 # ⚠️ 這些句子**原封不動顯示在手機上**（Insights 頁的攝影機卡），Dart 不改寫。
 #    寫法比照 behavior/sleep_efficiency.py：第二人稱、不出現欄位名、
@@ -325,8 +327,20 @@ def make_night(csv_path, user_id, date, db_path=None, clips_dir=None):
 
     順序：先把新的 GIF 全部寫好 → 寫資料庫 → 才刪舊檔。中途失敗時把這次
     新寫的檔刪掉，舊的片段原樣保留（不會出現「資料庫指著不存在的檔」）。
+
+    ⚠️ **那一晚要先有 camera_nightly 那一列**，否則不做、並清掉已有的片段
+       （2026-11-07 補做時發現）：App 只顯示 camera_nightly 裡的夜晚，
+       沒有那一列的片段**永遠看不到**，卻會佔掉「保留 14 晚」的名額。
+       實例：09-13 那份錄影半夜斷線，早上匯入的檢查刻意擋掉它
+       （沒有 camera_nightly），片段卻照做了。判準不在這裡重寫一份——
+       「這晚算不算數」由攝影機入庫那一步決定，這裡只看結果。
     """
     clips_dir = Path(clips_dir or CLIPS_DIR)
+    if not db.has_camera_nightly(user_id, date, db_path=db_path):
+        removed = db.delete_camera_clip_night(user_id, date, db_path=db_path)
+        delete_files(removed, clips_dir)
+        return {"status": STATUS_NO_CAMERA_NIGHT, "labels": [], "expired_clips": 0,
+                "removed_clips": len(removed)}
     clips_dir.mkdir(parents=True, exist_ok=True)
     plan = plan_night(csv_path)
     rows, written = [], []
@@ -400,13 +414,20 @@ def main(argv=None):
             print(f"  —           {path.name}  （不算一晚：{why}）")
             skipped += 1
             continue
-        if args.dry_run:
+        if args.dry_run and not db.has_camera_nightly(user_id, date):
+            plan, labels = {"status": STATUS_NO_CAMERA_NIGHT}, []
+        elif args.dry_run:
             plan = plan_night(path)
             labels = [label_for(m["start_at"], m["duration_seconds"]) for m in plan["moments"]]
         else:
             result = make_night(path, user_id, date)
             plan, labels = result, result["labels"]
-        shown = "；".join(labels) if labels else NOTES.get(plan["status"], "")
+        if plan["status"] == STATUS_NO_CAMERA_NIGHT:
+            shown = ("攝影機紀錄裡沒有這一晚（沒匯入，或早上匯入的檢查擋掉了），不做片段"
+                     + (f"；清掉 {plan['removed_clips']} 段看不到的舊片段"
+                        if plan.get("removed_clips") else ""))
+        else:
+            shown = "；".join(labels) if labels else NOTES.get(plan["status"], "")
         print(f"  {date}  {path.name}  [{plan['status']}]  {shown}")
         done += 1
 
