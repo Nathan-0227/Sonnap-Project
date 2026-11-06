@@ -273,17 +273,23 @@ void main() {
       }
     });
 
-    test('⚠️ anxious 橫跨多個品質等級（所以心情不可能是從品質查表來的）', () {
-      // 實測 87 晚（2026-10-04）：Good 3、Normal 7、Poor 3、Bad 2 都有 anxious。
+    test('⚠️ 同一個品質等級裡有 anxious 也有別的心情（所以心情不可能是從品質查表來的）', () {
+      // 2026-10-22 改寫。原本要求「anxious 橫跨多個品質等級」，但壓力改成
+      // 依個人波動換算、焦慮要兩個訊號同向之後，89 晚只剩 07-07 一晚 anxious
+      // （使用者決定接受焦慮很少見）。真正要守的性質是「心情不是品質的函數」：
+      // 只要某個等級裡同時有 anxious 與非 anxious 的夜晚，任何「照品質查表」
+      // 都不可能同時給出這兩個答案——一晚就足以證明，不需要跨等級。
       // 這條紅了代表 Tier3 的生理覆寫實質上失效，或 payload 的來源變了。
-      final levels = sample.history
+      final anxiousLevels = sample.history
           .where((e) => e.petMood == 'anxious')
           .map((e) => e.finalQuality)
           .toSet();
+      final mixed = anxiousLevels.where((q) => sample.history
+          .any((e) => e.finalQuality == q && e.petMood != 'anxious'));
       expect(
-        levels.length,
-        greaterThan(1),
-        reason: 'anxious 全部集中在同一個品質等級的話，'
+        mixed,
+        isNotEmpty,
+        reason: '每個出現 anxious 的等級裡全都是 anxious 的話，'
             '「照品質查表」會給出一樣的結果，這組測試就守不住任何東西',
       );
     });

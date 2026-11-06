@@ -316,6 +316,41 @@ G. 壓力分數
 
 ⚠️ **本修正不宣稱解決了壓力與睡眠的因果方向問題。** Yap 等人（2020）已證實雙向關係，本節亦據此撰寫；文獻對「何者影響較大」的結論分歧，本專案 46 晚資料亦無法區辨（三種時窗定義與基礎分數的相關係數分別為 −0.189、−0.283、−0.258，兩兩差距遠小於 n=46 時約 0.155 的標準誤，且均未達統計顯著）。此修正處理的是**可查證的事實問題**——「這個數值量的是哪一段時間」——而非統計問題。
 
+**⚠️ 換算改版（2026-10-22）：由「每單位 0.4 分」改為「偏離幾倍個人波動」。**
+
+*問題。* 2026-07-30 訂下的「每偏離 1 分壓力給／扣 0.4 分、偏離 10 分打滿 ±4」**沒有出處**——「10 分」是當時看資料訂的。2026-10-04 時刻修正後，`presleep_stress_score` 第一次真正量到入睡前的清醒時段，而那一段的逐晚起伏比修正前誤取到的睡眠時段大得多：有壓力修正值的 32 晚裡 **15 晚打到上限**（本人 23 晚裡 9 晚）。一個打到上限比例近半的分項，等於在多數夜晚只輸出 ±4 兩個值，失去了「偏離多少」的資訊。
+
+*構念。* 本節的判讀框架本來就是「相對個人 baseline 的偏離」（見上方 Quer 2020 等）。但「偏離 10 分」對平常起伏 3 分的人與起伏 15 分的人意義完全不同——前者是罕見事件，後者是普通的一天。要回答「今晚是否不尋常」，偏離量必須以**這個人自己的波動**為單位。
+
+*文獻怎麼說（核對過第一作者）。* Buchheit（2014）回顧以心率指標監測訓練狀態的方法，討論如何判定個人的變化「有意義」：以「最小有意義變化」（smallest worthwhile change, SWC）為界，而 SWC 的參考單位有兩派——個人內的變異係數（CV），或族群間標準差的分數。作者認為**以個人 CV 為參考「直覺上是比較好的選擇」**；他並整理出 Le Meur 等（2013）採用 0.5 倍個人 CV 作為 SWC。但他也明白寫出：**「目前沒有證據顯示，超過 CV 的任何特定倍數在實務上真的有意義。」**
+
+另一方面，Rosenbach 等（2025）在實驗室以 Polar H10 胸帶心電同步比對 Garmin Vivosmart 4（前導 29 人、預註冊主研究 60 人）：Garmin 壓力分數在休息與心算壓力任務間有顯著差異，且與心率、RMSSD 相關，但**對自評壓力只有邊緣的預測力**，與自評壓力關聯最強的反而是心率。這支持 Tier3 把壓力額度限制在 ±4、且 `anxious` 覆寫要求心率同向佐證（2026-10-22 起，見 `build_app_payload.map_pet_mood`）。
+
+*本專案採用的操作性定義。*
+
+| 項目 | 取值 | 依據層級 |
+|---|---|---|
+| 波動的單位 | 個人波動 = baseline 窗格內的 MAD × 1.4826 | ✅ 以個人變異為單位：Buchheit 2014。用 MAD 而非標準差、1.4826 換算到標準差尺度：統計慣例，理由與 baseline 用中位數相同（不被單晚極端值撐大） |
+| 窗格 | 與 baseline **同一個**（最近 28 日曆天、至少 14 晚） | 一致性要求：分子與分母取自不同夜晚時比值無意義 |
+| 開始扣分 | 偏離 > **0.5 倍**個人波動；以內一律 0 分 | ⚠️ 有人採用（Le Meur 2013，轉引自 Buchheit 2014），但原作者自承任何倍數皆無實證 |
+| 打滿 ±4 | 偏離 ≥ **2.0 倍**個人波動，中間線性 | ❌ **設計決策，無文獻**。與 I 節配分同一性質，報告須如實標註 |
+| 波動下限 | 1 分（Garmin 壓力讀數為整數） | 量測解析度，防止 MAD≈0 時把 1 分雜訊放大成扣滿 |
+
+⚠️ 必須如實說明的限制：Buchheit 與 Le Meur 處理的是**運動員的心率／HRV**，不是 Garmin 壓力分數；此處借用的是「以個人變異為單位判定變化是否有意義」這個**方法學概念**，不是把他們的數值移植過來。這一改的定位是：把一個**兩半都沒有出處**的換算（單位與倍數皆自訂），換成**單位有出處、倍數如實標為設計決策**的換算——是改善，不是「已有文獻門檻」。
+
+*實測影響（89 晚，2026-10-22）。*
+
+| | 改版前 | 改版後 |
+|---|---|---|
+| 壓力修正打到 ±4 | 32 晚中 **15** 晚（本人 23 晚中 9 晚） | **3** 晚（本人 3 晚） |
+| 壓力修正為 0（在個人正常起伏內） | 0 晚 | 12 晚 |
+| 壓力修正平均絕對值 | 2.76 | 1.06 |
+| 分數變動 | — | 26 晚，−3.1 ~ +3.3 |
+| 品質等級改變 | — | 2 晚（06-24 Normal→Poor、07-07 Normal→Good） |
+| `anxious` 夜晚 | 6 晚 | **1** 晚（07-07） |
+
+Tier1/2 基礎分數 0 晚變動。全體平均 73.2 → 73.4、標準差 20.9 → 20.8。`anxious` 幾乎消失是因為 −3 的門檻在新尺度下約等於「超過 1.6 倍個人波動」，而仍打滿的 3 晚心率都沒有同向偏高；**使用者決定接受焦慮很少見，不另訂新門檻**（新數字同樣沒有文獻）。
+
 文獻
 Van Reeth O, Weibel L, Spiegel K, Leproult R, Dugovic C, Maccari S. Interactions between stress and sleep: from basic research to clinical situations. Sleep Med Rev. 2000;4(2):201-219. doi:10.1053/smrv.1999.0097
 
@@ -328,6 +363,12 @@ Zhang J, Li X, Tang Z, et al. Effects of stress on sleep quality: multiple media
 Correia ATL, Lipinska G, Rauch HGL, Forshaw PE, Roden LC, Rae DE. Associations between sleep-related heart rate variability and both sleep and symptoms of depression and anxiety: A systematic review. Sleep Med. 2023;101:106-117. doi:10.1016/j.sleep.2022.10.018
 
 Chalmers T, Hickey BA, Newton P, Lin CT, Sibbritt D, McLachlan CS, Clifton-Bligh R, Morley JW, Lal S. Associations between Sleep Quality and Heart Rate Variability; Implications for a Biological Model of Stress Detection Using Wearable Technology. Int J Environ Res Public Health. 2022;19(9):5770. doi:10.3390/ijerph19095770
+
+Buchheit M. Monitoring training status with HR measures: do all roads lead to Rome? Front Physiol. 2014;5:73. doi:10.3389/fphys.2014.00073
+
+Rosenbach H, Itzkovitch A, Gidron Y, Schonberg T. Assessing Stress Level Scores Against Wearables-Driven Physiological Measurements. Stress Health. 2025;41(6):e70125. doi:10.1002/smi.70125
+
+（Le Meur 等 2013 僅轉引自 Buchheit 2014，未讀原文，故不列入書目。）
 
 Kerkering EM, Greenlund IM, Bigalke JA, Migliaccio GCL, Smoot CA, Carter JR. Reliability of heart rate variability during stable and disrupted polysomnographic sleep. Am J Physiol Heart Circ Physiol. 2022;323:H16–H23. doi:10.1152/ajpheart.00143.2022
 
@@ -519,7 +560,7 @@ Ohayon MM, et al. Meta-analysis of quantitative sleep parameters from childhood 
 | 淺層睡眠（不計分）| — | Boulos 2019 / Hertenstein 2018 | 僅顯示不評分 | — | ✅ 設計決策合理（避免與深睡+REM 重複計分） |
 | 靜止心率 (F) | Tier3 修正 ±2 | Quer 2020 | `RHR_CAP`/`RHR_POINTS_PER_BPM` | 個人 baseline 偏離，絕對差距 0.4分/bpm | ✅ 已實作（`apply_recovery_modifier.py`），2026-07-31 由原 ±4 拆半 |
 | 睡眠期間平均心率 (F) | Tier3 修正 ±2 | Cosgrave 2021 | `AVG_HR_CAP`/`AVG_HR_POINTS_PER_BPM` | 個人 baseline 偏離，絕對差距 0.4分/bpm | ✅ 已實作（2026-07-31 新增），與靜止心率共享原 ±4 額度 |
-| HRV/壓力 (G) | Tier3 修正 ±4 | Van Reeth 2000 + Yap 2020 + Zhang 2024×2 + Correia 2023 + Chalmers 2022 + Kerkering 2022 | `STRESS_CAP`/`STRESS_POINTS_PER_UNIT` | 個人 baseline 偏離，絕對差距 0.4分/單位 | ✅ 已實作；七篇分工；2026-07-30 由百分比改絕對差距（小 baseline 易失真） |
+| HRV/壓力 (G) | Tier3 修正 ±4 | Van Reeth 2000 + Yap 2020 + Zhang 2024×2 + Correia 2023 + Chalmers 2022 + Kerkering 2022 + Buchheit 2014 + Rosenbach 2025 | `STRESS_CAP`/`STRESS_SWC_SPREADS`/`STRESS_FULL_SPREADS` | 個人 baseline 偏離，以個人波動（MAD×1.4826）為單位：0.5 倍內 0 分、2 倍扣滿 | ✅ 已實作；2026-07-30 由百分比改絕對差距；**2026-10-22 改為依個人波動**（單位有文獻、倍數為設計決策） |
 | 步數/活動量 (H) | Tier3 修正 0~+2 | Kredlow 2015 + Wang & Zhong 2026 | `ACTIVITY_CAP`/`ACTIVITY_SCALE`/`ACTIVITY_MIN_BASELINE_STEPS` | 個人 baseline，百分比換算，僅加分；baseline <1000 步則停用 | ⚠️ 已實作步數子項但**本專案資料下自動停用**（使用者未全日配戴，步數中位數僅 185，見 H 節）；中強度分鐘數尚未實作 |
 | 睡眠規律性 (J) | **呈現用，不計分** | Phillips 2017（SRI 原始）+ Windred 2024（死亡率預測力優於時長，支持值得呈現）+ Czeisler 2026（RIRI，證實跨方法不可比→不計分的依據）+ Kalkanis 2025 | `SRI_WINDOW_DAYS`/`SRI_MIN_VALID_PAIRS`（無 CAP，不計分） | SRI 數值輸出；28 日窗格需 ≥10 組相鄰日配對才可計算 | ✅ 已實作計算；⚠️ **刻意不計分**——Czeisler 2026 證實同資料跨套件 SRI 差異顯著（佐證：NHANES 54.5 歲 63.0 vs UK Biobank 62.8 歲 81.0，差 18 分非年齡效應），本專案近似實作無法對照外部常模，故只呈現趨勢 |
 | 睡眠片段化 (M) | Tier3 修正 ±2 | 沿用 Buysse 1989、Ohayon 2004 脈絡 | `M_AWAKE_CAP`/`M_SEGMENT_CAP` | 醒來次數 ±1、睡眠段數 ±1，絕對差距換算 | ✅ 已實作；⚠️ 操作上刻意排除 WASO（已在 Tier1 佔 25 分，避免重複計分），已於 M 節誠實標註此窄化 |
