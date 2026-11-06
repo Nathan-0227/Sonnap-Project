@@ -52,15 +52,38 @@ SCORE_COMPONENT_WEIGHTS = {"duration": 30, "efficiency": 25, "waso": 25, "deep":
 # 「四項一樣可信」與「以時長為主」的差別。
 PRIMARY_SCORE_COMPONENT = "duration"
 
-# 效率為什麼不計分（= evaluate_sleep_quality.EFFICIENCY_SCORING_ENABLED = False）。
-EFFICIENCY_UNSCORED_REASON = (
-    "the only sleep-efficiency figure this watch can produce divides by "
-    "(wake - sleep onset), which excludes the time spent awake in bed. The >=85% "
-    "threshold it would be compared against is defined for time in bed, so the "
-    "two are different constructs. Shown for information, never scored."
-)
-
 NOT_MEASURED_REASON = "not measured on this night"
+
+# ── 睡眠效率：2026-11-07 恢復計分，三段式（behavior/sleep_efficiency.scoring_efficiency）──
+# 每晚用的是哪一種寫在 efficiency_basis，這裡依它挑**那一晚的**警語。
+# ⚠️ 三種都掛警語，理由各不相同——不是「沒問題的那一種不用講」：
+#    ① 構念對了，但兩端是自述的、分子有已知的裝置低估
+#    ② 終點是手錶給的、沒有常模
+#    ③ 構念錯配（10-01 停止計分的原因），幾乎每晚拿滿
+# ⚠️ basis 字串照抄 behavior/sleep_efficiency.py 的常數（刻意不 import：
+#    score_claim 要保持零相依，main.py 與 build_app_payload 都 import 它）。
+#    tests/test_score_composition.py 守著兩邊一致。
+EFFICIENCY_CAVEATS = {
+    "watch_tst__phone_tats": (
+        "scored from your Start sleep and Out of bed taps: the sleep your watch "
+        "measured, divided by the time you marked as trying to sleep - the "
+        "definition the >=85% threshold was written for. Both taps are "
+        "self-reported, and wrist devices tend to under-count total sleep by "
+        "about 17 minutes, which pulls this figure down."
+    ),
+    "phone_bed_start__watch_wake": (
+        "scored from your Start sleep tap to the time your watch says you woke "
+        "up, because Out of bed was missing or could not be used. No published "
+        "norm exists for this definition: the >=85% threshold is borrowed, and "
+        "the watch's wake time is earlier than leaving bed, so this reads high."
+    ),
+    "watch_tst__watch_onset_to_wake": (
+        "no sleep buttons were tapped this night, so the watch's own figure is "
+        "used. It divides by (wake - sleep onset) and leaves out time awake "
+        "before falling asleep, so it reads high - almost every such night gets "
+        "the full points - and the >=85% threshold was not written for it."
+    ),
+}
 
 # 有計分、但門檻效度存疑的分項。
 #
@@ -96,10 +119,12 @@ COMPOSITION_NOTE = (
 )
 
 
-def compose(scored):
+def compose(scored, efficiency_basis=None):
     """
     把「哪幾項有算」組成 API／payload 要回的那個 dict。
 
+    efficiency_basis：效率有算時，這晚用的是哪一種（三種 basis 之一）。
+                      決定 caveats 裡效率那一條寫什麼；沒算效率時忽略。
     scored：有算分的分項名稱（可迭代）。呼叫端自己決定怎麼判斷——
             main.py 從資料庫的原始度量推論，build_app_payload 直接讀
             pipeline 算出來的分項得分。**判準兩邊各一份，形狀與文字共用這份。**
@@ -110,21 +135,21 @@ def compose(scored):
     scored_set = set(scored)
     ordered = [k for k in SCORE_COMPONENT_WEIGHTS if k in scored_set]
     unscored = [
-        {
-            "component": k,
-            "reason": EFFICIENCY_UNSCORED_REASON if k == "efficiency"
-            else NOT_MEASURED_REASON,
-        }
+        {"component": k, "reason": NOT_MEASURED_REASON}
         for k in SCORE_COMPONENT_WEIGHTS if k not in scored_set
     ]
+    caveat_text = dict(SCORED_COMPONENT_CAVEATS)
+    if efficiency_basis in EFFICIENCY_CAVEATS:
+        caveat_text["efficiency"] = EFFICIENCY_CAVEATS[efficiency_basis]
     return {
         "scored": ordered,
         "unscored": unscored,
         "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in ordered),
         "primary_component": PRIMARY_SCORE_COMPONENT,
+        "efficiency_basis": efficiency_basis if "efficiency" in scored_set else None,
         "caveats": [
-            {"component": k, "caveat": SCORED_COMPONENT_CAVEATS[k]}
-            for k in ordered if k in SCORED_COMPONENT_CAVEATS
+            {"component": k, "caveat": caveat_text[k]}
+            for k in ordered if k in caveat_text
         ],
         "note": COMPOSITION_NOTE,
     }

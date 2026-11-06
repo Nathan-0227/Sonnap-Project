@@ -35,19 +35,21 @@ const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 
 /// 後端 `behavior/sleep_efficiency.py` 的原文（算得出來的情況）。
 /// ⚠️ 照抄，不要在測試裡改寫——這條測試的意義就是「畫面上的字來自後端」。
+/// ⚠️ 2026-11-07 起效率恢復計分（三段式），這兩句從「不影響分數」改成
+///    「分數什麼時候用它」。
 const String kOkNote =
     'The sleep your watch measured, as a share of the time you said you were '
     'trying to sleep - from when you tapped Start sleep to when you tapped '
-    'Out of bed. Shown for information only; it never affects your sleep '
-    'score.';
+    'Out of bed. Your sleep score uses this figure whenever it can be worked '
+    'out.';
 
 /// 並列的第二個效率，後端原文（`watch_wake_efficiency`）。
 /// ⚠️ 它與 kOkNote 講的是**不同的量**——終點是手錶給的，不是使用者按的。
 const String kWatchWakeNote =
     'The same watch-measured sleep, but counted from when you tapped Start '
     'sleep to when your watch says you woke up - so it still works on nights '
-    'you forgot to tap Out of bed. Shown for information only; it never '
-    'affects your sleep score.';
+    'you forgot to tap Out of bed. Your sleep score uses this figure only on '
+    'nights the Start sleep to Out of bed figure could not be worked out.';
 
 /// 算不出來時後端給的原因（最常見的那一個：沒按按鈕）。
 /// ⚠️ 這句**要能讓人照著做**——「沒按按鈕」是所有失敗情況裡唯一使用者
@@ -273,14 +275,16 @@ void main() {
           reason: '後端給 91.7，畫面就是 91.7——印成 92% 會讓人以為它比實際精確');
     });
 
-    testWidgets('【3】那句「不計分」與 basis 都必須在', (tester) async {
+    testWidgets('【3】那句「跟分數的關係」與 basis 都必須在', (tester) async {
       await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
 
-      // ⚠️ **兩個**數字各自都要講一次。少任何一個，使用者就會以為
-      //    「沒講的那個有進分數」——而兩個都不進。
-      expect(find.textContaining('never affects your sleep score'),
+      // ⚠️ **兩個**數字各自都要講一次它跟分數的關係。少任何一個，使用者就會
+      //    猜錯「是哪一個進了分數」。（2026-11-07 前兩個都不進；之後①優先、②備用。）
+      expect(find.textContaining('Your sleep score uses this figure'),
           findsNWidgets(2),
           reason: '照抄後端。改寫成「參考值」就是自己發明了一種說法');
+      expect(find.textContaining('never affects'), findsNothing,
+          reason: '11-07 起效率進分數，再說「不影響」就是假話');
       expect(find.textContaining('you were trying to sleep'), findsOneWidget,
           reason: '分母是自述的那段窗，這句話是唯一講出來的地方');
       expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget,

@@ -531,6 +531,11 @@ def _run(args, paths, now, runner, db_check, env, analyse):
     print(f"● 從 {start} 抓到今天（更早的日子不動），要連 Garmin 伺服器")
     if runner(fetch) != 0:
         raise fail_and_restore("抓手錶資料失敗（上面有錯誤訊息）。")
+    # 睡眠效率 2026-11-07 起從按鈕算（三段式），評分前要先有最新的按鈕紀錄。
+    # ⚠️ 匯出失敗要停：不停的話 pipeline 會把每晚都退回手錶自己的效率，
+    #    分數悄悄變高，而且沒有任何錯誤訊息。
+    if runner(["export_bed_marks.py"]) != 0:
+        raise fail_and_restore("匯出睡眠按鈕紀錄失敗（上面有錯誤訊息）。")
     if runner(["garmin/run_pipeline.py"]) != 0:
         raise fail_and_restore("評分 pipeline 失敗（上面有錯誤訊息）。")
 

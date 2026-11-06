@@ -294,13 +294,14 @@ def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
     #    （實測真實資料有 16 晚 WASO 是 0）。
     present = {
         "duration": wearable_row.get("duration_min") is not None,
-        # 效率一律不算，見 score_claim.EFFICIENCY_UNSCORED_REASON
-        "efficiency": False,
+        # 效率有沒有算、用哪一種，都是評分器存下來的判定（同 rem_measured）
+        "efficiency": wearable_row.get("efficiency_basis") is not None,
         "waso": wearable_row.get("waso_min") is not None,
         "deep": wearable_row.get("deep_min") is not None,
         "rem": bool(wearable_row.get("rem_measured")),
     }
-    return score_claim.compose(k for k, v in present.items() if v)
+    return score_claim.compose((k for k, v in present.items() if v),
+                               efficiency_basis=wearable_row.get("efficiency_basis"))
 
 
 # ═══════════════════════════════════════════════════════════════════

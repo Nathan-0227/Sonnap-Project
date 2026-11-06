@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-11-07T03:30:09+08:00",
+  "generated_at": "2026-11-07T04:00:16+08:00",
   "session_id": "20261106_001",
   "status": {
     "pet_mood": "tired",
     "current_activity": null,
-    "energy_level": 63,
+    "energy_level": 64,
     "mood_reason": "final_quality=Poor"
   },
   "metrics": {
@@ -38,9 +38,9 @@
     "model": "claude-sonnet-5"
   },
   "scoring": {
-    "final_score": 62.6,
+    "final_score": 64.2,
     "final_quality": "Poor",
-    "base_score": 62.1,
+    "base_score": 63.6,
     "total_modifier": 0.55,
     "sri": 61.1,
     "modifier_note": "",
@@ -48,19 +48,20 @@
     "composition": {
       "scored": [
         "duration",
+        "efficiency",
         "waso",
         "deep",
         "rem"
       ],
-      "unscored": [
+      "unscored": [],
+      "scored_weight": 100,
+      "primary_component": "duration",
+      "efficiency_basis": "watch_tst__phone_tats",
+      "caveats": [
         {
           "component": "efficiency",
-          "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-        }
-      ],
-      "scored_weight": 75,
-      "primary_component": "duration",
-      "caveats": [
+          "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+        },
         {
           "component": "deep",
           "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -84,7 +85,7 @@
   },
   "streak": {
     "streak_days": 3,
-    "completed_days": 3,
+    "completed_days": 4,
     "definition": "streak_days = consecutive nights with a sleep record, counting back from the latest night. completed_days = nights rated Good or Normal within the last 7 calendar days. Nights when the watch was not worn are excluded, so a low number reflects wear rate, not sleep quality."
   },
   "history": [
@@ -100,19 +101,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -127,7 +129,7 @@
     },
     {
       "date": "2026-07-02",
-      "final_score": 99.1,
+      "final_score": 99.2,
       "final_quality": "Good",
       "sleep_duration_hours": 8.75,
       "sleep_start_time": "2026-07-02T01:06:00+08:00",
@@ -137,19 +139,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -164,7 +167,7 @@
     },
     {
       "date": "2026-07-06",
-      "final_score": 90.8,
+      "final_score": 92.1,
       "final_quality": "Good",
       "sleep_duration_hours": 7.3,
       "sleep_start_time": "2026-07-06T03:02:00+08:00",
@@ -174,19 +177,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -201,7 +205,7 @@
     },
     {
       "date": "2026-07-07",
-      "final_score": 80.9,
+      "final_score": 85.2,
       "final_quality": "Good",
       "sleep_duration_hours": 8.77,
       "sleep_start_time": "2026-07-07T03:28:00+08:00",
@@ -211,22 +215,24 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -237,29 +243,30 @@
     },
     {
       "date": "2026-07-09",
-      "final_score": 55.8,
-      "final_quality": "Poor",
+      "final_score": 65.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 9.02,
       "sleep_start_time": "2026-07-09T01:06:00+08:00",
       "wake_time": "2026-07-09T10:24:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -274,7 +281,7 @@
     },
     {
       "date": "2026-07-11",
-      "final_score": 82.9,
+      "final_score": 87.5,
       "final_quality": "Good",
       "sleep_duration_hours": 9.08,
       "sleep_start_time": "2026-07-10T22:42:00+08:00",
@@ -284,22 +291,24 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -310,32 +319,34 @@
     },
     {
       "date": "2026-07-12",
-      "final_score": 38.6,
-      "final_quality": "Bad",
+      "final_score": 55.8,
+      "final_quality": "Poor",
       "sleep_duration_hours": 12.75,
       "sleep_start_time": "2026-07-12T02:39:00+08:00",
       "wake_time": "2026-07-12T15:29:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -346,7 +357,7 @@
     },
     {
       "date": "2026-07-17",
-      "final_score": 94.6,
+      "final_score": 96.1,
       "final_quality": "Good",
       "sleep_duration_hours": 6.73,
       "sleep_start_time": "2026-07-17T03:09:00+08:00",
@@ -356,19 +367,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -383,32 +395,34 @@
     },
     {
       "date": "2026-07-19",
-      "final_score": 52.9,
-      "final_quality": "Poor",
+      "final_score": 65.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 11.03,
       "sleep_start_time": "2026-07-19T04:14:00+08:00",
       "wake_time": "2026-07-19T15:21:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -419,29 +433,30 @@
     },
     {
       "date": "2026-07-20",
-      "final_score": 75.1,
-      "final_quality": "Normal",
+      "final_score": 81.5,
+      "final_quality": "Good",
       "sleep_duration_hours": 6.85,
       "sleep_start_time": "2026-07-20T04:20:00+08:00",
       "wake_time": "2026-07-20T11:45:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -456,29 +471,30 @@
     },
     {
       "date": "2026-07-21",
-      "final_score": 78.7,
-      "final_quality": "Normal",
+      "final_score": 83.5,
+      "final_quality": "Good",
       "sleep_duration_hours": 8.45,
       "sleep_start_time": "2026-07-21T03:58:00+08:00",
       "wake_time": "2026-07-21T12:53:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -493,7 +509,7 @@
     },
     {
       "date": "2026-07-23",
-      "final_score": 86.4,
+      "final_score": 89.9,
       "final_quality": "Good",
       "sleep_duration_hours": 6.02,
       "sleep_start_time": "2026-07-23T04:53:00+08:00",
@@ -503,19 +519,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -530,29 +547,30 @@
     },
     {
       "date": "2026-07-25",
-      "final_score": 64.2,
-      "final_quality": "Poor",
+      "final_score": 72.2,
+      "final_quality": "Normal",
       "sleep_duration_hours": 7.95,
       "sleep_start_time": "2026-07-25T03:15:00+08:00",
       "wake_time": "2026-07-25T12:00:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -567,7 +585,7 @@
     },
     {
       "date": "2026-07-27",
-      "final_score": 98.2,
+      "final_score": 98.9,
       "final_quality": "Good",
       "sleep_duration_hours": 8.05,
       "sleep_start_time": "2026-07-27T04:01:00+08:00",
@@ -577,19 +595,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -604,7 +623,7 @@
     },
     {
       "date": "2026-08-02",
-      "final_score": 94.8,
+      "final_score": 96.1,
       "final_quality": "Good",
       "sleep_duration_hours": 9.13,
       "sleep_start_time": "2026-08-02T02:13:00+08:00",
@@ -614,19 +633,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -641,7 +661,7 @@
     },
     {
       "date": "2026-08-04",
-      "final_score": 98.8,
+      "final_score": 99.1,
       "final_quality": "Good",
       "sleep_duration_hours": 8.88,
       "sleep_start_time": "2026-08-04T01:40:00+08:00",
@@ -651,19 +671,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -678,32 +699,34 @@
     },
     {
       "date": "2026-08-06",
-      "final_score": 38.5,
-      "final_quality": "Bad",
+      "final_score": 55.6,
+      "final_quality": "Poor",
       "sleep_duration_hours": 12.12,
       "sleep_start_time": "2026-08-06T03:22:00+08:00",
       "wake_time": "2026-08-06T15:29:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -714,7 +737,7 @@
     },
     {
       "date": "2026-08-07",
-      "final_score": 81.4,
+      "final_score": 86.1,
       "final_quality": "Good",
       "sleep_duration_hours": 7.08,
       "sleep_start_time": "2026-08-07T03:59:00+08:00",
@@ -724,19 +747,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -751,29 +775,30 @@
     },
     {
       "date": "2026-08-09",
-      "final_score": 37.2,
-      "final_quality": "Bad",
+      "final_score": 52.9,
+      "final_quality": "Poor",
       "sleep_duration_hours": 5.35,
       "sleep_start_time": "2026-08-09T01:44:00+08:00",
       "wake_time": "2026-08-09T07:53:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -788,29 +813,30 @@
     },
     {
       "date": "2026-08-17",
-      "final_score": 58.4,
-      "final_quality": "Poor",
+      "final_score": 68.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.78,
       "sleep_start_time": "2026-08-17T02:24:00+08:00",
       "wake_time": "2026-08-17T08:37:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -825,7 +851,7 @@
     },
     {
       "date": "2026-08-18",
-      "final_score": 97.2,
+      "final_score": 97.9,
       "final_quality": "Good",
       "sleep_duration_hours": 7.03,
       "sleep_start_time": "2026-08-18T04:56:00+08:00",
@@ -835,19 +861,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -862,32 +889,34 @@
     },
     {
       "date": "2026-08-21",
-      "final_score": 43.8,
-      "final_quality": "Bad",
+      "final_score": 59.4,
+      "final_quality": "Poor",
       "sleep_duration_hours": 10.65,
       "sleep_start_time": "2026-08-20T22:31:00+08:00",
       "wake_time": "2026-08-21T09:38:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -898,7 +927,7 @@
     },
     {
       "date": "2026-08-22",
-      "final_score": 83.5,
+      "final_score": 87.7,
       "final_quality": "Good",
       "sleep_duration_hours": 9.37,
       "sleep_start_time": "2026-08-22T06:41:00+08:00",
@@ -908,19 +937,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -935,32 +965,34 @@
     },
     {
       "date": "2026-08-23",
-      "final_score": 75.4,
-      "final_quality": "Normal",
+      "final_score": 82.2,
+      "final_quality": "Good",
       "sleep_duration_hours": 6.4,
       "sleep_start_time": "2026-08-22T22:32:00+08:00",
       "wake_time": "2026-08-23T04:56:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -971,7 +1003,7 @@
     },
     {
       "date": "2026-08-27",
-      "final_score": 13.8,
+      "final_score": 35.4,
       "final_quality": "Bad",
       "sleep_duration_hours": 3.13,
       "sleep_start_time": "2026-08-27T01:37:00+08:00",
@@ -981,19 +1013,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1008,29 +1041,30 @@
     },
     {
       "date": "2026-08-28",
-      "final_score": 77.8,
-      "final_quality": "Normal",
+      "final_score": 83.3,
+      "final_quality": "Good",
       "sleep_duration_hours": 5.53,
       "sleep_start_time": "2026-08-28T02:26:00+08:00",
       "wake_time": "2026-08-28T07:58:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1045,29 +1079,30 @@
     },
     {
       "date": "2026-08-29",
-      "final_score": 64.8,
-      "final_quality": "Poor",
+      "final_score": 73.6,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.25,
       "sleep_start_time": "2026-08-29T01:50:00+08:00",
       "wake_time": "2026-08-29T07:05:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1082,7 +1117,7 @@
     },
     {
       "date": "2026-08-30",
-      "final_score": 73.0,
+      "final_score": 79.8,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.22,
       "sleep_start_time": "2026-08-30T01:46:00+08:00",
@@ -1092,19 +1127,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1119,7 +1155,7 @@
     },
     {
       "date": "2026-08-31",
-      "final_score": 82.4,
+      "final_score": 86.8,
       "final_quality": "Good",
       "sleep_duration_hours": 6.63,
       "sleep_start_time": "2026-08-31T01:42:00+08:00",
@@ -1129,19 +1165,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1156,7 +1193,7 @@
     },
     {
       "date": "2026-09-01",
-      "final_score": 66.9,
+      "final_score": 75.2,
       "final_quality": "Normal",
       "sleep_duration_hours": 4.88,
       "sleep_start_time": "2026-09-01T02:37:00+08:00",
@@ -1166,19 +1203,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1193,7 +1231,7 @@
     },
     {
       "date": "2026-09-02",
-      "final_score": 70.9,
+      "final_score": 78.2,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.42,
       "sleep_start_time": "2026-09-02T02:49:00+08:00",
@@ -1203,19 +1241,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1230,7 +1269,7 @@
     },
     {
       "date": "2026-09-03",
-      "final_score": 82.1,
+      "final_score": 86.6,
       "final_quality": "Good",
       "sleep_duration_hours": 6.53,
       "sleep_start_time": "2026-09-03T02:28:00+08:00",
@@ -1240,19 +1279,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1267,7 +1307,7 @@
     },
     {
       "date": "2026-09-04",
-      "final_score": 69.9,
+      "final_score": 77.4,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.38,
       "sleep_start_time": "2026-09-04T02:48:00+08:00",
@@ -1277,19 +1317,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1304,7 +1345,7 @@
     },
     {
       "date": "2026-09-05",
-      "final_score": 82.2,
+      "final_score": 86.6,
       "final_quality": "Good",
       "sleep_duration_hours": 6.12,
       "sleep_start_time": "2026-09-05T02:25:00+08:00",
@@ -1314,19 +1355,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1341,29 +1383,30 @@
     },
     {
       "date": "2026-09-06",
-      "final_score": 74.7,
-      "final_quality": "Normal",
+      "final_score": 81.0,
+      "final_quality": "Good",
       "sleep_duration_hours": 5.58,
       "sleep_start_time": "2026-09-06T06:22:00+08:00",
       "wake_time": "2026-09-06T11:57:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1378,29 +1421,30 @@
     },
     {
       "date": "2026-09-07",
-      "final_score": 56.3,
-      "final_quality": "Poor",
+      "final_score": 67.2,
+      "final_quality": "Normal",
       "sleep_duration_hours": 4.03,
       "sleep_start_time": "2026-09-07T04:16:00+08:00",
       "wake_time": "2026-09-07T08:19:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1415,7 +1459,7 @@
     },
     {
       "date": "2026-09-08",
-      "final_score": 72.6,
+      "final_score": 79.4,
       "final_quality": "Normal",
       "sleep_duration_hours": 6.22,
       "sleep_start_time": "2026-09-08T02:11:00+08:00",
@@ -1425,19 +1469,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1452,7 +1497,7 @@
     },
     {
       "date": "2026-09-09",
-      "final_score": 71.2,
+      "final_score": 78.4,
       "final_quality": "Normal",
       "sleep_duration_hours": 4.97,
       "sleep_start_time": "2026-09-09T03:25:00+08:00",
@@ -1462,19 +1507,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1489,7 +1535,7 @@
     },
     {
       "date": "2026-09-10",
-      "final_score": 50.7,
+      "final_score": 63.0,
       "final_quality": "Poor",
       "sleep_duration_hours": 3.32,
       "sleep_start_time": "2026-09-10T05:14:00+08:00",
@@ -1499,19 +1545,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1526,29 +1573,30 @@
     },
     {
       "date": "2026-09-11",
-      "final_score": 64.1,
-      "final_quality": "Poor",
+      "final_score": 72.3,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.12,
       "sleep_start_time": "2026-09-11T01:59:00+08:00",
       "wake_time": "2026-09-11T07:06:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1563,7 +1611,7 @@
     },
     {
       "date": "2026-09-12",
-      "final_score": 65.3,
+      "final_score": 73.6,
       "final_quality": "Normal",
       "sleep_duration_hours": 9.47,
       "sleep_start_time": "2026-09-12T01:30:00+08:00",
@@ -1573,19 +1621,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1600,7 +1649,7 @@
     },
     {
       "date": "2026-09-13",
-      "final_score": 92.4,
+      "final_score": 94.7,
       "final_quality": "Good",
       "sleep_duration_hours": 8.0,
       "sleep_start_time": "2026-09-13T05:43:00+08:00",
@@ -1610,19 +1659,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1637,29 +1687,30 @@
     },
     {
       "date": "2026-09-14",
-      "final_score": 60.0,
-      "final_quality": "Poor",
+      "final_score": 70.1,
+      "final_quality": "Normal",
       "sleep_duration_hours": 4.05,
       "sleep_start_time": "2026-09-14T04:28:00+08:00",
       "wake_time": "2026-09-14T08:32:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1674,29 +1725,30 @@
     },
     {
       "date": "2026-09-15",
-      "final_score": 59.1,
-      "final_quality": "Poor",
+      "final_score": 70.0,
+      "final_quality": "Normal",
       "sleep_duration_hours": 3.13,
       "sleep_start_time": "2026-09-15T06:07:00+08:00",
       "wake_time": "2026-09-15T09:15:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1711,32 +1763,34 @@
     },
     {
       "date": "2026-09-16",
-      "final_score": 74.0,
-      "final_quality": "Normal",
+      "final_score": 80.5,
+      "final_quality": "Good",
       "sleep_duration_hours": 5.48,
       "sleep_start_time": "2026-09-15T23:00:00+08:00",
       "wake_time": "2026-09-16T04:30:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1747,32 +1801,34 @@
     },
     {
       "date": "2026-09-17",
-      "final_score": 44.6,
-      "final_quality": "Bad",
+      "final_score": 59.9,
+      "final_quality": "Poor",
       "sleep_duration_hours": 4.65,
       "sleep_start_time": "2026-09-17T08:00:00+08:00",
       "wake_time": "2026-09-17T13:00:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep"
         ],
         "unscored": [
           {
-            "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          },
-          {
             "component": "rem",
             "reason": "not measured on this night"
           }
         ],
-        "scored_weight": 65,
+        "scored_weight": 90,
         "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
         "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1783,29 +1839,30 @@
     },
     {
       "date": "2026-09-18",
-      "final_score": 76.7,
-      "final_quality": "Normal",
+      "final_score": 81.6,
+      "final_quality": "Good",
       "sleep_duration_hours": 6.73,
       "sleep_start_time": "2026-09-18T01:10:00+08:00",
       "wake_time": "2026-09-18T07:59:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1820,7 +1877,7 @@
     },
     {
       "date": "2026-09-19",
-      "final_score": 100.0,
+      "final_score": 84.0,
       "final_quality": "Good",
       "sleep_duration_hours": 7.82,
       "sleep_start_time": "2026-09-19T04:33:00+08:00",
@@ -1830,19 +1887,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1857,29 +1915,30 @@
     },
     {
       "date": "2026-09-20",
-      "final_score": 74.6,
-      "final_quality": "Normal",
+      "final_score": 81.8,
+      "final_quality": "Good",
       "sleep_duration_hours": 8.67,
       "sleep_start_time": "2026-09-20T04:32:00+08:00",
       "wake_time": "2026-09-20T13:34:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1894,29 +1953,30 @@
     },
     {
       "date": "2026-09-21",
-      "final_score": 46.4,
-      "final_quality": "Bad",
+      "final_score": 59.4,
+      "final_quality": "Poor",
       "sleep_duration_hours": 4.0,
       "sleep_start_time": "2026-09-21T04:26:00+08:00",
       "wake_time": "2026-09-21T08:27:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1931,29 +1991,30 @@
     },
     {
       "date": "2026-09-22",
-      "final_score": 38.2,
-      "final_quality": "Bad",
+      "final_score": 53.9,
+      "final_quality": "Poor",
       "sleep_duration_hours": 3.47,
       "sleep_start_time": "2026-09-22T04:55:00+08:00",
       "wake_time": "2026-09-22T08:31:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -1968,29 +2029,30 @@
     },
     {
       "date": "2026-09-23",
-      "final_score": 57.0,
-      "final_quality": "Poor",
+      "final_score": 67.5,
+      "final_quality": "Normal",
       "sleep_duration_hours": 3.63,
       "sleep_start_time": "2026-09-22T23:36:00+08:00",
       "wake_time": "2026-09-23T03:17:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2005,7 +2067,7 @@
     },
     {
       "date": "2026-09-24",
-      "final_score": 96.6,
+      "final_score": 98.1,
       "final_quality": "Good",
       "sleep_duration_hours": 8.68,
       "sleep_start_time": "2026-09-24T00:09:00+08:00",
@@ -2015,19 +2077,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2042,29 +2105,30 @@
     },
     {
       "date": "2026-09-25",
-      "final_score": 63.9,
-      "final_quality": "Poor",
+      "final_score": 72.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 6.27,
       "sleep_start_time": "2026-09-25T03:47:00+08:00",
       "wake_time": "2026-09-25T10:08:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2079,29 +2143,30 @@
     },
     {
       "date": "2026-09-26",
-      "final_score": 79.4,
-      "final_quality": "Normal",
+      "final_score": 84.4,
+      "final_quality": "Good",
       "sleep_duration_hours": 6.68,
       "sleep_start_time": "2026-09-26T02:09:00+08:00",
       "wake_time": "2026-09-26T08:52:00+08:00",
-      "pet_mood": "bored",
-      "mood_reason": "final_quality=Normal",
+      "pet_mood": "happy",
+      "mood_reason": "final_quality=Good",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2116,7 +2181,7 @@
     },
     {
       "date": "2026-09-27",
-      "final_score": 26.3,
+      "final_score": 44.6,
       "final_quality": "Bad",
       "sleep_duration_hours": 12.9,
       "sleep_start_time": "2026-09-26T23:43:00+08:00",
@@ -2126,19 +2191,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2153,7 +2219,7 @@
     },
     {
       "date": "2026-09-28",
-      "final_score": 84.3,
+      "final_score": 88.6,
       "final_quality": "Good",
       "sleep_duration_hours": 8.55,
       "sleep_start_time": "2026-09-28T03:22:00+08:00",
@@ -2163,19 +2229,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2190,7 +2257,7 @@
     },
     {
       "date": "2026-09-29",
-      "final_score": 17.0,
+      "final_score": 28.5,
       "final_quality": "Bad",
       "sleep_duration_hours": 3.73,
       "sleep_start_time": "2026-09-29T04:39:00+08:00",
@@ -2200,19 +2267,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2227,29 +2295,30 @@
     },
     {
       "date": "2026-09-30",
-      "final_score": 59.1,
-      "final_quality": "Poor",
+      "final_score": 69.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.38,
       "sleep_start_time": "2026-09-30T03:07:00+08:00",
       "wake_time": "2026-09-30T08:31:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2264,29 +2333,30 @@
     },
     {
       "date": "2026-10-01",
-      "final_score": 55.0,
-      "final_quality": "Poor",
+      "final_score": 66.0,
+      "final_quality": "Normal",
       "sleep_duration_hours": 4.25,
       "sleep_start_time": "2026-10-01T04:48:00+08:00",
       "wake_time": "2026-10-01T09:05:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2301,7 +2371,7 @@
     },
     {
       "date": "2026-10-02",
-      "final_score": 86.4,
+      "final_score": 89.6,
       "final_quality": "Good",
       "sleep_duration_hours": 8.63,
       "sleep_start_time": "2026-10-02T03:23:00+08:00",
@@ -2311,19 +2381,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2338,7 +2409,7 @@
     },
     {
       "date": "2026-10-03",
-      "final_score": 93.7,
+      "final_score": 94.9,
       "final_quality": "Good",
       "sleep_duration_hours": 7.02,
       "sleep_start_time": "2026-10-03T06:29:00+08:00",
@@ -2348,19 +2419,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2375,7 +2447,7 @@
     },
     {
       "date": "2026-10-04",
-      "final_score": 92.4,
+      "final_score": 95.2,
       "final_quality": "Good",
       "sleep_duration_hours": 7.92,
       "sleep_start_time": "2026-10-04T04:53:00+08:00",
@@ -2385,19 +2457,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2412,29 +2485,30 @@
     },
     {
       "date": "2026-10-06",
-      "final_score": 62.3,
-      "final_quality": "Poor",
+      "final_score": 72.6,
+      "final_quality": "Normal",
       "sleep_duration_hours": 3.8,
       "sleep_start_time": "2026-10-06T02:21:00+08:00",
       "wake_time": "2026-10-06T06:10:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2449,7 +2523,7 @@
     },
     {
       "date": "2026-10-08",
-      "final_score": 70.0,
+      "final_score": 78.3,
       "final_quality": "Normal",
       "sleep_duration_hours": 4.53,
       "sleep_start_time": "2026-10-08T04:05:00+08:00",
@@ -2459,19 +2533,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2486,7 +2561,7 @@
     },
     {
       "date": "2026-10-09",
-      "final_score": 65.3,
+      "final_score": 74.0,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.02,
       "sleep_start_time": "2026-10-09T02:31:00+08:00",
@@ -2496,19 +2571,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2523,7 +2599,7 @@
     },
     {
       "date": "2026-10-11",
-      "final_score": 89.7,
+      "final_score": 92.2,
       "final_quality": "Good",
       "sleep_duration_hours": 7.67,
       "sleep_start_time": "2026-10-11T06:23:00+08:00",
@@ -2533,19 +2609,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2560,29 +2637,30 @@
     },
     {
       "date": "2026-10-12",
-      "final_score": 57.2,
-      "final_quality": "Poor",
+      "final_score": 68.1,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.3,
       "sleep_start_time": "2026-10-12T03:23:00+08:00",
       "wake_time": "2026-10-12T08:44:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2597,29 +2675,30 @@
     },
     {
       "date": "2026-10-13",
-      "final_score": 44.5,
-      "final_quality": "Bad",
+      "final_score": 59.4,
+      "final_quality": "Poor",
       "sleep_duration_hours": 4.48,
       "sleep_start_time": "2026-10-13T03:56:00+08:00",
       "wake_time": "2026-10-13T08:35:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2634,29 +2713,30 @@
     },
     {
       "date": "2026-10-14",
-      "final_score": 56.3,
-      "final_quality": "Poor",
+      "final_score": 69.0,
+      "final_quality": "Normal",
       "sleep_duration_hours": 4.15,
       "sleep_start_time": "2026-10-14T04:03:00+08:00",
       "wake_time": "2026-10-14T08:13:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2671,29 +2751,30 @@
     },
     {
       "date": "2026-10-15",
-      "final_score": 62.8,
-      "final_quality": "Poor",
+      "final_score": 72.8,
+      "final_quality": "Normal",
       "sleep_duration_hours": 3.32,
       "sleep_start_time": "2026-10-15T06:29:00+08:00",
       "wake_time": "2026-10-15T09:49:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Poor",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2708,7 +2789,7 @@
     },
     {
       "date": "2026-10-16",
-      "final_score": 91.1,
+      "final_score": 95.0,
       "final_quality": "Good",
       "sleep_duration_hours": 5.82,
       "sleep_start_time": "2026-10-15T21:48:00+08:00",
@@ -2718,19 +2799,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2745,7 +2827,7 @@
     },
     {
       "date": "2026-10-17",
-      "final_score": 99.9,
+      "final_score": 100.0,
       "final_quality": "Good",
       "sleep_duration_hours": 8.6,
       "sleep_start_time": "2026-10-17T01:44:00+08:00",
@@ -2755,19 +2837,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2792,19 +2875,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2819,7 +2903,7 @@
     },
     {
       "date": "2026-10-19",
-      "final_score": 65.0,
+      "final_score": 74.3,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.07,
       "sleep_start_time": "2026-10-19T03:22:00+08:00",
@@ -2829,19 +2913,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2856,7 +2941,7 @@
     },
     {
       "date": "2026-10-20",
-      "final_score": 89.7,
+      "final_score": 94.1,
       "final_quality": "Good",
       "sleep_duration_hours": 6.08,
       "sleep_start_time": "2026-10-20T02:34:00+08:00",
@@ -2866,19 +2951,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2893,7 +2979,7 @@
     },
     {
       "date": "2026-10-21",
-      "final_score": 68.2,
+      "final_score": 75.8,
       "final_quality": "Normal",
       "sleep_duration_hours": 4.73,
       "sleep_start_time": "2026-10-21T03:39:00+08:00",
@@ -2903,19 +2989,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2930,7 +3017,7 @@
     },
     {
       "date": "2026-10-22",
-      "final_score": 77.8,
+      "final_score": 68.1,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.82,
       "sleep_start_time": "2026-10-22T03:05:00+08:00",
@@ -2940,19 +3027,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -2967,7 +3055,7 @@
     },
     {
       "date": "2026-10-25",
-      "final_score": 84.1,
+      "final_score": 88.8,
       "final_quality": "Good",
       "sleep_duration_hours": 7.15,
       "sleep_start_time": "2026-10-25T06:10:00+08:00",
@@ -2977,19 +3065,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3004,29 +3093,30 @@
     },
     {
       "date": "2026-10-26",
-      "final_score": 84.2,
-      "final_quality": "Good",
+      "final_score": 67.6,
+      "final_quality": "Normal",
       "sleep_duration_hours": 5.83,
       "sleep_start_time": "2026-10-26T07:02:00+08:00",
       "wake_time": "2026-10-26T12:54:00+08:00",
-      "pet_mood": "happy",
-      "mood_reason": "final_quality=Good",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3041,7 +3131,7 @@
     },
     {
       "date": "2026-10-27",
-      "final_score": 85.7,
+      "final_score": 88.8,
       "final_quality": "Good",
       "sleep_duration_hours": 7.22,
       "sleep_start_time": "2026-10-27T04:40:00+08:00",
@@ -3051,19 +3141,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3078,7 +3169,7 @@
     },
     {
       "date": "2026-10-28",
-      "final_score": 65.0,
+      "final_score": 72.8,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.22,
       "sleep_start_time": "2026-10-28T03:17:00+08:00",
@@ -3088,19 +3179,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3115,7 +3207,7 @@
     },
     {
       "date": "2026-10-29",
-      "final_score": 80.2,
+      "final_score": 85.4,
       "final_quality": "Good",
       "sleep_duration_hours": 6.28,
       "sleep_start_time": "2026-10-29T06:34:00+08:00",
@@ -3125,19 +3217,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3152,7 +3245,7 @@
     },
     {
       "date": "2026-10-30",
-      "final_score": 67.0,
+      "final_score": 75.0,
       "final_quality": "Normal",
       "sleep_duration_hours": 5.42,
       "sleep_start_time": "2026-10-30T02:58:00+08:00",
@@ -3162,19 +3255,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3189,7 +3283,7 @@
     },
     {
       "date": "2026-10-31",
-      "final_score": 95.2,
+      "final_score": 96.8,
       "final_quality": "Good",
       "sleep_duration_hours": 7.12,
       "sleep_start_time": "2026-10-31T00:42:00+08:00",
@@ -3199,19 +3293,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3226,8 +3321,8 @@
     },
     {
       "date": "2026-11-01",
-      "final_score": 60.7,
-      "final_quality": "Poor",
+      "final_score": 68.9,
+      "final_quality": "Normal",
       "sleep_duration_hours": 6.08,
       "sleep_start_time": "2026-11-01T05:22:00+08:00",
       "wake_time": "2026-11-01T11:34:00+08:00",
@@ -3236,19 +3331,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3263,29 +3359,30 @@
     },
     {
       "date": "2026-11-02",
-      "final_score": 47.5,
-      "final_quality": "Bad",
+      "final_score": 60.6,
+      "final_quality": "Poor",
       "sleep_duration_hours": 4.5,
       "sleep_start_time": "2026-11-02T03:53:00+08:00",
       "wake_time": "2026-11-02T08:23:00+08:00",
       "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "mood_reason": "final_quality=Poor",
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3300,7 +3397,7 @@
     },
     {
       "date": "2026-11-04",
-      "final_score": 86.2,
+      "final_score": 90.1,
       "final_quality": "Good",
       "sleep_duration_hours": 7.05,
       "sleep_start_time": "2026-11-04T00:03:00+08:00",
@@ -3310,19 +3407,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "phone_bed_start__watch_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep tap to the time your watch says you woke up, because Out of bed was missing or could not be used. No published norm exists for this definition: the >=85% threshold is borrowed, and the watch's wake time is earlier than leaving bed, so this reads high."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3337,7 +3435,7 @@
     },
     {
       "date": "2026-11-05",
-      "final_score": 84.5,
+      "final_score": 87.6,
       "final_quality": "Good",
       "sleep_duration_hours": 6.15,
       "sleep_start_time": "2026-11-04T22:31:00+08:00",
@@ -3347,19 +3445,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
@@ -3374,7 +3473,7 @@
     },
     {
       "date": "2026-11-06",
-      "final_score": 62.6,
+      "final_score": 64.2,
       "final_quality": "Poor",
       "sleep_duration_hours": 4.3,
       "sleep_start_time": "2026-11-06T03:48:00+08:00",
@@ -3384,19 +3483,20 @@
       "composition": {
         "scored": [
           "duration",
+          "efficiency",
           "waso",
           "deep",
           "rem"
         ],
-        "unscored": [
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__phone_tats",
+        "caveats": [
           {
             "component": "efficiency",
-            "reason": "the only sleep-efficiency figure this watch can produce divides by (wake - sleep onset), which excludes the time spent awake in bed. The >=85% threshold it would be compared against is defined for time in bed, so the two are different constructs. Shown for information, never scored."
-          }
-        ],
-        "scored_weight": 75,
-        "primary_component": "duration",
-        "caveats": [
+            "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          },
           {
             "component": "deep",
             "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."

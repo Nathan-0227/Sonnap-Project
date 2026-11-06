@@ -490,6 +490,8 @@ def to_wearable_row(session, date=None, age_band="young_adult",
         "base_score": scored["score"],
         "base_quality": scored["quality"],
         "rem_measured": 1 if scored["rem_measured"] else 0,
+        # 這條路徑沒有按鈕資料 → 一律是手錶自己的效率那一種（或沒算）
+        "efficiency_basis": scored.get("efficiency_basis"),
         # ── Tier3 與 SRI ──
         # ⚠️ total_modifier 存 0.0 而 sri 存 None，兩者刻意不同：
         #    修正值**確實是 0**（各項都算過了，只是都在冷啟動）；

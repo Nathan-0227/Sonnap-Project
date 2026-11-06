@@ -226,22 +226,25 @@ void main() {
     // `Research-Background/Garmin手錶分數.md` B-3～B-6），剩下的配分
     // 重新正規化到 100，實測 83 晚的分數整批往下走：
     // 07-12 Poor→Bad、08-09 Poor→Bad、08-23 Good→Normal。
+    // ⚠️ **2026-11-07 又位移一次、方向相反**：效率恢復計分（三段式，那幾晚
+    //    沒有按鈕 → 手錶效率、拿滿 25 分），08-09 Bad→Poor、08-23 Normal→Good，
+    //    剛好回到 10-01 之前的值。
     // **分數變了不代表心情的來源壞了**，所以這裡更新的是期望值；
     // 而「心情不能從品質推」那個真正要守的東西改成**由資料本身推導**
     // （下面兩條），這樣下一次分數位移時它不會又無預警地紅。
 
-    test('08-09 是 tired（Bad）', () {
+    test('08-09 是 tired（Poor）', () {
       final night = nightOf('2026-08-09');
       expect(night, isNotNull);
       expect(night!.petMood, 'tired');
-      expect(night.finalQuality, 'Bad');
+      expect(night.finalQuality, 'Poor');
     });
 
-    test('08-23 是 bored（Normal）', () {
+    test('08-23 是 happy（Good）', () {
       final night = nightOf('2026-08-23');
       expect(night, isNotNull);
-      expect(night!.petMood, 'bored');
-      expect(night.finalQuality, 'Normal');
+      expect(night!.petMood, 'happy');
+      expect(night.finalQuality, 'Good');
     });
 
     test('07-12 還在 history 裡；有 anxious 的品質等級底下也有別的心情', () {
