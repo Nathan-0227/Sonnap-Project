@@ -284,22 +284,33 @@ MOTIF_FAMILIES = {
     "self-shelving library": ["library", "bookcase", "shelves", "reshelv"],
     # "season" 只出現在這一個選項，安全。逐字片語擋不住
     # "could not decide on a season" 這種改寫（06-12/08-18/08-22 都漏掉）。
-    "changing sky": ["season", "sky changing", "autumn orange"],
-    "door to another room": ["different room", "another room behind"],
+    # 2026-11-07 補 "sky kept changing"／"warm orange"（10-12、10-22 漏掉）。
+    "changing sky": ["season", "sky changing", "autumn orange",
+                     "sky kept changing", "warm orange"],
+    # 2026-11-07 補：模型改寫成 "a door that opened onto a new room"、
+    # "kept opening onto somewhere new"（09-04/09-25/10-31 漏掉）。
+    # ⚠️ 不收 "new room"／"opened onto"：會誤中圖書館那個選項的夢（09-02、10-17）。
+    "door to another room": ["different room", "another room behind",
+                             "onto a new", "onto somewhere"],
     "market of colours": ["market", "stall", "stalls"],
-    "tree of new branches": ["new branches", "new branch"],
-    "picture book": ["picture book"],
+    "tree of new branches": ["new branches", "new branch", "fresh branches"],
+    # 2026-11-07 補：模型改寫成 "a little book someone kept turning"（08-29/09-19）。
+    # "page turned" 實測命中的 6 篇全是繪本的夢；⚠️ 不收單字 "page"——
+    # REM 沒量到時的「日記缺頁」意象也會寫到 page。
+    "picture book": ["picture book", "page turned", "page flipped", "turning the pages"],
     # ── [REM share was low, but measured] 三個選項，原本全擠在一個家族 ──
     "fog you cannot walk to": ["fog"],
     # ⚠️ 不能只收 "breath"——深睡選項 a 是 "a seabed that breathes"。
     # 收 "cold morning"：只出現在這一個選項，且擋得住
     # "breath **fading** on a cold morning"（07-02/08-17 都漏掉）。
-    "breath on a cold morning": ["cold morning"],
+    "breath on a cold morning": ["cold morning", "breath on cold"],
     "smoke pulled apart": ["smoke"],
     # ── [Time awake at night was long] 五個選項 ──
     "door that will not stay shut": ["pushed the door open", "opened again",
                                      "would not stay shut"],
-    "knocking at the window": ["knock", "knocked", "knocking"],
+    # 2026-11-07 補 "kept tapping"（09-27）。⚠️ 不收單字 "tapping"／"window"：
+    #    實測各誤中 4–5 篇別的家族的夢。
+    "knocking at the window": ["knock", "knocked", "knocking", "kept tapping"],
     "train lights": ["train"],
     "path that runs out": ["path ran out", "path runs out"],
     "radio losing signal": ["radio", "static"],
@@ -312,7 +323,10 @@ MOTIF_FAMILIES = {
     "waves and boat": ["waves", "boat"],
     "swaying bridge": ["bridge"],
     # ── [Sleep was short] 三個選項 ──
-    "the sky went light": ["sky went light", "sky got light"],
+    # 2026-11-07 補（09-10、09-23 漏掉）。⚠️ 不收 "too soon"：那是很多夢
+    #    共通的結尾，實測誤中 3 篇別的家族；"light came" 也一樣。
+    "the sky went light": ["sky went light", "sky got light",
+                           "came up too soon", "switched on"],
     # 加 "my name"：模型寫 "called my name"（06-18）而不是 "called me"。
     "someone calling": ["calling me", "called me", "calling my name", "called my name"],
     "the book closed itself": ["book closed itself", "closed itself"],
