@@ -1222,16 +1222,17 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **後端（根目錄）**
 
-- `main.py` — FastAPI。20 個端點：
+- `main.py` — FastAPI。21 個端點：
   使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
   上傳 `POST /nightly /wearable`；
   讀取 `GET /home /insights /challenges /get-sleep-data /health`；
+  攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
   遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
   助理 `POST /chat`。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — 13 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+- `db.py` — 15 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
   設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
   自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
@@ -1288,6 +1289,18 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   ⚠️ 任何掃過所有使用者的查詢都要排除 `DEMO_COHORT`——`resolve_phone_account()`
   靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
   只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
+- **`camera_clips.py`（2026-11-07 新增）— 攝影機動作片段。** 一晚挑動作最大的 3 段、
+  每段 10 秒，做成 GIF（**原始畫面**＋在動區域疊暖色＋「02:41 · moved for 6 s」），
+  App 的 Insights 攝影機卡跟著趨勢圖點選的那一晚顯示。早上匯入會自動跑；
+  補舊的：`python camera_clips.py --all`（先加 `--dry-run` 看會挑哪幾段）。
+  🔴 **錄影要加 `--save-video`**（`tapo_metric_logger.py --save-video 600`），
+  09-15 之後的夜晚都只有 CSV、沒有畫面可剪。
+  ⚠️ 片段是原始畫面，所以：檔案在 `sonnap-data/camera_clips/`（所有 worktree 之外、
+  `SONNAP_CLIPS_DIR` 可改）；網址只用隨機 clip_id、**不含 user_id**（uvicorn 會把網址印進 log）；
+  `DELETE /users` 先刪檔再刪列（CASCADE 清不到檔案）。
+  ⚠️ 「哪裡算在動」**呼叫時才讀** `tapo_sleep_onset.MOTION_THRESHOLD` 與它的 `episodes()`，
+  不抄一份。⚠️ 標籤不寫「翻身」類分類（沒校準過）。保留最近 14 個**有片段的夜晚**，
+  原始影片不自動刪（早上匯入超過 30 GB 會提醒）。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1319,7 +1332,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 21 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 22 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1328,7 +1341,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 21 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 22 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1355,6 +1368,7 @@ python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不�
 python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／壓力是當地時間、睡眠那幾段沒被多加 8 小時、舊檔轉換可重複執行
 python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
+python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
@@ -1386,6 +1400,7 @@ flutter analyze     # No issues found
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
+| `camera_card_test.dart`（動作片段那組） | 標籤與「為什麼沒有片段」照抄後端（哨兵字串）；網址接上 baseUrl、不出現 `//`；舊版後端沒有 `clips` 欄位時整段不出現（講「沒有片段」是假話）；點了某一晚卻沒有那晚的錄影時**不退回最近一晚** |
 | `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」 |
 | `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
 | `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |

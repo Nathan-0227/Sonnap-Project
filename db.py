@@ -393,6 +393,40 @@ CREATE TABLE IF NOT EXISTS camera_nightly (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- ── 攝影機動作片段（2026-11-07）──────────────────────────────────
+-- 一晚挑出動作最大的幾段，做成 GIF 給 App 看。產生的程式在 camera_clips.py。
+-- ⚠️ 片段是**原始畫面**（使用者 2026-11-07 決定），所以：
+--    - 檔案存在所有 worktree 之外（camera_clips.CLIPS_DIR），從不進 git
+--    - 網址只用 clip_id（隨機 32 碼），**不含 user_id**——uvicorn 的
+--      access log 會印出完整網址，而 user_id 是憑證
+--    - 刪帳號時檔案要一起刪（main.py 的 DELETE /users），CASCADE 只清得到資料列
+-- ⚠️ 呈現用，不進任何分數（與 camera_nightly 同一條）。
+
+-- 每晚一列：這晚有沒有片段、沒有的話為什麼。note 會原封不動顯示在手機上。
+CREATE TABLE IF NOT EXISTS camera_clip_nights (
+    user_id     TEXT NOT NULL,
+    date        TEXT NOT NULL,               -- 起床日，與 camera_nightly 同一個約定
+    status      TEXT NOT NULL,               -- camera_clips.STATUS_* 其中之一
+    note        TEXT,                        -- 給人讀的原因；status = ok 時為 NULL
+    created_at  TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS camera_clips (
+    clip_id     TEXT PRIMARY KEY,            -- 隨機 32 碼十六進位，也是檔名
+    user_id     TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    clip_rank   INTEGER NOT NULL,            -- 1 = 那晚動作最大的一段（不叫 rank：MySQL 8 的保留字）
+    start_at    TEXT NOT NULL,               -- 動作開始的牆鐘時刻
+    duration_seconds REAL NOT NULL,          -- 動作本身持續多久（不是片長）
+    label       TEXT NOT NULL,               -- 畫面上的字，例如 "02:41 · moved for 6 s"
+    created_at  TEXT NOT NULL,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- ── 遊戲化（B2）────────────────────────────────────────────────
 -- ⚠️ 設計紅線 4：這三張表**只存使用者的動作**（穿了什麼、領過什麼），
 --    不存 XP 或等級。XP 每次都從 nightly_behavior / wearable_nightly 即時算
@@ -1127,6 +1161,121 @@ def get_camera_nightly(user_id, days=30, db_path=None):
             (user_id, days),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ── 攝影機動作片段 ─────────────────────────────────────────────────
+# ⚠️ 這幾個函式只管資料列，**不碰檔案**。凡是會讓資料列消失的函式都回傳
+#    被移掉的 clip_id，由呼叫端（camera_clips.py / main.py）刪檔——
+#    db.py 不知道檔案放哪裡，也不該知道。
+
+def replace_camera_clips(user_id, date, status, note, clips, db_path=None):
+    """
+    整晚覆寫：這晚的狀態一列 + 片段若干列。回傳被取代掉的舊 clip_id 列表。
+
+    clips：[{clip_id, clip_rank, start_at, duration_seconds, label}, ...]
+    ⚠️ 整晚覆寫是對的：片段完全由那一份錄影重算得出，重跑同一晚應該得到
+       一份新的、完整的清單，而不是新舊混在一起。
+    """
+    conn = connect(db_path)
+    try:
+        old = [r["clip_id"] for r in conn.execute(
+            "SELECT clip_id FROM camera_clips WHERE user_id = ? AND date = ?",
+            (user_id, date)).fetchall()]
+        conn.execute("DELETE FROM camera_clips WHERE user_id = ? AND date = ?",
+                     (user_id, date))
+        conn.execute(
+            """
+            INSERT INTO camera_clip_nights (user_id, date, status, note, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                status = excluded.status, note = excluded.note,
+                created_at = excluded.created_at
+            """,
+            (user_id, date, status, note, now_iso()))
+        for c in clips:
+            conn.execute(
+                """
+                INSERT INTO camera_clips
+                    (clip_id, user_id, date, clip_rank, start_at,
+                     duration_seconds, label, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (c["clip_id"], user_id, date, c["clip_rank"], c["start_at"],
+                 c["duration_seconds"], c["label"], now_iso()))
+        conn.commit()
+        return old
+    finally:
+        conn.close()
+
+
+def get_camera_clip_nights(user_id, db_path=None):
+    """{起床日: {"status", "note", "clips": [片段, 依 clip_rank 排序]}}。"""
+    conn = connect(db_path)
+    try:
+        nights = {
+            r["date"]: {"status": r["status"], "note": r["note"], "clips": []}
+            for r in conn.execute(
+                "SELECT date, status, note FROM camera_clip_nights WHERE user_id = ?",
+                (user_id,)).fetchall()
+        }
+        for r in conn.execute(
+                "SELECT * FROM camera_clips WHERE user_id = ? "
+                "ORDER BY date, clip_rank", (user_id,)).fetchall():
+            nights.setdefault(r["date"], {"status": None, "note": None, "clips": []})
+            nights[r["date"]]["clips"].append(dict(r))
+        return nights
+    finally:
+        conn.close()
+
+
+def get_camera_clip(clip_id, db_path=None):
+    """單一片段的資料列，或 None。"""
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT * FROM camera_clips WHERE clip_id = ?",
+                           (clip_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def camera_clip_ids_for_user(user_id, db_path=None):
+    """這個帳號所有片段的 clip_id。刪帳號前用來刪檔。"""
+    conn = connect(db_path)
+    try:
+        return [r["clip_id"] for r in conn.execute(
+            "SELECT clip_id FROM camera_clips WHERE user_id = ?", (user_id,)).fetchall()]
+    finally:
+        conn.close()
+
+
+def expire_camera_clip_nights(user_id, keep, status, note, db_path=None):
+    """
+    只留最近 `keep` 個**有片段**的夜晚；更舊的片段列刪掉、那晚改成 (status, note)。
+    回傳被刪掉的 clip_id 列表。
+
+    ⚠️ 算的是「有片段的夜晚」不是日曆天（2026-11-07 使用者決定）：
+       停錄一陣子之後，舊片段要一直留到被新的取代，App 才不會整片空白。
+    """
+    conn = connect(db_path)
+    try:
+        dates = [r["date"] for r in conn.execute(
+            "SELECT DISTINCT date FROM camera_clips WHERE user_id = ? ORDER BY date DESC",
+            (user_id,)).fetchall()]
+        removed = []
+        for d in dates[keep:]:
+            removed += [r["clip_id"] for r in conn.execute(
+                "SELECT clip_id FROM camera_clips WHERE user_id = ? AND date = ?",
+                (user_id, d)).fetchall()]
+            conn.execute("DELETE FROM camera_clips WHERE user_id = ? AND date = ?",
+                         (user_id, d))
+            conn.execute(
+                "UPDATE camera_clip_nights SET status = ?, note = ? "
+                "WHERE user_id = ? AND date = ?", (status, note, user_id, d))
+        conn.commit()
+        return removed
     finally:
         conn.close()
 

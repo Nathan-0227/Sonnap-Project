@@ -389,7 +389,7 @@ class _ReportScreenState extends State<ReportScreen>
 
                   // 沒設定後端時不顯示——與 _buildDeliveryRow 同一個判準。
                   if (widget.cameraInsights != null) ...[
-                    _buildCameraCard(),
+                    _buildCameraCard(_selectedTrendDate(session)),
                     const SizedBox(height: 14),
                   ],
 
@@ -703,22 +703,26 @@ class _ReportScreenState extends State<ReportScreen>
   // SLEEP TREND CARD
   // ============================================================
 
+  /// 趨勢圖上點得到的夜晚（有睡眠時長的那些）。
+  ///
+  /// ⚠️ 趨勢卡與攝影機卡**共用這一份**：各算一次的話，篩選條件改了一邊，
+  ///    使用者點的那一晚與攝影機卡顯示的就不是同一晚，而且不會有任何錯誤。
+  List<HistoryEntry> _trendNights(SleepSession session) =>
+      _getFilteredHistory(session.history)
+          .where((entry) => entry.sleepDurationHours != null)
+          .toList();
+
+  /// 趨勢圖目前點選的那一晚（起床日）；沒點時 null。
+  String? _selectedTrendDate(SleepSession session) {
+    final nights = _trendNights(session);
+    final i = _selectedTrendIndex;
+    return (i != null && i >= 0 && i < nights.length) ? nights[i].date : null;
+  }
+
   Widget _buildSleepTrendCard(
     SleepSession session,
   ) {
-    final filteredHistory =
-        _getFilteredHistory(
-      session.history,
-    );
-
-    final validHistory =
-        filteredHistory
-            .where(
-              (entry) =>
-                  entry.sleepDurationHours !=
-                  null,
-            )
-            .toList();
+    final validHistory = _trendNights(session);
 
     // Reset selection when the selected period
     // changes and the old index no longer exists.
@@ -1771,9 +1775,19 @@ class _ReportScreenState extends State<ReportScreen>
   ///      —— 報 0 會被讀成「躺下就睡著」，而真值可能是 5 分鐘；
   ///   3. 它不進任何分數（攝影機現行可計分項目是 0 項）。
   /// `camera_card_test.dart` 三條都守著。
-  Widget _buildCameraCard() {
+  Widget _buildCameraCard(String? selectedDate) {
     final camera = _camera;
-    final night = camera?.latest;
+    // 趨勢圖點了某一晚就跟著那一晚（與「點某一晚，寵物跟著換」同一個操作）；
+    // 沒點就是最近一晚。⚠️ 點了卻沒有那晚的錄影時，**不要偷偷退回最近一晚**——
+    // 使用者會以為看到的是自己點的那晚。
+    final night = selectedDate == null
+        ? camera?.latest
+        : camera?.nightOn(selectedDate);
+    final missingSelected = selectedDate != null &&
+        night == null &&
+        camera != null &&
+        camera.status == CameraInsightsStatus.ok &&
+        camera.nights.isNotEmpty;
 
     return _insightCard(
       child: Column(
@@ -1814,6 +1828,10 @@ class _ReportScreenState extends State<ReportScreen>
           else if (camera.status == CameraInsightsStatus.noUser)
             const _NoDataMessage(
               message: 'No account yet, so camera nights cannot be loaded.',
+            )
+          else if (missingSelected)
+            _NoDataMessage(
+              message: 'No camera recording for the night of $selectedDate.',
             )
           else if (night == null)
             const _NoDataMessage(
@@ -1856,9 +1874,69 @@ class _ReportScreenState extends State<ReportScreen>
                   style: TextStyle(color: Color(0xFF8498B7), fontSize: 9),
                 ),
               ),
+            // 舊版後端沒有 clips 欄位 → 整段不出現（不是顯示「沒有片段」）。
+            if (night.clipsSupported) ...[
+              const SizedBox(height: 16),
+              _buildMovementClips(night),
+            ],
           ],
         ],
       ),
+    );
+  }
+
+  /// 昨晚動作最大的幾段（GIF）。
+  ///
+  /// ⚠️ 標籤與「為什麼沒有片段」的說明**照抄後端**，一個字都不在 Dart 產生
+  ///    ——那些句子只在 `camera_clips.py` 定義，兩份會漂移。
+  /// ⚠️ 不寫「翻身」之類的分類：那種分類沒有校準過，標籤只講時刻與動了多久。
+  Widget _buildMovementClips(CameraNight night) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Biggest movements',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (night.clips.isEmpty)
+          _NoDataMessage(
+            message: night.clipsNote ?? 'No clips for this night.',
+          )
+        else
+          for (final clip in night.clips) ...[
+            Text(
+              clip.label,
+              style: const TextStyle(color: Color(0xFFFFE1B4), fontSize: 11),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  clip.url,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const ColoredBox(
+                    color: Color(0xFF16203A),
+                    child: Center(
+                      child: Text(
+                        'Could not load this clip.',
+                        style: TextStyle(color: Color(0xFF8498B7), fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+      ],
     );
   }
 

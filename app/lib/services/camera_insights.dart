@@ -52,6 +52,29 @@ enum CameraInsightsStatus {
   failed,
 }
 
+/// 一段動作片段（GIF）。後端 `camera.history[].clips[]`。
+///
+/// ⚠️ [label] 照抄後端（例如「02:41 · moved for 6 s」），Dart 不重組。
+@immutable
+class CameraClip {
+  /// 完整網址（已接上 baseUrl）。⚠️ 不含 user_id：後端刻意只用隨機 clip_id。
+  final String url;
+  final String label;
+
+  const CameraClip({required this.url, required this.label});
+
+  /// 後端給的是相對網址（`/camera/clips/<id>.gif`），這裡接上 baseUrl。
+  factory CameraClip.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+    final base = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    return CameraClip(
+      url: '$base${json['url'] as String? ?? ''}',
+      label: (json['label'] as String?) ?? '',
+    );
+  }
+}
+
 /// 一晚的攝影機資料。欄名與後端 `/insights` 的 `camera.history` 一致。
 @immutable
 class CameraNight {
@@ -79,6 +102,16 @@ class CameraNight {
   final String? bedTimesProvenance;
   final String? sleepOnsetProvenance;
 
+  /// 那晚動作最大的幾段，依大小排序。沒有時是空的，原因在 [clipsNote]。
+  final List<CameraClip> clips;
+
+  /// 沒有片段的原因（後端的句子，照抄）。有片段時 null。
+  final String? clipsNote;
+
+  /// 後端有沒有給 clips 欄位。舊版後端沒有 → 畫面整段不顯示，
+  /// 而不是講「這晚沒有片段」（那是假話：不是沒有，是後端不會做）。
+  final bool clipsSupported;
+
   const CameraNight({
     required this.date,
     this.bedStartAt,
@@ -92,9 +125,12 @@ class CameraNight {
     this.eventsPerHour,
     this.bedTimesProvenance,
     this.sleepOnsetProvenance,
+    this.clips = const [],
+    this.clipsNote,
+    this.clipsSupported = false,
   });
 
-  factory CameraNight.fromJson(Map<String, dynamic> json) {
+  factory CameraNight.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
     double? num_(Object? v) => (v as num?)?.toDouble();
     return CameraNight(
       date: (json['date'] as String?) ?? '',
@@ -109,6 +145,12 @@ class CameraNight {
       eventsPerHour: num_(json['events_per_hour']),
       bedTimesProvenance: json['bed_times_provenance'] as String?,
       sleepOnsetProvenance: json['sleep_onset_provenance'] as String?,
+      clips: [
+        for (final c in (json['clips'] as List?) ?? const [])
+          CameraClip.fromJson(Map<String, dynamic>.from(c as Map), baseUrl: baseUrl),
+      ],
+      clipsNote: json['clips_note'] as String?,
+      clipsSupported: json.containsKey('clips'),
     );
   }
 
@@ -143,6 +185,14 @@ class CameraInsightsResult {
 
   /// 最近一晚。沒有資料時回 null（**不要回一個全是 0 的假夜晚**）。
   CameraNight? get latest => nights.isEmpty ? null : nights.last;
+
+  /// 指定起床日的那一晚；沒有就 null（**不退回最近一晚**，見攝影機卡的說明）。
+  CameraNight? nightOn(String date) {
+    for (final n in nights) {
+      if (n.date == date) return n;
+    }
+    return null;
+  }
 }
 
 /// 打 `GET /insights` 取 `camera` 區塊。
@@ -204,7 +254,7 @@ class CameraInsightsService implements CameraInsightsSource {
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
-          .map(CameraNight.fromJson)
+          .map((j) => CameraNight.fromJson(j, baseUrl: baseUrl))
           .toList();
       debugPrint('CameraInsights: ok ${history.length} nights');
       return CameraInsightsResult(
