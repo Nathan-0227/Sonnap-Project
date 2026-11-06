@@ -1251,6 +1251,33 @@ def camera_clip_ids_for_user(user_id, db_path=None):
         conn.close()
 
 
+def has_camera_nightly(user_id, date, db_path=None):
+    """這一晚有沒有 camera_nightly 那一列（＝這晚的錄影有被算成一晚）。"""
+    conn = connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT 1 FROM camera_nightly WHERE user_id = ? AND date = ?",
+            (user_id, date)).fetchone() is not None
+    finally:
+        conn.close()
+
+
+def delete_camera_clip_night(user_id, date, db_path=None):
+    """刪掉一晚的片段與狀態列。回傳被刪掉的 clip_id（檔案由呼叫端刪）。"""
+    conn = connect(db_path)
+    try:
+        ids = [r["clip_id"] for r in conn.execute(
+            "SELECT clip_id FROM camera_clips WHERE user_id = ? AND date = ?",
+            (user_id, date)).fetchall()]
+        conn.execute("DELETE FROM camera_clips WHERE user_id = ? AND date = ?", (user_id, date))
+        conn.execute("DELETE FROM camera_clip_nights WHERE user_id = ? AND date = ?",
+                     (user_id, date))
+        conn.commit()
+        return ids
+    finally:
+        conn.close()
+
+
 def expire_camera_clip_nights(user_id, keep, status, note, db_path=None):
     """
     只留最近 `keep` 個**有片段**的夜晚；更舊的片段列刪掉、那晚改成 (status, note)。

@@ -13,6 +13,7 @@ tests/test_camera_clips.py —— 攝影機動作片段（camera_clips.py）
   【6】只留最近 14 個有片段的夜晚，更舊的檔案刪掉、那晚標成 expired
   【7】API：/insights 帶片段、網址不含 user_id、檔案端點 200/404、
        刪帳號連檔案一起刪
+  【8】沒有 camera_nightly 的夜晚不做片段，已有的也清掉（App 看不到、卻佔保留名額）
 
 執行：python tests/test_camera_clips.py
 """
@@ -105,6 +106,14 @@ NIGHT = write_night(TMP / "metrics", "20260913_010000", [
     (1800, 5, 5000),    # E  7.5%，影片之外
 ])
 
+ANALYSED = onset.analyse(NIGHT)
+
+
+def cam(user_id, date):
+    """先有攝影機那一列（make_night 的前提）。內容不重要，用同一份分析結果。"""
+    db.upsert_camera_nightly(user_id, date, ANALYSED)
+
+
 print("【1】門檻讀的是 tapo_sleep_onset.MOTION_THRESHOLD，而且是呼叫時才讀")
 plan = cc.plan_night(NIGHT)
 starts = [m["start_at"] - START for m in plan["moments"]]
@@ -148,6 +157,7 @@ ok("標籤裡沒有「翻身」類的分類字",
 print("【4】做一晚：GIF、資料庫、重跑")
 uid = db.create_user("clips tester")
 DATE = "2026-09-13"
+cam(uid, DATE)
 res = cc.make_night(NIGHT, uid, DATE)
 nights = db.get_camera_clip_nights(uid)
 clips = nights[DATE]["clips"]
@@ -179,6 +189,7 @@ cases = [
      "2026-09-22", cc.STATUS_MOTION_AFTER_VIDEO),
 ]
 for label, path, d, want in cases:
+    cam(u5, d)
     r = cc.make_night(path, u5, d)
     n = db.get_camera_clip_nights(u5)[d]
     ok(f"{label} → {want}，note 照抄 NOTES", r["status"] == want and n["note"] == cc.NOTES[want]
@@ -192,11 +203,13 @@ u6 = db.create_user("retention")
 dummy = []
 for i in range(15):                                      # 15 晚舊片段：09-01 ~ 09-15
     cid = f"{i:032x}"
+    cam(u6, f"2026-09-{i + 1:02d}")
     cc.clip_path(cid).write_bytes(b"GIF89a")
     dummy.append(cid)
     db.replace_camera_clips(u6, f"2026-09-{i + 1:02d}", cc.STATUS_OK, None,
                             [{"clip_id": cid, "clip_rank": 1, "start_at": "2026-09-01T02:00:00",
                               "duration_seconds": 5.0, "label": "x"}])
+cam(u6, "2026-09-16")
 cc.make_night(NIGHT, u6, "2026-09-16")                   # 第 16 晚（新的，有三段）
 n6 = db.get_camera_clip_nights(u6)
 with_clips = sorted(d for d, v in n6.items() if v["clips"])
@@ -209,11 +222,10 @@ ok("最舊那晚標成 expired、note 講保留規則",
 
 print("【7】API")
 u7 = client.post("/users", json={"display_name": "api clips", "study_cohort": "L1"}).json()["user_id"]
-analysed = onset.analyse(NIGHT)
-db.upsert_camera_nightly(u7, DATE, analysed)
+cam(u7, DATE)
 cc.make_night(NIGHT, u7, DATE)
 # 另一晚有攝影機資料、但從沒做過片段
-db.upsert_camera_nightly(u7, "2026-09-12", analysed)
+cam(u7, "2026-09-12")
 ins = client.get("/insights", params={"user_id": u7, "days": 30}).json()
 hist = {h["date"]: h for h in ins["camera"]["history"]}
 cl = hist[DATE]["clips"]
@@ -240,6 +252,26 @@ client.delete(f"/users/{u7}")
 ok("🔴 刪帳號後：這個人的片段檔全部刪掉（原始畫面不得留在磁碟上）", not any(p.exists() for p in mine))
 ok("  別人的片段沒被誤刪", any(cc.clip_path(c["clip_id"]).exists()
                           for c in db.get_camera_clip_nights(uid)[DATE]["clips"]))
+
+print("【8】沒有 camera_nightly 的夜晚：不做片段，已有的清掉")
+u8 = db.create_user("no camera row")
+r8 = cc.make_night(NIGHT, u8, "2026-09-13")
+ok("沒有攝影機那一列 → 不做（狀態 no_camera_night）",
+   r8["status"] == cc.STATUS_NO_CAMERA_NIGHT and db.get_camera_clip_nights(u8) == {}, r8["status"])
+# 反向對照：補上那一列就做得出來——少了這條，把整個功能關掉這組也會綠
+cam(u8, "2026-09-13")
+made = cc.make_night(NIGHT, u8, "2026-09-13")
+files8 = [cc.clip_path(c["clip_id"]) for c in db.get_camera_clip_nights(u8)["2026-09-13"]["clips"]]
+ok("反向：有那一列就照做", made["status"] == cc.STATUS_OK and len(files8) == 3)
+# 那一列後來不見了（例如重新匯入時被檢查擋掉）→ 重跑要把看不到的片段清掉
+conn = db.connect()
+conn.execute("DELETE FROM camera_nightly WHERE user_id = ?", (u8,))
+conn.commit()
+conn.close()
+r8b = cc.make_night(NIGHT, u8, "2026-09-13")
+ok("那一列不見之後重跑 → 片段列清掉", db.get_camera_clip_nights(u8) == {}
+   and r8b.get("removed_clips") == 3, str(r8b))
+ok("  檔案也刪掉了", not any(f.exists() for f in files8))
 
 print()
 if fails:
