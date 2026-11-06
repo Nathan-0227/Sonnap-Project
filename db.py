@@ -749,9 +749,17 @@ def update_user(user_id, db_path=None, **fields):
         conn.close()
 
 
+# 成果展用的示範帳號（demo_accounts.py 建的）。資料是腳本產生的，不是真人。
+# ⚠️ 任何「掃過所有使用者」的查詢都要排除這個值——
+#    resolve_phone_account() 靠「夜數最多」認帳號，示範帳號塞得比本人多的話，
+#    手錶與攝影機匯入會把本人的資料寫進假帳號，而且不會有任何錯誤訊息。
+DEMO_COHORT = "DEMO"
+
+
 def resolve_phone_account(db_path=None):
     """
     挑出「手機一直在上傳的那個帳號」：nightly_behavior 夜數最多的那個。
+    示範帳號（study_cohort = DEMO_COHORT）不參與。
 
     回傳 (user_id 或 None, info)。info 是 dict：
       reason   : "ok" | "no_users" | "no_behavior" | "tie"
@@ -774,9 +782,11 @@ def resolve_phone_account(db_path=None):
             SELECT u.user_id AS user_id, COUNT(n.date) AS nights
             FROM users u
             LEFT JOIN nightly_behavior n ON n.user_id = u.user_id
+            WHERE u.study_cohort <> ?
             GROUP BY u.user_id
             ORDER BY nights DESC
-            """
+            """,
+            (DEMO_COHORT,),
         ).fetchall()
     finally:
         conn.close()

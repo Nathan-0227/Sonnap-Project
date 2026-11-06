@@ -100,7 +100,11 @@ def load_behavior(db_path, display_name=None):
                          conn.execute("SELECT display_name FROM users")]
                 sys.exit(f"✗ 找不到暱稱 {display_name!r}。這個 DB 裡有：{names}")
         else:
-            users = [r["user_id"] for r in conn.execute("SELECT user_id FROM users")]
+            # ⚠️ 示範帳號要排除：底下會把所有人的夜晚依日期併成一份，
+            #    混進去會蓋掉真實的那一晚。
+            users = [r["user_id"] for r in conn.execute(
+                "SELECT user_id FROM users WHERE study_cohort <> ?",
+                (sonnap_db.DEMO_COHORT,))]
 
         rows = {}
         for uid in users:

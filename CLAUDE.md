@@ -1281,6 +1281,13 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   要在主 clone 跑（`.env` 只在那裡），並先設 `SONNAP_DB_URL`。
   ⚠️ **但事後檢查只能告訴你「昨晚沒了」。** 真正的預防是開錄前擋「筆電沒插電」，
   那還沒做（要改 `tapo_metric_logger.py`）。
+- **`demo_accounts.py`（2026-11-06 新增）— 成果展用的 4 個示範帳號。**
+  `--create`／`--status`／`--remove`，加成手機帳號的好友，讓好友頁有東西看。
+  🔴 **資料是腳本產生的，不是受測者**：暱稱帶 `(demo)`、`study_cohort = db.DEMO_COHORT`，
+  畫面出現時要標 Demo accounts，**不得當成 D2 結果或算進使用者數**。
+  ⚠️ 任何掃過所有使用者的查詢都要排除 `DEMO_COHORT`——`resolve_phone_account()`
+  靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
+  只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
   **依 `video_clip` 檔名定日期與時刻**（`report_date` 會錯、`time` 欄位會壞，
@@ -1312,7 +1319,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 20 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 21 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1321,7 +1328,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 20 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 21 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1347,6 +1354,7 @@ python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳�
 python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫；【1b】守錄影中間斷掉（三條擋法缺一不可）
 python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／壓力是當地時間、睡眠那幾段沒被多加 8 小時、舊檔轉換可重複執行
+python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
