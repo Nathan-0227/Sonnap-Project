@@ -290,6 +290,10 @@ CREATE TABLE IF NOT EXISTS wearable_nightly (
     --    Vivoactive 3 有多晚屬於前者（已實測 Garmin 官方 App 也顯示無 REM），
     --    當成後者就會因為錶舊而懲罰使用者。
     rem_measured   INTEGER,
+    -- 睡眠效率這晚用哪一種算（2026-11-07 恢復計分，三段式）。
+    -- NULL = 效率沒進分數。值是 behavior/sleep_efficiency.py 的三個 basis 之一。
+    -- ⚠️ 這是**評分器自己的判定**（同 rem_measured），API 不重新推論。
+    efficiency_basis TEXT,
 
     -- ── Tier3 修正值與 SRI：**只有 Garmin 來源會有值**，其餘為 NULL ──
     -- 兩個原因，都不是 bug、也都不需要修：
@@ -560,6 +564,10 @@ COLUMN_MIGRATIONS = [
     ("nightly_behavior", "assumed_sleep_minutes", "REAL"),
     ("nightly_behavior", "sleep_efficiency", "REAL"),
     ("nightly_behavior", "efficiency_basis", "TEXT"),
+    # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
+    # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
+    #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
+    ("wearable_nightly", "efficiency_basis", "TEXT"),
 ]
 
 
@@ -1045,7 +1053,7 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
                "sleep_start_time", "wake_time",
                # 臥床時間：只有 Health Connect 給得出來（Garmin 一律 None）
                "time_in_bed_min", "clinical_efficiency",
-               "base_score", "base_quality", "rem_measured",
+               "base_score", "base_quality", "rem_measured", "efficiency_basis",
                # Tier3 與 SRI：只有 Garmin 有值
                "total_modifier", "sri", "modifier_note",
                # 自律神經三分項，pet_mood 的 anxious 覆寫要用（見 COLUMN_MIGRATIONS）

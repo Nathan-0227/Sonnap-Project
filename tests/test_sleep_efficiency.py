@@ -34,9 +34,9 @@ sys.path.insert(0, str(ROOT))
 
 from behavior.sleep_efficiency import (  # noqa: E402
     evaluate_efficiency, phone_in_bed_share, measured_efficiency,
-    watch_wake_efficiency,
+    watch_wake_efficiency, scoring_efficiency,
     EFFICIENCY_BASIS, MEASURED_EFFICIENCY_BASIS, MIN_TIME_IN_BED_MINUTES,
-    WATCH_WAKE_EFFICIENCY_BASIS,
+    WATCH_WAKE_EFFICIENCY_BASIS, WATCH_ONLY_EFFICIENCY_BASIS,
 )
 
 fails = []
@@ -266,10 +266,13 @@ check_true("睡眠比臥床長：不得斷定標記按錯了",
 check_true("睡眠比臥床長：要提出最可能的無辜解釋（又睡著了）",
            "fallen asleep again" in leak)
 
-# ⑥ 算得出來的那句**必須講「不進分數」**。這個數字看起來就像一般的睡眠
-#    效率，少了那半句，使用者會以為它影響了分數。
-check_true("算得出來：要說它不影響分數",
-           "never affects your sleep score" in NOTES["算得出來"])
+# ⑥ 算得出來的那句**必須講它跟分數的關係**。2026-11-07 前是「不進分數」，
+#    之後是「分數用這個」——兩個效率並列時，沒講的那個會被猜錯。
+check_true("算得出來：要說分數用的就是它",
+           "Your sleep score uses this figure whenever it can be worked out"
+           in NOTES["算得出來"])
+check_true("算得出來：不得再說「不影響分數」（11-07 起不成立）",
+           "never affects" not in NOTES["算得出來"])
 
 # ═══════════════════════════════════════════════════════════════════
 # 【6d】「沒按」與「按了但那一對不能用」必須講不同的話（2026-10-02）
@@ -387,12 +390,46 @@ for label, note in {
     check_true(f"{label}：沒有欄位名洩漏到畫面上", "_" not in note)
     check_true(f"{label}：不說「the user」", "the user" not in note.lower())
 
-check_true("算得出來：要說它不影響分數",
-           "never affects your sleep score" in b["watch_wake_efficiency_note"])
+check_true("算得出來：要說分數只在上面那個算不出來時才用它",
+           "Your sleep score uses this figure only on nights" in b["watch_wake_efficiency_note"])
+check_true("算得出來：不得再說「不影響分數」（11-07 起不成立）",
+           "never affects" not in b["watch_wake_efficiency_note"])
 check_true("算得出來：要講清楚結束時刻是**手錶**給的（否則會跟上面那個混淆）",
            "your watch says you woke up" in b["watch_wake_efficiency_note"])
 check_true("沒按 Start sleep：要說這個不需要 Out of bed",
            "Out of bed" in watch_wake_efficiency(307, None, "2026-09-11T07:06:00")["watch_wake_efficiency_note"])
+
+# ═══════════════════════════════════════════════════════════════════
+# 【7】進分數的那個效率：三段式（2026-11-07 使用者決定）
+# ═══════════════════════════════════════════════════════════════════
+#   ① 兩個按鈕都按、算得出來 → measured_efficiency
+#   ② ① 算不出來、有按 Start sleep → watch_wake_efficiency
+#   ③ 都沒有 → 手錶自己的效率
+# ⚠️ ①② 的值必須**等於**上面那兩個函式的值——App 顯示的數字與進分數的
+#    數字是同一份計算。另寫一份公式的話，兩邊漂移時不會有任何錯誤訊息。
+print("【7】scoring_efficiency：三段式")
+S, E = "2026-09-11T01:36:07", "2026-09-11T07:09:25"   # 臥床 333.3 分
+WAKE = "2026-09-11T07:06:00+08:00"
+one = scoring_efficiency(307, 100.0, WAKE, S, E, 333.3)
+check("① 兩個都按 → basis 是 TATS 那一種", one["basis"], MEASURED_EFFICIENCY_BASIS)
+check("① 數值等於 measured_efficiency（同一份計算）", one["value"],
+      measured_efficiency(307, 333.3, S, E)["measured_efficiency"])
+two = scoring_efficiency(307, 100.0, WAKE, S, None, None)
+check("② 只按 Start sleep → basis 是手錶起床那一種", two["basis"], WATCH_WAKE_EFFICIENCY_BASIS)
+check("② 數值等於 watch_wake_efficiency", two["value"],
+      watch_wake_efficiency(307, S, WAKE)["watch_wake_efficiency"])
+# ① 算不出來（睡得比自述區間還久，09-20 那種）→ 要退到 ②，不是直接退到 ③
+over = scoring_efficiency(520, 100.0, "2026-09-20T13:34:00+08:00",
+                          "2026-09-20T04:03:00", "2026-09-20T11:05:00", 422.2)
+check("① 算不出來但有 Start sleep → 退到 ②", over["basis"], WATCH_WAKE_EFFICIENCY_BASIS)
+three = scoring_efficiency(307, 99.3, WAKE)
+check("③ 沒按按鈕 → 手錶自己的效率", (three["basis"], three["value"]),
+      (WATCH_ONLY_EFFICIENCY_BASIS, 99.3))
+none = scoring_efficiency(None, None)
+check("連手錶效率都沒有 → 不計分（value 與 basis 都是 None）",
+      (none["value"], none["basis"]), (None, None))
+check("三個 basis 彼此不同",
+      len({MEASURED_EFFICIENCY_BASIS, WATCH_WAKE_EFFICIENCY_BASIS, WATCH_ONLY_EFFICIENCY_BASIS}), 3)
 
 # ═══════════════════════════════════════════════════════════════════
 print()

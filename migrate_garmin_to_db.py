@@ -142,7 +142,7 @@ def build_rows():
        所以這裡明確檢查並中止，而不是取交集繼續跑。
     """
     final = load("garmin_sleep_quality_final.json")
-    base = load("garmin_sleep_quality.json")      # 只為了 rem_measured
+    base = load("garmin_sleep_quality.json")      # 只為了 rem_measured 與 efficiency_basis
     feats = load("garmin_sleep_features.json")
 
     by_base = index_by_date(base)
@@ -192,6 +192,8 @@ def build_rows():
             "base_quality": q.get("base_quality"),
             # rem_measured 只有 Tier1/2 那份輸出有，final 那份沒帶過來
             "rem_measured": 1 if b.get("rem_measured") else 0,
+            # 同上：效率這晚用哪一種算（2026-11-07 恢復計分）
+            "efficiency_basis": b.get("efficiency_basis"),
             # ── Tier3 與 SRI（只有 Garmin 來源會有值）──
             "total_modifier": q.get("total_modifier"),
             "sri": q.get("sri"),
