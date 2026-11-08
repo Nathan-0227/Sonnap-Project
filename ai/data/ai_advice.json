@@ -2004,6 +2004,40 @@
       "prompt_version": "v4",
       "fingerprint": "2bb8f49c100e498c",
       "generated_at": "2026-11-06T19:20:53+08:00"
+    },
+    "2026-11-07": {
+      "date": "2026-11-07",
+      "lang": "en",
+      "trend_note": "Your sleep score has dropped over the last week compared to the month before, even as your stress score has crept up a bit.",
+      "model": "claude-sonnet-5",
+      "advice": "You only slept 2.6 hours last night, well short of the 7.0-9.0 h range. Try heading to bed half an hour earlier tonight and see how that feels.",
+      "dream_summary": "I dreamt I was sinking slowly into a seabed that seemed to breathe, warm sand giving way a little more each time I let out a breath. I could feel the weight of it pressing gently on my paws, holding me still. It was quiet down there, just the soft push and pull of the sand, and I did not want to float back up.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "4a297fcb70f3bce3",
+      "generated_at": "2026-11-07T07:20:35+08:00"
+    },
+    "2026-11-08": {
+      "date": "2026-11-08",
+      "lang": "en",
+      "trend_note": "Your sleep score has dropped over the past week compared to the month before, while your stress score has nudged up a bit.",
+      "model": "claude-sonnet-5",
+      "advice": "You only got 3.9 hours last night, well short of the 7-9 hour goal. Try heading to bed earlier tonight so your body gets a fuller stretch of rest.",
+      "dream_summary": "I dreamt of a sky that kept changing seasons with every blink, orange leaves swirling then suddenly soft green buds, the air going from crisp to warm against my fur in an instant. I kept chasing the color as it shifted, paws light on ground that kept turning from frost to grass. It never stayed one thing long enough for me to settle, but it was never scary, just quick and bright and endless.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "746ced640929f5e1",
+      "generated_at": "2026-11-09T06:43:29+08:00"
     }
   }
 }

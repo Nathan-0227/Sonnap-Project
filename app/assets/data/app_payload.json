@@ -1,50 +1,50 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-11-07T04:00:16+08:00",
-  "session_id": "20261106_001",
+  "generated_at": "2026-11-09T06:43:29+08:00",
+  "session_id": "20261108_001",
   "status": {
-    "pet_mood": "tired",
+    "pet_mood": "bored",
     "current_activity": null,
-    "energy_level": 64,
-    "mood_reason": "final_quality=Poor"
+    "energy_level": 70,
+    "mood_reason": "final_quality=Normal"
   },
   "metrics": {
     "motion_count": null,
     "garmin_movement": {
-      "sample_minutes": 379,
-      "level_mean": 1.895,
-      "level_max": 6.992,
-      "active_minutes": 157
+      "sample_minutes": 355,
+      "level_mean": 1.699,
+      "level_max": 7.086,
+      "active_minutes": 150
     },
-    "sleep_duration_minutes": 258,
+    "sleep_duration_minutes": 235,
     "ambient_noise_db": null,
-    "sleep_start_time": "2026-11-06T03:48:00+08:00",
-    "wake_time": "2026-11-06T08:07:00+08:00",
-    "deep_minutes": 33,
-    "rem_minutes": 70,
-    "waso_minutes": 1,
-    "sleep_efficiency": 99.61,
-    "avg_heart_rate": 71.83,
-    "resting_heart_rate": 55
+    "sleep_start_time": "2026-11-08T02:48:00+08:00",
+    "wake_time": "2026-11-08T06:43:00+08:00",
+    "deep_minutes": 30,
+    "rem_minutes": 67,
+    "waso_minutes": 0,
+    "sleep_efficiency": 100.0,
+    "avg_heart_rate": 74.77,
+    "resting_heart_rate": 53
   },
   "ai_content": {
-    "advice": "Your sleep was short last night at 4.3 hours, below the 7.0-9.0 h goal. Try heading to bed half an hour earlier tonight so you can work toward that range.",
-    "dream_summary": "I dreamt of a market where the colors ran from one stall to the next, red bleeding into gold, gold into blue under my paws. I trotted faster to keep up with it, nose full of warm spice and wet stone, but just as I reached the brightest stall the morning light pulled me away before I could see what was there.",
-    "trend_note": "Your sleep score has dropped over the last 7 nights compared to the month before, while your stress score has risen a little.",
+    "advice": "You only got 3.9 hours last night, well short of the 7-9 hour goal. Try heading to bed earlier tonight so your body gets a fuller stretch of rest.",
+    "dream_summary": "I dreamt of a sky that kept changing seasons with every blink, orange leaves swirling then suddenly soft green buds, the air going from crisp to warm against my fur in an instant. I kept chasing the color as it shifted, paws light on ground that kept turning from frost to grass. It never stayed one thing long enough for me to settle, but it was never scary, just quick and bright and endless.",
+    "trend_note": "Your sleep score has dropped over the past week compared to the month before, while your stress score has nudged up a bit.",
     "is_ai_generated": true,
     "content_type": "fiction+advice",
     "source": "llm",
     "model": "claude-sonnet-5"
   },
   "scoring": {
-    "final_score": 64.2,
-    "final_quality": "Poor",
-    "base_score": 63.6,
-    "total_modifier": 0.55,
-    "sri": 61.1,
+    "final_score": 69.9,
+    "final_quality": "Normal",
+    "base_score": 67.7,
+    "total_modifier": 2.22,
+    "sri": 64.8,
     "modifier_note": "",
-    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.3 h). Try going to bed earlier; aim for 7.0–9.0 h.",
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.92 h). Try going to bed earlier; aim for 7.0–9.0 h.",
     "composition": {
       "scored": [
         "duration",
@@ -56,11 +56,11 @@
       "unscored": [],
       "scored_weight": 100,
       "primary_component": "duration",
-      "efficiency_basis": "watch_tst__phone_tats",
+      "efficiency_basis": "watch_tst__watch_onset_to_wake",
       "caveats": [
         {
           "component": "efficiency",
-          "caveat": "scored from your Start sleep and Out of bed taps: the sleep your watch measured, divided by the time you marked as trying to sleep - the definition the >=85% threshold was written for. Both taps are self-reported, and wrist devices tend to under-count total sleep by about 17 minutes, which pulls this figure down."
+          "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
         },
         {
           "component": "deep",
@@ -76,95 +76,19 @@
   },
   "display": {
     "lang": "en",
-    "score_color": "#FF9518",
-    "score_message": "Rough one.",
-    "mood_description": "Your buddy needs more rest.",
-    "header_message": "Let's take it easy tonight.",
-    "pet_message": "I could use\na longer\nnap today...",
-    "streak_encouragement": "Let's build a streak!"
+    "score_color": "#FFC83D",
+    "score_message": "Not bad.",
+    "mood_description": "Your buddy is a little restless.",
+    "header_message": "Let's get a good night's sleep!",
+    "pet_message": "Let's rest\na little\nearlier tonight.",
+    "streak_encouragement": "Amazing consistency!"
   },
   "streak": {
-    "streak_days": 3,
+    "streak_days": 5,
     "completed_days": 4,
     "definition": "streak_days = consecutive nights with a sleep record, counting back from the latest night. completed_days = nights rated Good or Normal within the last 7 calendar days. Nights when the watch was not worn are excluded, so a low number reflects wear rate, not sleep quality."
   },
   "history": [
-    {
-      "date": "2026-07-01",
-      "final_score": 100.0,
-      "final_quality": "Good",
-      "sleep_duration_hours": 8.28,
-      "sleep_start_time": "2026-07-01T00:52:00+08:00",
-      "wake_time": "2026-07-01T09:19:00+08:00",
-      "pet_mood": "happy",
-      "mood_reason": "final_quality=Good",
-      "composition": {
-        "scored": [
-          "duration",
-          "efficiency",
-          "waso",
-          "deep",
-          "rem"
-        ],
-        "unscored": [],
-        "scored_weight": 100,
-        "primary_component": "duration",
-        "efficiency_basis": "watch_tst__watch_onset_to_wake",
-        "caveats": [
-          {
-            "component": "efficiency",
-            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
-          },
-          {
-            "component": "deep",
-            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
-          },
-          {
-            "component": "rem",
-            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
-          }
-        ],
-        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
-      }
-    },
-    {
-      "date": "2026-07-02",
-      "final_score": 99.2,
-      "final_quality": "Good",
-      "sleep_duration_hours": 8.75,
-      "sleep_start_time": "2026-07-02T01:06:00+08:00",
-      "wake_time": "2026-07-02T09:52:00+08:00",
-      "pet_mood": "happy",
-      "mood_reason": "final_quality=Good",
-      "composition": {
-        "scored": [
-          "duration",
-          "efficiency",
-          "waso",
-          "deep",
-          "rem"
-        ],
-        "unscored": [],
-        "scored_weight": 100,
-        "primary_component": "duration",
-        "efficiency_basis": "watch_tst__watch_onset_to_wake",
-        "caveats": [
-          {
-            "component": "efficiency",
-            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
-          },
-          {
-            "component": "deep",
-            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
-          },
-          {
-            "component": "rem",
-            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
-          }
-        ],
-        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
-      }
-    },
     {
       "date": "2026-07-06",
       "final_score": 92.1,
@@ -3473,7 +3397,7 @@
     },
     {
       "date": "2026-11-06",
-      "final_score": 64.2,
+      "final_score": 63.7,
       "final_quality": "Poor",
       "sleep_duration_hours": 4.3,
       "sleep_start_time": "2026-11-06T03:48:00+08:00",
@@ -3508,15 +3432,91 @@
         ],
         "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
       }
+    },
+    {
+      "date": "2026-11-07",
+      "final_score": 68.5,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 2.6,
+      "sleep_start_time": "2026-11-07T04:15:00+08:00",
+      "wake_time": "2026-11-07T06:51:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
+      "composition": {
+        "scored": [
+          "duration",
+          "efficiency",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
+    },
+    {
+      "date": "2026-11-08",
+      "final_score": 69.9,
+      "final_quality": "Normal",
+      "sleep_duration_hours": 3.92,
+      "sleep_start_time": "2026-11-08T02:48:00+08:00",
+      "wake_time": "2026-11-08T06:43:00+08:00",
+      "pet_mood": "bored",
+      "mood_reason": "final_quality=Normal",
+      "composition": {
+        "scored": [
+          "duration",
+          "efficiency",
+          "waso",
+          "deep",
+          "rem"
+        ],
+        "unscored": [],
+        "scored_weight": 100,
+        "primary_component": "duration",
+        "efficiency_basis": "watch_tst__watch_onset_to_wake",
+        "caveats": [
+          {
+            "component": "efficiency",
+            "caveat": "no sleep buttons were tapped this night, so the watch's own figure is used. It divides by (wake - sleep onset) and leaves out time awake before falling asleep, so it reads high - almost every such night gets the full points - and the >=85% threshold was not written for it."
+          },
+          {
+            "component": "deep",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to over-report deep sleep; no pooled bias in minutes is available, so the size of the error is unquantified."
+          },
+          {
+            "component": "rem",
+            "caveat": "consumer wrist devices are 60-75% accurate at four-class sleep staging and are known to under-report REM - this watch reports zero REM on some nights, which are excluded rather than scored as poor."
+          }
+        ],
+        "note": "The score is renormalised to 100 over the components that were measurable on this night, so a night scored on fewer components is not directly comparable with one scored on more. Which components are available depends on the devices the user has. This is a duration-primary score, not an equally-weighted composite: sleep duration is the only component whose device measurement error is clearly smaller than the band it is graded on. See 'caveats'."
+      }
     }
   ],
   "data_sources": [
     "garmin"
   ],
   "notes": {
-    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-11-06.",
+    "tapo": "Camera data unavailable: no camera recording could be matched to the night of 2026-11-08.",
     "mapping": "The pet_mood / energy_level mapping is a default value, still pending PM approval. (mapping_version=1)"
   },
   "disclaimer": "Sleep scores are computed from Garmin watch data using literature-weighted rules and do not constitute a medical diagnosis. Any dream content, where generated, is an AI creation imagined from sleep data, not a record of the user’s actual dreams.",
-  "timestamp": "2026-11-06T08:07:00+08:00"
+  "timestamp": "2026-11-08T06:43:00+08:00"
 }

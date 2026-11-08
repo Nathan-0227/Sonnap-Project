@@ -1738,5 +1738,35 @@
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 82.3,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.3 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-07",
+    "score": 69.2,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 9.9,
+    "rem_score": 9.2,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 100.0,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (2.6 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-08",
+    "score": 67.7,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 9.8,
+    "rem_score": 7.9,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 100.0,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.92 h). Try going to bed earlier; aim for 7.0–9.0 h."
   }
 ]
