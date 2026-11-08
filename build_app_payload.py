@@ -412,8 +412,9 @@ def composition_for(base_row):
     if not base_row:
         return None
     return score_claim.compose(
-        k for k in ("duration", "efficiency", "waso", "deep", "rem")
-        if base_row.get(f"{k}_score") is not None
+        (k for k in ("duration", "efficiency", "waso", "deep", "rem")
+         if base_row.get(f"{k}_score") is not None),
+        efficiency_basis=base_row.get("efficiency_basis"),
     )
 
 

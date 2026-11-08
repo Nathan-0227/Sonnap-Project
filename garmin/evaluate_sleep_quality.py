@@ -36,7 +36,13 @@ evaluate_sleep_quality.py
 import argparse
 import csv
 import json
+import sys
 from pathlib import Path
+
+# 三段式效率的選擇規則與 App 顯示的兩個效率是**同一份計算**，定義在 behavior/。
+# （方向是評分讀行為資料；behavior/ 絕不反過來 import 這裡，見 behavior/__init__.py。）
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from behavior.sleep_efficiency import scoring_efficiency  # noqa: E402
 
 
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，用 Path(__file__).parent 定位，
@@ -46,6 +52,9 @@ DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_INPUT_CSV = DATA_DIR / "garmin_sleep_features.csv"
 DEFAULT_OUTPUT_CSV = DATA_DIR / "garmin_sleep_quality.csv"
 DEFAULT_OUTPUT_JSON = DATA_DIR / "garmin_sleep_quality.json"
+# 每晚的「開始／結束睡覺」按鈕（export_bed_marks.py 從資料庫匯出）。
+# 沒有這個檔＝每晚都退回手錶自己的效率，pipeline 照常跑。
+DEFAULT_BED_MARKS = DATA_DIR / "bed_marks.json"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -110,42 +119,25 @@ EFFICIENCY_GOOD = 85.0   # ≥85% 良好
 EFFICIENCY_FAIR = 80.0   # 80–84.9% 尚可；<80% 偏低
 
 # ═══════════════════════════════════════════════════════════════════
-# 🔴 睡眠效率目前**不進計分**（2026-10-01 決定）
+# 睡眠效率：2026-10-01 停止計分 → 2026-11-07 恢復，三段式
 # ═══════════════════════════════════════════════════════════════════
 #
-# 上面那組門檻本身沒問題，**錯的是它被套在哪個量上**。
+# 上面那組門檻（≥85% / 80%）是為「臥床時間」或「嘗試入睡時間（TATS）」
+# 這種分母訂的（Ohayon 2017、ANSI/CTA/NSF-2110）。手錶自己的效率分母是
+# 「起床 − 入睡」，不含入睡潛伏期 → 構念錯配，所以 10-01 停止計分。
 #
-#   Ohayon 2017 的 ≥85%     分母 = 臥床時間（原文 "while in bed"）
-#   ANSI/CTA/NSF-2110       分母 = TIB 或 TATS，兩者都含入睡潛伏期
-#   本 pipeline 餵進來的     分母 = 起床 − 入睡（**不含**入睡潛伏期）
+# 11-07 使用者決定恢復，每晚依序取（behavior/sleep_efficiency.scoring_efficiency）：
+#   ① 兩個按鈕都按 → 手錶睡眠 ÷（Out of bed − Start sleep）   ✅ TATS，門檻適用
+#   ② 只按 Start sleep → 手錶睡眠 ÷（手錶起床 − Start sleep）  ⚠️ 無常模
+#   ③ 都沒按 → 手錶自己的效率                                  🔴 門檻套錯量
 #
-# 分母少一段，數值必然系統性偏高，臨床門檻因此自動變得過寬。
-# 實測 84 晚有 83 晚 ≥85% 拿滿 25 分，`<80%` 的扣分級距**一次都沒觸發**，
-# 17 晚達 100.00%。這 25 分實質是固定給的。**構念錯配，不是調係數能修的。**
-# 完整分析：Research-Background/Garmin手錶分數.md B-3～B-6。
-#
-# ⚠️ 為什麼不改用手機／攝影機的自述臥床時間來算（那個分母是對的）：
-#    兩個來源都是**自述**——攝影機的臥床時間在 tapo_sleep_onset.py 裡
-#    標著 `SELF_REPORTED_recording_start_stop`，不是量測的。而自述的分母
-#    代表使用者只要「快睡著才按開始」就能把效率推向 100%，
-#    那會是本系統**第一個使用者說了算的計分輸入**（現有五項全部來自手錶），
-#    正是紅線 4、5 要防的東西。
-#
-# ⚠️ 為什麼不靠攝影機偵測上床就好：**背景相減做不到**。實測 09-30 那夜
-#    91155 幀，床鋪 ROI 的前景像素有 **84% 的幀是 0**——人躺著不動與空床
-#    在背景相減下完全一樣。它偵測得到「入睡」（開錄後 30 分鐘 62.9% 的幀
-#    有動作 vs 之後 11.9%），但**入睡不是上床**，拿入睡當分母起點就退回
-#    Garmin 現在這個有缺陷的分母。要真的量到上床時刻得換成人形偵測，
-#    規格與驗收條件已寫進 docs/TAPO_HANDOFF.md。
-#
-# → 在那之前照 SRI 與攝影機動作率的先例：**照算、照顯示、標 basis、不計分**。
-#   `score_efficiency()` 保留不刪：它對正確的分母是對的程式，
-#   人形偵測驗證通過之後把這個旗標改成 True 就能重新啟用。
-#
-# ⚠️ 關掉之後那 25 分的權重會由既有的正規化機制分給其他項（見 evaluate_night
-#    末段）。副作用：**WASO 的有效權重從 25% 升到 33%**，而 WASO 的分級切點
-#    在文獻文件裡標著「操作性轉換非論文原文表格」。已知並接受，記錄在此。
-EFFICIENCY_SCORING_ENABLED = False
+# ⚠️ 已知並接受的代價（實測 116 晚，Research-Background/Garmin手錶分數.md B-7）：
+#    ③ 有 100/102 晚拿滿 25 分；沒按按鈕的夜晚平均比兩個都按的高 8.5 分
+#    → 誘因是「別按」。使用者 11-06、11-07 兩次看過數字後決定，不是疏忽。
+# ⚠️ 每晚用的是哪一段寫在輸出的 efficiency_basis，一路帶到 App 的分數卡
+#    （score_claim.py 依它挑警語）。不帶 basis 的話，三種量會被當成同一種。
+# ⚠️ 要關掉：改回 False，efficiency 那 25 分會由既有的正規化分給其他項。
+EFFICIENCY_SCORING_ENABLED = True
 
 # 各指標配分（核心 80 分 + 輔助 20 分 = 100）
 WEIGHTS = {
@@ -170,6 +162,8 @@ def parse_args():
     parser.add_argument("--input", default=DEFAULT_INPUT_CSV, help="Input features CSV.")
     parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="Output scoring CSV.")
     parser.add_argument("--output-json", default=DEFAULT_OUTPUT_JSON, help="Output scoring JSON.")
+    parser.add_argument("--bed-marks", default=DEFAULT_BED_MARKS,
+                        help="Sleep-button marks exported by export_bed_marks.py.")
     return parser.parse_args()
 
 
@@ -305,8 +299,13 @@ def build_recommendation(grade, component_scores, band, feats):
     return "".join(advice)
 
 
-def evaluate_night(row):
-    """對一晚的特徵計算各指標分數與總分。"""
+def evaluate_night(row, bed_marks=None):
+    """
+    對一晚的特徵計算各指標分數與總分。
+
+    bed_marks：{起床日: {bed_start_at, bed_end_at, time_in_bed_minutes}}，
+               沒有就是 None（Health Connect 那條路徑就是這樣呼叫的）。
+    """
     band = row.get("age_band", "young_adult")
     if band not in DURATION_RANGE:
         band = "young_adult"
@@ -324,10 +323,20 @@ def evaluate_night(row):
     # 避免因 Vivoactive 3 偵測不到 REM 而懲罰使用者（已實測 Garmin 官方同樣顯示無 REM）
     rem_unavailable = (rem_pct is None or rem_pct == 0.0)
 
+    # 三段式：見 EFFICIENCY_SCORING_ENABLED 上方的說明
+    marks = (bed_marks or {}).get(row.get("date", ""), {})
+    chosen = scoring_efficiency(
+        to_float(row.get("total_sleep_minutes")), efficiency,
+        wake_time=row.get("wake_time") or None,
+        bed_start_at=marks.get("bed_start_at"),
+        bed_end_at=marks.get("bed_end_at"),
+        time_in_bed_minutes=marks.get("time_in_bed_minutes"),
+    )
+    efficiency_scored = EFFICIENCY_SCORING_ENABLED and chosen["value"] is not None
+
     component_scores = {
         "duration": score_duration(duration_h, band),
-        # ⚠️ 見 EFFICIENCY_SCORING_ENABLED：目前一律 None，走權重正規化。
-        "efficiency": score_efficiency(efficiency) if EFFICIENCY_SCORING_ENABLED else None,
+        "efficiency": score_efficiency(chosen["value"]) if efficiency_scored else None,
         "waso": score_waso(waso_min, band),
         "deep": score_deep(deep_pct),
         "rem": None if rem_unavailable else score_rem(rem_pct, band),
@@ -353,12 +362,25 @@ def evaluate_night(row):
         "deep_score": _round(component_scores["deep"]),
         "rem_score": _round(component_scores["rem"]),
         "rem_measured": not rem_unavailable,
+        # 進分數的那個效率是哪一種、多少。沒計分時兩個都是 None。
+        "efficiency_basis": chosen["basis"] if efficiency_scored else None,
+        "efficiency_used": chosen["value"] if efficiency_scored else None,
         "recommendation": build_recommendation(grade, component_scores, band, row),
     }
 
 
 def _round(value):
     return None if value is None else round(value, 1)
+
+
+def load_bed_marks(path):
+    """讀 export_bed_marks.py 的輸出；檔案不存在回空 dict（全部退回手錶效率）。"""
+    path = Path(path)
+    if not path.exists():
+        print(f"⚠ {path.name} not found: every night falls back to the watch's own efficiency.")
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f).get("nights", {})
 
 
 def main():
@@ -370,7 +392,8 @@ def main():
     if not rows:
         raise SystemExit(f"{args.input} has no rows. Run extract_sleep_features.py first.")
 
-    results = [evaluate_night(row) for row in rows]
+    marks = load_bed_marks(args.bed_marks)
+    results = [evaluate_night(row, marks) for row in rows]
 
     with open(args.output_json, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
@@ -393,6 +416,10 @@ def main():
     print(f"- Mean score: {avg_score}")
     print(f"- Grade distribution: {distribution}")
     print(f"- Nights excluded from REM scoring (not measured): {rem_missing}")
+    bases = {}
+    for r in results:
+        bases[r["efficiency_basis"]] = bases.get(r["efficiency_basis"], 0) + 1
+    print(f"- Efficiency basis per night: {bases}")
 
 
 if __name__ == "__main__":
