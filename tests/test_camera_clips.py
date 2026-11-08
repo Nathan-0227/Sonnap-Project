@@ -14,6 +14,7 @@ tests/test_camera_clips.py —— 攝影機動作片段（camera_clips.py）
   【7】API：/insights 帶片段、網址不含 user_id、檔案端點 200/404、
        刪帳號連檔案一起刪
   【8】沒有 camera_nightly 的夜晚不做片段，已有的也清掉（App 看不到、卻佔保留名額）
+  【9】框畫在哪：畫面比對框住真的在動的東西；噪點與沒變化不畫；CSV 外框只在合理時才用
 
 執行：python tests/test_camera_clips.py
 """
@@ -272,6 +273,25 @@ r8b = cc.make_night(NIGHT, u8, "2026-09-13")
 ok("那一列不見之後重跑 → 片段列清掉", db.get_camera_clip_nights(u8) == {}
    and r8b.get("removed_clips") == 3, str(r8b))
 ok("  檔案也刪掉了", not any(f.exists() for f in files8))
+
+print("【9】框畫在哪（2026-11-09：原本被床鋪區域切成固定方框）")
+blank = np.full((360, 640), 40, np.uint8)
+moved = blank.copy(); moved[100:200, 300:420] = 220          # 一塊 120×100 的東西出現
+box = cc.motion_box(blank, moved)
+ok("畫面比對：框住那一塊（容許邊緣膨脹）",
+   box is not None and abs(box[0] - 300) <= 12 and abs(box[1] - 100) <= 12
+   and abs(box[2] - 120) <= 24 and abs(box[3] - 100) <= 24, str(box))
+ok("反向：框不能是整個畫面", box is not None and box[2] < 640 and box[3] < 360)
+ok("沒有變化 → 不畫框", cc.motion_box(blank, blank.copy()) is None)
+speck = blank.copy(); speck[50:53, 50:53] = 220                 # 3×3 的噪點
+ok("小噪點 → 不畫框", cc.motion_box(blank, speck) is None)
+roi_b = (34, 129, 288, 231)
+ok("CSV 外框：整個畫面那麼大的不採用（照明誤判／連成一片）",
+   cc.highlight_box(roi_b, (0, 0, 640, 360)) == roi_b)
+ok("CSV 外框：跟床鋪區域沒重疊的不採用（別處的雜訊）",
+   cc.highlight_box(roi_b, (500, 10, 80, 60)) == roi_b)
+ok("CSV 外框：合理又有重疊 → 用整個畫面那一塊",
+   cc.highlight_box(roi_b, (200, 100, 200, 150)) == (200, 100, 200, 150))
 
 print()
 if fails:

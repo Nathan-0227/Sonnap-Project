@@ -66,7 +66,17 @@ CLIP_SECONDS = 10          # 一段的總長（含 LEAD）
 KEEP_NIGHTS = 14
 OUTPUT_WIDTH = 480         # 640×360 → 480×270：一段 10 秒約 1–2 MB
 HIGHLIGHT_RGB = (255, 170, 60)     # 寵物的暖色
-HIGHLIGHT_ALPHA = 0.35
+HIGHLIGHT_ALPHA = 0.18             # 只淡淡填一層：重點是外框，填太濃會把人蓋掉
+HIGHLIGHT_LINE = 3                 # 外框線寬（輸出尺寸的像素）
+# 整個畫面裡最大的動作區塊超過畫面這個比例時不採用：那是照明變化造成的整畫面誤判
+# （TAPO_HANDOFF 記錄過的那種），不是人在動。
+MAX_HIGHLIGHT_FRAC = 0.8
+FRAME_W, FRAME_H = 640, 360
+# 框畫在哪：比對片段裡相隔 DIFF_GAP 幀的兩張畫面，變化夠大的地方就是「在動的地方」。
+# ⚠️ 這只決定**框的位置**（視覺提示），「這一幀算不算在動」仍由校準過的 CSV 判斷。
+DIFF_GAP = 2                # 5 fps 下約 0.4 秒
+DIFF_THRESHOLD = 18         # 灰階差（0–255）。夜視噪點約 5–10
+DIFF_MIN_BLOB_FRAC = 0.004  # 小於畫面 0.4% 的變化當噪點
 GIF_COLORS = 64            # 夜視是灰階＋一個疊色，64 色看不出差別；128 色時一段 2.8 MB
 
 CLIP_ID = re.compile(r"^[0-9a-f]{32}$")
@@ -150,12 +160,69 @@ def label_for(start_at, duration_seconds):
     return f"{start_at:%H:%M} · moved for {duration_text(duration_seconds)}"
 
 
+def _box(r, keys):
+    try:
+        b = tuple(int(r[k]) for k in keys)
+    except (KeyError, ValueError):
+        return None
+    return b if b[2] > 0 and b[3] > 0 else None
+
+
+def _overlap(a, b):
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+def highlight_box(roi_box, frame_box):
+    """
+    畫面上要框哪裡。回傳 (x, y, w, h) 或 None。
+
+    ⚠️ 「這一幀算不算在動」**不在這裡判斷**——那仍是 ROI 內的比例對校準過的門檻
+       （render_clip 裡）。這裡只決定**框畫在哪**：
+       - ROI 內那一塊會被 ROI 的邊界切齊，動作一大就變成「整個床鋪區域」一個固定方框
+         （2026-11-09 看片段發現），看不出是誰、哪裡在動
+       - 所以改框**整個畫面裡最大的那一塊**（通常就是整個人），條件是它跟 ROI 內
+         那一塊有重疊——確定是同一個動作，不是窗簾或別處的雜訊
+       - 太大（≥ MAX_HIGHLIGHT_FRAC）的是照明誤判，不採用
+       不符合條件就退回 ROI 那一塊（＝改之前的行為）。
+    """
+    if frame_box is not None:
+        too_big = frame_box[2] * frame_box[3] >= MAX_HIGHLIGHT_FRAC * FRAME_W * FRAME_H
+        if not too_big and (roi_box is None or _overlap(frame_box, roi_box)):
+            return frame_box
+    return roi_box
+
+
+def motion_box(prev_gray, cur_gray):
+    """
+    兩張灰階畫面之間「真的在動」的地方的外框 (x, y, w, h)，沒有就 None。
+
+    為什麼不用 CSV 記錄的外框（2026-11-09 實測）：
+      - ROI 內那一塊被床鋪區域切齊 → 動作一大就變成整個床鋪的固定方框
+      - 整個畫面最大的那一塊在大動作時連成一片，外框直接是 640×360 整個畫面
+    這裡把小噪點去掉，只框夠大的變化區塊的聯集。
+    """
+    import cv2
+    import numpy as np
+    diff = cv2.absdiff(cv2.GaussianBlur(prev_gray, (7, 7), 0), cv2.GaussianBlur(cur_gray, (7, 7), 0))
+    _, mask = cv2.threshold(diff, DIFF_THRESHOLD, 255, cv2.THRESH_BINARY)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    mask = cv2.dilate(mask, np.ones((9, 9), np.uint8))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+    min_area = DIFF_MIN_BLOB_FRAC * mask.shape[0] * mask.shape[1]
+    boxes = [stats[i, :4] for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_area]
+    if not boxes:
+        return None
+    x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
+    x1 = max(b[0] + b[2] for b in boxes); y1 = max(b[1] + b[3] for b in boxes)
+    return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
+
+
 def read_frame_meta(csv_path):
     """
-    回傳 ({時刻: vf}, {vf: (bbox, frac)})。
+    回傳 ({時刻: vf}, {vf: (框, frac)})。
 
-    bbox 是那一幀最大動作區塊的外框（有 ROI 用 ROI 內的那一塊），frac 用
-    tapo_metric_logger.row_frac() 算——與偵測走同一個函式。
+    框由 highlight_box() 決定；frac 用 tapo_metric_logger.row_frac() 算——
+    與偵測走同一個函式。
     """
     import csv
     from tapo_metric_logger import read_roi, row_frac
@@ -168,12 +235,9 @@ def read_frame_meta(csv_path):
                 continue
             vf = int(r["vf"])
             vf_at[datetime.fromisoformat(r["t"])] = vf
-            keys = ("roi_x", "roi_y", "roi_w", "roi_h") if roi else ("max_x", "max_y", "max_w", "max_h")
-            try:
-                bbox = tuple(int(r[k]) for k in keys)
-            except (KeyError, ValueError):
-                bbox = None
-            meta[vf] = (bbox, row_frac(r, roi))
+            roi_box = _box(r, ("roi_x", "roi_y", "roi_w", "roi_h")) if roi else None
+            frame_box = _box(r, ("max_x", "max_y", "max_w", "max_h"))
+            meta[vf] = (highlight_box(roi_box, frame_box), row_frac(r, roi))
     return vf_at, meta
 
 
@@ -237,18 +301,30 @@ def render_clip(video_path, moment, meta, threshold, label, out_path, fps):
         cap.set(cv2.CAP_PROP_POS_FRAMES, moment["first_vf"])
         frames = []
         font = _font(15)
+        grays = []
         for vf in range(moment["first_vf"], moment["last_vf"] + 1):
             ok, frame = cap.read()
             if not ok:
                 break
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            grays.append(gray)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB).astype(np.float32)
-            bbox, frac = meta.get(vf, (None, None))
-            if bbox and frac is not None and frac >= threshold and bbox[2] > 0 and bbox[3] > 0:
+            csv_box, frac = meta.get(vf, (None, None))
+            # 在不在動：CSV（校準過）。框在哪：畫面比對；比不出來才退回 CSV 的框。
+            bbox = (motion_box(grays[-1 - DIFF_GAP], gray) if len(grays) > DIFF_GAP else None) or csv_box
+            moving = bbox is not None and frac is not None and frac >= threshold
+            if moving:
                 x, y, w, h = bbox
                 region = rgb[y:y + h, x:x + w]
                 region[:] = region * (1 - HIGHLIGHT_ALPHA) + np.array(HIGHLIGHT_RGB) * HIGHLIGHT_ALPHA
             img = Image.fromarray(rgb.clip(0, 255).astype(np.uint8))
-            img = img.resize((OUTPUT_WIDTH, round(img.height * OUTPUT_WIDTH / img.width)))
+            scale = OUTPUT_WIDTH / img.width
+            img = img.resize((OUTPUT_WIDTH, round(img.height * scale)))
+            if moving:
+                # 外框在縮小之後畫，線才會是乾淨的固定寬度
+                x, y, w, h = (round(v * scale) for v in bbox)
+                ImageDraw.Draw(img).rectangle((x, y, x + w - 1, y + h - 1),
+                                              outline=HIGHLIGHT_RGB, width=HIGHLIGHT_LINE)
             # ⚠️ 標籤放右下角：左上角是攝影機自己的時間戳記、左下角是 Tapo 浮水印，
             #    蓋住前者等於把唯一能拿來核對時刻的東西遮掉。
             draw = ImageDraw.Draw(img)

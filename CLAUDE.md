@@ -1312,7 +1312,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
   只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
 - **`camera_clips.py`（2026-11-07 新增）— 攝影機動作片段。** 一晚挑動作最大的 3 段、
-  每段 10 秒，做成 GIF（**原始畫面**＋在動區域疊暖色＋「02:41 · moved for 6 s」），
+  每段 10 秒，做成 GIF（**原始畫面**＋暖色外框框住在動的地方＋「02:41 · moved for 6 s」），
   App 的 Insights 攝影機卡跟著趨勢圖點選的那一晚顯示。早上匯入會自動跑；
   補舊的：`python camera_clips.py --all`（先加 `--dry-run` 看會挑哪幾段）。
   🔴 **錄影要加 `--save-video`**（`tapo_metric_logger.py --save-video 600`），
@@ -1321,7 +1321,9 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   `SONNAP_CLIPS_DIR` 可改）；網址只用隨機 clip_id、**不含 user_id**（uvicorn 會把網址印進 log）；
   `DELETE /users` 先刪檔再刪列（CASCADE 清不到檔案）。
   ⚠️ 「哪裡算在動」**呼叫時才讀** `tapo_sleep_onset.MOTION_THRESHOLD` 與它的 `episodes()`，
-  不抄一份。⚠️ 標籤不寫「翻身」類分類（沒校準過）。保留最近 14 個**有片段的夜晚**，
+  不抄一份。⚠️ **在不在動**看 CSV（校準過），**框畫在哪**看片段裡相隔 0.4 秒兩幀的畫面比對
+  （`motion_box()`）——CSV 的外框不能用：床鋪區域那塊會被切成固定方框，整畫面那塊大動作時撐滿整個畫面。
+  ⚠️ 標籤不寫「翻身」類分類（沒校準過）。保留最近 14 個**有片段的夜晚**，
   原始影片不自動刪（早上匯入超過 30 GB 會提醒）。
 - **`tapo_index.py`（2026-08-30 新增）— 攝影機資料的單一事實來源。**
   同時讀 `tapo/sleep_records.sql` 與 `tapo/sleep_reports/*/*.json`，
