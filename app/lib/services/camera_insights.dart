@@ -112,6 +112,17 @@ class CameraNight {
   /// 而不是講「這晚沒有片段」（那是假話：不是沒有，是後端不會做）。
   final bool clipsSupported;
 
+  /// 「跟你平常比」。⚠️ [usualLabel] 是後端寫好的那句話，**照抄不重寫**，
+  /// 也不要在 Dart 自己算百分比——那會是第二個定義處，兩邊漂移時不會報錯。
+  /// 基線不足時它是「還需要幾晚」而不是 null，所以有 label 不代表有數字。
+  final String? usualLabel;
+  final double? usualEventsPerHour;
+  final double? usualDeltaPct;
+  final int? usualBaselineNights;
+
+  /// 後端有沒有給 usual 欄位。舊版後端沒有 → 整段不顯示。
+  final bool usualSupported;
+
   const CameraNight({
     required this.date,
     this.bedStartAt,
@@ -128,10 +139,18 @@ class CameraNight {
     this.clips = const [],
     this.clipsNote,
     this.clipsSupported = false,
+    this.usualLabel,
+    this.usualEventsPerHour,
+    this.usualDeltaPct,
+    this.usualBaselineNights,
+    this.usualSupported = false,
   });
 
   factory CameraNight.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
     double? num_(Object? v) => (v as num?)?.toDouble();
+    final usual = json['usual'] == null
+        ? null
+        : Map<String, dynamic>.from(json['usual'] as Map);
     return CameraNight(
       date: (json['date'] as String?) ?? '',
       bedStartAt: json['bed_start_at'] as String?,
@@ -151,6 +170,11 @@ class CameraNight {
       ],
       clipsNote: json['clips_note'] as String?,
       clipsSupported: json.containsKey('clips'),
+      usualLabel: usual?['label'] as String?,
+      usualEventsPerHour: num_(usual?['usual_events_per_hour']),
+      usualDeltaPct: num_(usual?['delta_pct']),
+      usualBaselineNights: (usual?['baseline_nights'] as num?)?.toInt(),
+      usualSupported: usual != null,
     );
   }
 
@@ -173,6 +197,9 @@ class CameraInsightsResult {
   final String? note;
   final String? floorNote;
 
+  /// 「跟你平常比」那段說明（後端的句子，照抄）。舊版後端沒有 → null。
+  final String? usualNote;
+
   final String? error;
 
   const CameraInsightsResult(
@@ -180,6 +207,7 @@ class CameraInsightsResult {
     this.nights = const [],
     this.note,
     this.floorNote,
+    this.usualNote,
     this.error,
   });
 
@@ -262,6 +290,7 @@ class CameraInsightsService implements CameraInsightsSource {
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,
+        usualNote: camera['usual_note'] as String?,
       );
     } catch (error) {
       debugPrint('CameraInsights: failed - $error');

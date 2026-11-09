@@ -323,4 +323,118 @@ void main() {
       expect(result.latest?.date, '2026-09-12');
     });
   });
+
+  // ⚠️ 這一組守的是「跟你平常比」那句話。四個會安靜說謊的地方：
+  //    ① 那句話在 Dart 重寫一份 → 兩邊漂移不會報錯
+  //    ② 在 Dart 自己算百分比 → 第二份判準，後端改門檻時畫面不跟著變
+  //    ③ 基線不足時畫成 0% 或空白 → 0% 會被讀成「跟平常一模一樣」
+  //    ④ 舊版後端沒有 usual 時自己編話 → 講的是「沒差別」而真相是「算不出」
+  group('跟你平常比', () {
+    // 哨兵字串：Dart 任何地方都不會自己寫出這句，畫面上出現就證明是照抄的。
+    const sentinel = '27% less movement than usual [from camera_usual.py 4K]';
+    const sentinelNeeds = 'Needs 2 more recorded nights [from backend 8M]';
+
+    CameraNight withUsual({
+      String? label,
+      double? usual,
+      double? delta,
+      int? nights,
+      bool supported = true,
+    }) =>
+        CameraNight(
+          date: _aboveFloor.date,
+          timeInBedMinutes: _aboveFloor.timeInBedMinutes,
+          eventsPerHour: _aboveFloor.eventsPerHour,
+          bedTimesProvenance: _aboveFloor.bedTimesProvenance,
+          sleepOnsetProvenance: _aboveFloor.sleepOnsetProvenance,
+          usualLabel: label,
+          usualEventsPerHour: usual,
+          usualDeltaPct: delta,
+          usualBaselineNights: nights,
+          usualSupported: supported,
+        );
+
+    testWidgets('那句話照抄後端，而且原始次數還在小字裡', (tester) async {
+      await pump(tester, _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [withUsual(label: sentinel, usual: 21.4, delta: -26.6, nights: 7)],
+      )));
+
+      expect(find.text(sentinel), findsOneWidget, reason: '一個字都不能改');
+      expect(find.text('Movement vs your usual'), findsOneWidget);
+      expect(
+          find.textContaining('15.9/hr this night'), findsOneWidget,
+          reason: '原始次數是可驗證的事實，拿掉之後沒人能追問量到什麼');
+      expect(find.textContaining('your usual 21.4/hr'), findsOneWidget);
+      expect(find.textContaining('over 7 nights'), findsOneWidget);
+    });
+
+    testWidgets('Dart 不自己算百分比：label 與數字矛盾時照抄 label', (tester) async {
+      // 數字算起來是「少 26.6%」，但後端說「多 99%」。畫面必須聽後端的——
+      // 這條會紅就代表 Dart 裡有第二份計算。
+      await pump(tester, _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [withUsual(
+            label: '99% more movement than usual', usual: 21.4, delta: -26.6, nights: 7)],
+      )));
+
+      expect(find.text('99% more movement than usual'), findsOneWidget);
+      expect(find.textContaining('26.6'), findsNothing,
+          reason: 'Dart 自己算出來的百分比不該出現在畫面上');
+      expect(find.textContaining('less movement'), findsNothing,
+          reason: '方向也要聽後端的，不能自己從數字推');
+    });
+
+    testWidgets('基線不足：說「還需要幾晚」，不得畫成 0% 或空白', (tester) async {
+      await pump(tester, _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [withUsual(label: sentinelNeeds, nights: 3)],
+      )));
+
+      expect(find.text(sentinelNeeds), findsOneWidget);
+      expect(find.textContaining('0%'), findsNothing,
+          reason: '0% 會被讀成「跟平常一模一樣」，真相是還算不出來');
+      expect(find.textContaining('15.9/hr this night'), findsOneWidget,
+          reason: '算不出比較，但那一晚量到幾次是事實，照樣要講');
+      expect(find.textContaining('/hr · your usual'), findsNothing,
+          reason: '沒有「平常」可比，小字就不該出現那個數字');
+    });
+
+    testWidgets('反向對照：舊版後端沒有 usual → 退回原始次數，不自己編話', (tester) async {
+      await pump(tester, const _FakeCamera(CameraInsightsResult(
+        CameraInsightsStatus.ok,
+        nights: [_aboveFloor],          // usualSupported 預設 false
+      )));
+
+      expect(find.text(_cardTitle), findsOneWidget, reason: '卡片本身還在');
+      expect(find.text('Movement vs your usual'), findsNothing);
+      expect(find.text('Movements per hour'), findsOneWidget);
+      expect(find.text('15.9'), findsOneWidget);
+      expect(find.textContaining('than usual'), findsNothing,
+          reason: '後端沒給就不要講——講了就是在編');
+    });
+
+    test('fromJson：usual 解析得出來；沒有那個欄位時 supported 是 false', () {
+      final withIt = CameraNight.fromJson({
+        'date': '2026-11-07',
+        'events_per_hour': 15.7,
+        'usual': {
+          'label': sentinel,
+          'usual_events_per_hour': 21.4,
+          'delta_pct': -26.6,
+          'baseline_nights': 7,
+          'basis': 'within_person__median_of_recent_nights',
+        },
+      });
+      expect(withIt.usualSupported, isTrue);
+      expect(withIt.usualLabel, sentinel);
+      expect(withIt.usualEventsPerHour, 21.4);
+      expect(withIt.usualDeltaPct, -26.6);
+      expect(withIt.usualBaselineNights, 7);
+
+      final without = CameraNight.fromJson({'date': '2026-11-07'});
+      expect(without.usualSupported, isFalse);
+      expect(without.usualLabel, isNull);
+    });
+  });
 }

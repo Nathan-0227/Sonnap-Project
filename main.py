@@ -49,6 +49,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import camera_clips
+import camera_usual
 import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine, pet_state,
@@ -830,7 +831,13 @@ async def get_insights(
 
     behavior_rows = db.get_nightly_behavior(user_id, days=days)
     wearable_rows = db.get_wearable_nightly(user_id, days=days)
-    camera_rows = db.get_camera_nightly(user_id, days=days)
+    # ⚠️ 多抓一段，只拿來當「跟你平常比」的基線，**不顯示**。
+    #    理由：get_camera_nightly 的 days 參數其實是「最近 N 列」不是「N 天」，
+    #    只抓要顯示的那幾晚的話，視窗裡最舊的幾晚會誤報「還需要幾晚」——
+    #    即使資料庫裡有更早的夜晚。多抓的量要蓋得住 28 天的窗格。
+    camera_all = db.get_camera_nightly(user_id, days=days + camera_usual.BASELINE_WINDOW_DAYS)
+    camera_usual.annotate(camera_all)
+    camera_rows = camera_all[-days:] if days else camera_all
     clip_nights = db.get_camera_clip_nights(user_id) if camera_rows else {}
 
     ratio, late_nights, recorded = adherence.late_night_ratio(behavior_rows)
@@ -968,6 +975,8 @@ async def get_insights(
                 "the detector can resolve: read it as 'at most floor minutes'. "
                 "It is NOT zero - latency and onset are null in that case."
             ),
+            # ⚠️ 只在 camera_usual.py 定義，這裡與 Dart 都照抄。
+            "usual_note": camera_usual.NOTE,
             "history": [
                 {
                     "date": r["date"],
@@ -984,6 +993,8 @@ async def get_insights(
                     "sleep_onset_provenance": r["sleep_onset_provenance"],
                     "motion_threshold_pct": r["motion_threshold_pct"],
                     "motion_threshold_basis": r["motion_threshold_basis"],
+                    # 「跟你平常比」。⚠️ label 是給人讀的那句話，Dart 照抄不重寫。
+                    "usual": r.get("usual"),
                     "roi": r["roi"],
                     "csv_name": r["csv_name"],
                     **_camera_clips_for(clip_nights.get(r["date"])),
