@@ -1852,13 +1852,37 @@ class _ReportScreenState extends State<ReportScreen>
               value: _onsetText(night),
             ),
             const SizedBox(height: 8),
-            _SleepStat(
-              emoji: '🌀',
-              title: 'Movements per hour',
-              value: night.eventsPerHour == null
-                  ? '--'
-                  : night.eventsPerHour!.toStringAsFixed(1),
-            ),
+            // ⚠️ 有「跟你平常比」就讓它當主角，原始的每小時次數退成小字。
+            //    理由：15.7/hr 對使用者沒有意義，「比平常少 27%」才看得懂。
+            //    ⚠️ 那句話**照抄後端**（camera_usual.py 是唯一定義處），
+            //    也不要在這裡自己算百分比——那會是第二份判準。
+            //    舊版後端沒有 usual 欄位 → 退回只顯示原始次數，不要自己編話。
+            if (night.usualSupported)
+              _SleepStat(
+                emoji: '🌀',
+                title: 'Movement vs your usual',
+                value: night.usualLabel ?? '--',
+              )
+            else
+              _SleepStat(
+                emoji: '🌀',
+                title: 'Movements per hour',
+                value: night.eventsPerHour == null
+                    ? '--'
+                    : night.eventsPerHour!.toStringAsFixed(1),
+              ),
+            if (night.usualSupported && night.eventsPerHour != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  night.usualEventsPerHour == null
+                      ? '${night.eventsPerHour!.toStringAsFixed(1)}/hr this night'
+                      : '${night.eventsPerHour!.toStringAsFixed(1)}/hr this night'
+                          ' · your usual ${night.usualEventsPerHour!.toStringAsFixed(1)}/hr'
+                          ' over ${night.usualBaselineNights} nights',
+                  style: const TextStyle(color: Color(0xFF8498B7), fontSize: 9),
+                ),
+              ),
             const SizedBox(height: 10),
             Text(
               'Night of ${night.date}. Presentational only - '
