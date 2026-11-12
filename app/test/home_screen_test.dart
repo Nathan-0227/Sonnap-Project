@@ -86,6 +86,7 @@ void main() {
         'mood-chip',
         'week-strip',
         'mood-legend',
+        'night-sky-effects',
         'home-pet',
         'start-sleep',
         'bedtime-countdown',

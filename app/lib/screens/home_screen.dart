@@ -15,6 +15,7 @@ import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
+import '../widgets/night_sky_effects.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -458,6 +459,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             alignment: Alignment.topCenter,
             errorBuilder: (context, error, stack) => const SizedBox.shrink(),
           ),
+          // 星星閃光與流星，只畫在山頂以上的天空。
+          NightSkyEffects(width: width, height: crestY * 0.85),
           Padding(
             padding: EdgeInsets.only(top: topInset),
             child: Center(
