@@ -149,7 +149,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Target bedtime 03:45'),
+      find.text('Target 03:45'),
       findsOneWidget,
       reason: 'HomeScreen 收到了新的就寢時間，畫面上的就寢時間列卻沒有跟著變——'
           '上面那幾條測試看不出來',

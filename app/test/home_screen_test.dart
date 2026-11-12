@@ -123,7 +123,7 @@ void main() {
     testWidgets('時鐘卡：23:10 → 還剩 20m，光條變紅', (tester) async {
       await pumpHome(tester, () => at(12, 23, 10));
       expect(find.text('23:10'), findsOneWidget);
-      expect(find.text('Target bedtime 23:30'), findsOneWidget);
+      expect(find.text('Target 23:30'), findsOneWidget);
       final t = tester.widget<Text>(find.byKey(const Key('bedtime-countdown')));
       expect(t.data, '20m left');
       final b = tester.widget<CountdownBorder>(

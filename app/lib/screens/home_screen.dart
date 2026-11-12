@@ -93,7 +93,7 @@ const Color kHomeBackgroundBottom = Color(0xFF090F4F);
 const double kHomePetSize = 230;
 
 /// 問候＋時鐘＋倒數圓環那一塊的高度。
-const double kHomeHeaderHeight = 240;
+const double kHomeHeaderHeight = 230;
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
@@ -818,84 +818,88 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final color = countdownColor(left, urgency);
     final overdue = urgency == BedtimeUrgency.overdue;
 
-    return CountdownBorder(
-      key: const Key('countdown-border'),
-      // 一整天 = 一整圈；剛過就寢、或過了很久都不畫進度。
-      progress: (late || overdue) ? 0 : left.inMinutes / (24 * 60),
-      color: color,
-      radius: SonnapColors.radius,
-      child: InkWell(
-        key: Key(late ? 'late-evening' : 'bedtime-row'),
-        onTap: _pickBedtime,
-        borderRadius: BorderRadius.circular(SonnapColors.radius),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: sonnapCardDecoration(),
-          child: Column(
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  DateFormat('HH:mm').format(now),
-                  key: const Key('home-clock'),
-                  style: const TextStyle(
-                    color: SonnapColors.textPrimary,
-                    fontSize: 56,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      late
-                          ? 'Bedtime was ${_tod(_bedtime)}'
-                          : 'Target bedtime ${_tod(_bedtime)}',
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: 0.62,
+        child: CountdownBorder(
+          key: const Key('countdown-border'),
+          // 一整天 = 一整圈；剛過就寢、或過了很久都不畫進度。
+          progress: (late || overdue) ? 0 : left.inMinutes / (24 * 60),
+          color: color,
+          radius: SonnapColors.radius,
+          child: InkWell(
+            key: Key(late ? 'late-evening' : 'bedtime-row'),
+            onTap: _pickBedtime,
+            borderRadius: BorderRadius.circular(SonnapColors.radius),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: sonnapCardDecoration(),
+              child: Column(
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      DateFormat('HH:mm').format(now),
+                      key: const Key('home-clock'),
                       style: const TextStyle(
-                        color: SonnapColors.textSecondary,
-                        fontSize: 14,
+                        color: SonnapColors.textPrimary,
+                        fontSize: 40,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
                       ),
                     ),
-                    if (!late) ...[
-                      const Text(
-                        '  ·  ',
-                        style: TextStyle(
-                          color: SonnapColors.textMuted,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        overdue ? 'past bedtime' : _leftText(left),
-                        key: const Key('bedtime-countdown'),
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    const Icon(Icons.edit, color: Color(0xFFFFD96A), size: 16),
-                  ],
-                ),
-              ),
-              if (late) ...[
-                const SizedBox(height: 4),
-                const Text(
-                  'Your buddy is waiting.',
-                  style: TextStyle(
-                    color: SonnapColors.textSecondary,
-                    fontSize: 13,
                   ),
-                ),
-              ],
-            ],
+                  const SizedBox(height: 8),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          late
+                              ? 'Bedtime was ${_tod(_bedtime)}'
+                              : 'Target ${_tod(_bedtime)}',
+                          style: const TextStyle(
+                            color: SonnapColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.edit,
+                          color: Color(0xFFFFD96A),
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!late) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      overdue ? 'past bedtime' : _leftText(left),
+                      key: const Key('bedtime-countdown'),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  if (late) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Your buddy is waiting.',
+                      style: TextStyle(
+                        color: SonnapColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
