@@ -11,6 +11,8 @@ import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/screens/rested_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
+import 'package:app/screens/wake_up_screen.dart';
+import 'package:app/widgets/home_pet.dart';
 import 'package:app/services/alarm.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/camera_insights.dart';
@@ -808,12 +810,73 @@ void main() {
       return store;
     }
 
+    /// 滑起床 → 起床動畫（自己播完）→ 停在起床自評卡。
     Future<void> slideUp(WidgetTester tester) async {
       expect(find.byType(SleepModeScreen), findsOneWidget);
       await tester.drag(
           find.byKey(const Key('slide-knob')), const Offset(1000, 0));
-      await settle(tester, 15);
+      await settle(tester, 5);
+      expect(find.byType(WakeUpScreen), findsOneWidget, reason: '先播起床動畫');
+      expect(find.byType(RestedScreen), findsNothing);
+      await settle(tester, 30);
+      expect(find.byType(WakeUpScreen), findsNothing, reason: '播完自己關掉');
     }
+
+    testWidgets('⚠️ 起床動畫：只說早安——沒有分數、XP、Great；小狗用首頁那一份心情',
+        (tester) async {
+      final source = _Source(homeWithScore('2026-11-12'));
+      await pumpHome(tester, at(12, 7, 10), source,
+          before: (s) => s.markStart(at(11, 23, 40)));
+      await tester.drag(
+          find.byKey(const Key('slide-knob')), const Offset(1000, 0));
+      await settle(tester, 18);
+      expect(find.byType(WakeUpScreen), findsOneWidget);
+      expect(find.text('Good morning'), findsOneWidget);
+      expect(find.textContaining('Great'), findsNothing);
+      expect(find.textContaining('XP'), findsNothing);
+      expect(find.textContaining('score'), findsNothing);
+      expect(source.asked, isEmpty, reason: '動畫期間還沒讀報告');
+      final pet = tester.widget<HomePet>(find.byKey(const Key('wake-up-awake')));
+      expect(pet.mood, session.status.petMood,
+          reason: '照抄首頁那一份（後端的 pet_mood），不自己挑 happy');
+    });
+
+    test('起床 GIF 的長度：0 毫秒的格當 100 毫秒；整段夾在 1–6 秒', () {
+      expect(gifFrameDuration(Duration.zero), const Duration(milliseconds: 100));
+      expect(gifFrameDuration(const Duration(milliseconds: 40)),
+          const Duration(milliseconds: 40));
+      expect(clampWakeUpDuration(const Duration(milliseconds: 300)), kWakeUpMin);
+      expect(clampWakeUpDuration(const Duration(seconds: 20)), kWakeUpMax);
+      expect(clampWakeUpDuration(const Duration(milliseconds: 2800)),
+          const Duration(milliseconds: 2800));
+    });
+
+    testWidgets('起床動畫點一下就跳過', (tester) async {
+      await pumpHome(tester, at(12, 7, 10), _Source(null),
+          before: (s) => s.markStart(at(11, 23, 40)));
+      await tester.drag(
+          find.byKey(const Key('slide-knob')), const Offset(1000, 0));
+      await settle(tester, 3);
+      expect(find.byType(WakeUpScreen), findsOneWidget);
+      await tester.tap(find.byKey(const Key('wake-up-skip')));
+      await settle(tester, 6);
+      expect(find.byType(WakeUpScreen), findsNothing);
+      expect(find.byType(RestedScreen), findsOneWidget);
+    });
+
+    testWidgets('⚠️ 系統開「減少動態效果」→ 不播動畫，直接到自評卡', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await pumpHome(tester, at(12, 7, 10), _Source(null),
+          before: (s) => s.markStart(at(11, 23, 40)));
+      await tester.drag(
+          find.byKey(const Key('slide-knob')), const Offset(1000, 0));
+      await settle(tester, 2);
+      expect(find.byType(WakeUpScreen), findsNothing);
+      await settle(tester, 8);
+      expect(find.byType(RestedScreen), findsOneWidget);
+    });
 
     testWidgets('⚠️ 滑完 Slide to get up → 先問睡得怎樣（還沒問後端），Skip 之後才出現報告',
         (tester) async {

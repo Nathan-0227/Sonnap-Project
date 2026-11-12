@@ -28,6 +28,7 @@ import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import 'morning_report_screen.dart';
 import 'rested_screen.dart';
+import 'wake_up_screen.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -276,14 +277,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _sleepRouteOpen = false;
       if (!mounted) return;
       await _loadMarks();
-      // 滑完 Slide to get up（或 I already got up）→ 先問睡得怎樣（看到分數之前），
-      // 再出現昨晚的報告。按 Skip 也照樣進報告。
+      // 滑完 Slide to get up（或 I already got up）→ 起床動畫 → 先問睡得怎樣
+      // （看到分數之前）→ 再出現昨晚的報告。按 Skip 也照樣進報告。
       if (ended == true && mounted) {
         final date = reportDateKey(nightDateOf(startAt));
+        await _playWakeUp(_marks.endAt);
+        if (!mounted) return;
         await _askRested(date, _marks.endAt);
         if (mounted) await _openReport(date);
       }
     });
+  }
+
+  /// 起床動畫（約 2 秒，點一下跳過）。系統開「減少動態效果」就不播。
+  /// 小狗用首頁同一份心情（後端的 pet_mood），不自己挑。
+  Future<void> _playWakeUp(DateTime? wakeAt) async {
+    if (!shouldPlayWakeUp(context)) return;
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(wakeUpRoute(mood: mood, wakeAt: wakeAt));
   }
 
   /// 起床 6 小時內、那一晚還沒填 → 回傳那一晚的標記（補填小卡用）。
