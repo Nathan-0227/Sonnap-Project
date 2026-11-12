@@ -284,6 +284,11 @@ class HistoryEntry {
   final String? finalQuality;
   final double? sleepDurationHours;
 
+  /// 每晚的睡眠效率與深睡（2026-11-12 加，首頁「跟上一晚比」用）。
+  /// 舊版後端沒有這兩欄時是 null，比較就不顯示，**不畫假的**。
+  final double? sleepEfficiency;
+  final int? deepMinutes;
+
   /// Optional bedtime / wake time from backend.
   final String? bedtime;
   final String? wakeTime;
@@ -315,6 +320,8 @@ class HistoryEntry {
     this.finalScore,
     this.finalQuality,
     this.sleepDurationHours,
+    this.sleepEfficiency,
+    this.deepMinutes,
     this.bedtime,
     this.wakeTime,
     this.petMood,
@@ -329,6 +336,8 @@ class HistoryEntry {
       finalQuality: json['final_quality'] as String?,
       sleepDurationHours:
           (json['sleep_duration_hours'] as num?)?.toDouble(),
+      sleepEfficiency: (json['sleep_efficiency'] as num?)?.toDouble(),
+      deepMinutes: (json['deep_minutes'] as num?)?.round(),
       bedtime: json['sleep_start_time'] as String?,
       wakeTime: json['wake_time'] as String?,
       petMood: json['pet_mood'] as String?,

@@ -18,6 +18,9 @@ class InfoTile extends StatelessWidget {
   /// 大數字下面的一行小字（例如攝影機的「跟你平常比」，照抄後端）。
   final String? note;
 
+  /// 「跟上一晚比」那一行與它的顏色（上升紅、下降綠，只代表方向）。
+  final (String, Color)? compare;
+
   const InfoTile({
     super.key,
     required this.icon,
@@ -26,6 +29,7 @@ class InfoTile extends StatelessWidget {
     required this.value,
     this.missingNote = 'No watch data',
     this.note,
+    this.compare,
   });
 
   @override
@@ -120,6 +124,16 @@ class InfoTile extends StatelessWidget {
         Text(
           note!,
           style: const TextStyle(color: SonnapColors.textMuted, fontSize: 11),
+        ),
+      if (compare != null)
+        Text(
+          compare!.$1,
+          key: const Key('tile-compare'),
+          style: TextStyle(
+            color: compare!.$2,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
     ];
   }

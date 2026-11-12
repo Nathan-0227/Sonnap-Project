@@ -11,6 +11,7 @@ import '../services/camera_insights.dart';
 import '../services/game_service.dart';
 import '../services/home_mode.dart';
 import '../services/key_value_store.dart';
+import '../services/night_compare.dart';
 import '../services/sleep_repository.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
@@ -311,42 +312,160 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// 點有警語的卡片才跳出後端的原文（2026-11-12 使用者定案：畫面上不放警語）。
+  /// 點卡片跳出的彈窗：最近 7 晚的長條圖（當晚那根特別亮）、跟上一晚差多少，
+  /// 效率與深睡另外附上後端的警語（2026-11-12 使用者定案：畫面上不放警語）。
   ///
-  /// ⚠️ 文字只照抄 `scoring.composition.caveats`（唯一定義處是 `score_claim.py`），
-  ///    Dart 一個字都不產生。後端沒給就什麼都不跳。
-  void _showCaveat(SleepSession session, String component, String title) {
-    final caveats = session.scoring.composition?.caveats ?? const [];
-    String? text;
-    for (final c in caveats) {
-      if (c.component == component) text = c.text;
+  /// ⚠️ 警語文字只照抄 `scoring.composition.caveats`（唯一定義處是 `score_claim.py`），
+  ///    Dart 一個字都不產生。後端沒給就不放。
+  void _showMetricSheet({
+    required SleepSession session,
+    required String id,
+    required String title,
+    required List<NightValue> series,
+    required String Function(double) format,
+    String? caveatComponent,
+  }) {
+    final currentDate = session.history.lastOrNull?.date;
+    String? caveat;
+    if (caveatComponent != null) {
+      for (final c in session.scoring.composition?.caveats ?? const []) {
+        if (c.component == caveatComponent) caveat = c.text;
+      }
     }
-    if (text == null) return;
+    final bars = currentDate == null
+        ? const <NightValue>[]
+        : lastNights(series, currentDate);
+    final delta = currentDate == null
+        ? null
+        : compareWithPrevious(series, currentDate);
+    final maxV = bars.fold<double>(0, (m, n) => n.value > m ? n.value : m);
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF1B2350),
-      builder: (context) => Padding(
-        key: Key('caveat-$component'),
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: Key('metric-sheet-$id'),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (delta != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  deltaText(delta, format),
+                  style: TextStyle(
+                    color: deltaColor(delta),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (bars.isEmpty)
+                const Text(
+                  'No nights to compare yet.',
+                  style: TextStyle(color: Colors.white54),
+                )
+              else
+                SizedBox(
+                  height: 150,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      for (final n in bars)
+                        Expanded(
+                          child: _bar(
+                            n,
+                            maxV,
+                            isCurrent: n.date == currentDate,
+                            format: format,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (caveat != null) ...[
+                const SizedBox(height: 18),
+                Text(
+                  caveat,
+                  key: Key('caveat-$caveatComponent'),
+                  style: const TextStyle(color: Colors.white70, height: 1.5),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 長條圖的一根：上面是數值，下面是日期。當晚那根是亮紫色，其他半透明。
+  Widget _bar(
+    NightValue n,
+    double maxV, {
+    required bool isCurrent,
+    required String Function(double) format,
+  }) {
+    final frac = maxV <= 0 ? 0.0 : (n.value / maxV).clamp(0.05, 1.0);
+    final d = DateTime.tryParse(n.date);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              format(n.value),
+              style: TextStyle(
+                color: isCurrent ? Colors.white : Colors.white54,
+                fontSize: 11,
+                fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w400,
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              text!,
-              style: const TextStyle(color: Colors.white70, height: 1.5),
+          ),
+          const SizedBox(height: 4),
+          Flexible(
+            child: FractionallySizedBox(
+              heightFactor: frac,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? SonnapColors.accent
+                      : Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: isCurrent
+                      ? [
+                          BoxShadow(
+                            color: SonnapColors.accent.withValues(alpha: 0.6),
+                            blurRadius: 12,
+                          ),
+                        ]
+                      : null,
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            d == null ? '' : '${d.day}',
+            style: TextStyle(
+              color: isCurrent ? Colors.white : Colors.white54,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -964,17 +1083,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ('${minutes % 60}', 'min'),
   ];
 
+  static String _fmtPts(double v) => '${v.round()}%';
+  static String _fmtRate(double v) => '${v.toStringAsFixed(0)} /hr';
+
+  /// 每一項的逐夜數值（給「跟上一晚比」與長條圖）。沒值的晚上不放進來。
+  static List<NightValue> _series(
+    List<HistoryEntry> history,
+    double? Function(HistoryEntry) pick,
+  ) => [
+    for (final e in history)
+      if (pick(e) != null) NightValue(e.date, pick(e)!),
+  ];
+
   /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
-  /// 效率與深睡畫面上不放警語，點卡片才看得到後端的原文（見 [_showCaveat]）。
+  /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
+  /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。
   Widget _buildTiles(SleepSession session) {
     final m = session.metrics;
     final minutes = m.sleepDurationMinutes;
     final eff = m.sleepEfficiency;
     final deep = m.deepMinutes;
+    final h = session.history;
+    final current = h.lastOrNull?.date;
+
+    final durationSeries = _series(
+      h,
+      (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
+    );
+    final effSeries = _series(h, (e) => e.sleepEfficiency);
+    final deepSeries = _series(h, (e) => e.deepMinutes?.toDouble());
+
+    (String, Color)? cmp(List<NightValue> series, String Function(double) f) {
+      if (current == null) return null;
+      final d = compareWithPrevious(series, current);
+      return d == null ? null : (deltaText(d, f), deltaColor(d));
+    }
 
     // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
     Widget pair(Widget a, Widget b) => SizedBox(
-      height: 112,
+      height: 124,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -985,22 +1132,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
 
-    Widget tappable(Widget tile, String component, String title) =>
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _showCaveat(session, component, title),
-          child: tile,
-        );
+    Widget tappable(Widget tile, VoidCallback onTap) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: tile,
+    );
 
     return Column(
       children: [
         pair(
-          InfoTile(
-            key: const Key('tile-duration'),
-            icon: Icons.nightlight_round,
-            iconColor: const Color(0xFFB9A6FF),
-            title: 'Sleep',
-            value: minutes == null ? null : _hm(minutes),
+          tappable(
+            InfoTile(
+              key: const Key('tile-duration'),
+              icon: Icons.nightlight_round,
+              iconColor: const Color(0xFFB9A6FF),
+              title: 'Sleep',
+              value: minutes == null ? null : _hm(minutes),
+              compare: cmp(durationSeries, formatMinutes),
+            ),
+            () => _showMetricSheet(
+              session: session,
+              id: 'duration',
+              title: 'Sleep',
+              series: durationSeries,
+              format: formatMinutes,
+            ),
           ),
           tappable(
             InfoTile(
@@ -1009,9 +1165,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               iconColor: const Color(0xFF7EC8FF),
               title: 'Efficiency',
               value: eff == null ? null : [(eff.round().toString(), '%')],
+              compare: cmp(effSeries, _fmtPts),
             ),
-            'efficiency',
-            'Sleep efficiency',
+            () => _showMetricSheet(
+              session: session,
+              id: 'efficiency',
+              title: 'Sleep efficiency',
+              series: effSeries,
+              format: _fmtPts,
+              caveatComponent: 'efficiency',
+            ),
           ),
         ),
         const SizedBox(height: SonnapColors.gap),
@@ -1023,9 +1186,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               iconColor: const Color(0xFF9AD36A),
               title: 'Deep sleep',
               value: deep == null ? null : _hm(deep),
+              compare: cmp(deepSeries, formatMinutes),
             ),
-            'deep',
-            'Deep sleep',
+            () => _showMetricSheet(
+              session: session,
+              id: 'deep',
+              title: 'Deep sleep',
+              series: deepSeries,
+              format: formatMinutes,
+              caveatComponent: 'deep',
+            ),
           ),
           _buildCameraTile(session),
         ),
@@ -1086,13 +1256,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         missingNote: 'No camera this night',
       );
     }
-    return InfoTile(
-      key: key,
-      icon: icon,
-      iconColor: color,
-      title: title,
-      value: [(rate.toStringAsFixed(0), '/ hr')],
-      note: night.usualLabel,
+    final series = [
+      for (final n in camera.nights)
+        if (n.eventsPerHour != null) NightValue(n.date, n.eventsPerHour!),
+    ];
+    final d = compareWithPrevious(series, night.date);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showMetricSheet(
+        session: session,
+        id: 'camera',
+        title: 'Movement',
+        series: series,
+        format: _fmtRate,
+      ),
+      child: InfoTile(
+        key: key,
+        icon: icon,
+        iconColor: color,
+        title: title,
+        value: [(rate.toStringAsFixed(0), '/ hr')],
+        note: night.usualLabel,
+        compare: d == null ? null : (deltaText(d, _fmtRate), deltaColor(d)),
+      ),
     );
   }
 }
