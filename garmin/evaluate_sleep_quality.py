@@ -43,6 +43,7 @@ from pathlib import Path
 # （方向是評分讀行為資料；behavior/ 絕不反過來 import 這裡，見 behavior/__init__.py。）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from behavior.sleep_efficiency import scoring_efficiency  # noqa: E402
+from score_claim import efficiency_uses_recalled  # noqa: E402
 
 
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，用 Path(__file__).parent 定位，
@@ -365,6 +366,9 @@ def evaluate_night(row, bed_marks=None):
         # 進分數的那個效率是哪一種、多少。沒計分時兩個都是 None。
         "efficiency_basis": chosen["basis"] if efficiency_scored else None,
         "efficiency_used": chosen["value"] if efficiency_scored else None,
+        # 那個效率有沒有用到事後補的時間（分數卡因此多一句警語，見 score_claim）。
+        "efficiency_recalled": bool(efficiency_scored and efficiency_uses_recalled(
+            chosen["basis"], marks.get("bed_start_kind"), marks.get("bed_end_kind"))),
         "recommendation": build_recommendation(grade, component_scores, band, row),
     }
 

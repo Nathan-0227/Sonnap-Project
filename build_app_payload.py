@@ -419,6 +419,7 @@ def composition_for(base_row):
         (k for k in ("duration", "efficiency", "waso", "deep", "rem")
          if base_row.get(f"{k}_score") is not None),
         efficiency_basis=base_row.get("efficiency_basis"),
+        efficiency_recalled=bool(base_row.get("efficiency_recalled")),
     )
 
 

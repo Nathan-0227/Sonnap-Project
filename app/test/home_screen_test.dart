@@ -347,7 +347,7 @@ void main() {
       await tester.tap(find.byKey(const Key('start-sleep')));
       await settle(tester);
       now = at(13, 7, 10);
-      await tester.tap(find.byKey(const Key('sleep-out-of-bed')));
+      await tester.drag(find.byKey(const Key('slide-knob')), const Offset(1000, 0));
       await settle(tester);
       expect(find.byType(SleepModeScreen), findsNothing);
       final marks = await store.read(now: now);

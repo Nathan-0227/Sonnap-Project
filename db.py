@@ -161,6 +161,10 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     -- 下床，不是量到的入睡與醒來。沒按就是 NULL（不是 0）。
     bed_start_at      TEXT,
     bed_end_at        TEXT,
+    -- 那兩個時刻是當下按的（'tap'）還是事後補的（'recalled'，2026-11-12）。
+    -- NULL = 舊資料，一律當作 'tap'。⚠️ 攝影機上床偵測只拿 'tap' 當標準答案。
+    bed_start_kind    TEXT,
+    bed_end_kind      TEXT,
     time_in_bed_minutes   REAL,             -- bed_end − bed_start
     phone_in_bed_minutes  REAL,             -- lights_out − bed_start（下界，見下）
     assumed_sleep_minutes REAL,             -- 臥床 − 滑手機 − WASO(=0)
@@ -564,6 +568,9 @@ COLUMN_MIGRATIONS = [
     ("nightly_behavior", "assumed_sleep_minutes", "REAL"),
     ("nightly_behavior", "sleep_efficiency", "REAL"),
     ("nightly_behavior", "efficiency_basis", "TEXT"),
+    # 2026-11-12：上床／下床是當下按的還是事後補的（'tap' / 'recalled'）。
+    ("nightly_behavior", "bed_start_kind", "TEXT"),
+    ("nightly_behavior", "bed_end_kind", "TEXT"),
     # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
@@ -906,7 +913,8 @@ def delete_user(user_id, db_path=None):
 
 def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
-                            db_path=None, efficiency=None):
+                            db_path=None, efficiency=None,
+                            bed_start_kind=None, bed_end_kind=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -927,8 +935,9 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                  adherence_minutes, is_late, source, created_at,
                  bed_start_at, bed_end_at, time_in_bed_minutes,
                  phone_in_bed_minutes, assumed_sleep_minutes,
-                 sleep_efficiency, efficiency_basis)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 sleep_efficiency, efficiency_basis,
+                 bed_start_kind, bed_end_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 target_bedtime    = excluded.target_bedtime,
                 lights_out_at     = excluded.lights_out_at,
@@ -941,16 +950,37 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                 phone_in_bed_minutes  = excluded.phone_in_bed_minutes,
                 assumed_sleep_minutes = excluded.assumed_sleep_minutes,
                 sleep_efficiency      = excluded.sleep_efficiency,
-                efficiency_basis      = excluded.efficiency_basis
+                efficiency_basis      = excluded.efficiency_basis,
+                bed_start_kind        = excluded.bed_start_kind,
+                bed_end_kind          = excluded.bed_end_kind
             """,
             (user_id, date, target_bedtime, lights_out_at,
              adherence_minutes, 1 if is_late else 0, source, now_iso(),
              eff.get("bed_start_at"), eff.get("bed_end_at"),
              eff.get("time_in_bed_minutes"), eff.get("phone_in_bed_minutes"),
              eff.get("assumed_sleep_minutes"), eff.get("sleep_efficiency"),
-             eff.get("efficiency_basis")),
+             eff.get("efficiency_basis"),
+             bed_start_kind if eff.get("bed_start_at") else None,
+             bed_end_kind if eff.get("bed_end_at") else None),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_bed_mark_kinds(user_id, date, db_path=None):
+    """某一晚已存的上床／下床是當下按的還是事後補的 → (start_kind, end_kind)。
+
+    舊資料是 (None, None)，呼叫端一律當作 'tap'。
+    """
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT bed_start_kind, bed_end_kind FROM nightly_behavior "
+            "WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchone()
+        return (row["bed_start_kind"], row["bed_end_kind"]) if row else (None, None)
     finally:
         conn.close()
 

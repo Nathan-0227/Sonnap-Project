@@ -21,6 +21,7 @@ import '../widgets/countdown_border.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
+import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/week_mood_strip.dart';
@@ -125,6 +126,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 本機的上床／下床標記。決定要不要進睡覺畫面。
   BedMarks _marks = BedMarks.none;
 
+  /// 首頁要不要出現「Forgot to tap last night? Add times」。
+  bool _needsBackfill = false;
+
   /// 畫面上顯示的目標就寢時間。在這頁改了之後立刻反映，同時往上回報；
   /// 上層傳來新值時以上層為準（見 didUpdateWidget）。
   late TimeOfDay _bedtime;
@@ -172,9 +176,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadMarks() async {
     final marks = await widget.bedMarks.read(now: widget.clock());
+    final needsBackfill = await widget.bedMarks.needsBackfill(widget.clock());
     if (!mounted) return;
-    setState(() => _marks = marks);
+    setState(() {
+      _marks = marks;
+      _needsBackfill = needsBackfill;
+    });
     _maybeOpenSleepMode();
+  }
+
+  /// 補昨晚（2026-11-12）：只補缺的那一個。昨晚有按上床就鎖月亮；
+  /// 預設值用目標就寢與轉盤上的起床時間，**不用手機偵測的時間**（使用者定）。
+  Future<void> _backfillLastNight() async {
+    final now = widget.clock();
+    final last = await widget.bedMarks.lastNight(now);
+    final tappedStart = last.startAt;
+    final bed = tappedStart != null
+        ? TimeOfDay.fromDateTime(tappedStart)
+        : _bedtime;
+    final wake = await _alarmSettings.wakeTime(_bedtime);
+    if (!mounted) return;
+    final result = await showBedTimesSheet(
+      context,
+      title: 'Last night',
+      bedtime: bed,
+      wake: wake,
+      bedLocked: tappedStart != null,
+    );
+    if (result == null || !mounted) return;
+    final end = lastNightWake(now, result.wake.hour, result.wake.minute);
+    final start = tappedStart ??
+        end.subtract(sleepSpan(result.bedtime, result.wake));
+    final problem = recalledTimesProblem(start, end, now);
+    if (problem != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(problem)),
+      );
+      return;
+    }
+    await widget.bedMarks.backfillLastNight(now, start: start, end: end);
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text("Added last night's times.")),
+    );
+    await _loadMarks();
   }
 
   void _maybeOpenSleepMode() {
@@ -1207,6 +1252,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
           ),
         ),
+        // 補昨晚（2026-11-12）。⚠️ 上面那句「不按也沒關係」照留——它有測試守著，
+        //    是使用者唯一會看到的保證；這一行只是多給一條路。
+        if (_needsBackfill)
+          TextButton(
+            key: const Key('backfill-last-night'),
+            onPressed: _backfillLastNight,
+            child: const Text(
+              'Forgot to tap last night? Add times',
+              style: TextStyle(
+                color: Color(0xFFB9A6FF),
+                fontSize: 12,
+                decoration: TextDecoration.underline,
+                decorationColor: Color(0xFFB9A6FF),
+              ),
+            ),
+          ),
       ],
     );
   }
