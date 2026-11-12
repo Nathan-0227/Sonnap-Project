@@ -14,6 +14,7 @@ import '../services/key_value_store.dart';
 import '../services/sleep_repository.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
+import '../widgets/countdown_border.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
@@ -92,7 +93,7 @@ const Color kHomeBackgroundBottom = Color(0xFF090F4F);
 const double kHomePetSize = 230;
 
 /// 問候＋時鐘＋倒數圓環那一塊的高度。
-const double kHomeHeaderHeight = 250;
+const double kHomeHeaderHeight = 240;
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
@@ -797,152 +798,107 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return next.difference(now);
   }
 
-  static String _hhmmDuration(Duration d) =>
-      '${d.inHours.toString().padLeft(2, '0')}:'
-      '${(d.inMinutes % 60).toString().padLeft(2, '0')}';
+  static String _leftText(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    return h > 0 ? '${h}h ${m}m left' : '${m}m left';
+  }
 
-  /// 左邊大時鐘（點了改目標就寢時間），右邊「Time Left」倒數圓環。
+  /// 大時鐘卡（點了改目標就寢時間）。倒數是一條沿著卡片外框繞的光條：
+  /// 剩越少越短、越紅（2026-11-12 使用者定案，取代右邊的圓環）。
   ///
-  /// ⚠️ 過目標 60 分鐘以上（例如凌晨兩點）**不顯示倒數數字**——那時倒數會算成
+  /// ⚠️ 過目標 60 分鐘以上（例如凌晨兩點）**不顯示倒數**——那時倒數會算成
   ///    「距離明天還有 21 小時」，寫「晚了 2 小時半」又只剩責備
   ///    （見 `bedtime_urgency.dart` 的 kOverdueWindow）。
   Widget _buildClockRow(DateTime now) {
     final late =
         homeModeFor(now: now, bedtime: _bedtime) == HomeMode.lateEvening;
     final urgency = bedtimeUrgency(now, _bedtime);
-    final color = bedtimeUrgencyColor(urgency);
     final left = _untilBedtime(now);
+    final color = countdownColor(left, urgency);
+    final overdue = urgency == BedtimeUrgency.overdue;
 
-    final clockCard = InkWell(
-      key: Key(late ? 'late-evening' : 'bedtime-row'),
-      onTap: _pickBedtime,
-      borderRadius: BorderRadius.circular(SonnapColors.radius),
-      child: Container(
-        height: 120,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: sonnapCardDecoration(),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                DateFormat('HH:mm').format(now),
-                key: const Key('home-clock'),
-                style: const TextStyle(
-                  color: SonnapColors.textPrimary,
-                  fontSize: 52,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0,
+    return CountdownBorder(
+      key: const Key('countdown-border'),
+      // 一整天 = 一整圈；剛過就寢、或過了很久都不畫進度。
+      progress: (late || overdue) ? 0 : left.inMinutes / (24 * 60),
+      color: color,
+      radius: SonnapColors.radius,
+      child: InkWell(
+        key: Key(late ? 'late-evening' : 'bedtime-row'),
+        onTap: _pickBedtime,
+        borderRadius: BorderRadius.circular(SonnapColors.radius),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: sonnapCardDecoration(),
+          child: Column(
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  DateFormat('HH:mm').format(now),
+                  key: const Key('home-clock'),
+                  style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 56,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    late
-                        ? 'Bedtime was ${_tod(_bedtime)}'
-                        : 'Target bedtime ${_tod(_bedtime)}',
-                    style: const TextStyle(
-                      color: SonnapColors.textSecondary,
-                      fontSize: 14,
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      late
+                          ? 'Bedtime was ${_tod(_bedtime)}'
+                          : 'Target bedtime ${_tod(_bedtime)}',
+                      style: const TextStyle(
+                        color: SonnapColors.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.edit, color: Color(0xFFFFD96A), size: 16),
-                ],
+                    if (!late) ...[
+                      const Text(
+                        '  ·  ',
+                        style: TextStyle(
+                          color: SonnapColors.textMuted,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        overdue ? 'past bedtime' : _leftText(left),
+                        key: const Key('bedtime-countdown'),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    const Icon(Icons.edit, color: Color(0xFFFFD96A), size: 16),
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (late) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'Your buddy is waiting.',
+                  style: TextStyle(
+                    color: SonnapColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
-    );
-
-    const ringSize = 120.0;
-    final ring = SizedBox(
-      width: ringSize,
-      height: ringSize,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: ringSize,
-            height: ringSize,
-            child: CircularProgressIndicator(
-              // 一整天 = 一整圈；越接近就寢圈越短。過了太久就不畫進度。
-              value: late ? 0 : (left.inMinutes / (24 * 60)).clamp(0.0, 1.0),
-              strokeWidth: 9,
-              backgroundColor: Colors.white24,
-              color: color,
-              strokeCap: StrokeCap.round,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: late
-                  ? const Column(
-                      children: [
-                        Icon(
-                          Icons.bedtime_rounded,
-                          color: Color(0xFFFFD96A),
-                          size: 26,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Your buddy\nis waiting',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Time Left',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        Text(
-                          _hhmmDuration(left),
-                          key: const Key('bedtime-countdown'),
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          bedtimeUrgencyCaption(urgency),
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return Row(
-      children: [
-        Expanded(child: clockCard),
-        const SizedBox(width: SonnapColors.gap),
-        ring,
-      ],
     );
   }
 

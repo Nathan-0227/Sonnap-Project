@@ -15,6 +15,7 @@ import 'package:app/services/bed_marks.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/widgets/countdown_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,8 +48,7 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sample = await const AssetSleepRepository().load();
-    rawPayload =
-        await rootBundle.loadString(AssetSleepRepository.assetPath);
+    rawPayload = await rootBundle.loadString(AssetSleepRepository.assetPath);
   });
 
   setUp(() {
@@ -62,15 +62,17 @@ void main() {
     tester.view.physicalSize = const Size(1200, 4200);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: HomeScreen(
-          repository: _ImmediateRepository(sample),
-          bedMarks: store,
-          clock: now,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _ImmediateRepository(sample),
+            bedMarks: store,
+            clock: now,
+          ),
         ),
       ),
-    ));
+    );
     // ⚠️ 不用 pumpAndSettle：寵物的 Lottie 永遠在動。
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 50));
@@ -81,8 +83,11 @@ void main() {
     testWidgets('問候、心情標籤、分數、Start sleep、四張卡都在同一頁', (tester) async {
       await pumpHome(tester, () => at(12, 9));
       expect(find.textContaining('Good morning'), findsOneWidget);
-      expect(find.text('Sleeper'), findsOneWidget,
-          reason: '沒有帳號時用 Sleeper，不能是人名');
+      expect(
+        find.text('Sleeper'),
+        findsOneWidget,
+        reason: '沒有帳號時用 Sleeper，不能是人名',
+      );
       for (final k in [
         'mood-chip',
         'week-strip',
@@ -107,25 +112,48 @@ void main() {
 
     testWidgets('「不按也沒關係」那句話在按鈕旁邊', (tester) async {
       await pumpHome(tester, () => at(12, 23, 10));
-      expect(find.textContaining('fine if you forget'), findsOneWidget,
-          reason: '這是加分項不是取代品，使用者必須看得到');
+      expect(
+        find.textContaining('fine if you forget'),
+        findsOneWidget,
+        reason: '這是加分項不是取代品，使用者必須看得到',
+      );
       expect(find.textContaining('detected anyway'), findsOneWidget);
     });
 
-    testWidgets('時鐘卡與倒數圓環：23:10 → 還剩 00:20', (tester) async {
+    testWidgets('時鐘卡：23:10 → 還剩 20m，光條變紅', (tester) async {
       await pumpHome(tester, () => at(12, 23, 10));
       expect(find.text('23:10'), findsOneWidget);
       expect(find.text('Target bedtime 23:30'), findsOneWidget);
       final t = tester.widget<Text>(find.byKey(const Key('bedtime-countdown')));
-      expect(t.data, '00:20');
+      expect(t.data, '20m left');
+      final b = tester.widget<CountdownBorder>(
+        find.byKey(const Key('countdown-border')),
+      );
+      expect(
+        b.color,
+        const Color(0xFFFF6B6B),
+        reason: '剩 30 分鐘內要紅，與提醒、守門同一個 30 分鐘',
+      );
+    });
+
+    testWidgets('早上還很久：光條是綠的、幾乎整圈', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      final b = tester.widget<CountdownBorder>(
+        find.byKey(const Key('countdown-border')),
+      );
+      expect(b.color, const Color(0xFF7ED957));
+      expect(b.progress, greaterThan(0.5));
     });
 
     testWidgets('⚠️ 凌晨兩點：不顯示倒數數字，改成一句話', (tester) async {
       await pumpHome(tester, () => at(13, 2));
       expect(find.byKey(const Key('late-evening')), findsOneWidget);
       expect(find.textContaining('Bedtime was 23:30'), findsOneWidget);
-      expect(find.byKey(const Key('bedtime-countdown')), findsNothing,
-          reason: '倒數會算成「距離明天還有 21 小時」');
+      expect(
+        find.byKey(const Key('bedtime-countdown')),
+        findsNothing,
+        reason: '倒數會算成「距離明天還有 21 小時」',
+      );
       expect(find.byKey(const Key('start-sleep')), findsOneWidget);
     });
 
@@ -144,46 +172,58 @@ void main() {
 
     testWidgets('點效率卡 → 跳出後端的警語原文（畫面上平常不放）', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      final caveat = sample.scoring.composition!.caveats
-          .firstWhere((c) => c.component == 'efficiency');
+      final caveat = sample.scoring.composition!.caveats.firstWhere(
+        (c) => c.component == 'efficiency',
+      );
       expect(find.text(caveat.text), findsNothing, reason: '平常不顯示');
       await tester.tap(find.byKey(const Key('tile-efficiency')));
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text(caveat.text), findsOneWidget,
-          reason: '文字只能照抄 score_claim.py，Dart 不產生');
+      expect(
+        find.text(caveat.text),
+        findsOneWidget,
+        reason: '文字只能照抄 score_claim.py，Dart 不產生',
+      );
     });
 
     testWidgets('沒有後端 → 攝影機卡說需要後端，不畫數字', (tester) async {
       await pumpHome(tester, () => at(12, 9));
       expect(
-          find.descendant(
-              of: find.byKey(const Key('tile-camera')),
-              matching: find.text('Needs backend')),
-          findsOneWidget);
+        find.descendant(
+          of: find.byKey(const Key('tile-camera')),
+          matching: find.text('Needs backend'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('⚠️ 後端連不到 → 攝影機卡不能說成「那晚沒錄影」', (tester) async {
       tester.view.physicalSize = const Size(1200, 4200);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: HomeScreen(
-            repository: _ImmediateRepository(sample),
-            bedMarks: store,
-            cameraInsights: const _FailedCamera(),
-            clock: () => at(12, 9),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HomeScreen(
+              repository: _ImmediateRepository(sample),
+              bedMarks: store,
+              cameraInsights: const _FailedCamera(),
+              clock: () => at(12, 9),
+            ),
           ),
         ),
-      ));
+      );
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
       final tile = find.byKey(const Key('tile-camera'));
-      expect(find.descendant(of: tile, matching: find.text('Backend unreachable')),
-          findsOneWidget);
-      expect(find.descendant(of: tile, matching: find.text('No camera this night')),
-          findsNothing);
+      expect(
+        find.descendant(of: tile, matching: find.text('Backend unreachable')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: tile, matching: find.text('No camera this night')),
+        findsNothing,
+      );
     });
 
     testWidgets('⚠️ 沒戴錶那晚：顯示「—」，不畫成 0', (tester) async {
@@ -203,8 +243,11 @@ void main() {
 
       await pumpHome(tester, () => at(12, 9));
       expect(find.text('No watch data'), findsNWidgets(3));
-      expect(find.textContaining('0 min'), findsNothing,
-          reason: '「0 min」會被讀成整晚沒睡，真相是沒量到');
+      expect(
+        find.textContaining('0 min'),
+        findsNothing,
+        reason: '「0 min」會被讀成整晚沒睡，真相是沒量到',
+      );
       final line = tester.widget<Text>(find.byKey(const Key('score-line')));
       expect(line.textSpan!.toPlainText(), contains('— / 100'));
     });
@@ -221,8 +264,11 @@ void main() {
       await pumpHome(tester, () => at(12, 23, 41));
       await tester.tap(find.byKey(const Key('start-sleep')));
       await settle(tester);
-      expect(await kv.getString(kBedStartKey), isNotNull,
-          reason: '只改畫面不存檔的話，關掉 App 就沒了');
+      expect(
+        await kv.getString(kBedStartKey),
+        isNotNull,
+        reason: '只改畫面不存檔的話，關掉 App 就沒了',
+      );
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.text('Sleep mode · since 23:41'), findsOneWidget);
     });
@@ -255,8 +301,7 @@ void main() {
       expect(marks.endAt, at(13, 7, 10));
     });
 
-    testWidgets('取消 → 要確認；確認後這次的開始沒了，上一晚的那一對還在',
-        (tester) async {
+    testWidgets('取消 → 要確認；確認後這次的開始沒了，上一晚的那一對還在', (tester) async {
       // 上一晚：完整一對，還沒上傳
       await store.markStart(at(11, 23, 50));
       await store.markEnd(at(12, 7, 30));
@@ -298,8 +343,7 @@ void main() {
       expect(find.byType(SleepModeScreen), findsOneWidget);
     });
 
-    testWidgets('⚠️ 不寫 measuring／tracking：睡覺時 App 沒有在量東西',
-        (tester) async {
+    testWidgets('⚠️ 不寫 measuring／tracking：睡覺時 App 沒有在量東西', (tester) async {
       await pumpHome(tester, () => at(12, 23, 41));
       await tester.tap(find.byKey(const Key('start-sleep')));
       await settle(tester);

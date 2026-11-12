@@ -14,9 +14,9 @@ class SonnapColors {
   /// 頁面上半部的光暈，讓寵物站在一個場景裡而不是一塊色塊上。
   static const Color backdropTop = Color(0xFF1A2456);
 
-  /// 卡片。比底色亮一階，加一條很淡的邊框。
-  static const Color card = Color(0xFF131E42);
-  static const Color cardBorder = Color(0x14FFFFFF);
+  /// 卡片：半透明，隱約透出後面的夜空（2026-11-12 使用者要求），加一條淡邊框。
+  static const Color card = Color(0x803A3672);
+  static const Color cardBorder = Color(0x26FFFFFF);
 
   /// 強調色：切換鈕、按鈕、圖示。
   static const Color accent = Color(0xFF8B6DFF);
@@ -32,7 +32,7 @@ class SonnapColors {
 
 /// 統一的卡片外框。
 BoxDecoration sonnapCardDecoration() => BoxDecoration(
-      color: SonnapColors.card,
-      borderRadius: BorderRadius.circular(SonnapColors.radius),
-      border: Border.all(color: SonnapColors.cardBorder),
-    );
+  color: SonnapColors.card,
+  borderRadius: BorderRadius.circular(SonnapColors.radius),
+  border: Border.all(color: SonnapColors.cardBorder),
+);
