@@ -41,7 +41,7 @@ String formatSpan(Duration d) {
 TimeOfDay _tod(int minutes) =>
     TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
 int _min(TimeOfDay t) => t.hour * 60 + t.minute;
-String _hhmm(TimeOfDay t) =>
+String hhmm(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 class SleepDial extends StatefulWidget {
@@ -123,60 +123,22 @@ class _SleepDialState extends State<SleepDial> {
                 ),
               ),
             ),
+            // 中間只放睡多久；就寢／起床的時刻在轉盤下面那張卡（SleepTimesCard）。
             Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Bedtime',
-                    style: TextStyle(
-                      color: SonnapColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    _hhmm(widget.bedtime),
-                    key: const Key('dial-bedtime'),
+              child: SizedBox(
+                width: widget.size * 0.56,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatSpan(span),
+                    key: const Key('dial-span'),
                     style: const TextStyle(
                       color: SonnapColors.textPrimary,
-                      fontSize: 15,
+                      fontSize: 44,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: widget.size * 0.56,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        formatSpan(span),
-                        key: const Key('dial-span'),
-                        style: const TextStyle(
-                          color: Color(0xFFB9A6FF),
-                          fontSize: 44,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Wake up',
-                    style: TextStyle(
-                      color: SonnapColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    _hhmm(widget.wake),
-                    key: const Key('dial-wake'),
-                    style: const TextStyle(
-                      color: SonnapColors.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             _handle(
@@ -292,4 +254,104 @@ class _DialPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DialPainter old) =>
       old.bed != bed || old.wake != wake;
+}
+
+/// 轉盤下面那張雙欄卡：月亮＋就寢時間｜太陽＋起床（鬧鐘）時間。
+/// 圖示浮在卡片上緣（參考使用者給的設計圖）。鬧鐘關著時右欄寫 Wake up 而不是 Alarm。
+class SleepTimesCard extends StatelessWidget {
+  final TimeOfDay bedtime;
+  final TimeOfDay wake;
+  final bool alarmOn;
+
+  const SleepTimesCard({
+    super.key,
+    required this.bedtime,
+    required this.wake,
+    required this.alarmOn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 18),
+          padding: const EdgeInsets.fromLTRB(8, 26, 8, 14),
+          decoration: sonnapCardDecoration(),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _col('Bed time', bedtime, const Key('dial-bedtime')),
+                ),
+                const VerticalDivider(color: Colors.white24, width: 1),
+                Expanded(
+                  child: _col(
+                    alarmOn ? 'Alarm' : 'Wake up',
+                    wake,
+                    const Key('dial-wake'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Row(
+            children: [
+              Expanded(
+                child: Center(
+                  child: _badge(
+                    Icons.nightlight_round,
+                    const Color(0xFFB9D8FF),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: _badge(
+                    Icons.wb_sunny_rounded,
+                    const Color(0xFFFFD66B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _col(String label, TimeOfDay t, Key key) => Column(
+    children: [
+      Text(
+        label,
+        style: const TextStyle(color: SonnapColors.textSecondary, fontSize: 13),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        hhmm(t),
+        key: key,
+        style: const TextStyle(
+          color: SonnapColors.textPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ],
+  );
+
+  Widget _badge(IconData icon, Color color) => Container(
+    width: 36,
+    height: 36,
+    decoration: const BoxDecoration(
+      color: Color(0xFF2A2F5E),
+      shape: BoxShape.circle,
+    ),
+    child: Icon(icon, color: color, size: 20),
+  );
 }

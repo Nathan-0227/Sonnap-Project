@@ -124,7 +124,9 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
               onBedtimeChanged: (t) => setState(() => _bed = t),
               onWakeChanged: (t) => setState(() => _wake = t),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               decoration: sonnapCardDecoration(),

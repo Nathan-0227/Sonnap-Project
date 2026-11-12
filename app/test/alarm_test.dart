@@ -193,6 +193,34 @@ void main() {
       }
     });
 
+    testWidgets('轉盤下面有就寢／鬧鐘雙欄卡；鬧鐘關掉時右欄改叫 Wake up', (tester) async {
+      await big(tester);
+      Future<void> show(bool alarmOn) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SleepScheduleSheet(
+              key: ValueKey(alarmOn),
+              bedtime: bed,
+              wake: const TimeOfDay(hour: 8, minute: 15),
+              alarmEnabled: alarmOn,
+              scheduler: FakeAlarm(),
+            ),
+          ),
+        ),
+      );
+      await show(true);
+      await tester.pump();
+      expect(find.text('Bed time'), findsOneWidget);
+      expect(find.text('Alarm'), findsWidgets);
+      final bedText = tester.widget<Text>(find.byKey(const Key('dial-bedtime')));
+      final wakeText = tester.widget<Text>(find.byKey(const Key('dial-wake')));
+      expect(bedText.data, '23:30');
+      expect(wakeText.data, '08:15');
+      await show(false);
+      await tester.pump();
+      expect(find.text('Wake up'), findsOneWidget);
+    });
+
     testWidgets('點首頁時鐘卡 → 滑出轉盤', (tester) async {
       await big(tester);
       await tester.pumpWidget(
