@@ -371,7 +371,7 @@ void main() {
       );
 
       now = at(13, 7, 10);
-      await tester.tap(find.byKey(const Key('sleep-out-of-bed')));
+      await tester.drag(find.byKey(const Key('slide-knob')), const Offset(1000, 0));
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }

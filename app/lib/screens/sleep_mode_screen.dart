@@ -7,6 +7,7 @@ import '../services/bed_marks.dart';
 import '../services/sleep_sounds.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleepy_pet.dart';
+import '../widgets/slide_to_confirm.dart';
 
 /// 按了「Start sleep」之後佔滿整個畫面的睡覺畫面（2026-11-12 定案）。
 ///
@@ -525,31 +526,11 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                       _line,
                     ],
                     const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: const Key('sleep-out-of-bed'),
-                        onPressed: _outOfBed,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.white.withValues(alpha: 0.06),
-                          side: const BorderSide(
-                            color: Color(0xFFB9A6FF),
-                            width: 2,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Out of bed',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
+                    // 用滑的結束（使用者要求）：點一下不算，半夜被碰到不會記成下床。
+                    SlideToConfirm(
+                      key: const Key('sleep-out-of-bed'),
+                      label: 'Slide to get up',
+                      onConfirmed: _outOfBed,
                     ),
                     // 兩個併成一列：分兩行的話 6.4 吋手機底部溢出 21 像素（2026-11-12 實機）。
                     Row(

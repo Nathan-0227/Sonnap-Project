@@ -139,7 +139,7 @@ void main() {
       await tester.tap(find.byKey(const Key('sleep-sounds-play')));
       await settle(tester);
       now = at(23, 55);
-      await tester.tap(find.byKey(const Key('sleep-out-of-bed')));
+      await tester.drag(find.byKey(const Key('slide-knob')), const Offset(1000, 0));
       await settle(tester);
       expect(player.stops, 1);
     });
