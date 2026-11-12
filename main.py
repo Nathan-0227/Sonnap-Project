@@ -947,6 +947,11 @@ async def get_insights(
                         round(r["duration_min"] / 60.0, 2)
                         if r["duration_min"] is not None else None
                     ),
+                    # 首頁「跟上一晚比」要逐夜的效率與深睡（2026-11-12）。
+                    # ⚠️ 與 /home 的 metrics 同一個欄位（wearable_nightly.efficiency /
+                    #    deep_min），欄名與 asset 路徑的 history 相同。
+                    "sleep_efficiency": r["efficiency"],
+                    "deep_minutes": r["deep_min"],
                     # Insights 頁要畫「幾點睡→幾點醒」。與 asset 路徑
                     # （build_app_payload.py 的 history）同一個來源，欄名也相同。
                     "sleep_start_time": r["sleep_start_time"],

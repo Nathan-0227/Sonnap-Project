@@ -65,6 +65,10 @@ sys.path.insert(0, str(ROOT))
 import score_claim  # noqa: E402
 import tapo_index  # noqa: E402
 
+# garmin/ 不是套件（沒有 __init__.py），sleep_stages 與其他 pipeline 步驟一樣直接以檔案 import。
+sys.path.insert(0, str(ROOT / "garmin"))
+import sleep_stages  # noqa: E402
+
 SCHEMA_VERSION = 1
 MAPPING_VERSION = 1  # pet_mood 映射表的版本，改映射規則時要 +1
 # history 陣列帶幾晚。
@@ -418,6 +422,41 @@ def composition_for(base_row):
     )
 
 
+def sleep_stages_block(night_features, composition):
+    """首頁 Sleep Stages 圖用（2026-11-12）。**只呈現、不計分。**
+
+    - segments：從 garmin_standard_data.json 還原的逐段時間軸，只用來畫曲線。
+      實測 118 晚裡 116 晚與手錶自己的各階段總數相差 2 分鐘以內（另 2 晚差 13、22 分鐘）。
+    - minutes：圖例的數字**用手錶自己的總數**（features），不用還原出來的——
+      有那 2 晚的落差，圖例要以手錶為準。awake 用 waso_minutes（入睡後清醒）。
+    - rem_measured：評分器判定那晚有沒有量到 REM（composition.scored 有沒有 rem）。
+      手錶有些晚上 REM 是 0，那是沒量到，不是沒有 REM；App 不畫 REM 那一層。
+
+    資料不夠（沒有入睡／起床時刻、原始檔不在）時回 None，App 就不畫這張卡。
+    """
+    start = night_features.get("sleep_start_time")
+    wake = night_features.get("wake_time")
+    if not start or not wake:
+        return None
+    raw = load_json(GARMIN_DATA / "garmin_standard_data.json")
+    if not raw:
+        return None
+    segments = sleep_stages.stage_segments(raw.get("records", []), start, wake)
+    if not segments:
+        return None
+    scored = (composition or {}).get("scored") or []
+    return {
+        "segments": segments,
+        "minutes": {
+            "awake": night_features.get("waso_minutes"),
+            "rem": night_features.get("rem_minutes"),
+            "light": night_features.get("light_minutes"),
+            "deep": night_features.get("deep_minutes"),
+        },
+        "rem_measured": "rem" in scored,
+    }
+
+
 def build_payload(target_date=None):
     """組出完整 payload。找不到資料時丟 SystemExit，讓 pipeline 停在這裡。"""
     quality_rows = load_json(GARMIN_DATA / "garmin_sleep_quality_final.json")
@@ -502,6 +541,10 @@ def build_payload(target_date=None):
                 "final_score": row.get("final_score"),
                 "final_quality": row.get("final_quality"),
                 "sleep_duration_hours": feat.get("sleep_duration_hours"),
+                # 首頁「跟上一晚比」要逐夜的效率與深睡（2026-11-12）。
+                # ⚠️ 與 metrics 同一個來源（features），所以 history[-1] 與首頁卡片逐字相同。
+                "sleep_efficiency": feat.get("sleep_efficiency"),
+                "deep_minutes": feat.get("deep_minutes"),
                 "sleep_start_time": feat.get("sleep_start_time"),
                 "wake_time": feat.get("wake_time"),
                 "pet_mood": row_mood,
@@ -566,6 +609,10 @@ def build_payload(target_date=None):
             "rem_minutes": features.get("rem_minutes"),
             "waso_minutes": features.get("waso_minutes"),
             "sleep_efficiency": features.get("sleep_efficiency"),
+            "light_minutes": features.get("light_minutes"),
+            "sleep_stages": sleep_stages_block(
+                features, composition_for(base_by_date.get(night_iso))
+            ),
             "avg_heart_rate": features.get("avg_heart_rate"),
             "resting_heart_rate": features.get("resting_heart_rate"),
         },
