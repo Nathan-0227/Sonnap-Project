@@ -146,6 +146,17 @@ class AlarmController {
     return at;
   }
 
+  /// 睡覺畫面上改今晚的鬧鐘（半夜想到明天要早起）。轉盤上的設定不受影響。
+  /// 回傳排了幾點；超過 14 小時就不排，回 null（原本排的不動）。
+  /// 原生端用同一個 PendingIntent，重排會直接蓋掉舊的那個。
+  Future<DateTime?> setTonightAt(DateTime now, TimeOfDay wake) async {
+    final at = nextAlarmTime(now, wake);
+    if (at == null) return null;
+    await scheduler.schedule(at);
+    await settings.setTonight(at);
+    return at;
+  }
+
   /// 下床、取消、或在睡覺畫面點「只關今晚」。轉盤上的設定不受影響。
   Future<void> cancelTonight() async {
     await scheduler.cancel();

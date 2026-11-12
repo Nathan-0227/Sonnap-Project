@@ -110,6 +110,52 @@ void main() {
     });
   });
 
+  group('睡覺畫面上改今晚的鬧鐘', () {
+    test('改今晚：重排並記下新時間，轉盤上的起床時間不變', () async {
+      final kv = InMemoryKeyValueStore();
+      final fake = FakeAlarm();
+      final ctrl = AlarmController(
+        settings: AlarmSettingsStore(kv),
+        scheduler: fake,
+      );
+      await AlarmSettingsStore(
+        kv,
+      ).save(wake: const TimeOfDay(hour: 7, minute: 30), enabled: true);
+      await ctrl.onStartSleep(at(12, 23, 40), bed);
+      final got = await ctrl.setTonightAt(
+        at(13, 2, 0),
+        const TimeOfDay(hour: 6, minute: 0),
+      );
+      expect(got, at(13, 6, 0));
+      expect(fake.scheduled.last, at(13, 6, 0));
+      expect(await AlarmSettingsStore(kv).tonight(), at(13, 6, 0));
+      expect(
+        await AlarmSettingsStore(kv).wakeTime(bed),
+        const TimeOfDay(hour: 7, minute: 30),
+      );
+    });
+
+    test('⚠️ 改成超過 14 小時後 → 不動原本的鬧鐘', () async {
+      final kv = InMemoryKeyValueStore();
+      final fake = FakeAlarm();
+      final ctrl = AlarmController(
+        settings: AlarmSettingsStore(kv),
+        scheduler: fake,
+      );
+      await ctrl.onStartSleep(at(12, 23, 40), bed);
+      // 02:00 改成 01:55 → 隔天 01:55，快 24 小時後
+      expect(
+        await ctrl.setTonightAt(
+          at(13, 2, 0),
+          const TimeOfDay(hour: 1, minute: 55),
+        ),
+        isNull,
+      );
+      expect(fake.scheduled, [at(13, 7, 30)]);
+      expect(await AlarmSettingsStore(kv).tonight(), at(13, 7, 30));
+    });
+  });
+
   group('轉盤的數學', () {
     test('正上方 00:00、右 06:00、下 12:00、左 18:00', () {
       expect(minutesForOffset(const Offset(0, -100)), 0);
@@ -273,12 +319,27 @@ void main() {
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.textContaining('07:30'), findsWidgets);
 
+      // 點鬧鐘列 → 只關今晚
+      await tester.tap(find.byKey(const Key('sleep-alarm')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.byKey(const Key('alarm-off-tonight')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(fake.cancels, 1, reason: '只關今晚要真的取消');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('sleep-alarm-time'))).data,
+        'Off',
+      );
+
       now = at(13, 7, 10);
       await tester.tap(find.byKey(const Key('sleep-out-of-bed')));
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(fake.cancels, 1, reason: '下床要取消鬧鐘');
+      expect(fake.cancels, 2, reason: '下床要取消鬧鐘');
     });
   });
 }
