@@ -66,3 +66,94 @@ class _MoonPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+/// 睡覺畫面的寵物（2026-11-12）。有使用者做的睡姿圖就用它（慢慢呼吸、旁邊飄 Zz），
+/// 圖還沒放進來就退回上面那隻趴在月亮上的 [SleepyPet]。
+///
+/// 圖放在 [kSleepingPetAsset]：去背 PNG，寵物連同墊子畫在一起。
+const String kSleepingPetAsset = 'assets/pets/dog01/sleeping.png';
+
+class SleepingPet extends StatefulWidget {
+  final double size;
+  const SleepingPet({super.key, this.size = 240});
+
+  @override
+  State<SleepingPet> createState() => _SleepingPetState();
+}
+
+class _SleepingPetState extends State<SleepingPet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 系統開「減少動態效果」時靜止，跟首頁的星星一樣。
+    if (MediaQuery.of(context).disableAnimations) {
+      _breath.stop();
+    } else if (!_breath.isAnimating) {
+      _breath.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.size;
+    return SizedBox(
+      key: const Key('sleeping-pet'),
+      width: s,
+      height: s,
+      child: Image.asset(
+        kSleepingPetAsset,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => SleepyPet(size: s),
+        frameBuilder: (context, child, frame, sync) {
+          if (frame == null && !sync) return child;
+          return AnimatedBuilder(
+            animation: _breath,
+            builder: (context, _) {
+              final t = Curves.easeInOut.transform(_breath.value);
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: Transform.scale(
+                      alignment: Alignment.bottomCenter,
+                      scaleY: 1 + 0.025 * t,
+                      scaleX: 1 + 0.01 * t,
+                      child: child,
+                    ),
+                  ),
+                  Positioned(
+                    right: s * 0.12,
+                    top: s * (0.14 - 0.06 * t),
+                    child: Opacity(
+                      opacity: 0.35 + 0.5 * t,
+                      child: Text(
+                        'z Z',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: s * 0.09,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}

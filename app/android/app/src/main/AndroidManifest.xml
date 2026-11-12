@@ -36,6 +36,16 @@
         android:maxSdkVersion="32" />
 
     <!--
+      鬧鐘（2026-11-12）：鈴聲由前景服務播（媒體播放類型），鎖屏時跳全螢幕畫面。
+      USE_FULL_SCREEN_INTENT：Android 14 起只給鬧鐘／來電類 App；本 App 只走側載。
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
       Health Connect：只讀睡眠 session（B8）。
       ⚠️ 只宣告用得到的這一個。多宣告的權限會一起出現在授權畫面上，
          受測者看到「心率、步數、體重」很可能整組拒絕。
@@ -99,6 +109,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 鬧鐘（2026-11-12）：時間到 → 接收器 → 前景服務響鈴 → 鎖屏全螢幕畫面。 -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+        <service
+            android:name=".AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <activity
+            android:name=".AlarmRingActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
         <!-- 就寢提醒的鬧鐘接收器。exported=false：只有自己的 AlarmManager 叫得動它。 -->
         <receiver
             android:name=".BedtimeReminderReceiver"

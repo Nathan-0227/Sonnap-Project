@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
+import 'package:app/services/alarm.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/key_value_store.dart';
@@ -29,6 +30,20 @@ class _ImmediateRepository implements SleepRepository {
 }
 
 DateTime at(int day, int h, [int m = 0]) => DateTime(2026, 11, day, h, m);
+
+/// 什麼都不做的鬧鐘。⚠️ 測試環境裡真的 channel 沒有人回應，用真的會讓 Start sleep 卡住。
+class _NoAlarm implements AlarmScheduler {
+  @override
+  Future<void> schedule(DateTime at) async {}
+  @override
+  Future<void> cancel() async {}
+  @override
+  Future<bool> canRing() async => true;
+  @override
+  Future<void> requestPermission() async {}
+  @override
+  Future<void> openSettings() async {}
+}
 
 class _FailedCamera implements CameraInsightsSource {
   const _FailedCamera();
@@ -68,6 +83,7 @@ void main() {
           body: HomeScreen(
             repository: _ImmediateRepository(sample),
             bedMarks: store,
+          alarmScheduler: _NoAlarm(),
             clock: now,
           ),
         ),
@@ -241,6 +257,7 @@ void main() {
             body: HomeScreen(
               repository: _ImmediateRepository(sample),
               bedMarks: store,
+          alarmScheduler: _NoAlarm(),
               cameraInsights: const _FailedCamera(),
               clock: () => at(12, 9),
             ),
@@ -307,7 +324,7 @@ void main() {
         reason: '只改畫面不存檔的話，關掉 App 就沒了',
       );
       expect(find.byType(SleepModeScreen), findsOneWidget);
-      expect(find.text('Sleep mode · since 23:41'), findsOneWidget);
+      expect(find.text('Sleeping… your watch is tracking'), findsOneWidget);
     });
 
     testWidgets('半夜打開 App（還沒按下床）→ 直接是睡覺畫面', (tester) async {
@@ -380,12 +397,18 @@ void main() {
       expect(find.byType(SleepModeScreen), findsOneWidget);
     });
 
-    testWidgets('⚠️ 不寫 measuring／tracking：睡覺時 App 沒有在量東西', (tester) async {
+    testWidgets('⚠️ 不說 App 在量：只准講「手錶在量」', (tester) async {
+      // 2026-11-12 使用者定副標 `Sleeping… your watch is tracking`——量的是手錶，是事實。
+      // 但 App 本身沒有在量，所以其他 measuring／monitoring／tracking 的說法一律不准。
       await pumpHome(tester, () => at(12, 23, 41));
       await tester.tap(find.byKey(const Key('start-sleep')));
       await settle(tester);
-      for (final word in ['easur', 'racking', 'onitor']) {
+      for (final word in ['easur', 'onitor']) {
         expect(find.textContaining(word), findsNothing, reason: word);
+      }
+      for (final e in find.textContaining('racking').evaluate()) {
+        final t = (e.widget as Text).data ?? '';
+        expect(t.contains('watch is tracking'), isTrue, reason: t);
       }
     });
   });

@@ -32,6 +32,7 @@ class MainActivity : FlutterFragmentActivity() {
     private lateinit var usageStatsService: UsageStatsService
     private lateinit var keyValueStore: KeyValueStore
     private lateinit var notificationService: NotificationService
+    private lateinit var alarmService: AlarmService
     private val guardBridge by lazy { BedtimeGuardBridge(this) }
     private val healthService by lazy { HealthConnectService(this) }
 
@@ -55,6 +56,8 @@ class MainActivity : FlutterFragmentActivity() {
         private const val GUARD_CHANNEL = "sonnap/guard"
         private const val HEALTH_CHANNEL = "sonnap/health"
         private const val NOTIFY_PERMISSION_REQUEST = 4202
+        private const val ALARM_CHANNEL = "sonnap/alarm"
+        private const val ALARM_PERMISSION_REQUEST = 5103
     }
 
     /**
@@ -73,6 +76,23 @@ class MainActivity : FlutterFragmentActivity() {
         usageStatsService = UsageStatsService(this)
         keyValueStore = KeyValueStore(this)
         notificationService = NotificationService(this)
+        alarmService = AlarmService(this)
+    }
+
+    /** 鬧鐘要通知權限時，等使用者按完允許／拒絕才回覆 Dart。 */
+    private var pendingAlarmPermission: MethodChannel.Result? = null
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == ALARM_PERMISSION_REQUEST) {
+            val pending = pendingAlarmPermission ?: return
+            pendingAlarmPermission = null
+            pending.success(null)
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -225,6 +245,46 @@ class MainActivity : FlutterFragmentActivity() {
                             NOTIFY_PERMISSION_REQUEST
                         )
                     }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 鬧鐘（2026-11-12）。⚠️ 幾點響、要不要排都是 Dart 決定好的（alarm.dart）。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ALARM_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "schedule" -> {
+                    val at = call.argument<Number>("triggerAtMillis")?.toLong()
+                    if (at == null) {
+                        result.error("INVALID_ARGUMENTS", "triggerAtMillis is required.", null)
+                        return@setMethodCallHandler
+                    }
+                    alarmService.schedule(at)
+                    result.success(null)
+                }
+                "cancel" -> {
+                    alarmService.cancel()
+                    result.success(null)
+                }
+                "canRing" -> result.success(alarmService.canRing())
+                "requestPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33 && !alarmService.canPostNotifications()) {
+                        pendingAlarmPermission?.success(null)
+                        pendingAlarmPermission = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            ALARM_PERMISSION_REQUEST
+                        )
+                    } else {
+                        result.success(null)
+                    }
+                }
+                "openSettings" -> {
+                    alarmService.openSettings()
                     result.success(null)
                 }
                 else -> result.notImplemented()
