@@ -1,9 +1,9 @@
-// 首頁早晚兩版、Today/Tonight 切換、睡覺畫面（2026-11-12 定案）。
+// 首頁（一頁全放）與睡覺畫面（2026-11-12 定案）。
 //
 // 守的都是「壞掉時不會報錯」的地方：
 // - 「不按也沒關係」那句話要在 Start sleep 旁邊（原本在 bed_mark_buttons_test）
-// - 晚上版不顯示心情標籤（那不是心情，是「該睡了」）
 // - 凌晨兩點不顯示倒數數字（會算成「距離明天還有 21 小時」）
+// - 警語平常不顯示，但點卡片要看得到，而且文字照抄後端
 // - 取消不能刪掉上一晚還沒上傳的那一對；下床要真的存進本機
 // - 睡覺畫面不寫 measuring/tracking、返回鍵離不開
 import 'dart:convert';
@@ -68,47 +68,86 @@ void main() {
     }
   }
 
-  group('白天版（09:00，目標 23:30）', () {
-    testWidgets('問候、心情、分數都在；沒有 Start sleep', (tester) async {
+  group('一頁全放（2026-11-12 定案）', () {
+    testWidgets('問候、心情標籤、分數、Start sleep、四張卡都在同一頁', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      expect(find.byKey(const Key('day-greeting')), findsOneWidget);
       expect(find.textContaining('Good morning, Sleeper'), findsOneWidget,
           reason: '沒有帳號時用 Sleeper，不能是人名');
-      expect(find.byKey(const Key('mood-chip')), findsOneWidget);
-      expect(find.byKey(const Key('start-sleep')), findsNothing);
-      expect(find.byKey(const Key('sleepy-pet')), findsNothing);
-    });
-
-    testWidgets('下午照樣是白天版，但問候是 afternoon', (tester) async {
-      await pumpHome(tester, () => at(12, 14));
-      expect(find.textContaining('Good afternoon'), findsOneWidget);
-      expect(find.byKey(const Key('start-sleep')), findsNothing);
-    });
-  });
-
-  group('白天版的寵物＋卡片（2026-11-12 改版）', () {
-    testWidgets('分數行照抄後端：等級 · 分數 / 100', (tester) async {
-      await pumpHome(tester, () => at(12, 9));
-      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
-      final text = line.textSpan!.toPlainText();
-      expect(text, contains(sample.scoring.finalQuality));
-      expect(text, contains('${sample.scoring.scoreAsInt} / 100'));
-    });
-
-    testWidgets('四張卡、日期列、2D 寵物都在', (tester) async {
-      await pumpHome(tester, () => at(12, 9));
       for (final k in [
-        'tile-duration',
-        'tile-window',
-        'tile-streak',
-        'tile-waso',
+        'mood-chip',
         'week-strip',
+        'mood-legend',
         'home-pet',
+        'start-sleep',
+        'out-of-bed',
+        'bedtime-countdown',
+        'tile-duration',
+        'tile-efficiency',
+        'tile-deep',
+        'tile-camera',
       ]) {
         expect(find.byKey(Key(k)), findsOneWidget, reason: k);
       }
-      // 深睡、REM 有警語，刻意留在 Insights
-      expect(find.text('Deep sleep'), findsNothing);
+    });
+
+    testWidgets('下午的問候是 afternoon', (tester) async {
+      await pumpHome(tester, () => at(12, 14));
+      expect(find.textContaining('Good afternoon'), findsOneWidget);
+    });
+
+    testWidgets('「不按也沒關係」那句話在按鈕旁邊', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 10));
+      expect(find.textContaining('fine if you forget'), findsOneWidget,
+          reason: '這是加分項不是取代品，使用者必須看得到');
+      expect(find.textContaining('detected anyway'), findsOneWidget);
+    });
+
+    testWidgets('就寢時間列：23:10 → 23:30 · 20m left', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 10));
+      expect(find.text('23:30 · 20m left'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ 凌晨兩點：不顯示倒數數字，改成一句話', (tester) async {
+      await pumpHome(tester, () => at(13, 2));
+      expect(find.byKey(const Key('late-evening')), findsOneWidget);
+      expect(find.textContaining('Bedtime was 23:30'), findsOneWidget);
+      expect(find.byKey(const Key('bedtime-countdown')), findsNothing,
+          reason: '倒數會算成「距離明天還有 21 小時」');
+      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
+    });
+
+    testWidgets('下床鈕平常按不到（還沒開始睡）', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      final b = tester.widget<OutlinedButton>(find.byKey(const Key('out-of-bed')));
+      expect(b.onPressed, isNull);
+    });
+
+    testWidgets('分數行照抄後端', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
+      final text = line.textSpan!.toPlainText();
+      expect(text, contains('${sample.scoring.scoreAsInt} / 100'));
+      expect(text, contains(sample.scoring.finalQuality));
+    });
+
+    testWidgets('點效率卡 → 跳出後端的警語原文（畫面上平常不放）', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      final caveat = sample.scoring.composition!.caveats
+          .firstWhere((c) => c.component == 'efficiency');
+      expect(find.text(caveat.text), findsNothing, reason: '平常不顯示');
+      await tester.tap(find.byKey(const Key('tile-efficiency')));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(caveat.text), findsOneWidget,
+          reason: '文字只能照抄 score_claim.py，Dart 不產生');
+    });
+
+    testWidgets('沒有後端 → 攝影機卡說需要後端，不畫數字', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('tile-camera')),
+              matching: find.text('Needs backend')),
+          findsOneWidget);
     });
 
     testWidgets('⚠️ 沒戴錶那晚：顯示「—」，不畫成 0', (tester) async {
@@ -116,9 +155,8 @@ void main() {
       final metrics = raw['metrics'] as Map<String, dynamic>;
       for (final k in [
         'sleep_duration_minutes',
-        'sleep_start_time',
-        'wake_time',
-        'waso_minutes'
+        'sleep_efficiency',
+        'deep_minutes',
       ]) {
         metrics[k] = null;
       }
@@ -133,62 +171,6 @@ void main() {
           reason: '「0 min」會被讀成整晚沒睡，真相是沒量到');
       final line = tester.widget<Text>(find.byKey(const Key('score-line')));
       expect(line.textSpan!.toPlainText(), contains('— / 100'));
-    });
-  });
-
-  group('晚上版（23:10，目標 23:30）', () {
-    testWidgets('Start sleep 與「不按也沒關係」都在', (tester) async {
-      await pumpHome(tester, () => at(12, 23, 10));
-      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
-      expect(find.textContaining('Optional'), findsOneWidget,
-          reason: '這是加分項不是取代品，使用者必須看得到');
-      expect(find.textContaining('detected anyway'), findsOneWidget);
-      expect(find.byKey(const Key('bedtime-countdown')), findsOneWidget);
-    });
-
-    testWidgets('⚠️ 不顯示心情標籤：晚上的寵物不是心情', (tester) async {
-      await pumpHome(tester, () => at(12, 23, 10));
-      expect(find.byKey(const Key('sleepy-pet')), findsOneWidget);
-      expect(find.byKey(const Key('mood-chip')), findsNothing);
-      // 反向對照：白天版確實有那個標籤，所以上面那條不是假性通過
-      await tester.tap(find.byKey(const Key('mode-today')));
-      await tester.pump();
-      expect(find.byKey(const Key('mood-chip')), findsOneWidget);
-    });
-  });
-
-  group('凌晨兩點還沒睡（目標 23:30）', () {
-    testWidgets('不顯示倒數數字，改成一句話；Start sleep 照樣在', (tester) async {
-      await pumpHome(tester, () => at(13, 2));
-      expect(find.byKey(const Key('late-evening')), findsOneWidget);
-      expect(find.text('Bedtime was 23:30'), findsOneWidget);
-      expect(find.byKey(const Key('bedtime-countdown')), findsNothing,
-          reason: '倒數會算成「距離明天還有 21 小時」');
-      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
-    });
-  });
-
-  group('Today / Tonight 手動切換', () {
-    testWidgets('白天切到 Tonight 看得到晚上版，再切回來', (tester) async {
-      await pumpHome(tester, () => at(12, 14));
-      await tester.tap(find.byKey(const Key('mode-tonight')));
-      await tester.pump();
-      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('mode-today')));
-      await tester.pump();
-      expect(find.byKey(const Key('start-sleep')), findsNothing);
-    });
-
-    testWidgets('⚠️ 切換不留下來：重開 App 恢復自動', (tester) async {
-      await pumpHome(tester, () => at(12, 14));
-      await tester.tap(find.byKey(const Key('mode-tonight')));
-      await tester.pump();
-      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
-      // 模擬重開 App：整棵樹換掉再建一次
-      await tester.pumpWidget(const SizedBox());
-      await pumpHome(tester, () => at(12, 14));
-      expect(find.byKey(const Key('start-sleep')), findsNothing,
-          reason: '手動切換只活在這次開著的 App 裡');
     });
   });
 

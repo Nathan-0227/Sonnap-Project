@@ -16,7 +16,6 @@ import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:app/services/sleep_repository.dart';
-import 'package:app/widgets/header_card.dart';
 
 /// 立即回應的假 repository。
 ///
@@ -129,7 +128,7 @@ void main() {
     expect(settingsOf(tester).initialReminderOn, !before);
   });
 
-  testWidgets('值真的傳到了 HeaderCard，不是只傳到 HomeScreen', (tester) async {
+  testWidgets('值真的畫到了就寢時間列，不是只傳到 HomeScreen', (tester) async {
     // 上面那幾條檢查的是 HomeScreen **收到**什麼。但如果有人把參數收下來
     // 卻在 HeaderCard 那裡仍然寫死 23:30，那幾條照樣會過——而畫面上的
     // 倒數還是不會動。這一條走到最底層，把那個漏洞補起來。
@@ -142,19 +141,18 @@ void main() {
         body: HomeScreen(
           repository: _ImmediateRepository(sample),
           targetBedtime: changed,
-          // 目標 03:45 的前 45 分鐘：晚上版，倒數（HeaderCard）在畫面上
+          // 目標 03:45 的前 45 分鐘
           clock: () => DateTime(2026, 11, 12, 3, 0),
         ),
       ),
     ));
     await tester.pump();
 
-    final header = tester.widget<HeaderCard>(find.byType(HeaderCard));
     expect(
-      header.initialTargetBedtime,
-      changed,
-      reason: 'HomeScreen 收到了新的就寢時間，卻沒有往下傳給 HeaderCard——'
-          '畫面上的倒數因此不會變，而上面那幾條測試看不出來',
+      find.text('03:45 · 45m left'),
+      findsOneWidget,
+      reason: 'HomeScreen 收到了新的就寢時間，畫面上的就寢時間列卻沒有跟著變——'
+          '上面那幾條測試看不出來',
     );
   });
 

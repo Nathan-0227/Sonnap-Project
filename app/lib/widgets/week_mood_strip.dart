@@ -47,7 +47,9 @@ class WeekMoodStrip extends StatelessWidget {
       key: const Key('week-strip'),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
       decoration: sonnapCardDecoration(),
-      child: Row(
+      child: Column(
+        children: [
+          Row(
         children: [
           for (final (i, (date, entry)) in days.indexed)
             Expanded(
@@ -71,6 +73,38 @@ class WeekMoodStrip extends StatelessWidget {
             ),
         ],
       ),
+          const SizedBox(height: 10),
+          // 圖示說明（2026-11-12：使用者反映看不懂那排圖示代表什麼）
+          const _MoodLegend(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoodLegend extends StatelessWidget {
+  const _MoodLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      key: const Key('mood-legend'),
+      alignment: WrapAlignment.center,
+      spacing: 12,
+      runSpacing: 4,
+      children: [
+        for (final m in const ['happy', 'bored', 'tired', 'anxious'])
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(moodIcon(m), color: moodColor(m), size: 14),
+              const SizedBox(width: 3),
+              Text(moodLabel(m),
+                  style: const TextStyle(
+                      color: SonnapColors.textSecondary, fontSize: 11)),
+            ],
+          ),
+      ],
     );
   }
 }

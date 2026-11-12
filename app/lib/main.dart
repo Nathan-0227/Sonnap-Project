@@ -403,6 +403,7 @@ class _MainPageState extends State<MainPage> {
         displayName: account.displayName ?? kFallbackDisplayName,
         repository: _repository,
         game: _game,
+        cameraInsights: _cameraInsights,
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,

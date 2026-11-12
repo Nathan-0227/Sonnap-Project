@@ -100,7 +100,7 @@ void main() {
     expect(find.textContaining('46', findRichText: true), findsWidgets);
     expect(find.text('Anxious'), findsOneWidget);
     // 寵物下面那一行：等級 · 分數（2026-11-12 改版，原本的分數卡與 score_message 退場）
-    expect(find.textContaining('Bad · 46 / 100', findRichText: true),
+    expect(find.textContaining('46 / 100 · Bad', findRichText: true),
         findsOneWidget);
     expect(find.text('Your buddy is worn out.'), findsOneWidget);
 

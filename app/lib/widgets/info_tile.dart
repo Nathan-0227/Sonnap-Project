@@ -15,6 +15,9 @@ class InfoTile extends StatelessWidget {
   final List<(String, String)>? value;
   final String missingNote;
 
+  /// 大數字下面的一行小字（例如攝影機的「跟你平常比」，照抄後端）。
+  final String? note;
+
   const InfoTile({
     super.key,
     required this.icon,
@@ -22,6 +25,7 @@ class InfoTile extends StatelessWidget {
     required this.title,
     required this.value,
     this.missingNote = 'No watch data',
+    this.note,
   });
 
   @override
@@ -38,46 +42,85 @@ class InfoTile extends StatelessWidget {
               Icon(icon, color: iconColor, size: 18),
               const SizedBox(width: 6),
               Flexible(
-                child: Text(title,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: iconColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: iconColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          if (parts == null) ...[
-            const Text('—',
-                style: TextStyle(
-                    color: SonnapColors.textPrimary,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800)),
-            Text(missingNote,
-                style: const TextStyle(
-                    color: SonnapColors.textMuted, fontSize: 11)),
-          ] else
-            FittedBox(
-              fit: BoxFit.scaleDown,
+          const SizedBox(height: 8),
+          // 卡片高度固定，下半部放不下時整塊等比縮小，不溢出。
+          Expanded(
+            child: Align(
               alignment: Alignment.centerLeft,
-              child: Text.rich(TextSpan(children: [
-                for (final (number, unit) in parts) ...[
-                  TextSpan(
-                      text: number,
-                      style: const TextStyle(
-                          color: SonnapColors.textPrimary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800)),
-                  TextSpan(
-                      text: unit.isEmpty ? ' ' : ' $unit ',
-                      style: const TextStyle(
-                          color: SonnapColors.textMuted, fontSize: 13)),
-                ],
-              ])),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _body(parts),
+                ),
+              ),
             ),
+          ),
         ],
       ),
     );
+  }
+
+  List<Widget> _body(List<(String, String)>? parts) {
+    if (parts == null) {
+      return [
+        const Text(
+          '—',
+          style: TextStyle(
+            color: SonnapColors.textPrimary,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        Text(
+          missingNote,
+          style: const TextStyle(color: SonnapColors.textMuted, fontSize: 11),
+        ),
+      ];
+    }
+    return [
+      Text.rich(
+        TextSpan(
+          children: [
+            for (final (number, unit) in parts) ...[
+              TextSpan(
+                text: number,
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              TextSpan(
+                text: unit.isEmpty ? ' ' : ' $unit ',
+                style: const TextStyle(
+                  color: SonnapColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (note != null)
+        Text(
+          note!,
+          style: const TextStyle(color: SonnapColors.textMuted, fontSize: 11),
+        ),
+    ];
   }
 }
