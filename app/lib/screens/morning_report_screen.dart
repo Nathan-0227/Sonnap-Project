@@ -104,7 +104,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   @override
   Widget build(BuildContext context) {
     final r = _report;
-    final hasBuddy = r.hasScore && (r.summaryText != null || r.tip != null);
+    final hasBuddy = r.hasScore && (_buddyText(r) != null || r.tip != null);
     return ReportFont(
       child: Scaffold(
         backgroundColor: ReportColors.bgTop,
@@ -623,8 +623,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   // ── From your buddy：AI 那段＋小建議（都照抄 /night-summary） ─────────────
 
+  /// AI 那段。⚠️ 後端寫不出來時（source = fallback）回的是 score_message＋mood_description，
+  /// 也就是圓環下面已經有的那兩句——再放一次就是同一句話出現兩遍，所以不放，只留小建議。
+  static String? _buddyText(MorningReport r) =>
+      r.summarySource == 'fallback' ? null : r.summaryText;
+
   Widget _buddy(MorningReport r) {
     final tip = r.tip;
+    final text = _buddyText(r);
     return Container(
       key: const Key('report-buddy'),
       padding: const EdgeInsets.all(16),
@@ -647,10 +653,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               ),
             ],
           ),
-          if (r.summaryText != null) ...[
+          if (text != null) ...[
             const SizedBox(height: 10),
             Text(
-              r.summaryText!,
+              text,
               key: const Key('report-summary'),
               style: const TextStyle(
                 color: Colors.white,
@@ -1143,8 +1149,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                             '${r.efficiency}%',
                             'report-efficiency',
                             notes: [
+                              // 與 Insights 頁同一個寫法（「Efficiency - 原文」）：
+                              // 後端那段字是接在項目名稱後面用的，原文不改
                               if (r.efficiencyCaveat != null)
-                                r.efficiencyCaveat!,
+                                'Efficiency - ${r.efficiencyCaveat!}',
                               if (r.efficiencyBasis != null)
                                 'Basis: ${r.efficiencyBasis}',
                             ],
@@ -1191,11 +1199,12 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
             const SizedBox(height: 2),
             valueText,
           ] else
+            // 標籤照自己的寬度，數值拿剩下的（各佔一半的話「75 bpm avg · 53 resting」會被擠成兩行）
             Row(
               children: [
-                Expanded(child: Text(label, style: labelStyle)),
+                Text(label, style: labelStyle),
                 const SizedBox(width: 12),
-                Flexible(child: valueText),
+                Expanded(child: valueText),
               ],
             ),
           for (final n in notes)
@@ -1336,16 +1345,38 @@ class _RingPainter extends CustomPainter {
         ..color = Colors.white.withValues(alpha: 0.10),
     );
     if (value <= 0) return;
+    const colors = [Color(0xFF7FB2FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)];
+    const stops = [0.0, 0.55, 1.0];
+    final sweep = 2 * math.pi * value;
+    // ⚠️ 不用 StrokeCap.round：起點的圓頭會伸到 12 點鐘左邊一點點，
+    //    掃描漸層在那裡繞回尾端的粉紅色（實機看得到一個粉紅小點）。
+    //    改成平頭弧＋兩端各補一個同色圓點。
     final fill = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
       ..shader = const SweepGradient(
-        colors: [Color(0xFF7FB2FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)],
-        stops: [0, 0.55, 1],
+        colors: colors,
+        stops: stops,
         transform: GradientRotation(-math.pi / 2),
       ).createShader(rect);
-    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * value, false, fill);
+    canvas.drawArc(rect, -math.pi / 2, sweep, false, fill);
+    Offset at(double a) => center + Offset(math.cos(a), math.sin(a)) * radius;
+    canvas.drawCircle(at(-math.pi / 2), stroke / 2, Paint()..color = colors[0]);
+    canvas.drawCircle(
+      at(-math.pi / 2 + sweep),
+      stroke / 2,
+      Paint()..color = _colorAt(value, colors, stops),
+    );
+  }
+
+  static Color _colorAt(double t, List<Color> colors, List<double> stops) {
+    for (var i = 1; i < stops.length; i++) {
+      if (t <= stops[i]) {
+        final f = (t - stops[i - 1]) / (stops[i] - stops[i - 1]);
+        return Color.lerp(colors[i - 1], colors[i], f)!;
+      }
+    }
+    return colors.last;
   }
 
   @override

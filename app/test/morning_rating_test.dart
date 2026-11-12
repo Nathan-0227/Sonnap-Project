@@ -10,8 +10,15 @@ import 'dart:io';
 import 'package:app/screens/rested_screen.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/morning_rating.dart';
+import 'package:app/services/user_identity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _FixedIdentity implements UserIdentity {
+  const _FixedIdentity();
+  @override
+  Future<String?> currentUserId() async => 'test-user';
+}
 
 class _Sender implements RestedSender {
   final List<RestedSendResult> results;
@@ -118,6 +125,43 @@ void main() {
       await store.save(
           const MorningRating(date: '2026-11-12', rested: 1), null);
       expect((await store.read('2026-11-12'))!.rested, 1);
+    });
+  });
+
+  group('RestedService 的狀態碼', () {
+    // ⚠️ 同檔有 testWidgets，binding 會把 HttpClient 換成一律回 400 的假的，要拿掉
+    HttpOverrides? saved;
+    setUp(() {
+      saved = HttpOverrides.current;
+      HttpOverrides.global = null;
+    });
+    tearDown(() => HttpOverrides.global = saved);
+
+    Future<RestedSendResult> sendWith(int status) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) async {
+        await req.drain<void>();
+        req.response.statusCode = status;
+        await req.response.close();
+      });
+      try {
+        return await RestedService(
+          baseUrl: 'http://127.0.0.1:${server.port}',
+          identity: const _FixedIdentity(),
+        ).send(const MorningRating(date: '2026-11-12', rested: 3));
+      } finally {
+        await server.close(force: true);
+      }
+    }
+
+    test('⚠️ 404（後端還是舊版、沒有 /rested）→ 留著下次補送，不能當成格式錯', () async {
+      expect(await sendWith(404), RestedSendResult.retryLater);
+    });
+    test('422／400 → 格式錯，不再送；200 → 送到了；500 → 下次再送', () async {
+      expect(await sendWith(422), RestedSendResult.rejected);
+      expect(await sendWith(400), RestedSendResult.rejected);
+      expect(await sendWith(200), RestedSendResult.sent);
+      expect(await sendWith(500), RestedSendResult.retryLater);
     });
   });
 

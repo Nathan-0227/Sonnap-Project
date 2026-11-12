@@ -494,6 +494,26 @@ void main() {
       expect(find.byKey(const Key('report-tip-tip')), findsNothing);
     });
 
+    testWidgets('⚠️ AI 寫不出來（fallback）→ 卡片不再放一次上面那句話，只留小建議',
+        (tester) async {
+      final base = buildMorningReport(
+          date: '2026-11-12', home: homeWithScore('2026-11-12'));
+      final fallback = {
+        ...summaryOk('2026-11-12'),
+        'source': 'fallback',
+        'text': 'SENTINEL-mood-description',
+      };
+      await pumpReport(tester, base.withSummary(fallback));
+      expect(find.text('SENTINEL-mood-description'), findsOneWidget,
+          reason: '同一句話只能出現一次');
+      expect(find.byKey(const Key('report-summary')), findsNothing);
+      expect(find.text('SENTINEL-tip'), findsOneWidget);
+
+      // fallback 又沒有小建議 → 整張卡不畫
+      await pumpReport(tester, base.withSummary({...fallback, 'tip': null}));
+      expect(find.byKey(const Key('report-buddy')), findsNothing);
+    });
+
     testWidgets('⚠️ 放下手機：有後端時照抄達成度；沒有後端時不出現任何達成度措辭',
         (tester) async {
       final json = homeWithScore('2026-11-12');
@@ -536,7 +556,8 @@ void main() {
       expect(textOf(tester, 'report-hr'), '56 bpm avg · 51 resting');
       expect(textOf(tester, 'report-efficiency'), '98.9%',
           reason: '照抄，不四捨五入掉小數');
-      expect(find.text('SENTINEL-eff-caveat'), findsOneWidget);
+      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsOneWidget,
+          reason: '原文照抄，前面接項目名稱（與 Insights 頁同一個寫法）');
       expect(find.text('Basis: SENTINEL-basis-measured'), findsOneWidget,
           reason: 'App 裡有好幾個「效率」，只有 basis 分得開');
       expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');

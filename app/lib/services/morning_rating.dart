@@ -127,7 +127,7 @@ enum RestedSendResult {
   /// 連不到／逾時／5xx：留著，下次再送
   retryLater,
 
-  /// 後端說格式不對（4xx）：再送也一樣，不再送
+  /// 後端說格式不對（400／422）：再送也一樣，不再送
   rejected,
 
   /// 這支 build 沒有後端或還沒有帳號：只存在手機上
@@ -166,7 +166,9 @@ class RestedService implements RestedSender {
       if (code >= 200 && code < 300) return RestedSendResult.sent;
       // ⚠️ 不印 body：請求裡有 user_id（憑證）。
       debugPrint('Rested: POST /rested returned $code');
-      if (code >= 400 && code < 500) return RestedSendResult.rejected;
+      // 只有「格式錯」才不再送。⚠️ 404 要留著：後端還是舊版（沒有 /rested）時就是 404，
+      // 換成新版之後補送得進去；當成格式錯的話那幾晚永遠到不了後端。
+      if (code == 400 || code == 422) return RestedSendResult.rejected;
       return RestedSendResult.retryLater;
     } catch (error) {
       debugPrint('Rested: failed - $error');
