@@ -403,6 +403,8 @@ void main() {
             repository: _ImmediateRepository(sample),
             bedMarks: BedMarkStore(InMemoryKeyValueStore()),
             game: game,
+            // 早上：等級卡、衣櫃在白天版
+            clock: () => DateTime(2026, 11, 12, 9),
           ),
         ),
       );

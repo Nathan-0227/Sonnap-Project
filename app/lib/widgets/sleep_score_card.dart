@@ -19,8 +19,8 @@ class SleepScoreCard extends StatelessWidget {
     final progress = (score / 100).clamp(0.0, 1.0);
 
     return Container(
-      // 跟 pet_mood_card.dart 一樣改成高度下限，兩張卡才能在 Row 裡一起長高
-      // 並保持等高（home_screen.dart 用 IntrinsicHeight + stretch 對齊）。
+      // 高度下限而不是固定高度：內容長時可以長高。
+      // ⚠️ 裡面用 Spacer，外層一定要給有限高度（home_screen.dart 包了 IntrinsicHeight）。
       constraints: const BoxConstraints(minHeight: 150),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

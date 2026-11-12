@@ -577,7 +577,7 @@ void main() {
     });
   });
 
-  group('上床／下床標記會影響上傳（按鈕本身在 bed_mark_buttons_test）', () {
+  group('上床／下床標記會影響上傳（按鈕本身在 home_screen_test）', () {
     _FakeUsageStats detected() => _FakeUsageStats(
           const UsageStatsResult(UsageStatsStatus.ok, apps: [
             AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95),

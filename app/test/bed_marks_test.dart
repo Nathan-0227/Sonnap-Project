@@ -86,6 +86,23 @@ void main() {
     expect(m.endAt, isNull);
   });
 
+  test('取消 → 這次的開始沒了，但上一晚還沒上傳的那一對要留著', () async {
+    // 上一晚：完整一對，還沒上傳
+    await marks.markStart(t0);
+    await marks.markEnd(t0.add(const Duration(hours: 8)));
+    // 今晚按了開始（上一對被搬進 pending），然後發現按錯了
+    final tonight = t0.add(const Duration(hours: 24));
+    await marks.markStart(tonight);
+    await marks.cancelStart();
+
+    final now = tonight.add(const Duration(minutes: 2));
+    expect((await marks.read(now: now)).hasStart, isFalse);
+    final pending = await marks.readPending(now: now);
+    expect(pending.isComplete, isTrue,
+        reason: '取消今晚不能把上一晚的真資料一起刪掉');
+    expect(pending.startAt, t0);
+  });
+
   test('壞掉的字串不會讓整支炸掉', () async {
     await kv.setString(kBedStartKey, 'not-a-timestamp');
     final m = await marks.read(now: t0);

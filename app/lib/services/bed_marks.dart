@@ -178,6 +178,17 @@ class BedMarkStore {
   Future<void> markEnd(DateTime at) =>
       store.setString(kBedEndKey, at.toIso8601String());
 
+  /// 「Not sleeping? Cancel」：不小心按到「開始睡覺」時，把這次的開始刪掉。
+  ///
+  /// ⚠️ 只刪**目前這個槽**，不碰 pending。[markStart] 已經把上一晚按完、
+  /// 還沒上傳的那一對搬進 pending 了；那一對是真的資料，取消今晚不能連它一起刪。
+  /// ⚠️ 也不能用「按下床」代替取消：那會留下一筆兩分鐘的假睡眠，
+  /// 而上床按鈕是驗證攝影機上床偵測唯一的 ground truth。
+  Future<void> cancelStart() async {
+    await store.remove(kBedStartKey);
+    await store.remove(kBedEndKey);
+  }
+
   /// 上傳成功之後清掉，免得同一對標記被算進第二晚。
   Future<void> clear() async {
     await store.remove(kBedStartKey);

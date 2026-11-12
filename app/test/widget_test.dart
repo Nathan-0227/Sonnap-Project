@@ -89,6 +89,8 @@ void main() {
       home: Scaffold(
         body: HomeScreen(
           repository: _FakeRepository(session: _sampleSession()),
+          // 早上：分數與心情在白天版（晚上版刻意不放）
+          clock: () => DateTime(2026, 11, 12, 9),
         ),
       ),
     ));

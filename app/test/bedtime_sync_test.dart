@@ -142,6 +142,8 @@ void main() {
         body: HomeScreen(
           repository: _ImmediateRepository(sample),
           targetBedtime: changed,
+          // 目標 03:45 的前 45 分鐘：晚上版，倒數（HeaderCard）在畫面上
+          clock: () => DateTime(2026, 11, 12, 3, 0),
         ),
       ),
     ));
