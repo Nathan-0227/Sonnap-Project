@@ -12,6 +12,7 @@ import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
 import 'package:app/services/bed_marks.dart';
+import 'package:app/services/camera_insights.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,14 @@ class _ImmediateRepository implements SleepRepository {
 }
 
 DateTime at(int day, int h, [int m = 0]) => DateTime(2026, 11, day, h, m);
+
+class _FailedCamera implements CameraInsightsSource {
+  const _FailedCamera();
+
+  @override
+  Future<CameraInsightsResult> load() async =>
+      const CameraInsightsResult(CameraInsightsStatus.failed);
+}
 
 void main() {
   late SleepSession sample;
@@ -148,6 +157,30 @@ void main() {
               of: find.byKey(const Key('tile-camera')),
               matching: find.text('Needs backend')),
           findsOneWidget);
+    });
+
+    testWidgets('⚠️ 後端連不到 → 攝影機卡不能說成「那晚沒錄影」', (tester) async {
+      tester.view.physicalSize = const Size(1200, 4200);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _ImmediateRepository(sample),
+            bedMarks: store,
+            cameraInsights: const _FailedCamera(),
+            clock: () => at(12, 9),
+          ),
+        ),
+      ));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      final tile = find.byKey(const Key('tile-camera'));
+      expect(find.descendant(of: tile, matching: find.text('Backend unreachable')),
+          findsOneWidget);
+      expect(find.descendant(of: tile, matching: find.text('No camera this night')),
+          findsNothing);
     });
 
     testWidgets('⚠️ 沒戴錶那晚：顯示「—」，不畫成 0', (tester) async {

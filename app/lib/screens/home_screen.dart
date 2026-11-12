@@ -929,9 +929,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     }
 
+    // ⚠️ 連不到、沒帳號都不能說成「那晚沒錄影」——那會讓人以為攝影機壞了。
+    if (camera == null ||
+        camera.status == CameraInsightsStatus.failed ||
+        camera.status == CameraInsightsStatus.noUser) {
+      return InfoTile(
+          key: key,
+          icon: icon,
+          iconColor: color,
+          title: title,
+          value: null,
+          missingNote: camera?.status == CameraInsightsStatus.noUser
+              ? 'Needs an account'
+              : (camera == null ? 'Loading…' : 'Backend unreachable'));
+    }
+
     // 只看跟首頁同一晚的那一筆；沒有就是那晚沒錄影，不退回別的晚上。
     CameraNight? night;
-    for (final n in camera?.nights ?? const <CameraNight>[]) {
+    for (final n in camera.nights) {
       if (n.date == session.history.lastOrNull?.date) night = n;
     }
     final rate = night?.eventsPerHour;
