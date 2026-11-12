@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/account_service.dart';
+import '../services/alarm.dart';
+import '../services/key_value_store.dart';
+import '../widgets/sleep_schedule_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String username;
@@ -29,6 +32,10 @@ class SettingsScreen extends StatefulWidget {
   /// 打開 Health Connect 的設定頁（B8）。
   final VoidCallback? onHealthConnectTap;
 
+  /// 鬧鐘的設定存在哪、原生端是誰（可注入，測試換成假的）。
+  final KeyValueStore store;
+  final AlarmScheduler alarmScheduler;
+
   const SettingsScreen({
     super.key,
     this.username = kFallbackDisplayName,
@@ -38,10 +45,7 @@ class SettingsScreen extends StatefulWidget {
     this.appearance = "Dark Mode",
     this.appVersion = "Version 1.0",
     this.initialReminderOn = true,
-    this.initialTargetBedtime = const TimeOfDay(
-      hour: 23,
-      minute: 30,
-    ),
+    this.initialTargetBedtime = const TimeOfDay(hour: 23, minute: 30),
     this.onReminderChanged,
     this.onBedtimeChanged,
     this.onEditProfile,
@@ -52,6 +56,8 @@ class SettingsScreen extends StatefulWidget {
     this.onLogout,
     this.onBedtimeGuardTap,
     this.onHealthConnectTap,
+    this.store = const PlatformKeyValueStore(),
+    this.alarmScheduler = const PlatformAlarmScheduler(),
   });
 
   @override
@@ -90,31 +96,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return "$hour:$minute";
   }
 
+  /// 與首頁時鐘卡同一個轉盤（就寢＋起床＋鬧鐘開關，2026-11-12 定案）。
   Future<void> _pickBedtime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: targetBedtime,
-      initialEntryMode: TimePickerEntryMode.dial,
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: true,
-          ),
-          child: Theme(
-            data: ThemeData.dark(),
-            child: child!,
-          ),
-        );
-      },
+    final result = await showSleepScheduleSheet(
+      context,
+      bedtime: targetBedtime,
+      alarmSettings: AlarmSettingsStore(widget.store),
+      scheduler: widget.alarmScheduler,
     );
-
-    if (picked == null || !mounted) return;
-
+    if (result == null || !mounted) return;
+    if (result.bedtime == targetBedtime) return;
     setState(() {
-      targetBedtime = picked;
+      targetBedtime = result.bedtime;
     });
-
-    widget.onBedtimeChanged?.call(picked);
+    widget.onBedtimeChanged?.call(result.bedtime);
   }
 
   void _changeReminder(bool value) {
@@ -127,9 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showComingSoon(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("$feature will be available later."),
-      ),
+      SnackBar(content: Text("$feature will be available later.")),
     );
   }
 
@@ -146,16 +139,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           backgroundColor: const Color(0xFF10265A),
           title: const Text(
             "Log out?",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: const Text(
             "Are you sure you want to log out of Sonnap?",
-            style: TextStyle(
-              color: Colors.white70,
-            ),
+            style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
@@ -164,9 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               child: const Text(
                 "Cancel",
-                style: TextStyle(
-                  color: Colors.white70,
-                ),
+                style: TextStyle(color: Colors.white70),
               ),
             ),
             TextButton(
@@ -221,10 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const Text(
                   "Manage your account and sleep preferences.",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
 
                 const SizedBox(height: 24),
@@ -233,9 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 20),
 
-                const _SectionTitle(
-                  title: "Preferences",
-                ),
+                const _SectionTitle(title: "Preferences"),
 
                 const SizedBox(height: 12),
 
@@ -243,7 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.dark_mode_rounded,
                   title: "Appearance",
                   subtitle: widget.appearance,
-                  onTap: widget.onAppearanceTap ??
+                  onTap:
+                      widget.onAppearanceTap ??
                       () => _showComingSoon("Appearance settings"),
                 ),
 
@@ -266,7 +248,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.block_rounded,
                   title: "Bedtime Guard",
                   subtitle: "Remind or block chosen apps near bedtime",
-                  onTap: widget.onBedtimeGuardTap ??
+                  onTap:
+                      widget.onBedtimeGuardTap ??
                       () => _showComingSoon("Bedtime guard"),
                 ),
 
@@ -276,7 +259,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.watch_rounded,
                   title: "Health Connect",
                   subtitle: "Import sleep from your watch or band",
-                  onTap: widget.onHealthConnectTap ??
+                  onTap:
+                      widget.onHealthConnectTap ??
                       () => _showComingSoon("Health Connect"),
                 ),
 
@@ -286,8 +270,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.pets_rounded,
                   title: "Pet",
                   subtitle: widget.petName,
-                  onTap: widget.onPetTap ??
-                      () => _showComingSoon("Pet settings"),
+                  onTap:
+                      widget.onPetTap ?? () => _showComingSoon("Pet settings"),
                 ),
 
                 const SizedBox(height: 12),
@@ -296,15 +280,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.language_rounded,
                   title: "Language",
                   subtitle: widget.language,
-                  onTap: widget.onLanguageTap ??
+                  onTap:
+                      widget.onLanguageTap ??
                       () => _showComingSoon("Language settings"),
                 ),
 
                 const SizedBox(height: 24),
 
-                const _SectionTitle(
-                  title: "Support",
-                ),
+                const _SectionTitle(title: "Support"),
 
                 const SizedBox(height: 12),
 
@@ -312,7 +295,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.info_outline_rounded,
                   title: "About Sonnap",
                   subtitle: widget.appVersion,
-                  onTap: widget.onAboutTap ??
+                  onTap:
+                      widget.onAboutTap ??
                       () => _showComingSoon("About Sonnap"),
                 ),
 
@@ -331,9 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
-                    icon: const Icon(
-                      Icons.logout_rounded,
-                    ),
+                    icon: const Icon(Icons.logout_rounded),
                     label: const Text(
                       "Log Out",
                       style: TextStyle(
@@ -357,8 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: widget.onEditProfile ??
-            () => _showComingSoon("Profile editing"),
+        onTap: widget.onEditProfile ?? () => _showComingSoon("Profile editing"),
         borderRadius: BorderRadius.circular(24),
         child: Ink(
           width: double.infinity,
@@ -427,10 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildReminderTile() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 16,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF10265A),
         borderRadius: BorderRadius.circular(22),
@@ -463,10 +441,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 Text(
                   "Receive a reminder every night",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -475,8 +450,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Switch(
             value: reminderOn,
             activeThumbColor: const Color(0xFF8B6DFF),
-            activeTrackColor:
-                const Color(0xFF8B6DFF).withValues(alpha: 0.45),
+            activeTrackColor: const Color(0xFF8B6DFF).withValues(alpha: 0.45),
             inactiveThumbColor: Colors.white70,
             inactiveTrackColor: Colors.white24,
             onChanged: _changeReminder,
@@ -498,20 +472,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
         child: Ink(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 16,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           decoration: BoxDecoration(
             color: const Color(0xFF10265A),
             borderRadius: BorderRadius.circular(22),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: const Color(0xFFFFD96A),
-              ),
+              Icon(icon, color: const Color(0xFFFFD96A)),
 
               const SizedBox(width: 16),
 
@@ -545,10 +513,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(width: 10),
 
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white54,
-              ),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white54),
             ],
           ),
         ),
@@ -560,9 +525,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _SectionTitle extends StatelessWidget {
   final String title;
 
-  const _SectionTitle({
-    required this.title,
-  });
+  const _SectionTitle({required this.title});
 
   @override
   Widget build(BuildContext context) {

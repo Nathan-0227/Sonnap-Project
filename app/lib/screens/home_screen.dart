@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
 import '../services/account_service.dart';
+import '../services/alarm.dart';
 import '../services/bed_marks.dart';
 import '../services/camera_insights.dart';
 import '../services/game_service.dart';
@@ -19,6 +20,7 @@ import '../widgets/countdown_border.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
+import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
@@ -61,9 +63,13 @@ class HomeScreen extends StatefulWidget {
   /// 現在幾點。可注入：就寢時間列與睡覺畫面都看時間，測試要釘住才穩。
   final DateTime Function() clock;
 
+  /// 鬧鐘的原生端（可注入，測試換成假的）。設定存在 [bedMarks] 同一個儲存裡。
+  final AlarmScheduler alarmScheduler;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
+    this.alarmScheduler = const PlatformAlarmScheduler(),
     this.game,
     this.cameraInsights,
     this.clock = DateTime.now,
@@ -177,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => SleepModeScreen(
+            alarm: _alarm,
             store: widget.bedMarks,
             startAt: startAt,
             clock: widget.clock,
@@ -190,7 +197,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startSleep() async {
-    await widget.bedMarks.markStart(widget.clock());
+    final now = widget.clock();
+    await widget.bedMarks.markStart(now);
+    // 鬧鐘只在按了 Start Sleep 才排（使用者決定）。
+    await _alarm.onStartSleep(now, _bedtime);
     await _loadMarks();
   }
 
@@ -245,14 +255,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) await _loadGame();
   }
 
+  AlarmSettingsStore get _alarmSettings =>
+      AlarmSettingsStore(widget.bedMarks.store);
+
+  AlarmController get _alarm => AlarmController(
+    settings: _alarmSettings,
+    scheduler: widget.alarmScheduler,
+  );
+
+  /// 點時鐘卡：滑出轉盤（就寢＋起床＋鬧鐘開關）。
   Future<void> _pickBedtime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _bedtime,
+    final result = await showSleepScheduleSheet(
+      context,
+      bedtime: _bedtime,
+      alarmSettings: _alarmSettings,
+      scheduler: widget.alarmScheduler,
     );
-    if (picked == null || !mounted) return;
-    setState(() => _bedtime = picked);
-    widget.onBedtimeChanged?.call(picked);
+    if (result == null || !mounted) return;
+    if (result.bedtime != _bedtime) {
+      setState(() => _bedtime = result.bedtime);
+      widget.onBedtimeChanged?.call(result.bedtime);
+    }
   }
 
   void _reload() {

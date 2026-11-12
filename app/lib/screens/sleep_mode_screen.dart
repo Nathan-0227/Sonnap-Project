@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/alarm.dart';
 import '../services/bed_marks.dart';
 import '../widgets/sleepy_pet.dart';
 
@@ -16,18 +17,22 @@ import '../widgets/sleepy_pet.dart';
 ///   的假睡眠，而上床按鈕是驗證攝影機唯一的 ground truth。
 /// - 返回鍵擋掉：只能用「下床」或「取消」離開。導覽列不在這一頁上。
 ///
-/// 鬧鐘、睡眠音樂、「I already got up」分別在之後的 PR 加，這一版刻意不放
-/// 還不能用的按鈕。
+/// 鬧鐘那一行顯示今晚排了幾點，點了只關今晚。睡眠音樂、「I already got up」
+/// 在之後的 PR 加。
 class SleepModeScreen extends StatefulWidget {
   final BedMarkStore store;
   final DateTime startAt;
   final DateTime Function() clock;
+
+  /// 鬧鐘。null = 沒有鬧鐘（測試或舊的呼叫端）。
+  final AlarmController? alarm;
 
   const SleepModeScreen({
     super.key,
     required this.store,
     required this.startAt,
     this.clock = DateTime.now,
+    this.alarm,
   });
 
   @override
@@ -37,9 +42,13 @@ class SleepModeScreen extends StatefulWidget {
 class _SleepModeScreenState extends State<SleepModeScreen> {
   Timer? _tick;
 
+  /// 今晚鬧鐘排在幾點。null = 沒排、或使用者點了「只關今晚」。
+  DateTime? _alarmAt;
+
   @override
   void initState() {
     super.initState();
+    _loadAlarm();
     _tick = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted) setState(() {});
     });
@@ -54,7 +63,20 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
   static String _hhmm(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+  Future<void> _loadAlarm() async {
+    final at = await widget.alarm?.settings.tonight();
+    if (mounted) setState(() => _alarmAt = at);
+  }
+
+  /// 點鬧鐘那一行：只關今晚（轉盤上的設定不受影響，Q10）。
+  Future<void> _alarmOffTonight() async {
+    await widget.alarm?.cancelTonight();
+    if (mounted) setState(() => _alarmAt = null);
+  }
+
   Future<void> _outOfBed() async {
+    // 下床會取消鬧鐘；但鬧鐘響了不會反過來自動按下床（使用者決定）。
+    await widget.alarm?.cancelTonight();
     await widget.store.markEnd(widget.clock());
     if (mounted) Navigator.of(context).pop();
   }
@@ -64,8 +86,10 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1B2350),
-        title: const Text('Cancel this sleep?',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Cancel this sleep?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: const Text(
           'This removes the "Start sleep" you just tapped. Nothing else changes.',
           style: TextStyle(color: Colors.white70),
@@ -78,13 +102,16 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
           TextButton(
             key: const Key('sleep-cancel-confirm'),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancel sleep',
-                style: TextStyle(color: Color(0xFFFF8A8A))),
+            child: const Text(
+              'Cancel sleep',
+              style: TextStyle(color: Color(0xFFFF8A8A)),
+            ),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
+    await widget.alarm?.cancelTonight();
     await widget.store.cancelStart();
     if (mounted) Navigator.of(context).pop();
   }
@@ -126,6 +153,28 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                     key: const Key('sleep-since'),
                     style: const TextStyle(color: Colors.white70, fontSize: 15),
                   ),
+                  if (widget.alarm != null) ...[
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                      key: const Key('sleep-alarm'),
+                      onPressed: _alarmAt == null ? null : _alarmOffTonight,
+                      icon: Icon(
+                        _alarmAt == null
+                            ? Icons.alarm_off_rounded
+                            : Icons.alarm_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _alarmAt == null
+                            ? 'No alarm tonight'
+                            : '${_hhmm(_alarmAt!)}  ·  tap to turn off tonight',
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFFB3E6),
+                        disabledForegroundColor: Colors.white38,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   const SleepyPet(size: 260),
                   const Spacer(),
@@ -140,9 +189,13 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: const StadiumBorder(),
                       ),
-                      child: const Text('Out of bed',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
+                      child: const Text(
+                        'Out of bed',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
                   ),
                   TextButton(

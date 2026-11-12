@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
+import 'package:app/services/alarm.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/key_value_store.dart';
@@ -29,6 +30,20 @@ class _ImmediateRepository implements SleepRepository {
 }
 
 DateTime at(int day, int h, [int m = 0]) => DateTime(2026, 11, day, h, m);
+
+/// 什麼都不做的鬧鐘。⚠️ 測試環境裡真的 channel 沒有人回應，用真的會讓 Start sleep 卡住。
+class _NoAlarm implements AlarmScheduler {
+  @override
+  Future<void> schedule(DateTime at) async {}
+  @override
+  Future<void> cancel() async {}
+  @override
+  Future<bool> canRing() async => true;
+  @override
+  Future<void> requestPermission() async {}
+  @override
+  Future<void> openSettings() async {}
+}
 
 class _FailedCamera implements CameraInsightsSource {
   const _FailedCamera();
@@ -68,6 +83,7 @@ void main() {
           body: HomeScreen(
             repository: _ImmediateRepository(sample),
             bedMarks: store,
+          alarmScheduler: _NoAlarm(),
             clock: now,
           ),
         ),
@@ -241,6 +257,7 @@ void main() {
             body: HomeScreen(
               repository: _ImmediateRepository(sample),
               bedMarks: store,
+          alarmScheduler: _NoAlarm(),
               cameraInsights: const _FailedCamera(),
               clock: () => at(12, 9),
             ),
