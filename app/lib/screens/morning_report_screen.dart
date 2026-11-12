@@ -2,43 +2,59 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
-import '../theme/sonnap_colors.dart';
+import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/sleepy_pet.dart';
 
-/// 早晨報告畫面（2026-11-12，版面 11-12 依參考圖改版）。
+/// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
+/// 小狗坐在圓環右下的山丘上、卡片少而短）。
 ///
-/// 由上到下：日期 → 細線大字的起床時間疊在小狗後面 → 等級／XP → 半圓分數
-/// → 上床／起床與睡眠目標 → Sleep phases（沒有圖時是比例條）→ Dream diary
-/// → Back to home。**只放這一晚的資料**（使用者定：不放日期圈圈列、不放 7 晚長條圖）。
+/// 由上到下：日期 → 圓環＋山丘＋小狗＋自評小標籤 → Lv／XP 一條 → From your buddy
+/// （AI 那段＋小建議）→ Time in bed／Time asleep → Phone down｜Your target
+/// → Sleep phases → More details（收合）→ Dream diary → View sleep insights → Back to home。
 ///
-/// 一打開就先畫 [initial]（手機上已經有的），[load] 回來之後換成完整版。
-/// 分數、等級、心情、那句話、XP 全部照抄後端，規則寫在
+/// 一打開就先畫 [initial]（手機上已經有的），[load] 回來之後換成完整版，
+/// [loadSummary] 再晚一點回來（AI 第一次生成要等模型）。
+/// 分數、等級、心情、那句話、XP、建議全部照抄後端，規則寫在
 /// `services/morning_report.dart`。
 ///
 /// 不放「Great work」這種固定鼓勵句，也不另外發 XP（紅線 5）。
-/// 睡眠目標只寫事實（「7h 25m of your 8h goal」），**不寫 reached、不變色**：
+/// 睡眠目標只寫事實（「of your 8h goal」），**不寫 reached、不變色**：
 /// 好壞只有後端能判斷，而分數本身就以睡眠時長為主在算，兩個說法會打架。
+///
+/// 關掉時回傳 [kReportOpenInsights] 代表使用者按了 View sleep insights。
 class MorningReportScreen extends StatefulWidget {
   final MorningReport initial;
   final Future<MorningReport> Function()? load;
+
+  /// 拿到完整版之後再接 AI 那段。回傳 `/night-summary` 的 JSON（失敗回 null）。
+  final Future<Map<String, dynamic>?> Function()? loadSummary;
 
   /// 這一晚是不是剛結束（今天早上起床的那一晚）。是的話沒分數時說「在等資料」，
   /// 不是的話說「沒有資料」——幾天前沒戴錶的晚上，資料不會來了。
   final bool pending;
 
+  /// 要不要放 View sleep insights（首頁有給切分頁的方法才放）。
+  final bool canOpenInsights;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
     this.load,
+    this.loadSummary,
     this.pending = true,
+    this.canOpenInsights = false,
   });
 
   @override
   State<MorningReportScreen> createState() => _MorningReportScreenState();
 }
+
+/// 按了 View sleep insights 時，報告用這個值 pop。
+const String kReportOpenInsights = 'insights';
 
 /// 「Thursday, Nov 13」。自己組而不用 intl 的 DateFormat：那會跟著手機語言走
 /// （中文手機上變成中文，或沒初始化語系時直接丟錯），而全 App 的輸出是英文。
@@ -53,12 +69,17 @@ String reportDateTitle(DateTime d) {
   return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
 }
 
-/// 背景。缺圖時退回同色系的漸層，不會報錯。
-const String kDawnBackground = 'assets/backgrounds/dawn.png';
+/// 「放下手機比目標晚多少」那一行。**只照抄後端的分鐘數**；沒有就不寫。
+String? adherenceLine(double? minutes) {
+  if (minutes == null) return null;
+  if (minutes <= 0) return 'On time';
+  return '${reportHm(minutes)} after your target';
+}
 
 class _MorningReportScreenState extends State<MorningReportScreen> {
   late MorningReport _report = widget.initial;
   bool _loading = false;
+  bool _detailsOpen = false;
 
   @override
   void initState() {
@@ -66,8 +87,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final load = widget.load;
     if (load != null) {
       _loading = true;
-      load().then((r) {
-        if (mounted) setState(() => _report = r);
+      load().then((r) async {
+        if (!mounted) return;
+        setState(() => _report = r);
+        final summary = widget.loadSummary;
+        if (summary != null && r.hasScore) {
+          final json = await summary();
+          if (mounted) setState(() => _report = _report.withSummary(json));
+        }
       }).whenComplete(() {
         if (mounted) setState(() => _loading = false);
       });
@@ -77,100 +104,118 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   @override
   Widget build(BuildContext context) {
     final r = _report;
-    return Scaffold(
-      backgroundColor: const Color(0xFF2A2F7A),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            kDawnBackground,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF2A2F7A),
-                    Color(0xFF8B6DD8),
-                    Color(0xFFF3A0C0),
-                    Color(0xFFFFC98A),
+    final hasBuddy = r.hasScore && (r.summaryText != null || r.tip != null);
+    return ReportFont(
+      child: Scaffold(
+        backgroundColor: ReportColors.bgTop,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ReportBackground(),
+            SafeArea(
+              child: ListView(
+                key: const Key('report-list'),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+                children: [
+                  _header(r),
+                  const SizedBox(height: 14),
+                  _hero(r),
+                  if (r.level != null) ...[
+                    const SizedBox(height: 14),
+                    _xp(r),
                   ],
-                ),
+                  if (hasBuddy) ...[
+                    const SizedBox(height: 14),
+                    _buddy(r),
+                  ],
+                  const SizedBox(height: 14),
+                  _timeCards(r),
+                  if (r.lightsOutAt != null) ...[
+                    const SizedBox(height: 14),
+                    _phoneDown(r),
+                  ],
+                  if (r.stages != null) ...[
+                    const SizedBox(height: 14),
+                    SleepStagesCard(
+                      stages: r.stages!,
+                      totalSleepMinutes: r.sleepMinutes?.round(),
+                    ),
+                  ] else if (r.hasScore &&
+                      (r.hasStageSplit || r.deepMinutes != null)) ...[
+                    const SizedBox(height: 14),
+                    _splitCard(r),
+                  ],
+                  if (r.hasDetails) ...[
+                    const SizedBox(height: 14),
+                    _details(r),
+                  ],
+                  if (!r.hasScore && widget.pending) ...[
+                    const SizedBox(height: 14),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'Once your watch syncs, tap this day in the week row on '
+                        'Home to see the full report.',
+                        key: Key('report-waiting-hint'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: ReportColors.muted,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (r.dream != null) ...[
+                    const SizedBox(height: 14),
+                    _linkRow(
+                      key: const Key('report-dream'),
+                      icon: Icons.auto_stories_rounded,
+                      label: 'Dream diary',
+                      onTap: () => _showDream(r.dream!),
+                    ),
+                  ],
+                  if (widget.canOpenInsights) ...[
+                    const SizedBox(height: 14),
+                    _linkRow(
+                      key: const Key('report-insights'),
+                      icon: Icons.bar_chart_rounded,
+                      label: 'View sleep insights',
+                      onTap: () =>
+                          Navigator.of(context).pop(kReportOpenInsights),
+                    ),
+                  ],
+                  if (r.source == ReportSource.bundled) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'From the data bundled with the app (backend unreachable).',
+                      key: Key('report-source-bundled'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: ReportColors.muted, fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    key: const Key('report-done'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: ReportColors.navy,
+                      minimumSize: const Size.fromHeight(56),
+                      shape: const StadiumBorder(),
+                      textStyle: const TextStyle(
+                        fontFamily: kReportFont,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    child: const Text('Back to home'),
+                  ),
+                ],
               ),
             ),
-          ),
-          SafeArea(
-            child: ListView(
-              key: const Key('report-list'),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              children: [
-                _header(r),
-                _hero(r),
-                if (r.level != null) ...[
-                  const SizedBox(height: 4),
-                  _xp(r),
-                ],
-                const SizedBox(height: 14),
-                r.hasScore ? _gauge(r) : _waitingCard(),
-                const SizedBox(height: SonnapColors.gap),
-                _timesCard(r),
-                if (r.stages != null) ...[
-                  const SizedBox(height: SonnapColors.gap),
-                  SleepStagesCard(
-                    stages: r.stages!,
-                    totalSleepMinutes: r.sleepMinutes?.round(),
-                  ),
-                ] else if (r.hasScore &&
-                    (r.hasStageSplit || r.deepMinutes != null)) ...[
-                  const SizedBox(height: SonnapColors.gap),
-                  _splitCard(r),
-                ],
-                if (r.dream != null) ...[
-                  const SizedBox(height: SonnapColors.gap),
-                  OutlinedButton.icon(
-                    key: const Key('report-dream'),
-                    onPressed: () => _showDream(r.dream!),
-                    icon: const Icon(Icons.auto_stories_rounded),
-                    label: const Text('Dream diary'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: SonnapColors.card,
-                      side: const BorderSide(color: SonnapColors.accentSoft),
-                      minimumSize: const Size.fromHeight(50),
-                      shape: const StadiumBorder(),
-                    ),
-                  ),
-                ],
-                if (r.source == ReportSource.bundled) ...[
-                  const SizedBox(height: 10),
-                  const Text(
-                    'From the data bundled with the app (backend unreachable).',
-                    key: Key('report-source-bundled'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                FilledButton(
-                  key: const Key('report-done'),
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF2A2F7A),
-                    minimumSize: const Size.fromHeight(54),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  child: const Text('Back to home'),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -192,120 +237,261 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
                 ),
               ),
               const Text(
                 'Last night',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: ReportColors.muted, fontSize: 13),
               ),
             ],
           ),
         ),
         if (_loading)
           const Padding(
-            padding: EdgeInsets.only(right: 8),
+            padding: EdgeInsets.only(right: 10),
             child: SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white70,
+                color: ReportColors.muted,
               ),
             ),
           ),
-        IconButton(
-          key: const Key('report-close'),
-          tooltip: 'Close',
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close_rounded, color: Colors.white),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            key: const Key('report-close'),
+            tooltip: 'Close',
+            onPressed: () => Navigator.of(context).pop(),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              side: const BorderSide(color: Color(0x2EFFFFFF)),
+            ),
+            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+          ),
         ),
       ],
     );
   }
 
-  // ── 細線大字的起床時間，小狗疊在它下半部 ───────────────────────────
+  // ── 圓環＋山丘＋小狗＋自評小標籤 ─────────────────────────────────
 
   Widget _hero(MorningReport r) {
-    final wake = r.wakeAt;
-    const petSize = 190.0;
-    return Column(
-      children: [
-        SizedBox(
-          height: 270,
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              if (wake != null)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // 小標放在數字右上角（參考圖的 AM 位置）——放下面會被小狗的頭蓋住
-                      Padding(
-                        padding: const EdgeInsets.only(right: 24),
-                        child: Text(
-                          r.bedEnd != null ? 'Out of bed' : 'Woke up (watch)',
-                          key: const Key('report-wake-label'),
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Center(
-                        child: FittedBox(
-                          child: Text(
-                            _t(wake),
-                            key: const Key('report-wake-big'),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.92),
-                              fontSize: 104,
-                              fontWeight: FontWeight.w200,
-                              letterSpacing: 2,
-                              height: 1.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Positioned(
-                bottom: 0,
-                child: r.hasScore
-                    ? HomePet(
-                        key: const Key('report-pet-awake'),
-                        mood: r.mood,
-                        size: petSize,
-                      )
-                    : const SleepingPet(
-                        key: Key('report-pet-asleep'),
-                        size: petSize + 20,
-                      ),
-              ),
-            ],
-          ),
-        ),
-        if (r.moodDescription != null && r.moodDescription!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              r.moodDescription!,
-              key: const Key('report-mood-line'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+    const ring = 236.0;
+    return SizedBox(
+      height: 352,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 4,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: SizedBox(
+                width: ring,
+                height: ring,
+                child: r.hasScore ? _scoreRing(r) : _waitingRing(),
               ),
             ),
           ),
-      ],
+          // 山丘：延伸到左右邊（抵掉 ListView 的 16 邊距）
+          const Positioned(
+            left: -16,
+            right: -16,
+            bottom: 0,
+            height: 120,
+            child: CustomPaint(painter: _HillPainter()),
+          ),
+          if (r.hasScore)
+            Positioned(
+              right: 18,
+              bottom: 50,
+              child: HomePet(
+                key: const Key('report-pet-awake'),
+                mood: r.mood,
+                size: 110,
+              ),
+            )
+          else
+            const Positioned(
+              right: 8,
+              bottom: 40,
+              child: SleepingPet(key: Key('report-pet-asleep'), size: 140),
+            ),
+          Positioned(
+            left: 0,
+            bottom: 8,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 230),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (r.rating != null) _ratingChip(r),
+                  if (r.hasScore &&
+                      r.moodDescription != null &&
+                      r.moodDescription!.isNotEmpty) ...[
+                    if (r.rating != null) const SizedBox(height: 8),
+                    Text(
+                      r.moodDescription!,
+                      key: const Key('report-mood-line'),
+                      style: const TextStyle(
+                        color: ReportColors.soft,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoreRing(MorningReport r) {
+    final score = r.score!.round();
+    final color = _hex(r.qualityColor) ?? ReportColors.accent;
+    final line = [
+      if (r.quality != null) r.quality!,
+      if (r.scoreMessage != null && r.scoreMessage!.isNotEmpty) r.scoreMessage!,
+    ].join(' · ');
+    return CustomPaint(
+      key: const Key('report-gauge'),
+      painter: _RingPainter(value: (score / 100).clamp(0.0, 1.0)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$score',
+              key: const Key('report-score'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 64,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'Sleep score',
+              style: TextStyle(color: ReportColors.muted, fontSize: 13),
+            ),
+            if (line.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 30),
+                child: Text(
+                  line,
+                  key: const Key('report-quality'),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 沒有分數時：虛線圓環。只有「剛結束的那一晚」才說在等資料；
+  /// 更早的晚上說沒有資料（yet：早晨匯入晚跑幾天，還是可能補進來）。
+  Widget _waitingRing() {
+    return CustomPaint(
+      key: const Key('report-waiting'),
+      painter: const _DashedRingPainter(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.watch_rounded, color: ReportColors.lilac, size: 30),
+            const SizedBox(height: 8),
+            Text(
+              widget.pending ? kWaitingForWatch : kNoWatchData,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                height: 1.25,
+              ),
+            ),
+            if (widget.pending) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Your score shows up here once your watch syncs.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: ReportColors.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ratingChip(MorningReport r) {
+    final rating = r.rating!;
+    return Container(
+      key: const Key('report-rating'),
+      padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ReportColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            restedFaceAsset(rating.rested),
+            width: 30,
+            height: 30,
+            errorBuilder: (_, _, _) => const SizedBox(width: 30, height: 30),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'You felt',
+                  style: TextStyle(color: ReportColors.muted, fontSize: 11),
+                ),
+                Text(
+                  r.ratingLabel ?? rating.label,
+                  key: const Key('report-rating-label'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -315,328 +501,434 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final size = r.xpLevelSize;
     final into = r.xpIntoLevel ?? 0;
     final night = r.nightXp;
-    return Column(
+    return Container(
       key: const Key('report-xp'),
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const Expanded(
-              child: Text(
-                'Your Experience',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: reportCard(radius: 20),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [ReportColors.purple, Color(0xFFC08BFF)],
               ),
             ),
-            Text(
-              'Lv.${r.level}',
+            child: Text(
+              'Lv${r.level}',
               key: const Key('report-level'),
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                height: 1.0,
-              ),
-            ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: night == null
-                    ? const SizedBox.shrink()
-                    : Text(
-                        r.nightXpSoFar ? '+$night XP so far' : '+$night XP',
-                        key: const Key('report-night-xp'),
-                        style: const TextStyle(
-                          color: Color(0xFFFFE08A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: (r.xpProgress ?? 0).clamp(0.0, 1.0),
-                minHeight: 20,
-                backgroundColor: Colors.white.withValues(alpha: 0.25),
-                color: Colors.white,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: Text(
-                size == null ? 'Max level' : '${_n(into)} / ${_n(size)} XP',
-                key: const Key('report-xp-text'),
-                style: const TextStyle(
-                  color: Color(0xFF2A2F7A),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _card(Widget child, {Key? key}) => Container(
-        key: key,
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: sonnapCardDecoration(),
-        child: child,
-      );
-
-  // ── 半圓分數 ────────────────────────────────────────────────
-
-  Widget _gauge(MorningReport r) {
-    final score = r.score!.round();
-    final color = _hex(r.qualityColor) ?? SonnapColors.accentSoft;
-    return _card(
-      key: const Key('report-gauge'),
-      Column(
-        children: [
-          SizedBox(
-            width: 220,
-            height: 124,
-            child: CustomPaint(
-              painter: _ArcPainter(value: (score / 100).clamp(0.0, 1.0)),
-              child: Align(
-                alignment: const Alignment(0, 0.75),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$score',
-                      key: const Key('report-score'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 44,
-                        fontWeight: FontWeight.w800,
-                        height: 1.0,
-                      ),
-                    ),
-                    const Text(
-                      'Sleep score',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
-                ),
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          if (r.quality != null)
-            Text(
-              '${r.quality} sleep',
-              key: const Key('report-quality'),
-              style: TextStyle(
-                color: color,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        size == null
+                            ? 'Max level'
+                            : '${_n(into)} / ${_n(size)} XP',
+                        key: const Key('report-xp-text'),
+                        style: const TextStyle(
+                            color: ReportColors.muted, fontSize: 12),
+                      ),
+                    ),
+                    if (size != null)
+                      Text(
+                        '${_n(size - into)} to Lv${(r.level ?? 0) + 1}',
+                        key: const Key('report-xp-to-next'),
+                        style: const TextStyle(
+                            color: ReportColors.muted, fontSize: 12),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(
+                    height: 8,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ColoredBox(color: Colors.white.withValues(alpha: 0.14)),
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: (r.xpProgress ?? 0).clamp(0.0, 1.0),
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [ReportColors.purple, Color(0xFFFFB36B)],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (night != null) ...[
+            const SizedBox(width: 12),
+            Container(
+              key: const Key('report-night-xp'),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0x29FFC83D),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '+$night XP',
+                    style: const TextStyle(
+                      color: ReportColors.gold,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
+                  if (r.nightXpSoFar)
+                    const Text(
+                      'so far',
+                      key: Key('report-night-xp-so-far'),
+                      style: TextStyle(
+                        color: ReportColors.gold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                ],
               ),
             ),
-          if (r.scoreMessage != null && r.scoreMessage!.isNotEmpty)
-            Text(
-              r.scoreMessage!.toUpperCase(),
-              key: const Key('report-score-message'),
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-              ),
-            ),
+          ],
         ],
       ),
     );
   }
 
-  /// 沒有分數時的那一格。只有「剛結束的那一晚」才說在等資料；
-  /// 更早的晚上說沒有資料（yet：早晨匯入晚跑幾天，還是可能補進來）。
-  Widget _waitingCard() => _card(
-        Column(
-          key: const Key('report-waiting'),
-          children: [
-            const Icon(Icons.watch_rounded,
-                color: SonnapColors.accentSoft, size: 30),
-            const SizedBox(height: 8),
-            Text(
-              widget.pending ? kWaitingForWatch : kNoWatchData,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (widget.pending) ...[
-              const SizedBox(height: 6),
-              const Text(
-                "Once your watch syncs, tap this day in the week row on Home "
-                "to see your score.",
-                textAlign: TextAlign.center,
+  // ── From your buddy：AI 那段＋小建議（都照抄 /night-summary） ─────────────
+
+  Widget _buddy(MorningReport r) {
+    final tip = r.tip;
+    return Container(
+      key: const Key('report-buddy'),
+      padding: const EdgeInsets.all(16),
+      decoration: reportCard(radius: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded,
+                  size: 16, color: ReportColors.accent),
+              SizedBox(width: 8),
+              Text(
+                'From your buddy',
                 style: TextStyle(
-                    color: Colors.white70, fontSize: 13, height: 1.4),
+                  color: ReportColors.accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
-          ],
-        ),
-      );
-
-  // ── 上床／起床、睡眠時間與目標 ─────────────────────────────────
-
-  Widget _timesCard(MorningReport r) {
-    // 有按鈕用按鈕；沒有按鈕、有分數時用手錶的入睡→起床，標籤照實寫
-    final DateTime? from;
-    final DateTime? to;
-    final String fromLabel;
-    final String toLabel;
-    if (r.bedStart != null) {
-      from = r.bedStart;
-      to = r.bedEnd;
-      fromLabel = 'In bed';
-      toLabel = 'Out of bed';
-    } else if (r.hasScore) {
-      from = r.asleepAt;
-      to = r.wokeAt;
-      fromLabel = 'Asleep';
-      toLabel = 'Woke up';
-    } else {
-      from = null;
-      to = null;
-      fromLabel = '';
-      toLabel = '';
-    }
-
-    final children = <Widget>[];
-    if (from != null || to != null) {
-      children.add(
-        Row(
-          key: const Key('report-times'),
-          children: [
-            Expanded(
-              child: _clock(Icons.bedtime_rounded, const Color(0xFFFFD27A),
-                  from, fromLabel, 'report-from'),
-            ),
-            Expanded(
-              child: _clock(Icons.wb_sunny_rounded, const Color(0xFFFFB36B),
-                  to, toLabel, 'report-to'),
+          ),
+          if (r.summaryText != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              r.summaryText!,
+              key: const Key('report-summary'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.5,
+              ),
             ),
           ],
-        ),
-      );
-    }
+          if (tip != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              key: const Key('report-tip'),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      // tip 是「下次可以怎麼做」，note 只解釋這一晚——圖示分開
+                      tip.isNote
+                          ? Icons.info_outline_rounded
+                          : Icons.lightbulb_outline_rounded,
+                      key: Key(tip.isNote ? 'report-tip-note' : 'report-tip-tip'),
+                      size: 18,
+                      color: ReportColors.gold,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      tip.text,
+                      style: const TextStyle(
+                        color: ReportColors.soft,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
+  // ── Time in bed／Time asleep ─────────────────────────────────────
+
+  Widget _timeCards(MorningReport r) {
+    final inBed = r.timeInBedMinutes;
     final asleep = r.hasScore ? r.sleepMinutes : null;
-    if (asleep != null) {
-      if (children.isNotEmpty) {
-        children.add(Divider(
-          height: 26,
-          color: Colors.white.withValues(alpha: 0.15),
-        ));
-      }
-      final goal = r.goalMinutes;
-      children.add(
-        Row(
-          children: [
-            Expanded(
-              child: _stat(_hm(asleep.round()), 'Time asleep', 'report-duration'),
-            ),
-            if (goal != null)
-              Expanded(child: _stat(_hm(goal), 'Sleep goal', 'report-goal')),
-          ],
-        ),
+    final goal = r.goalMinutes;
+    final Widget asleepFooter;
+    if (asleep == null) {
+      asleepFooter = const Text(
+        'From your watch',
+        style: TextStyle(color: ReportColors.faint, fontSize: 12),
       );
-      if (goal != null) {
-        children.add(const SizedBox(height: 14));
-        children.add(
+    } else if (goal == null) {
+      asleepFooter = const SizedBox.shrink();
+    } else {
+      asleepFooter = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(3),
             child: LinearProgressIndicator(
               key: const Key('report-goal-bar'),
               value: (asleep / goal).clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: Colors.white.withValues(alpha: 0.15),
+              minHeight: 6,
+              backgroundColor: Colors.white.withValues(alpha: 0.14),
               // 不依達標與否變色（使用者定）
-              color: SonnapColors.accentSoft,
+              color: ReportColors.lilac,
             ),
           ),
-        );
-        children.add(const SizedBox(height: 8));
-        children.add(
+          const SizedBox(height: 5),
           Text(
-            '${_hm(asleep.round())} of your ${_hm(goal)} goal',
+            'of your ${reportHm(goal)} goal',
             key: const Key('report-goal-line'),
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: const TextStyle(color: ReportColors.muted, fontSize: 12),
           ),
-        );
-      }
-    }
-
-    if (children.isEmpty) {
-      children.add(
-        const Text(
-          'No bedtime recorded for this night.',
-          key: Key('report-no-times'),
-          style: TextStyle(color: Colors.white70, fontSize: 14),
-        ),
+        ],
       );
     }
-    return _card(
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
-
-  Widget _clock(
-      IconData icon, Color color, DateTime? t, String label, String key) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                t == null ? '—' : _t(t),
-                key: Key(key),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
+    final start = r.bedStart;
+    final end = r.bedEnd;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _timeCard(
+              key: const Key('report-in-bed'),
+              icon: Icons.bed_rounded,
+              label: 'Time in bed',
+              value: inBed == null ? '—' : reportHm(inBed),
+              valueKey: 'report-in-bed-value',
+              change:
+                  inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
+              changeKey: 'report-in-bed-change',
+              dashed: inBed == null,
+              footer: Text(
+                start == null
+                    ? 'No bedtime recorded'
+                    : '${reportClock(start)} → '
+                        '${end == null ? '—' : reportClock(end)}',
+                key: const Key('report-times'),
+                style: const TextStyle(color: ReportColors.muted, fontSize: 12),
               ),
-              Text(label,
-                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
-            ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: _timeCard(
+              key: const Key('report-asleep'),
+              icon: Icons.nightlight_round,
+              label: 'Time asleep',
+              value: asleep == null ? '—' : reportHm(asleep),
+              valueKey: 'report-duration',
+              change: asleep == null
+                  ? null
+                  : changeOf(asleep, r.previousSleepMinutes),
+              changeKey: 'report-duration-change',
+              dashed: asleep == null,
+              footer: asleepFooter,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _stat(String value, String label, String key) => Column(
+  Widget _timeCard({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required String value,
+    required String valueKey,
+    required ChangeDirection? change,
+    required String changeKey,
+    required Widget footer,
+    bool dashed = false,
+  }) {
+    return Container(
+      key: key,
+      padding: const EdgeInsets.all(14),
+      decoration: reportCard(dashed: dashed),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: ReportColors.muted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style:
+                      const TextStyle(color: ReportColors.muted, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    key: Key(valueKey),
+                    style: TextStyle(
+                      color: dashed ? ReportColors.dim : Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              if (change != null && change != ChangeDirection.same)
+                _changeBadge(change, changeKey),
+            ],
+          ),
+          const SizedBox(height: 8),
+          footer,
+        ],
+      ),
+    );
+  }
+
+  /// 跟上一晚比：**只代表方向**，上升紅、下降綠（使用者定）。
+  Widget _changeBadge(ChangeDirection d, String key) {
+    final up = d == ChangeDirection.up;
+    final color = up ? ReportColors.up : ReportColors.down;
+    return Semantics(
+      label: up ? 'Up from last night' : 'Down from last night',
+      child: Container(
+        key: Key('$key-${up ? 'up' : 'down'}'),
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          up ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+          color: color,
+          size: 24,
+        ),
+      ),
+    );
+  }
+
+  // ── Phone down｜Your target ─────────────────────────────────────
+
+  Widget _phoneDown(MorningReport r) {
+    final line = adherenceLine(r.adherenceMinutes);
+    return Container(
+      key: const Key('report-phone-down'),
+      padding: const EdgeInsets.all(16),
+      decoration: reportCard(),
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _centerStat('Phone down', reportClock(r.lightsOutAt!),
+                      Colors.white, 'report-phone-down-at'),
+                ),
+                if (r.targetBedtime != null) ...[
+                  const VerticalDivider(
+                      width: 1, thickness: 1, color: ReportColors.border),
+                  Expanded(
+                    child: _centerStat('Your target', r.targetBedtime!,
+                        ReportColors.accent, 'report-target'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (line != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              line,
+              key: const Key('report-adherence'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: ReportColors.soft, fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _centerStat(String label, String value, Color color, String key) =>
+      Column(
+        children: [
+          Text(label,
+              style: const TextStyle(color: ReportColors.muted, fontSize: 13)),
+          const SizedBox(height: 2),
           Text(
             value,
             key: Key(key),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
+            style: TextStyle(
+              color: color,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 12)),
         ],
       );
 
@@ -647,11 +939,13 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       // 沒有淺睡就不畫比例條。兩種原因要講不同的話：
       // 沒量到 REM（淺睡會把 REM 吃進去）vs 後端是舊版、沒給淺睡（REM 其實有量到）
       final rem = r.remMeasured && r.remMinutes != null
-          ? 'REM ${_hm(r.remMinutes!.round())}'
+          ? 'REM ${reportHm(r.remMinutes!)}'
           : 'REM not measured';
-      return _card(
-        Text(
-          'Deep ${_hm(r.deepMinutes!.round())} · $rem',
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: reportCard(),
+        child: Text(
+          'Deep ${reportHm(r.deepMinutes!)} · $rem',
           key: const Key('report-split-partial'),
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white, fontSize: 15),
@@ -664,9 +958,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       ('REM', r.remMinutes!, SleepStagesCard.rem),
     ];
     final total = parts.fold<double>(0, (s, p) => s + p.$2);
-    return _card(
-      Column(
-        key: const Key('report-split'),
+    return Container(
+      key: const Key('report-split'),
+      padding: const EdgeInsets.all(16),
+      decoration: reportCard(),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
@@ -674,7 +970,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
             style: TextStyle(
               color: Colors.white,
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 12),
@@ -705,19 +1001,19 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     Row(
                       children: [
                         Container(
-                          width: 10,
-                          height: 10,
+                          width: 8,
+                          height: 8,
                           decoration: BoxDecoration(
                             color: p.$3,
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           p.$1,
                           style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
+                            color: ReportColors.muted,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -728,14 +1024,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       key: Key('report-split-${p.$1.toLowerCase()}'),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     Text(
-                      _hm(p.$2.round()),
+                      reportHm(p.$2),
                       style: const TextStyle(
-                        color: Colors.white60,
+                        color: ReportColors.muted,
                         fontSize: 12,
                       ),
                     ),
@@ -748,51 +1044,256 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  void _showDream(String dream) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1B1F4A),
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Your buddy's dream diary",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+  // ── More details（收合）：WASO、心率、效率、攝影機 ──────────────────
+
+  Widget _details(MorningReport r) {
+    final showWaso = r.hasScore && r.wasoMinutes != null;
+    final showHr =
+        r.hasScore && (r.avgHeartRate != null || r.restingHeartRate != null);
+    final showEff = r.hasScore && r.efficiency != null;
+    final showCam = r.camera?.usualLabel != null;
+    final names = [
+      if (showWaso) 'Awake time',
+      if (showHr) 'Heart rate',
+      if (showEff) 'Efficiency',
+      if (showCam) 'Movement',
+    ];
+    return Container(
+      decoration: reportCard(radius: 18),
+      child: Column(
+        children: [
+          InkWell(
+            key: const Key('report-details-toggle'),
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => setState(() => _detailsOpen = !_detailsOpen),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.monitor_heart_outlined,
+                        size: 18, color: ReportColors.accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'More details',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            names.join(' · '),
+                            style: const TextStyle(
+                                color: ReportColors.muted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _detailsOpen ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.expand_more_rounded,
+                          color: ReportColors.muted),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                dream,
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topCenter,
+            child: !_detailsOpen
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    key: const Key('report-details'),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Divider(height: 1, color: ReportColors.border),
+                        if (showWaso)
+                          _detailRow(
+                            'Awake during the night',
+                            reportHm(r.wasoMinutes!),
+                            'report-waso',
+                          ),
+                        if (showHr)
+                          _detailRow(
+                            'Heart rate',
+                            [
+                              if (r.avgHeartRate != null)
+                                '${r.avgHeartRate!.round()} bpm avg',
+                              if (r.restingHeartRate != null)
+                                '${r.restingHeartRate!.round()} resting',
+                            ].join(' · '),
+                            'report-hr',
+                          ),
+                        if (showEff)
+                          _detailRow(
+                            'Sleep efficiency',
+                            // 照抄，不四捨五入掉小數
+                            '${r.efficiency}%',
+                            'report-efficiency',
+                            notes: [
+                              if (r.efficiencyCaveat != null)
+                                r.efficiencyCaveat!,
+                              if (r.efficiencyBasis != null)
+                                'Basis: ${r.efficiencyBasis}',
+                            ],
+                          ),
+                        if (showCam)
+                          _detailRow(
+                            'Movement (camera)',
+                            r.camera!.usualLabel!,
+                            'report-camera',
+                            notes: const [
+                              'Camera data is not part of your score.',
+                            ],
+                            valueBelow: true,
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value, String key,
+      {List<String> notes = const [], bool valueBelow = false}) {
+    final valueText = Text(
+      value,
+      key: Key(key),
+      textAlign: valueBelow ? TextAlign.start : TextAlign.end,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+    const labelStyle = TextStyle(color: ReportColors.muted, fontSize: 13);
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (valueBelow) ...[
+            Text(label, style: labelStyle),
+            const SizedBox(height: 2),
+            valueText,
+          ] else
+            Row(
+              children: [
+                Expanded(child: Text(label, style: labelStyle)),
+                const SizedBox(width: 12),
+                Flexible(child: valueText),
+              ],
+            ),
+          for (final n in notes)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                n,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  height: 1.5,
+                  color: ReportColors.faint,
+                  fontSize: 11,
+                  height: 1.35,
                 ),
               ),
-            ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkRow({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Ink(
+          decoration: reportCard(radius: 18),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: ReportColors.accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: ReportColors.muted),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  static String _t(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
-  static String _hm(int m) {
-    final h = m ~/ 60;
-    final r = m % 60;
-    if (h == 0) return '${r}m';
-    if (r == 0) return '${h}h';
-    return '${h}h ${r}m';
+  void _showDream(String dream) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: ReportColors.sheet,
+      showDragHandle: true,
+      builder: (context) => ReportFont(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Your buddy's dream diary",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  dream,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// 1219 → 1,219
@@ -814,36 +1315,98 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   }
 }
 
-/// 半圓量表：底下一條淡色全弧，上面依分數畫一段漸層弧。
-class _ArcPainter extends CustomPainter {
+/// 分數圓環：深色底盤＋淡色全圈，上面依分數畫一段漸層弧（從 12 點鐘開始）。
+class _RingPainter extends CustomPainter {
   final double value;
-  const _ArcPainter({required this.value});
+  const _RingPainter({required this.value});
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 12.0;
-    final radius = math.min(size.width / 2, size.height) - stroke / 2;
-    final center = Offset(size.width / 2, size.height - stroke / 2);
+    const stroke = 16.0;
+    final center = size.center(Offset.zero);
+    final radius = math.min(size.width, size.height) / 2 - 18;
     final rect = Rect.fromCircle(center: center, radius: radius);
-    final base = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.white.withValues(alpha: 0.15);
-    canvas.drawArc(rect, math.pi, math.pi, false, base);
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xBF141C46));
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = Colors.white.withValues(alpha: 0.10),
+    );
     if (value <= 0) return;
     final fill = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..shader = const SweepGradient(
-        startAngle: math.pi,
-        endAngle: 2 * math.pi,
-        colors: [Color(0xFF6FA8FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)],
+        colors: [Color(0xFF7FB2FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)],
+        stops: [0, 0.55, 1],
+        transform: GradientRotation(-math.pi / 2),
       ).createShader(rect);
-    canvas.drawArc(rect, math.pi, math.pi * value, false, fill);
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * value, false, fill);
   }
 
   @override
-  bool shouldRepaint(_ArcPainter old) => old.value != value;
+  bool shouldRepaint(_RingPainter old) => old.value != value;
+}
+
+/// 等待中：虛線圓環。
+class _DashedRingPainter extends CustomPainter {
+  const _DashedRingPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = math.min(size.width, size.height) / 2 - 18;
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xBF141C46));
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0x59B9A6FF);
+    const dash = 6.0;
+    const gap = 9.0;
+    final count = (2 * math.pi * radius / (dash + gap)).floor();
+    final step = 2 * math.pi / count;
+    final sweep = step * dash / (dash + gap);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    for (var i = 0; i < count; i++) {
+      canvas.drawArc(rect, i * step, sweep, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRingPainter old) => false;
+}
+
+/// 小狗坐的山丘（示意圖的曲線，依寬度縮放）。
+class _HillPainter extends CustomPainter {
+  const _HillPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx = size.width / 390;
+    final sy = size.height / 120;
+    final ridge = Path()
+      ..moveTo(0, 70 * sy)
+      ..cubicTo(90 * sx, 40 * sy, 170 * sx, 52 * sy, 230 * sx, 58 * sy)
+      ..cubicTo(300 * sx, 64 * sy, 350 * sx, 46 * sy, 390 * sx, 52 * sy);
+    final fill = Path.from(ridge)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(fill, Paint()..color = ReportColors.hill);
+    canvas.drawPath(
+      ridge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0x59B9A6FF),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HillPainter old) => false;
 }

@@ -24,8 +24,10 @@ import '../widgets/night_sky_effects.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import 'morning_report_screen.dart';
+import 'rested_screen.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -77,6 +79,12 @@ class HomeScreen extends StatefulWidget {
   /// 報告改用打包檔裡那一晚。
   final MorningReportSource? morningReport;
 
+  /// 起床自評送後端（`POST /rested`）。null = 這支 build 沒有後端，只存在手機上。
+  final RestedSender? rested;
+
+  /// 早晨報告的 View sleep insights：切到 Insights 分頁。null = 不放那一列。
+  final VoidCallback? onOpenInsights;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
@@ -85,6 +93,8 @@ class HomeScreen extends StatefulWidget {
     this.game,
     this.cameraInsights,
     this.morningReport,
+    this.rested,
+    this.onOpenInsights,
     this.clock = DateTime.now,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
@@ -136,6 +146,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 首頁要不要出現「Forgot to tap last night? Add times」。
   bool _needsBackfill = false;
 
+  /// 起床自評存在跟上床標記同一個儲存裡。
+  late final MorningRatingStore _ratings =
+      MorningRatingStore(widget.bedMarks.store);
+
+  /// 起床 6 小時內、還沒填自評 → 首頁出現補填小卡（使用者定）。null = 不出現。
+  BedMarks? _restedMakeUp;
+
   /// 畫面上顯示的目標就寢時間。在這頁改了之後立刻反映，同時往上回報；
   /// 上層傳來新值時以上層為準（見 didUpdateWidget）。
   late TimeOfDay _bedtime;
@@ -155,6 +172,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadGame();
     _loadCamera();
     _loadMarks();
+    // 之前連不到後端、沒送出去的自評，這次補送
+    final rested = widget.rested;
+    if (rested != null) _ratings.retryUnsent(rested);
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
@@ -184,10 +204,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadMarks() async {
     final marks = await widget.bedMarks.read(now: widget.clock());
     final needsBackfill = await widget.bedMarks.needsBackfill(widget.clock());
+    final makeUp = await _restedMakeUpFor(widget.clock());
     if (!mounted) return;
     setState(() {
       _marks = marks;
       _needsBackfill = needsBackfill;
+      _restedMakeUp = makeUp;
     });
     _maybeOpenSleepMode();
   }
@@ -254,16 +276,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _sleepRouteOpen = false;
       if (!mounted) return;
       await _loadMarks();
-      // 滑完 Slide to get up（或 I already got up）→ 立刻出現昨晚的報告
+      // 滑完 Slide to get up（或 I already got up）→ 先問睡得怎樣（看到分數之前），
+      // 再出現昨晚的報告。按 Skip 也照樣進報告。
       if (ended == true && mounted) {
-        await _openReport(reportDateKey(nightDateOf(startAt)));
+        final date = reportDateKey(nightDateOf(startAt));
+        await _askRested(date, _marks.endAt);
+        if (mounted) await _openReport(date);
       }
     });
+  }
+
+  /// 起床 6 小時內、那一晚還沒填 → 回傳那一晚的標記（補填小卡用）。
+  Future<BedMarks?> _restedMakeUpFor(DateTime now) async {
+    final last = await widget.bedMarks.lastNight(now);
+    final start = last.startAt;
+    if (start == null || last.endAt == null) return null;
+    final existing = await _ratings.read(reportDateKey(nightDateOf(start)));
+    return showRestedMakeUp(wakeAt: last.endAt, now: now, existing: existing)
+        ? last
+        : null;
+  }
+
+  /// 起床自評卡。回傳存下來的（Skip 是 null）。
+  Future<MorningRating?> _askRested(String date, DateTime? wakeAt) async {
+    final rating = await Navigator.of(context).push<MorningRating>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => RestedScreen(
+          date: date,
+          wakeAt: wakeAt,
+          store: _ratings,
+          sender: widget.rested,
+          clock: widget.clock,
+        ),
+      ),
+    );
+    if (mounted) await _loadMarks();
+    return rating;
+  }
+
+  /// 首頁補填小卡：填完直接看那一晚的報告。
+  Future<void> _makeUpRested() async {
+    final last = _restedMakeUp;
+    if (last?.startAt == null) return;
+    final date = reportDateKey(nightDateOf(last!.startAt!));
+    final rating = await _askRested(date, last.endAt);
+    if (rating != null && mounted) await _openReport(date);
   }
 
   /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
   Future<void> _openReport(String date) async {
     final marks = await widget.bedMarks.read(now: widget.clock());
+    final localRating = await _ratings.read(date);
+    CameraNight? camera;
+    for (final n in _camera?.nights ?? const <CameraNight>[]) {
+      if (n.date == date) camera = n;
+    }
     SleepSession? session;
     try {
       session = await _sessionFuture;
@@ -276,15 +344,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final source = widget.morningReport;
     final gameService = widget.game;
-    await Navigator.of(context).push(
+    final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => MorningReportScreen(
           // 今天早上起床的那一晚才說「在等手錶資料」
           pending: date == reportDateKey(widget.clock()),
+          canOpenInsights: widget.onOpenInsights != null,
           // 先畫手上已經有的（XP 用首頁已經讀到的那一份）
-          initial: buildMorningReport(date: date, marks: marks)
-              .withExtras(game: _game?.value, goalMinutes: goal),
+          initial: buildMorningReport(date: date, marks: marks).withExtras(
+            game: _game?.value,
+            goalMinutes: goal,
+            camera: camera,
+            localRating: localRating,
+          ),
           load: () async {
             final homeF = source?.fetchNight(date);
             final gameF = gameService?.fetchGame();
@@ -295,11 +368,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               marks: marks,
               home: home,
               session: session,
-            ).withExtras(game: game, goalMinutes: goal);
+            ).withExtras(
+              game: game,
+              goalMinutes: goal,
+              camera: camera,
+              localRating: localRating,
+            );
           },
+          loadSummary:
+              source == null ? null : () => source.fetchSummary(date),
         ),
       ),
     );
+    if (result == kReportOpenInsights && mounted) widget.onOpenInsights?.call();
   }
 
   Future<void> _startSleep() async {
@@ -1324,7 +1405,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
+        // 起床自評補填（起床 6 小時內、還沒填）。不進分數、不給 XP。
+        if (_restedMakeUp != null) ...[
+          const SizedBox(height: 8),
+          _restedMakeUpCard(),
+        ],
       ],
+    );
+  }
+
+  /// 補填起床自評的小卡。
+  Widget _restedMakeUpCard() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const Key('rested-make-up'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: _makeUpRested,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0x8C3A3672),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0x24FFFFFF)),
+          ),
+          child: Row(
+            children: [
+              Image.asset(
+                restedFaceAsset(4),
+                width: 32,
+                height: 32,
+                errorBuilder: (_, _, _) => const SizedBox(width: 32, height: 32),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'How rested did you feel this morning?',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.white70, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

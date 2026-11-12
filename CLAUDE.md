@@ -428,23 +428,43 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 ### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
 
-滑完 Slide to get up（或 I already got up）立刻出現；首頁一週心情列點有資料的那天也會打開。
-`screens/morning_report_screen.dart`，合併規則在 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
+滑完 Slide to get up（或 I already got up）→ **先跳起床自評卡**（`screens/rested_screen.dart`）→ 再出現報告；
+首頁一週心情列點任一天也會打開。`screens/morning_report_screen.dart`，合併規則在
+`services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
+
+版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤 → Lv／XP 一條
+→ From your buddy（AI 那段＋小建議）→ Time in bed／Time asleep → Phone down｜Your target → Sleep phases
+→ More details（收合：WASO、心率、效率、攝影機）→ Dream diary → View sleep insights → Back to home。
+字是 **Nunito**，只用在報告與自評卡（`assets/fonts/nunito/`，OFL；官方只出可變字型，切成五個固定粗細，
+**刻意不裝 `google_fonts`**——它會在執行時上網抓字）。
 
 | 規則 | 理由 |
 |---|---|
-| 分數、等級、心情、那句話全部照抄後端 `/home?date=`；連不到才用打包檔那一晚 | Dart 不判斷好壞 |
-| **沒有分數時不顯示分數也不顯示睡眠長度**，只寫 `Waiting for your watch data`，畫睡姿小狗 | 剛起床時手錶資料幾乎一定還沒到，畫 0 或上一晚的數字都是編造 |
+| 分數、等級、心情、那句話、AI 那段、小建議、效率警語**全部照抄後端**；連不到才用打包檔那一晚 | Dart 不判斷好壞 |
+| **沒有分數時不顯示分數也不顯示睡眠長度**（Time asleep 是「—」），寫 `Waiting for your watch data`，虛線圓環＋睡姿小狗，**也不問 `/night-summary`** | 剛起床時手錶資料幾乎一定還沒到，畫 0 或上一晚的數字都是編造 |
 | 那句話用 `display.mood_description`，**不用 `mood_reason`** | 後者是規則標籤（`final_quality=Good`），不是給人讀的 |
 | 不放晚數、日期圈圈列、最近 7 晚長條圖（使用者定：**只放這一晚**）；不放「Great work」、不另外發 XP | 紅線 5 |
-| 版面（11-12 依參考圖改版）：細線大字起床時間疊在小狗後面 → Lv／XP 條 → 半圓分數 → 上床／起床＋睡眠目標 → Sleep phases → Back to home | — |
 | **「+N XP」照抄 `/game` 的 `recent_nights`**，差的晚上照實寫 +0；手錶還沒到寫 `so far`；後端還沒有這晚就不畫 | 好晚上回饋多、差晚上回饋少，規則只在 `game/xp.py` |
-| 睡眠目標＝轉盤「就寢→起床」的長度，**只寫「7h 25m of your 8h goal」，不寫 reached、不變色** | 好壞只有後端能判斷；分數以時長為主，兩個說法會打架 |
-| Sleep Stages 圖與夢境**只在打包檔最新那一晚就是這一晚時**才有 | `/home` 不回階段資料；夢境還沒有 per-user |
+| 跟上一晚比（Time in bed／Time asleep）照抄 `previous_night`，**上升紅、下降綠、只代表方向**；沒有上一晚不畫 | 與首頁同一條；睡得多不一定好 |
+| 睡眠目標＝轉盤「就寢→起床」的長度，**只寫「of your 8h goal」，不寫 reached、不變色** | 好壞只有後端能判斷；分數以時長為主，兩個說法會打架 |
+| 達成度那一行（`2h 12m after your target`／`On time`）**只照抄 `adherence_minutes`**，沒有後端就整張 Phone down 卡不出現 | 跨午夜只在 `behavior/adherence.py` 算 |
+| More details 的效率是**進分數的那一個**：依 `composition.efficiency_basis` 去 behavior 找同一個 basis 的欄位，都對不上才用手錶的；**basis 字串不寫死在 Dart**，畫面上照列 basis 與警語 | App 裡有五個叫「效率」的數字，只有 basis 分得開 |
+| 攝影機只顯示後端那句「跟你平常比」＋「not part of your score」 | 攝影機計分項 0 項 |
+| Sleep phases 圖用 `/home` 的 `metrics.sleep_stages`（Garmin 來源每晚都有）；沒有就比例條。夢境只在打包檔最新那一晚就是這一晚時才有 | 夢境還沒有 per-user |
 | 比例條要後端的 `light_minutes`（總睡眠 − 深睡 − REM），**沒量到 REM 時是 null** | 減出來的淺睡會把 REM 吃進去 |
-| 沒按按鈕時顯示手錶的 `Asleep 00:10 – 07:00`，不冒充 In bed | 入睡不是上床 |
-| Cancel 不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
+| 沒按按鈕時 Time in bed 是「—」、寫 `No bedtime recorded`，**不拿手錶的入睡冒充上床** | 入睡不是上床 |
+| Cancel 不開自評也不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
 | 日期自己組（`reportDateTitle`），不用 intl 的 DateFormat | 那會跟手機語言走 |
+
+**起床自評卡**（`services/morning_rating.dart`）：
+
+| 規則 | 理由 |
+|---|---|
+| 題目、五個選項、十個標籤與 `behavior/morning_tips.py` **逐字相同**（題目的「woke-up」連字號照抄 CSD 原文）；`morning_rating_test.dart` 直接讀那支 Python 與研究文件比對 | Dart 另存一份只為了離線也畫得出來，漂移時不會報錯 |
+| 卡片上**不出現分數**；Skip 永遠按得到、不送任何東西、不擋報告 | 看到分數之前先問 |
+| 先存在手機上再送；連不到（`retryLater`）下次開首頁補送，4xx 不再送 | 報告離線也畫得出 You felt；格式錯的再送也一樣 |
+| 首頁補填小卡：**起床 6 小時內、那一晚還沒填**才出現（Skip 過也照樣出現）；記下起床後幾分鐘才填 | 使用者定；分析時可以只取一小時內的 |
+| 不換寵物心情、不改那句話、不給 XP | 不進分數（紅線 4） |
 
 #### 早晨報告的後端（2026-11-12）
 
@@ -1562,7 +1582,7 @@ python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**436 條全過**，2026-10-04 實測）：
+Flutter（在 `app/` 底下跑，**614 條全過**，2026-11-13 實測）：
 
 ```bash
 flutter test
