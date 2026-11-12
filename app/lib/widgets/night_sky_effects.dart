@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// 首頁夜空上的動態效果：四角星一閃一閃地發亮，偶爾一道流星劃過。
+/// 首頁夜空上的動態效果：小小的圓形光點一閃一閃地發亮，偶爾一道流星劃過。
 ///
 /// 全部用程式畫（不用任何圖片素材）。只畫在天空那一塊（[height] 由首頁依
 /// 背景圖的山頂高度算出），不會蓋到寵物與卡片。
@@ -36,10 +36,10 @@ class _NightSkyEffectsState extends State<NightSkyEffects>
   static final List<_Sparkle> _sparkles = () {
     final r = math.Random(11);
     final out = <_Sparkle>[];
-    while (out.length < 14) {
+    while (out.length < 22) {
       final x = 0.04 + r.nextDouble() * 0.92;
       final y = 0.06 + r.nextDouble() * 0.74;
-      final size = 5 + r.nextDouble() * 7;
+      final size = 1.2 + r.nextDouble() * 1.6; // 光點核心半徑（很小）
       final phase = r.nextDouble() * math.pi * 2;
       final speed = 0.6 + r.nextDouble() * 1.2;
       // 左上角是問候文字，星星不要閃在字上。
@@ -106,47 +106,30 @@ class _SkyPainter extends CustomPainter {
 
   _SkyPainter({required this.t, required this.sparkles, required this.animate});
 
-  /// 四角星：上下左右四個尖，中間微微內凹。
-  static Path _star(Offset c, double r) {
-    final inner = r * 0.22;
-    final path = Path()..moveTo(c.dx, c.dy - r);
-    final pts = [
-      Offset(c.dx + inner, c.dy - inner),
-      Offset(c.dx + r, c.dy),
-      Offset(c.dx + inner, c.dy + inner),
-      Offset(c.dx, c.dy + r),
-      Offset(c.dx - inner, c.dy + inner),
-      Offset(c.dx - r, c.dy),
-      Offset(c.dx - inner, c.dy - inner),
-    ];
-    for (final p in pts) {
-      path.lineTo(p.dx, p.dy);
-    }
-    return path..close();
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
-    // ── 會閃的星 ──
+    // ── 會閃的星：小小的圓形光點，從中心往外漸淡 ──
     for (final s in sparkles) {
       final wave = animate
           ? (math.sin(t * math.pi * 2 * 4 * s.speed + s.phase) + 1) / 2
           : 0.6;
-      final alpha = 0.25 + 0.75 * wave;
-      final r = s.size * (0.75 + 0.35 * wave);
+      final alpha = 0.35 + 0.65 * wave;
+      final core = s.size * (0.85 + 0.25 * wave);
+      final glow = core * 4.5;
       final c = Offset(s.x * size.width, s.y * size.height);
 
-      // 外圈光暈
       canvas.drawCircle(
         c,
-        r * 1.6,
+        glow,
         Paint()
-          ..color = const Color(0xFFFFE9A8).withValues(alpha: 0.18 * alpha)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
-      canvas.drawPath(
-        _star(c, r),
-        Paint()..color = const Color(0xFFFFF3C4).withValues(alpha: alpha),
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xFFFFF6D8).withValues(alpha: alpha),
+              const Color(0xFFBFD4FF).withValues(alpha: 0.35 * alpha),
+              const Color(0x00BFD4FF),
+            ],
+            stops: [core / glow, 0.4, 1.0],
+          ).createShader(Rect.fromCircle(center: c, radius: glow)),
       );
     }
 
