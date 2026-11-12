@@ -27,7 +27,7 @@ import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/game_level_card.dart';
-import 'package:app/widgets/pet_card.dart';
+import 'package:app/widgets/home_pet.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 
@@ -369,19 +369,35 @@ void main() {
   });
 
   group('寵物身上的衣服', () {
-    testWidgets('穿了就畫在寵物身上', (tester) async {
+    // 帽子、眼鏡、圍巾有隊友畫的真圖；蝴蝶結、高帽、皇冠沒有，疊 emoji。
+    testWidgets('有真圖的那件 → 畫真圖，不疊 emoji', (tester) async {
       await pumpScreen(tester, const Scaffold(
-        body: PetCard(message: 'hi', animationPath: 'missing.json', accessoryEmoji: '🧣'),
+        body: HomePet(mood: 'happy', equippedItemId: 'scarf', accessoryEmoji: '🧣'),
       ));
       expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
-      expect(find.text('🧣'), findsOneWidget);
+      expect(find.text('🧣'), findsNothing, reason: '真圖與 emoji 不能同時出現');
+    });
+
+    testWidgets('沒有圖的那件 → 疊 emoji（看得到比好看重要）', (tester) async {
+      await pumpScreen(tester, const Scaffold(
+        body: HomePet(mood: 'happy', equippedItemId: 'crown', accessoryEmoji: '👑'),
+      ));
+      expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
+      expect(find.text('👑'), findsOneWidget);
     });
 
     testWidgets('沒穿就什麼都不畫', (tester) async {
-      await pumpScreen(tester, const Scaffold(
-        body: PetCard(message: 'hi', animationPath: 'missing.json'),
-      ));
+      await pumpScreen(tester, const Scaffold(body: HomePet(mood: 'happy')));
       expect(find.byKey(const Key('pet-accessory')), findsNothing);
+    });
+
+    test('衣櫃 item_id 對得上隊友的三件圖', () {
+      expect(layeredAccessoryFor('cap')?.id, 'sleep_hat');
+      expect(layeredAccessoryFor('glasses')?.id, 'round_glasses');
+      expect(layeredAccessoryFor('scarf')?.id, 'night_scarf');
+      for (final none in ['bow', 'top_hat', 'crown', null]) {
+        expect(layeredAccessoryFor(none), isNull, reason: '$none');
+      }
     });
   });
 
@@ -403,34 +419,34 @@ void main() {
             repository: _ImmediateRepository(sample),
             bedMarks: BedMarkStore(InMemoryKeyValueStore()),
             game: game,
+            // 早上：等級卡、衣櫃在白天版
+            clock: () => DateTime(2026, 11, 12, 9),
           ),
         ),
       );
     }
 
-    testWidgets('有後端 → 等級卡出現、寵物穿著衣櫃裡那一件', (tester) async {
+    testWidgets('有後端 → 等級徽章出現、寵物穿著衣櫃裡那一件', (tester) async {
       final stub = _StubGame(
           closetResult: GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf'))));
       await pumpHome(tester, stub);
-      expect(find.byKey(const Key('game-level')), findsOneWidget);
+      expect(find.byKey(const Key('level-badge')), findsOneWidget);
       expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
     });
 
     testWidgets('點衣櫃 → 打開衣櫃畫面', (tester) async {
       await pumpHome(tester, _StubGame());
-      await tester.ensureVisible(find.text('Closet'));
-      await tester.tap(find.text('Closet'));
+      await tester.tap(find.byKey(const Key('open-closet')));
       // ⚠️ 不用 pumpAndSettle：寵物的 Lottie 動畫永遠在動，會等到逾時。
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byType(ClosetScreen), findsOneWidget);
     });
 
-    testWidgets('沒有後端 → 沒有等級卡，點衣櫃老實講要連後端', (tester) async {
+    testWidgets('沒有後端 → 沒有等級徽章，點衣櫃老實講要連後端', (tester) async {
       await pumpHome(tester, null);
-      expect(find.byKey(const Key('game-level')), findsNothing);
-      await tester.ensureVisible(find.text('Closet'));
-      await tester.tap(find.text('Closet'));
+      expect(find.byKey(const Key('level-badge')), findsNothing);
+      await tester.tap(find.byKey(const Key('open-closet')));
       await tester.pump();
       expect(find.textContaining('needs the Sonnap backend'), findsOneWidget);
       expect(find.textContaining('available later'), findsNothing,

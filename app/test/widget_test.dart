@@ -7,11 +7,11 @@
 //
 // 兩個寫測試時踩到的坑，留著避免之後有人改回去：
 //
-// 1. **不要用 pumpAndSettle()**。PetCard 用 Lottie.asset 播動畫，預設是無限
+// 1. **不要用 pumpAndSettle()**。首頁寵物的動畫，預設是無限
 //    循環，pumpAndSettle 會一直等動畫停下來、最後逾時失敗。用固定次數的
 //    pump() 就好。
-// 2. **分數要用 findRichText**。SleepScoreCard 是用 Text.rich 把 "46" 和
-//    "/100" 併成一個 RichText，普通的 find.text('46') 抓不到。
+// 2. **分數要用 findRichText**。寵物下面那一行是用 Text.rich 把等級、分數、
+//    "/ 100" 併成一個 RichText，普通的 find.text('46') 抓不到。
 
 import 'package:app/main.dart';
 import 'package:app/models/sleep_session.dart';
@@ -83,21 +83,30 @@ void main() {
     }
   });
 
-  testWidgets('HomeScreen renders real values from the payload',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: HomeScreen(
-          repository: _FakeRepository(session: _sampleSession()),
+  testWidgets('HomeScreen renders real values from the payload', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _FakeRepository(session: _sampleSession()),
+            // 早上：分數與心情在白天版（晚上版刻意不放）
+            clock: () => DateTime(2026, 11, 12, 9),
+          ),
         ),
       ),
-    ));
+    );
     await _settleWithoutAnimations(tester);
 
     // 分數是 Text.rich（"46" + "/100"），所以要 findRichText
     expect(find.textContaining('46', findRichText: true), findsWidgets);
     expect(find.text('Anxious'), findsOneWidget);
+    // 寵物下面那一行：等級 · 分數（2026-11-12 改版，原本的分數卡與 score_message 退場）
+    expect(find.text('46'), findsOneWidget);
+    expect(find.text('Bad sleep'), findsOneWidget);
     expect(find.text('Tough night.'), findsOneWidget);
+    expect(find.text('Your buddy is worn out.'), findsOneWidget);
 
     // 確認不再是寫死的那組值
     expect(find.textContaining('82', findRichText: true), findsNothing);
@@ -107,15 +116,18 @@ void main() {
   // 讀真實 asset 的測試在 test/sleep_repository_test.dart，刻意分開放——
   // 那個測試要用 runAsync，跟這裡的 widget 測試放同一個檔案會互相卡住。
 
-  testWidgets('HomeScreen shows an error state when data is missing',
-      (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: HomeScreen(
-          repository: _FakeRepository(error: 'asset not found'),
+  testWidgets('HomeScreen shows an error state when data is missing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _FakeRepository(error: 'asset not found'),
+          ),
         ),
       ),
-    ));
+    );
     await _settleWithoutAnimations(tester);
 
     expect(find.text('No sleep data yet'), findsOneWidget);

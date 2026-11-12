@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../theme/sonnap_colors.dart';
 import 'package:intl/intl.dart';
 
 import 'bedtime_urgency.dart';
@@ -202,10 +204,7 @@ class _HeaderCardState extends State<HeaderCard> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10265A),
-        borderRadius: BorderRadius.circular(24),
-      ),
+      decoration: sonnapCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/sonnap_colors.dart';
+
 class SleepStreakCard extends StatelessWidget {
   final int streakDays;
   final int completedDays;
@@ -42,10 +44,7 @@ class SleepStreakCard extends StatelessWidget {
         horizontal: 16,
         vertical: 14,
       ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2548),
-        borderRadius: BorderRadius.circular(22),
-      ),
+      decoration: sonnapCardDecoration(),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isVeryNarrow = constraints.maxWidth < 360;
