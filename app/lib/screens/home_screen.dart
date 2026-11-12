@@ -81,6 +81,9 @@ class HomeScreen extends StatefulWidget {
 /// 整頁的背景圖（原創，2026-11-12 由使用者以 prompt 生成，左右翻轉讓月亮避開問候文字）。
 const String kHomeBackgroundAsset = 'assets/backgrounds/night_sky.png';
 
+/// 接在下面的湖面（原創，同樣左右翻轉，倒影與月亮在同一側）。
+const String kHomeBackgroundLowerAsset = 'assets/backgrounds/night_lake.png';
+
 /// 背景圖的寬高比（853 × 1844）。
 const double kHomeBackgroundAspect = 853 / 1844;
 
@@ -580,13 +583,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return SingleChildScrollView(
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Image.asset(
-            kHomeBackgroundAsset,
-            width: width,
-            fit: BoxFit.fitWidth,
-            alignment: Alignment.topCenter,
-            errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+          // 山丘那張在上、湖面那張接在下面（兩張同寬同比例，接縫兩邊都是深色草叢）。
+          // ⚠️ 用 Positioned：頁面高度由內容決定，背景只鋪到內容結束，
+          //    不然兩張圖會把頁面撐長，底下多出一大段空的湖面可以捲。
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Image.asset(
+                  kHomeBackgroundAsset,
+                  width: width,
+                  fit: BoxFit.fitWidth,
+                  errorBuilder: (context, error, stack) =>
+                      const SizedBox.shrink(),
+                ),
+                Image.asset(
+                  kHomeBackgroundLowerAsset,
+                  width: width,
+                  fit: BoxFit.fitWidth,
+                  errorBuilder: (context, error, stack) =>
+                      const SizedBox.shrink(),
+                ),
+              ],
+            ),
           ),
           // 星星閃光與流星，只畫在山頂以上的天空。
           NightSkyEffects(width: width, height: crestY * 0.85),
@@ -638,14 +661,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _buildGoingToBed(),
-                      const SizedBox(height: 16),
-                      WeekMoodStrip(history: session.history),
-                      const SizedBox(height: 16),
-                      _buildScoreLine(session),
+                      const SizedBox(height: 14),
+                      _buildStartSleepPill(),
                       const SizedBox(height: 18),
+                      _buildScoreCard(session),
+                      const SizedBox(height: SonnapColors.gap),
                       _buildTiles(session),
+                      const SizedBox(height: SonnapColors.gap),
+                      WeekMoodStrip(history: session.history),
                     ],
                   ),
                 ),
@@ -842,56 +865,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// 「Good · 95 / 100」。等級與分數都照抄後端。
+  /// 分數卡：左邊發光圓環（分數），右邊「Good sleep」與後端那句話。
+  /// 等級、分數、那句話都照抄後端（`display.score_message`），Dart 不判斷。
   /// ⚠️ 沒有分數時寫「—」，不能寫 0（`scoreAsInt` 在 null 時回 0）。
-  Widget _buildScoreLine(SleepSession session) {
+  Widget _buildScoreCard(SleepSession session) {
     final scoring = session.scoring;
-    final score = scoring.finalScore == null ? '—' : '${scoring.scoreAsInt}';
+    final hasScore = scoring.finalScore != null;
+    final score = hasScore ? '${scoring.scoreAsInt}' : '—';
+    final qualityColor = Color(session.display.colorValue);
+    const ring = 104.0;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: sonnapCardDecoration(),
       child: Row(
         children: [
-          const Text(
-            'Sleep Score',
-            style: TextStyle(color: SonnapColors.textSecondary, fontSize: 14),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Text.rich(
-                key: const Key('score-line'),
-                TextSpan(
+          SizedBox(
+            width: ring,
+            height: ring,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // 光暈
+                Container(
+                  width: ring,
+                  height: ring,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: SonnapColors.accent.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: ring,
+                  height: ring,
+                  child: CircularProgressIndicator(
+                    value: hasScore ? scoring.scoreAsInt / 100 : 0,
+                    strokeWidth: 7,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: Colors.white.withValues(alpha: 0.12),
+                    color: const Color(0xFFB9A6FF),
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextSpan(
-                      text: score,
+                    Text(
+                      score,
+                      key: const Key('score-number'),
                       style: const TextStyle(
                         color: SonnapColors.textPrimary,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
                       ),
                     ),
-                    const TextSpan(
-                      text: ' / 100 · ',
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Sleep Score',
                       style: TextStyle(
-                        color: SonnapColors.textMuted,
-                        fontSize: 14,
-                      ),
-                    ),
-                    TextSpan(
-                      text: scoring.finalQuality,
-                      style: TextStyle(
-                        color: Color(session.display.colorValue),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                        color: SonnapColors.textSecondary,
+                        fontSize: 11,
                       ),
                     ),
                   ],
                 ),
-              ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${scoring.finalQuality} sleep',
+                  key: const Key('score-quality'),
+                  style: TextStyle(
+                    color: qualityColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (session.display.scoreMessage.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    session.display.scoreMessage,
+                    style: const TextStyle(
+                      color: SonnapColors.textSecondary,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -1025,54 +1097,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ── 「Going to bed?」卡：只有 Start sleep ───────────────────────
+  // ── 小顆的 Start Sleep（LUNA 那樣的藥丸按鈕）──────────────────
 
   /// 首頁只有 Start sleep（2026-11-12 使用者定案）：下床在睡覺畫面裡按。
-  Widget _buildGoingToBed() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      decoration: sonnapCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Going to bed?',
-            style: TextStyle(
-              color: SonnapColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+  Widget _buildStartSleepPill() {
+    return Column(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            gradient: const LinearGradient(
+              colors: [Color(0xFFB9A6FF), Color(0xFF8B6DFF)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: SonnapColors.accent.withValues(alpha: 0.5),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: TextButton(
+            key: const Key('start-sleep'),
+            onPressed: _startSleep,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+              shape: const StadiumBorder(),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.nightlight_round, size: 20),
+                SizedBox(width: 10),
+                Text(
+                  'Start Sleep',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                SizedBox(width: 14),
+                Icon(Icons.chevron_right_rounded, size: 20),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
-          //    少了它，忘記按的人會以為那一晚白過了——而 lights_out_at 照樣偵測得到。
-          const Text(
-            "It's fine if you forget to tap :) Bedtime is detected anyway.",
-            key: Key('optional-note'),
-            style: TextStyle(color: SonnapColors.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
+        //    少了它，忘記按的人會以為那一晚白過了——而 lights_out_at 照樣偵測得到。
+        const Text(
+          "It's fine if you forget to tap :) Bedtime is detected anyway.",
+          key: Key('optional-note'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: SonnapColors.textSecondary,
+            fontSize: 11,
+            shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
           ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              key: const Key('start-sleep'),
-              onPressed: _startSleep,
-              icon: const Icon(Icons.nightlight_round, size: 22),
-              label: const Text(
-                'Start sleep',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFFFD96A),
-                side: const BorderSide(color: Color(0xFFFFC567), width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const StadiumBorder(),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

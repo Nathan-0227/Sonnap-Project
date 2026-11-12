@@ -162,12 +162,17 @@ void main() {
       expect(find.text('Out of bed'), findsNothing);
     });
 
-    testWidgets('分數行照抄後端', (tester) async {
+    testWidgets('分數卡照抄後端：分數、等級、那句話', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
-      final text = line.textSpan!.toPlainText();
-      expect(text, contains('${sample.scoring.scoreAsInt} / 100'));
-      expect(text, contains(sample.scoring.finalQuality));
+      expect(
+        tester.widget<Text>(find.byKey(const Key('score-number'))).data,
+        '${sample.scoring.scoreAsInt}',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('score-quality'))).data,
+        '${sample.scoring.finalQuality} sleep',
+      );
+      expect(find.text(sample.display.scoreMessage), findsOneWidget);
     });
 
     testWidgets('點效率卡 → 跳出後端的警語原文（畫面上平常不放）', (tester) async {
@@ -185,12 +190,12 @@ void main() {
       );
     });
 
-    testWidgets('睡眠長度卡底下有「跟上一晚比」，點了開最近 7 晚的長條圖',
-        (tester) async {
+    testWidgets('睡眠長度卡底下有「跟上一晚比」，點了開最近 7 晚的長條圖', (tester) async {
       await pumpHome(tester, () => at(12, 9));
       final line = find.descendant(
-          of: find.byKey(const Key('tile-duration')),
-          matching: find.byKey(const Key('tile-compare')));
+        of: find.byKey(const Key('tile-duration')),
+        matching: find.byKey(const Key('tile-compare')),
+      );
       expect(line, findsOneWidget);
       expect(tester.widget<Text>(line).data, contains(' vs '));
       await tester.tap(find.byKey(const Key('tile-duration')));
@@ -198,13 +203,13 @@ void main() {
       expect(find.byKey(const Key('metric-sheet-duration')), findsOneWidget);
     });
 
-    testWidgets('⚠️ 歷史沒有效率資料（舊版後端）→ 不畫比較，不編數字',
-        (tester) async {
+    testWidgets('⚠️ 歷史沒有效率資料（舊版後端）→ 不畫比較，不編數字', (tester) async {
       final hasEff = sample.history.any((e) => e.sleepEfficiency != null);
       await pumpHome(tester, () => at(12, 9));
       final line = find.descendant(
-          of: find.byKey(const Key('tile-efficiency')),
-          matching: find.byKey(const Key('tile-compare')));
+        of: find.byKey(const Key('tile-efficiency')),
+        matching: find.byKey(const Key('tile-compare')),
+      );
       expect(line, hasEff ? findsOneWidget : findsNothing);
     });
 
@@ -271,8 +276,10 @@ void main() {
         findsNothing,
         reason: '「0 min」會被讀成整晚沒睡，真相是沒量到',
       );
-      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
-      expect(line.textSpan!.toPlainText(), contains('— / 100'));
+      expect(
+        tester.widget<Text>(find.byKey(const Key('score-number'))).data,
+        '—',
+      );
     });
   });
 

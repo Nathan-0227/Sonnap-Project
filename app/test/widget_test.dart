@@ -83,25 +83,29 @@ void main() {
     }
   });
 
-  testWidgets('HomeScreen renders real values from the payload',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: HomeScreen(
-          repository: _FakeRepository(session: _sampleSession()),
-          // 早上：分數與心情在白天版（晚上版刻意不放）
-          clock: () => DateTime(2026, 11, 12, 9),
+  testWidgets('HomeScreen renders real values from the payload', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _FakeRepository(session: _sampleSession()),
+            // 早上：分數與心情在白天版（晚上版刻意不放）
+            clock: () => DateTime(2026, 11, 12, 9),
+          ),
         ),
       ),
-    ));
+    );
     await _settleWithoutAnimations(tester);
 
     // 分數是 Text.rich（"46" + "/100"），所以要 findRichText
     expect(find.textContaining('46', findRichText: true), findsWidgets);
     expect(find.text('Anxious'), findsOneWidget);
     // 寵物下面那一行：等級 · 分數（2026-11-12 改版，原本的分數卡與 score_message 退場）
-    expect(find.textContaining('46 / 100 · Bad', findRichText: true),
-        findsOneWidget);
+    expect(find.text('46'), findsOneWidget);
+    expect(find.text('Bad sleep'), findsOneWidget);
+    expect(find.text('Tough night.'), findsOneWidget);
     expect(find.text('Your buddy is worn out.'), findsOneWidget);
 
     // 確認不再是寫死的那組值
@@ -112,15 +116,18 @@ void main() {
   // 讀真實 asset 的測試在 test/sleep_repository_test.dart，刻意分開放——
   // 那個測試要用 runAsync，跟這裡的 widget 測試放同一個檔案會互相卡住。
 
-  testWidgets('HomeScreen shows an error state when data is missing',
-      (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: HomeScreen(
-          repository: _FakeRepository(error: 'asset not found'),
+  testWidgets('HomeScreen shows an error state when data is missing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HomeScreen(
+            repository: _FakeRepository(error: 'asset not found'),
+          ),
         ),
       ),
-    ));
+    );
     await _settleWithoutAnimations(tester);
 
     expect(find.text('No sleep data yet'), findsOneWidget);
