@@ -248,6 +248,16 @@ def pick_latest_date(*row_lists) -> Optional[str]:
     return max(dates) if dates else None
 
 
+def _light_minutes(w_row: dict) -> Optional[float]:
+    """淺睡分鐘 = 總睡眠 − 深睡 − REM。沒量到 REM 或缺任何一項時回 None。"""
+    if not w_row.get("rem_measured"):
+        return None
+    total, deep, rem = w_row.get("duration_min"), w_row.get("deep_min"), w_row.get("rem_min")
+    if total is None or deep is None or rem is None:
+        return None
+    return round(max(0.0, total - deep - rem), 1)
+
+
 def _row_for(rows: List[dict], target_date: Optional[str]) -> Optional[dict]:
     """從列表裡挑出指定日期那一列。"""
     if target_date is None:
@@ -796,6 +806,10 @@ async def get_home(
             "waso_minutes": w_row["waso_min"],
             "deep_minutes": w_row["deep_min"],
             "rem_minutes": w_row["rem_min"],
+            # 早晨報告的淺睡／深睡／REM 比例條用（2026-11-12）。表裡沒有淺睡欄位，
+            # 所以是「總睡眠 − 深睡 − REM」。⚠️ 那晚沒量到 REM 時回 null：
+            # 減出來的數字會把 REM 吃進淺睡裡，跟 Sleep Stages 圖「沒量到就不畫」同一條規矩。
+            "light_minutes": _light_minutes(w_row),
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
             # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。

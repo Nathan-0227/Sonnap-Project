@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/sleep_session.dart';
 import '../theme/sonnap_colors.dart';
 
-/// 首頁上方的一週日期列：最近 7 天，每天一個心情小圖示。只顯示，不能點。
+/// 首頁上方的一週日期列：最近 7 天，每天一個心情小圖示。
+/// 有資料的那天點了打開那一晚的早晨報告（[onDayTap]，2026-11-12）；
+/// 沒資料的那天不能點——點了也只會看到一張空報告。
 ///
 /// ⚠️ 用心情圖示而不是寵物小臉：2D 小狗目前只有兩種樣子，用小臉的話
 ///    anxious 那晚看起來會跟 bored 一樣（2026-11-12 使用者決定）。
@@ -11,7 +13,10 @@ import '../theme/sonnap_colors.dart';
 class WeekMoodStrip extends StatelessWidget {
   final List<HistoryEntry> history;
 
-  const WeekMoodStrip({super.key, required this.history});
+  /// 點某一天。參數是那一晚的日期（YYYY-MM-DD，與 history 的 date 相同）。
+  final ValueChanged<String>? onDayTap;
+
+  const WeekMoodStrip({super.key, required this.history, this.onDayTap});
 
   /// 以最新那一晚為終點往回 7 個日曆天。中間沒資料的那天留空格，
   /// 不能直接取最後 7 筆——那會把「中間沒戴錶」的日子藏起來。
@@ -53,7 +58,13 @@ class WeekMoodStrip extends StatelessWidget {
         children: [
           for (final (i, (date, entry)) in days.indexed)
             Expanded(
-              child: Column(
+              child: InkWell(
+                key: Key('week-day-${date.day}'),
+                borderRadius: BorderRadius.circular(12),
+                onTap: entry == null || onDayTap == null
+                    ? null
+                    : () => onDayTap!(entry.date),
+                child: Column(
                 children: [
                   Text(_weekday[date.weekday - 1],
                       style: const TextStyle(
@@ -69,6 +80,7 @@ class WeekMoodStrip extends StatelessWidget {
                   const SizedBox(height: 6),
                   MoodDot(mood: entry?.petMood),
                 ],
+              ),
               ),
             ),
         ],

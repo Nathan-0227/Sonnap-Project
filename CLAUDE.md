@@ -426,6 +426,23 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 要求音訊焦點：Spotify 會暫停；別人搶走就停、來電先靜音 | 使用者定 |
 | ⚠️ 睡姿圖或背景缺檔時退回月亮小狗／漸層，**不會報錯** | 換新圖後若畫面沒變，先查 APK 裡有沒有那張圖——2026-11-12 建置快取漏包過一次，`flutter clean` 才好 |
 
+### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
+
+滑完 Slide to get up（或 I already got up）立刻出現；首頁一週心情列點有資料的那天也會打開。
+`screens/morning_report_screen.dart`，合併規則在 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
+
+| 規則 | 理由 |
+|---|---|
+| 分數、等級、心情、那句話全部照抄後端 `/home?date=`；連不到才用打包檔那一晚 | Dart 不判斷好壞 |
+| **沒有分數時不顯示分數也不顯示睡眠長度**，只寫 `Waiting for your watch data`，畫睡姿小狗 | 剛起床時手錶資料幾乎一定還沒到，畫 0 或上一晚的數字都是編造 |
+| 那句話用 `display.mood_description`，**不用 `mood_reason`** | 後者是規則標籤（`final_quality=Good`），不是給人讀的 |
+| 不放晚數（使用者定）、不放「Great work」、不發 XP | 紅線 5 |
+| Sleep Stages 圖與夢境**只在打包檔最新那一晚就是這一晚時**才有 | `/home` 不回階段資料；夢境還沒有 per-user |
+| 比例條要後端的 `light_minutes`（總睡眠 − 深睡 − REM），**沒量到 REM 時是 null** | 減出來的淺睡會把 REM 吃進去 |
+| 沒按按鈕時顯示手錶的 `Asleep 00:10 – 07:00`，不冒充 In bed | 入睡不是上床 |
+| Cancel 不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
+| 日期自己組（`reportDateTitle`），不用 intl 的 DateFormat | 那會跟手機語言走 |
+
 ### ⚠️ 三個已修、但規則仍然有效的地方
 
 ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你

@@ -254,7 +254,8 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.markEnd(widget.clock());
-    if (mounted) Navigator.of(context).pop();
+    // 回傳 true = 這一晚結束了，首頁接著打開早晨報告（Cancel 不回 true）
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   /// 「I already got up」（2026-11-12）：忘了按 Out of bed，事後補起床時間。
@@ -291,7 +292,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.markEnd(end, recalled: true);
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   Future<void> _cancel() async {

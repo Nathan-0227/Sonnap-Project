@@ -24,6 +24,8 @@ import '../widgets/night_sky_effects.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../services/morning_report.dart';
+import 'morning_report_screen.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -71,6 +73,10 @@ class HomeScreen extends StatefulWidget {
   /// 助眠聲音的原生端（可注入，測試換成假的）。選擇存在 [bedMarks] 同一個儲存裡。
   final SleepSoundPlayer soundPlayer;
 
+  /// 早晨報告讀 `/home?date=` 的來源。null = 這支 build 沒有後端，
+  /// 報告改用打包檔裡那一晚。
+  final MorningReportSource? morningReport;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
@@ -78,6 +84,7 @@ class HomeScreen extends StatefulWidget {
     this.soundPlayer = const PlatformSleepSoundPlayer(),
     this.game,
     this.cameraInsights,
+    this.morningReport,
     this.clock = DateTime.now,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
@@ -229,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _sleepRouteOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Navigator.of(context).push(
+      final ended = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) => SleepModeScreen(
@@ -247,7 +254,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _sleepRouteOpen = false;
       if (!mounted) return;
       await _loadMarks();
+      // 滑完 Slide to get up（或 I already got up）→ 立刻出現昨晚的報告
+      if (ended == true && mounted) {
+        await _openReport(reportDateKey(nightDateOf(startAt)));
+      }
     });
+  }
+
+  /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
+  Future<void> _openReport(String date) async {
+    final marks = await widget.bedMarks.read(now: widget.clock());
+    SleepSession? session;
+    try {
+      session = await _sessionFuture;
+    } catch (_) {
+      session = null;
+    }
+    if (!mounted) return;
+    final source = widget.morningReport;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => MorningReportScreen(
+          initial: buildMorningReport(date: date, marks: marks),
+          load: () async => buildMorningReport(
+            date: date,
+            marks: marks,
+            home: await source?.fetchNight(date),
+            session: session,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _startSleep() async {
@@ -768,7 +806,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       else
                         const SleepStagesUnavailableCard(),
                       const SizedBox(height: SonnapColors.gap),
-                      WeekMoodStrip(history: session.history),
+                      WeekMoodStrip(
+                        history: session.history,
+                        onDayTap: _openReport,
+                      ),
                     ],
                   ),
                 ),
