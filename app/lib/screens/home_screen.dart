@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
 import '../services/account_service.dart';
+import '../services/sleep_sounds.dart';
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
 import '../services/camera_insights.dart';
@@ -66,10 +67,14 @@ class HomeScreen extends StatefulWidget {
   /// 鬧鐘的原生端（可注入，測試換成假的）。設定存在 [bedMarks] 同一個儲存裡。
   final AlarmScheduler alarmScheduler;
 
+  /// 助眠聲音的原生端（可注入，測試換成假的）。選擇存在 [bedMarks] 同一個儲存裡。
+  final SleepSoundPlayer soundPlayer;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
     this.alarmScheduler = const PlatformAlarmScheduler(),
+    this.soundPlayer = const PlatformSleepSoundPlayer(),
     this.game,
     this.cameraInsights,
     this.clock = DateTime.now,
@@ -184,6 +189,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           fullscreenDialog: true,
           builder: (_) => SleepModeScreen(
             alarm: _alarm,
+            sounds: SleepSoundsController(
+              settings: SleepSoundSettings(widget.bedMarks.store),
+              player: widget.soundPlayer,
+            ),
             store: widget.bedMarks,
             startAt: startAt,
             clock: widget.clock,

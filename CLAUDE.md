@@ -395,6 +395,21 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 🔴 **還沒在實機驗證會響**：要在三星上測螢幕鎖住、App 被滑掉、開著勿擾三種情況。
 
+### ✅ 睡覺畫面＋助眠聲音（2026-11-12，`feature/sleep-sounds`）
+
+由上到下：大時間 → `Sleeping… your watch is tracking` → 睡著的小狗（`assets/pets/dog01/sleeping.png`，使用者生成）
+→ 鬧鐘列 → 助眠聲音列 → 外框 Out of bed → Cancel 小字。背景是房間（`assets/backgrounds/bedroom.png`）。
+
+| 規則 | 理由 |
+|---|---|
+| 副標只准說「**手錶**在量」；measuring／monitoring 與其他 tracking 說法都不准（`home_screen_test` 守著） | App 睡覺時沒有在量東西 |
+| 點鬧鐘列開**同一個轉盤**，月亮鎖在按 Start Sleep 的時刻；**只改今晚**，轉盤上存的設定不變 | 使用者定 |
+| 聲音三種（Rain／Ocean／Brown noise）**在 Kotlin 即時合成**（`SleepSoundService.kt`），沒有音檔 | 沒有版權問題、循環沒有接縫。要換成錄音只改原生端 |
+| 播多久（15／30／60，預設 30）、淡出 1 分鐘由 Dart 決定（`sleep_sounds.dart`），選擇記在手機上 | 與鬧鐘同一條紀律 |
+| **鬧鐘響、Out of bed、Cancel 都會停聲音**；鬧鐘那條在原生端（`AlarmRingService`） | App 沒開著也要停 |
+| 要求音訊焦點：Spotify 會暫停；別人搶走就停、來電先靜音 | 使用者定 |
+| ⚠️ 睡姿圖或背景缺檔時退回月亮小狗／漸層，**不會報錯** | 換新圖後若畫面沒變，先查 APK 裡有沒有那張圖——2026-11-12 建置快取漏包過一次，`flutter clean` 才好 |
+
 ### ⚠️ 三個已修、但規則仍然有效的地方
 
 ⚠️ **不要拿 `sleep_start_time` 當 `lights_out_at`**——前者是手錶偵測到你

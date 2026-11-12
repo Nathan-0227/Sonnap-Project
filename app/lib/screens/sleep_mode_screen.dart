@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
+import '../services/sleep_sounds.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 
@@ -21,7 +22,8 @@ import '../widgets/sleepy_pet.dart';
 /// 版面（2026-11-12 使用者定）：大時間 → 副標 → 睡著的寵物 → 鬧鐘列 → Out of bed 外框按鈕
 /// → Cancel 小字。背景是房間（`assets/backgrounds/bedroom.png`，使用者生成；沒有就退回漸層）。
 /// 點鬧鐘列打開跟外面一樣的轉盤（月亮鎖住），可以**改今晚的時間**或**關掉今晚**，轉盤上的設定不變。
-/// 助眠聲音那一列在做聲音的 PR 加；「I already got up」也在之後的 PR。
+/// 鬧鐘列下面是助眠聲音（喇叭鈕選聲音與時間、播放鈕播／停），按 Out of bed／Cancel 會停。
+/// 「I already got up」在之後的 PR。
 class SleepModeScreen extends StatefulWidget {
   final BedMarkStore store;
   final DateTime startAt;
@@ -30,12 +32,16 @@ class SleepModeScreen extends StatefulWidget {
   /// 鬧鐘。null = 沒有鬧鐘（測試或舊的呼叫端）。
   final AlarmController? alarm;
 
+  /// 助眠聲音。null = 不顯示那一列（測試或舊的呼叫端）。
+  final SleepSoundsController? sounds;
+
   const SleepModeScreen({
     super.key,
     required this.store,
     required this.startAt,
     this.clock = DateTime.now,
     this.alarm,
+    this.sounds,
   });
 
   @override
@@ -48,10 +54,22 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
   /// 今晚鬧鐘排在幾點。null = 沒排、或使用者點了「只關今晚」。
   DateTime? _alarmAt;
 
+  SleepSound _sound = SleepSound.rain;
+  int _soundMinutes = kDefaultSleepSoundMinutes;
+
+  /// 聲音幾點會停。null = 沒在播。
+  DateTime? _soundEndsAt;
+
+  bool get _soundPlaying {
+    final end = _soundEndsAt;
+    return end != null && widget.clock().isBefore(end);
+  }
+
   @override
   void initState() {
     super.initState();
     _loadAlarm();
+    _loadSounds();
     _tick = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted) setState(() {});
     });
@@ -69,6 +87,128 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
   Future<void> _loadAlarm() async {
     final at = await widget.alarm?.settings.tonight();
     if (mounted) setState(() => _alarmAt = at);
+  }
+
+  Future<void> _loadSounds() async {
+    final sounds = widget.sounds;
+    if (sounds == null) return;
+    final sound = await sounds.settings.sound();
+    final minutes = await sounds.settings.minutes();
+    final endsAt = await sounds.player.endsAt();
+    if (!mounted) return;
+    setState(() {
+      _sound = sound;
+      _soundMinutes = minutes;
+      _soundEndsAt = endsAt;
+    });
+  }
+
+  Future<void> _toggleSound() async {
+    final sounds = widget.sounds;
+    if (sounds == null) return;
+    if (_soundPlaying) {
+      setState(() => _soundEndsAt = null);
+      await sounds.stop();
+    } else {
+      final end = await sounds.play(widget.clock());
+      if (mounted) setState(() => _soundEndsAt = end);
+    }
+  }
+
+  /// 喇叭鈕：選聲音與播多久。正在播的話照新的選擇重播。
+  Future<void> _pickSound() async {
+    final sounds = widget.sounds;
+    if (sounds == null) return;
+    var sound = _sound;
+    var minutes = _soundMinutes;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF1B2350),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sleep sounds',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in SleepSound.values)
+                      ChoiceChip(
+                        key: Key('sound-${s.id}'),
+                        label: Text(s.label),
+                        selected: sound == s,
+                        onSelected: (_) => setSheet(() => sound = s),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Stop after',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final m in kSleepSoundMinutes)
+                      ChoiceChip(
+                        key: Key('sound-min-$m'),
+                        label: Text('$m min'),
+                        selected: minutes == m,
+                        onSelected: (_) => setSheet(() => minutes = m),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const Key('sound-done'),
+                    onPressed: () => Navigator.pop(context, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B7BFF),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: const StadiumBorder(),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await sounds.settings.save(sound, minutes);
+    if (!mounted) return;
+    setState(() {
+      _sound = sound;
+      _soundMinutes = minutes;
+    });
+    if (_soundPlaying) {
+      final end = await sounds.play(widget.clock());
+      if (mounted) setState(() => _soundEndsAt = end);
+    }
   }
 
   /// 點鬧鐘那一列：打開跟外面一樣的轉盤（使用者定），月亮固定在按 Start Sleep 的時刻，
@@ -110,6 +250,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
 
   Future<void> _outOfBed() async {
     // 下床會取消鬧鐘；但鬧鐘響了不會反過來自動按下床（使用者決定）。
+    unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.markEnd(widget.clock());
     if (mounted) Navigator.of(context).pop();
@@ -145,12 +286,75 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
       ),
     );
     if (confirmed != true) return;
+    unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.cancelStart();
     if (mounted) Navigator.of(context).pop();
   }
 
   static const _line = Divider(color: Colors.white24, height: 1);
+
+  Widget _soundsRow() {
+    final playing = _soundPlaying;
+    final detail = playing
+        ? '${_sound.label} · until ${_hhmm(_soundEndsAt!)}'
+        : '${_sound.label} · $_soundMinutes min';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sleep sounds',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  key: const Key('sleep-sounds-detail'),
+                  style: const TextStyle(color: Colors.white60, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          _squareButton(
+            const Key('sleep-sounds-pick'),
+            Icons.volume_up_rounded,
+            _pickSound,
+          ),
+          const SizedBox(width: 10),
+          _squareButton(
+            const Key('sleep-sounds-play'),
+            playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+            _toggleSound,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _squareButton(Key key, IconData icon, VoidCallback onTap) => InkWell(
+    key: key,
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white38),
+      ),
+      child: Icon(icon, color: Colors.white, size: 26),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -271,6 +475,11 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                           ],
                         ),
                       ),
+                      _line,
+                    ],
+                    if (widget.sounds != null) ...[
+                      if (widget.alarm == null) _line,
+                      _soundsRow(),
                       _line,
                     ],
                     const SizedBox(height: 28),
