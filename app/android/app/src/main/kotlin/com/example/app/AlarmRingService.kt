@@ -62,6 +62,8 @@ class AlarmRingService : Service() {
                 return START_NOT_STICKY
             }
         }
+        // 鬧鐘響了，助眠聲音立刻停（使用者定）。
+        SleepSoundService.stop(this)
         startInForeground()
         startSound()
         startVibration()

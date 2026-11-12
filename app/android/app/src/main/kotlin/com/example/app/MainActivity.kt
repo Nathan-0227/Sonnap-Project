@@ -57,6 +57,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val HEALTH_CHANNEL = "sonnap/health"
         private const val NOTIFY_PERMISSION_REQUEST = 4202
         private const val ALARM_CHANNEL = "sonnap/alarm"
+        private const val SOUNDS_CHANNEL = "sonnap/sounds"
         private const val ALARM_PERMISSION_REQUEST = 5103
     }
 
@@ -247,6 +248,32 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     result.success(null)
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 助眠聲音（2026-11-12）。播多久、哪一種都由 Dart 決定（sleep_sounds.dart）。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SOUNDS_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "play" -> {
+                    val sound = call.argument<String>("sound")
+                    val length = call.argument<Number>("lengthMillis")?.toLong()
+                    val fade = call.argument<Number>("fadeMillis")?.toLong()
+                    if (sound == null || length == null || fade == null) {
+                        result.error("INVALID_ARGUMENTS", "sound, lengthMillis, fadeMillis are required.", null)
+                        return@setMethodCallHandler
+                    }
+                    SleepSoundService.play(this, sound, length, fade)
+                    result.success(null)
+                }
+                "stop" -> {
+                    SleepSoundService.stop(this)
+                    result.success(null)
+                }
+                "endsAt" -> result.success(SleepSoundService.endsAt)
                 else -> result.notImplemented()
             }
         }
