@@ -10,6 +10,7 @@ import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
 import 'package:app/services/alarm.dart';
 import 'package:app/services/bed_marks.dart';
+import 'package:app/services/game_service.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/services/sleep_repository.dart';
@@ -193,7 +194,8 @@ void main() {
       tester.view.devicePixelRatio = size.width > 1100 ? 3.0 : 2.625;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
-        MaterialApp(home: MorningReportScreen(initial: r)),
+        // 同一條測試畫兩次時，key 不同才不會沿用上一次的狀態
+        MaterialApp(home: MorningReportScreen(key: ObjectKey(r), initial: r)),
       );
       await settle(tester);
     }
@@ -212,7 +214,12 @@ void main() {
       expect(find.byKey(const Key('report-duration')), findsNothing);
       expect(find.byKey(const Key('report-split')), findsNothing);
       expect(find.byKey(const Key('report-pet-asleep')), findsOneWidget);
-      expect(textOf(tester, 'report-times'), 'In bed 23:40 – 07:10');
+      expect(textOf(tester, 'report-from'), '23:40');
+      expect(textOf(tester, 'report-to'), '07:10');
+      expect(textOf(tester, 'report-wake-big'), '07:10',
+          reason: '細線大字＝起床時間（有按 Out of bed 用按鈕的）');
+      expect(find.byKey(const Key('report-goal-line')), findsNothing,
+          reason: '沒分數時不放睡眠目標');
       expect(textOf(tester, 'report-date'), 'Thursday, Nov 12');
       expect(find.textContaining('Great'), findsNothing,
           reason: '不放固定鼓勵句（紅線 5）');
@@ -230,7 +237,8 @@ void main() {
       expect(textOf(tester, 'report-score'), '62');
       expect(textOf(tester, 'report-quality'), 'Poor sleep');
       expect(textOf(tester, 'report-duration'), '7h 25m');
-      expect(textOf(tester, 'report-times'), 'In bed 23:40 – 07:10');
+      expect(textOf(tester, 'report-from'), '23:40');
+      expect(textOf(tester, 'report-to'), '07:10');
       expect(textOf(tester, 'report-split-light'), '60%');
       expect(textOf(tester, 'report-split-deep'), '13%');
       expect(textOf(tester, 'report-split-rem'), '27%');
@@ -247,7 +255,7 @@ void main() {
         buildMorningReport(date: '2026-11-12', home: json),
       );
       expect(find.byKey(const Key('report-split')), findsNothing);
-      expect(textOf(tester, 'report-split-partial'), 'Deep 1h 0m · REM 2h 0m');
+      expect(textOf(tester, 'report-split-partial'), 'Deep 1h · REM 2h');
     });
 
     testWidgets('沒量到 REM：不畫比例條，寫 REM not measured', (tester) async {
@@ -261,7 +269,7 @@ void main() {
       );
       expect(find.byKey(const Key('report-split')), findsNothing);
       expect(textOf(tester, 'report-split-partial'),
-          'Deep 1h 0m · REM not measured');
+          'Deep 1h · REM not measured');
     });
 
     testWidgets('沒按按鈕：改顯示手錶的 Asleep，不冒充上床時間', (tester) async {
@@ -271,7 +279,83 @@ void main() {
         tester,
         buildMorningReport(date: '2026-11-12', home: json),
       );
-      expect(textOf(tester, 'report-times'), 'Asleep 23:55 – 07:00');
+      expect(textOf(tester, 'report-from'), '23:55');
+      expect(textOf(tester, 'report-to'), '07:00');
+      expect(find.text('Asleep'), findsOneWidget);
+      expect(find.text('In bed'), findsNothing);
+    });
+
+    GameState game(List<Map<String, dynamic>> nights) => GameState.fromJson({
+          'level': 6,
+          'xp_total': 2000,
+          'xp_into_level': 830,
+          'xp_for_next': 389,
+          'progress': 830 / 1219,
+          'recent_nights': nights,
+        });
+
+    testWidgets('等級與 XP 條照抄 /game；+N XP 是那一晚的數字', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
+            .withExtras(game: game([
+          {'date': '2026-11-11', 'total': 50, 'final_quality': 'Good'},
+          {'date': '2026-11-12', 'behaviour_xp': 30, 'quality_xp': 0,
+           'total': 30, 'final_quality': 'Poor'},
+        ])),
+      );
+      expect(textOf(tester, 'report-level'), 'Lv.6');
+      expect(textOf(tester, 'report-xp-text'), '830 / 1,219 XP');
+      expect(textOf(tester, 'report-night-xp'), '+30 XP',
+          reason: '是那一晚的 30，不是前一晚的 50');
+    });
+
+    testWidgets('⚠️ 差的晚上照實寫 +0 XP，不藏（紅線 5）', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
+            .withExtras(game: game([
+          {'date': '2026-11-12', 'total': 0, 'final_quality': 'Bad'},
+        ])),
+      );
+      expect(textOf(tester, 'report-night-xp'), '+0 XP');
+    });
+
+    testWidgets('手錶資料還沒到 → +N XP so far；後端還沒有這晚 → 不畫 +N',
+        (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12').withExtras(game: game([
+          {'date': '2026-11-12', 'behaviour_xp': 30, 'total': 30},
+        ])),
+      );
+      expect(textOf(tester, 'report-night-xp'), '+30 XP so far');
+
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-13')
+            .withExtras(game: game([{'date': '2026-11-12', 'total': 30}])),
+      );
+      expect(find.byKey(const Key('report-night-xp')), findsNothing);
+      expect(find.byKey(const Key('report-level')), findsOneWidget);
+    });
+
+    testWidgets('沒有後端（沒有 /game）→ 整塊等級不畫', (tester) async {
+      await pumpReport(tester, buildMorningReport(date: '2026-11-12'));
+      expect(find.byKey(const Key('report-xp')), findsNothing);
+    });
+
+    testWidgets('⚠️ 睡眠目標只寫事實：不寫 reached、不寫 missed', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
+            .withExtras(goalMinutes: 480),
+      );
+      expect(textOf(tester, 'report-goal'), '8h');
+      expect(textOf(tester, 'report-goal-line'), '7h 25m of your 8h goal');
+      expect(find.textContaining('reached'), findsNothing);
+      expect(find.textContaining('missed'), findsNothing);
+      expect(find.textContaining('Great'), findsNothing);
     });
 
     testWidgets('⚠️ 6.4 吋手機（1080×2340）不溢出', (tester) async {
@@ -328,7 +412,9 @@ void main() {
       expect(find.byType(MorningReportScreen), findsOneWidget);
       expect(source.asked, ['2026-11-12'], reason: '問的是起床日那一晚');
       expect(find.text(kWaitingForWatch), findsOneWidget);
-      expect(textOf(tester, 'report-times'), 'In bed 23:40 – 07:10');
+      expect(textOf(tester, 'report-from'), '23:40');
+      expect(textOf(tester, 'report-to'), '07:10');
+      await tester.ensureVisible(find.byKey(const Key('report-done')));
       await tester.tap(find.byKey(const Key('report-done')));
       await settle(tester);
       expect(find.byType(MorningReportScreen), findsNothing);

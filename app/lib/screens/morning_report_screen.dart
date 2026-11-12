@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../services/morning_report.dart';
@@ -6,14 +8,19 @@ import '../widgets/home_pet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/sleepy_pet.dart';
 
-/// 早晨報告畫面（2026-11-12）。
+/// 早晨報告畫面（2026-11-12，版面 11-12 依參考圖改版）。
 ///
-/// 一打開就先畫 [initial]（手機上已經有的：日期、上床→起床、睡姿小狗），
-/// [load] 回來之後換成完整版。**分數、等級、心情、那句話全部照抄後端**，
-/// 規則寫在 `services/morning_report.dart` 的 [buildMorningReport]。
+/// 由上到下：日期 → 細線大字的起床時間疊在小狗後面 → 等級／XP → 半圓分數
+/// → 上床／起床與睡眠目標 → Sleep phases（沒有圖時是比例條）→ Dream diary
+/// → Back to home。**只放這一晚的資料**（使用者定：不放日期圈圈列、不放 7 晚長條圖）。
 ///
-/// 不放「Great work」這種固定鼓勵句，也不發 XP：好的夜晚與差的夜晚
-/// 拿到一樣的稱讚，就是紅線 5。
+/// 一打開就先畫 [initial]（手機上已經有的），[load] 回來之後換成完整版。
+/// 分數、等級、心情、那句話、XP 全部照抄後端，規則寫在
+/// `services/morning_report.dart`。
+///
+/// 不放「Great work」這種固定鼓勵句，也不另外發 XP（紅線 5）。
+/// 睡眠目標只寫事實（「7h 25m of your 8h goal」），**不寫 reached、不變色**：
+/// 好壞只有後端能判斷，而分數本身就以睡眠時長為主在算，兩個說法會打架。
 class MorningReportScreen extends StatefulWidget {
   final MorningReport initial;
   final Future<MorningReport> Function()? load;
@@ -96,55 +103,28 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           SafeArea(
             child: ListView(
               key: const Key('report-list'),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
                 _header(r),
-                const SizedBox(height: 4),
-                Center(
-                  child: SizedBox(
-                    height: 210,
-                    child: r.hasScore
-                        ? HomePet(
-                            key: const Key('report-pet-awake'),
-                            mood: r.mood,
-                            size: 200,
-                          )
-                        : const SleepingPet(
-                            key: Key('report-pet-asleep'),
-                            size: 210,
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                r.hasScore ? _scoreCard(r) : _waitingCard(),
-                const SizedBox(height: SonnapColors.gap),
-                _durationCard(r),
-                if (r.hasScore && (r.hasStageSplit || r.deepMinutes != null)) ...[
-                  const SizedBox(height: SonnapColors.gap),
-                  _splitCard(r),
+                _hero(r),
+                if (r.level != null) ...[
+                  const SizedBox(height: 4),
+                  _xp(r),
                 ],
+                const SizedBox(height: 14),
+                r.hasScore ? _gauge(r) : _waitingCard(),
+                const SizedBox(height: SonnapColors.gap),
+                _timesCard(r),
                 if (r.stages != null) ...[
                   const SizedBox(height: SonnapColors.gap),
                   SleepStagesCard(
                     stages: r.stages!,
                     totalSleepMinutes: r.sleepMinutes?.round(),
                   ),
-                ],
-                if (r.moodDescription != null &&
-                    r.moodDescription!.isNotEmpty) ...[
+                ] else if (r.hasScore &&
+                    (r.hasStageSplit || r.deepMinutes != null)) ...[
                   const SizedBox(height: SonnapColors.gap),
-                  _card(
-                    Text(
-                      r.moodDescription!,
-                      key: const Key('report-mood-line'),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: SonnapColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                  _splitCard(r),
                 ],
                 if (r.dream != null) ...[
                   const SizedBox(height: SonnapColors.gap),
@@ -176,7 +156,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                   key: const Key('report-done'),
                   onPressed: () => Navigator.of(context).pop(),
                   style: FilledButton.styleFrom(
-                    backgroundColor: SonnapColors.accent,
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF2A2F7A),
                     minimumSize: const Size.fromHeight(54),
                     shape: const StadiumBorder(),
                     textStyle: const TextStyle(
@@ -184,7 +165,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  child: const Text('Done'),
+                  child: const Text('Back to home'),
                 ),
               ],
             ),
@@ -194,7 +175,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  // ── 頂端：日期（使用者定：不放晚數） ─────────────────────────────
+  // ── 頂端：日期（使用者定：不放晚數、不放日期圈圈列） ─────────────────
 
   Widget _header(MorningReport r) {
     final d = DateTime.tryParse(r.date);
@@ -243,40 +224,193 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  Widget _card(Widget child) => Container(
+  // ── 細線大字的起床時間，小狗疊在它下半部 ───────────────────────────
+
+  Widget _hero(MorningReport r) {
+    final wake = r.wakeAt;
+    const petSize = 190.0;
+    return Column(
+      children: [
+        SizedBox(
+          height: 270,
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              if (wake != null)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // 小標放在數字右上角（參考圖的 AM 位置）——放下面會被小狗的頭蓋住
+                      Padding(
+                        padding: const EdgeInsets.only(right: 24),
+                        child: Text(
+                          r.bedEnd != null ? 'Out of bed' : 'Woke up (watch)',
+                          key: const Key('report-wake-label'),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Center(
+                        child: FittedBox(
+                          child: Text(
+                            _t(wake),
+                            key: const Key('report-wake-big'),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              fontSize: 104,
+                              fontWeight: FontWeight.w200,
+                              letterSpacing: 2,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Positioned(
+                bottom: 0,
+                child: r.hasScore
+                    ? HomePet(
+                        key: const Key('report-pet-awake'),
+                        mood: r.mood,
+                        size: petSize,
+                      )
+                    : const SleepingPet(
+                        key: Key('report-pet-asleep'),
+                        size: petSize + 20,
+                      ),
+              ),
+            ],
+          ),
+        ),
+        if (r.moodDescription != null && r.moodDescription!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              r.moodDescription!,
+              key: const Key('report-mood-line'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ── 等級與 XP（照抄 /game） ────────────────────────────────────
+
+  Widget _xp(MorningReport r) {
+    final size = r.xpLevelSize;
+    final into = r.xpIntoLevel ?? 0;
+    final night = r.nightXp;
+    return Column(
+      key: const Key('report-xp'),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Expanded(
+              child: Text(
+                'Your Experience',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ),
+            Text(
+              'Lv.${r.level}',
+              key: const Key('report-level'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                height: 1.0,
+              ),
+            ),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: night == null
+                    ? const SizedBox.shrink()
+                    : Text(
+                        r.nightXpSoFar ? '+$night XP so far' : '+$night XP',
+                        key: const Key('report-night-xp'),
+                        style: const TextStyle(
+                          color: Color(0xFFFFE08A),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: (r.xpProgress ?? 0).clamp(0.0, 1.0),
+                minHeight: 20,
+                backgroundColor: Colors.white.withValues(alpha: 0.25),
+                color: Colors.white,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: Text(
+                size == null ? 'Max level' : '${_n(into)} / ${_n(size)} XP',
+                key: const Key('report-xp-text'),
+                style: const TextStyle(
+                  color: Color(0xFF2A2F7A),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _card(Widget child, {Key? key}) => Container(
+        key: key,
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: sonnapCardDecoration(),
         child: child,
       );
 
-  // ── 分數 ────────────────────────────────────────────────────
+  // ── 半圓分數 ────────────────────────────────────────────────
 
-  Widget _scoreCard(MorningReport r) {
-    const ring = 104.0;
+  Widget _gauge(MorningReport r) {
     final score = r.score!.round();
     final color = _hex(r.qualityColor) ?? SonnapColors.accentSoft;
     return _card(
-      Row(
+      key: const Key('report-gauge'),
+      Column(
         children: [
           SizedBox(
-            width: ring,
-            height: ring,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: ring,
-                  height: ring,
-                  child: CircularProgressIndicator(
-                    value: score / 100,
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor: Colors.white.withValues(alpha: 0.12),
-                    color: SonnapColors.accentSoft,
-                  ),
-                ),
-                Column(
+            width: 220,
+            height: 124,
+            child: CustomPaint(
+              painter: _ArcPainter(value: (score / 100).clamp(0.0, 1.0)),
+              child: Align(
+                alignment: const Alignment(0, 0.75),
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
@@ -284,46 +418,42 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       key: const Key('report-score'),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 36,
+                        fontSize: 44,
                         fontWeight: FontWeight.w800,
                         height: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 4),
                     const Text(
-                      'Sleep Score',
-                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                      'Sleep score',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (r.quality != null)
-                  Text(
-                    '${r.quality} sleep',
-                    key: const Key('report-quality'),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                if (r.scoreMessage != null && r.scoreMessage!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    r.scoreMessage!,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                ],
-              ],
+          const SizedBox(height: 6),
+          if (r.quality != null)
+            Text(
+              '${r.quality} sleep',
+              key: const Key('report-quality'),
+              style: TextStyle(
+                color: color,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
+          if (r.scoreMessage != null && r.scoreMessage!.isNotEmpty)
+            Text(
+              r.scoreMessage!.toUpperCase(),
+              key: const Key('report-score-message'),
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
+            ),
         ],
       ),
     );
@@ -361,70 +491,98 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ),
       );
 
-  // ── 睡眠長度與時間 ──────────────────────────────────────────
+  // ── 上床／起床、睡眠時間與目標 ─────────────────────────────────
 
-  Widget _durationCard(MorningReport r) {
-    final lines = <Widget>[];
-    final minutes = r.hasScore ? r.sleepMinutes : null;
-    if (minutes != null) {
-      lines.add(
-        Text(
-          _hm(minutes.round()),
-          key: const Key('report-duration'),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 34,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
-      lines.add(
-        const Text(
-          'Asleep (measured by your watch)',
-          style: TextStyle(color: Colors.white70, fontSize: 12),
-        ),
-      );
-      lines.add(const SizedBox(height: 10));
-    }
-
-    final String? times;
+  Widget _timesCard(MorningReport r) {
+    // 有按鈕用按鈕；沒有按鈕、有分數時用手錶的入睡→起床，標籤照實寫
+    final DateTime? from;
+    final DateTime? to;
+    final String fromLabel;
+    final String toLabel;
     if (r.bedStart != null) {
-      times = r.bedEnd != null
-          ? 'In bed ${_t(r.bedStart!)} – ${_t(r.bedEnd!)}'
-          : 'In bed from ${_t(r.bedStart!)}';
-    } else if (r.hasScore && r.asleepAt != null && r.wokeAt != null) {
-      // 沒按按鈕：改給手錶的入睡→起床，並標成 Asleep，不冒充上床時間
-      times = 'Asleep ${_t(r.asleepAt!)} – ${_t(r.wokeAt!)}';
+      from = r.bedStart;
+      to = r.bedEnd;
+      fromLabel = 'In bed';
+      toLabel = 'Out of bed';
+    } else if (r.hasScore) {
+      from = r.asleepAt;
+      to = r.wokeAt;
+      fromLabel = 'Asleep';
+      toLabel = 'Woke up';
     } else {
-      times = null;
+      from = null;
+      to = null;
+      fromLabel = '';
+      toLabel = '';
     }
-    if (times != null) {
-      lines.add(
+
+    final children = <Widget>[];
+    if (from != null || to != null) {
+      children.add(
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          key: const Key('report-times'),
           children: [
-            const Icon(Icons.bedtime_rounded, size: 18, color: Color(0xFFFFD27A)),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                times,
-                key: const Key('report-times'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+            Expanded(
+              child: _clock(Icons.bedtime_rounded, const Color(0xFFFFD27A),
+                  from, fromLabel, 'report-from'),
             ),
-            const SizedBox(width: 6),
-            const Icon(Icons.wb_sunny_rounded, size: 18, color: Color(0xFFFFB36B)),
+            Expanded(
+              child: _clock(Icons.wb_sunny_rounded, const Color(0xFFFFB36B),
+                  to, toLabel, 'report-to'),
+            ),
           ],
         ),
       );
     }
-    if (lines.isEmpty) {
-      lines.add(
+
+    final asleep = r.hasScore ? r.sleepMinutes : null;
+    if (asleep != null) {
+      if (children.isNotEmpty) {
+        children.add(Divider(
+          height: 26,
+          color: Colors.white.withValues(alpha: 0.15),
+        ));
+      }
+      final goal = r.goalMinutes;
+      children.add(
+        Row(
+          children: [
+            Expanded(
+              child: _stat(_hm(asleep.round()), 'Time asleep', 'report-duration'),
+            ),
+            if (goal != null)
+              Expanded(child: _stat(_hm(goal), 'Sleep goal', 'report-goal')),
+          ],
+        ),
+      );
+      if (goal != null) {
+        children.add(const SizedBox(height: 14));
+        children.add(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              key: const Key('report-goal-bar'),
+              value: (asleep / goal).clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: Colors.white.withValues(alpha: 0.15),
+              // 不依達標與否變色（使用者定）
+              color: SonnapColors.accentSoft,
+            ),
+          ),
+        );
+        children.add(const SizedBox(height: 8));
+        children.add(
+          Text(
+            '${_hm(asleep.round())} of your ${_hm(goal)} goal',
+            key: const Key('report-goal-line'),
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+        );
+      }
+    }
+
+    if (children.isEmpty) {
+      children.add(
         const Text(
           'No bedtime recorded for this night.',
           key: Key('report-no-times'),
@@ -432,10 +590,57 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ),
       );
     }
-    return _card(Column(children: lines));
+    return _card(
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    );
   }
 
-  // ── 淺睡／深睡／REM 比例 ─────────────────────────────────────
+  Widget _clock(
+      IconData icon, Color color, DateTime? t, String label, String key) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                t == null ? '—' : _t(t),
+                key: Key(key),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(label,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stat(String value, String label, String key) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            key: Key(key),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(label,
+              style: const TextStyle(color: Colors.white60, fontSize: 12)),
+        ],
+      );
+
+  // ── 淺睡／深睡／REM 比例（沒有 Sleep phases 圖的晚上） ─────────────
 
   Widget _splitCard(MorningReport r) {
     if (!r.hasStageSplit) {
@@ -464,6 +669,15 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         key: const Key('report-split'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text(
+            'Sleep phases',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
@@ -577,7 +791,19 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final h = m ~/ 60;
     final r = m % 60;
     if (h == 0) return '${r}m';
+    if (r == 0) return '${h}h';
     return '${h}h ${r}m';
+  }
+
+  /// 1219 → 1,219
+  static String _n(int v) {
+    final s = v.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
   }
 
   static Color? _hex(String? s) {
@@ -586,4 +812,38 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     if (v == null) return null;
     return Color(0xFF000000 | v);
   }
+}
+
+/// 半圓量表：底下一條淡色全弧，上面依分數畫一段漸層弧。
+class _ArcPainter extends CustomPainter {
+  final double value;
+  const _ArcPainter({required this.value});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 12.0;
+    final radius = math.min(size.width / 2, size.height) - stroke / 2;
+    final center = Offset(size.width / 2, size.height - stroke / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final base = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.white.withValues(alpha: 0.15);
+    canvas.drawArc(rect, math.pi, math.pi, false, base);
+    if (value <= 0) return;
+    final fill = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..shader = const SweepGradient(
+        startAngle: math.pi,
+        endAngle: 2 * math.pi,
+        colors: [Color(0xFF6FA8FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)],
+      ).createShader(rect);
+    canvas.drawArc(rect, math.pi, math.pi * value, false, fill);
+  }
+
+  @override
+  bool shouldRepaint(_ArcPainter old) => old.value != value;
 }

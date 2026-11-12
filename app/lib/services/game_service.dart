@@ -114,6 +114,38 @@ class ClaimableReward {
       );
 }
 
+/// 一晚拿到幾 XP（後端 `recent_nights[]`，由 `game/xp.py` 的 `night_xp()` 算）。
+///
+/// ⚠️ **照抄，不在 Dart 算。** 行為那部分看準不準時，品質那部分看
+/// `final_quality`——睡得差的晚上就是拿得少（紅線 5），那個規則只寫在後端。
+@immutable
+class NightXp {
+  /// 起床日 YYYY-MM-DD
+  final String date;
+  final int behaviourXp;
+  final int qualityXp;
+  final int total;
+
+  /// null = 那一晚後端還沒有手錶資料，品質那部分還沒算進來。
+  final String? finalQuality;
+
+  const NightXp({
+    required this.date,
+    required this.behaviourXp,
+    required this.qualityXp,
+    required this.total,
+    this.finalQuality,
+  });
+
+  factory NightXp.fromJson(Map<String, dynamic> json) => NightXp(
+        date: (json['date'] as String?) ?? '',
+        behaviourXp: (json['behaviour_xp'] as num?)?.toInt() ?? 0,
+        qualityXp: (json['quality_xp'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        finalQuality: json['final_quality'] as String?,
+      );
+}
+
 @immutable
 class GameState {
   final int level;
@@ -136,6 +168,9 @@ class GameState {
   /// 後端寫好的說明句（英文）。畫面直接顯示，不在 Dart 重寫。
   final Map<String, String> notes;
 
+  /// 最近 7 晚各拿了幾 XP（由舊到新）。早晨報告的「+N XP」從這裡照抄。
+  final List<NightXp> recentNights;
+
   const GameState({
     required this.level,
     required this.xpTotal,
@@ -148,6 +183,7 @@ class GameState {
     required this.claimable,
     required this.badges,
     required this.notes,
+    this.recentNights = const [],
   });
 
   factory GameState.fromJson(Map<String, dynamic> json) => GameState(
@@ -171,6 +207,10 @@ class GameState {
           for (final e in ((json['notes'] as Map?) ?? const {}).entries)
             if (e.value is String) '${e.key}': e.value as String,
         },
+        recentNights: ((json['recent_nights'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(NightXp.fromJson)
+            .toList(),
       );
 }
 

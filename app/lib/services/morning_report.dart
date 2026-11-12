@@ -7,6 +7,7 @@ import '../models/sleep_session.dart';
 import '../models/sleep_stages.dart';
 import '../models/wall_clock.dart';
 import 'bed_marks.dart';
+import 'game_service.dart';
 import 'user_identity.dart';
 
 /// 早晨報告（2026-11-12 定案）：滑完 Slide to get up 立刻出現，
@@ -83,6 +84,24 @@ class MorningReport {
 
   final ReportSource source;
 
+  // ── 等級與這一晚的 XP（2026-11-12 改版）：全部照抄後端 /game ──
+  /// null = 沒有後端或讀不到 /game，整塊不畫。
+  final int? level;
+  final int? xpIntoLevel;
+
+  /// 這一級總共要幾 XP（= 已走的 + 還差的）。最高級時是 null。
+  final int? xpLevelSize;
+  final double? xpProgress;
+
+  /// 這一晚拿到幾 XP。null = 後端還沒有這一晚（例如還沒上傳），不畫 +N。
+  final int? nightXp;
+
+  /// 真時：手錶那部分還沒算進來，畫成「+N XP so far」。
+  final bool nightXpSoFar;
+
+  /// 睡眠目標（分鐘）＝轉盤上「就寢→起床」的長度。只拿來寫事實，不判斷達標。
+  final int? goalMinutes;
+
   const MorningReport({
     required this.date,
     this.bedStart,
@@ -103,7 +122,59 @@ class MorningReport {
     this.stages,
     this.dream,
     this.source = ReportSource.phoneOnly,
+    this.level,
+    this.xpIntoLevel,
+    this.xpLevelSize,
+    this.xpProgress,
+    this.nightXp,
+    this.nightXpSoFar = false,
+    this.goalMinutes,
   });
+
+  /// 起床時間：有按 Out of bed 用按鈕，沒按用手錶的。都沒有就是 null。
+  DateTime? get wakeAt => bedEnd ?? (hasScore ? wokeAt : null);
+
+  /// 接上等級、這一晚的 XP、睡眠目標。其餘欄位原樣保留。
+  ///
+  /// ⚠️ +N XP 照抄後端那一晚的數字，**差的晚上就是 +0，不藏**（紅線 5）。
+  ///    手錶資料還沒到時，後端那一晚只有行為那部分 → 標成 so far。
+  MorningReport withExtras({GameState? game, int? goalMinutes}) {
+    NightXp? night;
+    for (final n in game?.recentNights ?? const <NightXp>[]) {
+      if (n.date == date) night = n;
+    }
+    final forNext = game?.xpForNext;
+    return MorningReport(
+      date: date,
+      bedStart: bedStart,
+      bedEnd: bedEnd,
+      asleepAt: asleepAt,
+      wokeAt: wokeAt,
+      score: score,
+      quality: quality,
+      qualityColor: qualityColor,
+      scoreMessage: scoreMessage,
+      mood: mood,
+      moodDescription: moodDescription,
+      sleepMinutes: sleepMinutes,
+      lightMinutes: lightMinutes,
+      deepMinutes: deepMinutes,
+      remMinutes: remMinutes,
+      remMeasured: remMeasured,
+      stages: stages,
+      dream: dream,
+      source: source,
+      level: game?.level,
+      xpIntoLevel: game?.xpIntoLevel,
+      xpLevelSize: game == null || forNext == null
+          ? null
+          : game.xpIntoLevel + forNext,
+      xpProgress: game?.progress,
+      nightXp: night?.total,
+      nightXpSoFar: night != null && night.finalQuality == null,
+      goalMinutes: goalMinutes != null && goalMinutes > 0 ? goalMinutes : null,
+    );
+  }
 
   /// 有分數才算「手錶資料到了」。
   bool get hasScore => score != null;

@@ -436,7 +436,10 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 分數、等級、心情、那句話全部照抄後端 `/home?date=`；連不到才用打包檔那一晚 | Dart 不判斷好壞 |
 | **沒有分數時不顯示分數也不顯示睡眠長度**，只寫 `Waiting for your watch data`，畫睡姿小狗 | 剛起床時手錶資料幾乎一定還沒到，畫 0 或上一晚的數字都是編造 |
 | 那句話用 `display.mood_description`，**不用 `mood_reason`** | 後者是規則標籤（`final_quality=Good`），不是給人讀的 |
-| 不放晚數（使用者定）、不放「Great work」、不發 XP | 紅線 5 |
+| 不放晚數、日期圈圈列、最近 7 晚長條圖（使用者定：**只放這一晚**）；不放「Great work」、不另外發 XP | 紅線 5 |
+| 版面（11-12 依參考圖改版）：細線大字起床時間疊在小狗後面 → Lv／XP 條 → 半圓分數 → 上床／起床＋睡眠目標 → Sleep phases → Back to home | — |
+| **「+N XP」照抄 `/game` 的 `recent_nights`**，差的晚上照實寫 +0；手錶還沒到寫 `so far`；後端還沒有這晚就不畫 | 好晚上回饋多、差晚上回饋少，規則只在 `game/xp.py` |
+| 睡眠目標＝轉盤「就寢→起床」的長度，**只寫「7h 25m of your 8h goal」，不寫 reached、不變色** | 好壞只有後端能判斷；分數以時長為主，兩個說法會打架 |
 | Sleep Stages 圖與夢境**只在打包檔最新那一晚就是這一晚時**才有 | `/home` 不回階段資料；夢境還沒有 per-user |
 | 比例條要後端的 `light_minutes`（總睡眠 − 深睡 − REM），**沒量到 REM 時是 null** | 減出來的淺睡會把 REM 吃進去 |
 | 沒按按鈕時顯示手錶的 `Asleep 00:10 – 07:00`，不冒充 In bed | 入睡不是上床 |

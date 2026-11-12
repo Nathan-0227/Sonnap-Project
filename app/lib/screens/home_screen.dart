@@ -270,21 +270,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {
       session = null;
     }
+    // 睡眠目標＝轉盤上「就寢→起床」的長度（使用者定，預設 8 小時）
+    final wake = await _alarm.settings.wakeTime(_bedtime);
+    final goal = sleepSpan(_bedtime, wake).inMinutes;
     if (!mounted) return;
     final source = widget.morningReport;
+    final gameService = widget.game;
     await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => MorningReportScreen(
           // 今天早上起床的那一晚才說「在等手錶資料」
           pending: date == reportDateKey(widget.clock()),
-          initial: buildMorningReport(date: date, marks: marks),
-          load: () async => buildMorningReport(
-            date: date,
-            marks: marks,
-            home: await source?.fetchNight(date),
-            session: session,
-          ),
+          // 先畫手上已經有的（XP 用首頁已經讀到的那一份）
+          initial: buildMorningReport(date: date, marks: marks)
+              .withExtras(game: _game?.value, goalMinutes: goal),
+          load: () async {
+            final homeF = source?.fetchNight(date);
+            final gameF = gameService?.fetchGame();
+            final home = await homeF;
+            final game = (await gameF)?.value ?? _game?.value;
+            return buildMorningReport(
+              date: date,
+              marks: marks,
+              home: home,
+              session: session,
+            ).withExtras(game: game, goalMinutes: goal);
+          },
         ),
       ),
     );
