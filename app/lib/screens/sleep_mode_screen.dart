@@ -256,6 +256,43 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// 「I already got up」（2026-11-12）：忘了按 Out of bed，事後補起床時間。
+  /// 跟鬧鐘同一個轉盤，月亮鎖在上床時刻；太陽一開始停在今晚的鬧鐘（沒排就停在
+  /// 轉盤上的起床時間）——**不用手機偵測的時間**（使用者定）。
+  Future<void> _alreadyUp() async {
+    final started = TimeOfDay.fromDateTime(widget.startAt);
+    final alarmAt = _alarmAt;
+    final TimeOfDay wake;
+    if (alarmAt != null) {
+      wake = TimeOfDay.fromDateTime(alarmAt);
+    } else if (widget.alarm != null) {
+      wake = await widget.alarm!.settings.wakeTime(started);
+    } else {
+      wake = defaultWakeTime(started);
+    }
+    if (!mounted) return;
+    final result = await showBedTimesSheet(
+      context,
+      title: 'When did you get up?',
+      bedtime: started,
+      wake: wake,
+      bedLocked: true,
+    );
+    if (result == null || !mounted) return;
+    final end = wakeAfter(widget.startAt, result.wake.hour, result.wake.minute);
+    final problem = recalledTimesProblem(widget.startAt, end, widget.clock());
+    if (problem != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(problem)),
+      );
+      return;
+    }
+    unawaited(widget.sounds?.stop());
+    await widget.alarm?.cancelTonight();
+    await widget.store.markEnd(end, recalled: true);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _cancel() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -514,19 +551,38 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                         ),
                       ),
                     ),
-                    TextButton(
-                      key: const Key('sleep-cancel'),
-                      onPressed: _cancel,
-                      child: const Text(
-                        'Not sleeping? Cancel',
-                        style: TextStyle(
-                          color: Colors.white60,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.white60,
+                    // 兩個併成一列：分兩行的話 6.4 吋手機底部溢出 21 像素（2026-11-12 實機）。
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: TextButton(
+                            key: const Key('sleep-already-up'),
+                            onPressed: _alreadyUp,
+                            child: const Text(
+                              'I already got up',
+                              style: TextStyle(color: Colors.white, fontSize: 14),
+                            ),
+                          ),
                         ),
-                      ),
+                        Flexible(
+                          child: TextButton(
+                            key: const Key('sleep-cancel'),
+                            onPressed: _cancel,
+                            child: const Text(
+                              'Not sleeping? Cancel',
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 14,
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.white60,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),

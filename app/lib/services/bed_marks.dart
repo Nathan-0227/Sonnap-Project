@@ -10,6 +10,62 @@ const String kBedEndKey = 'bed_end_at';
 const String kBedPendingStartKey = 'bed_pending_start_at';
 const String kBedPendingEndKey = 'bed_pending_end_at';
 
+/// 上床／下床是當下按的還是事後補的（2026-11-12）。值是 'recalled'；沒有 = 當下按的。
+const String kBedStartKindKey = 'bed_start_kind';
+const String kBedEndKindKey = 'bed_end_kind';
+const String kBedPendingStartKindKey = 'bed_pending_start_kind';
+const String kBedPendingEndKindKey = 'bed_pending_end_kind';
+
+/// 最近一晚按了什麼的紀錄（2026-11-12）。
+///
+/// ⚠️ 不能拿上面那幾個槽來判斷「昨晚有沒有按齊」：上傳被收下之後槽就清掉了，
+///    分不出「按齊而且傳了」與「根本沒按」。這份紀錄只給首頁的
+///    「Forgot to tap last night?」用，**不參與上傳**。
+const String kBedLogStartKey = 'bed_log_start_at';
+const String kBedLogEndKey = 'bed_log_end_at';
+
+/// 事後補的值。
+const String kRecalled = 'recalled';
+
+/// 一個時刻屬於哪一晚（起床日）。與 `behavior/adherence.py` 的 `night_date()`
+/// 同一個約定：往後推 6 小時再取日期。
+DateTime nightDateOf(DateTime t) {
+  final shifted = t.add(const Duration(hours: 6));
+  return DateTime(shifted.year, shifted.month, shifted.day);
+}
+
+/// 首頁「補昨晚」只在早上 6 點之後出現：之前那段時間今晚可能還沒結束。
+const int kBackfillFromHour = 6;
+
+/// 一晚最長多久，與睡覺畫面、鬧鐘同一個 14 小時（`home_mode.dart` 的 kMaxSleepSession）。
+const Duration kMaxRecalledNight = Duration(hours: 14);
+
+/// 事後補的一對時間說不說得通。說得通回 null，否則回一句給使用者看的話。
+///
+/// 仍然要檢查（使用者定）：起床要晚於上床、不能晚於現在、整晚不超過 14 小時。
+/// ⚠️ **不**套「比手機第一次被碰晚 2 小時」那條（[kBedEndGrace]）：那條擋的正是
+///    「起床好幾小時才按」，而補的時間就是使用者說的起床時刻。
+String? recalledTimesProblem(DateTime start, DateTime end, DateTime now) {
+  if (!end.isAfter(start)) return 'Wake time has to be after bedtime.';
+  if (end.isAfter(now)) return "That's later than now.";
+  if (end.difference(start) > kMaxRecalledNight) {
+    return "That's more than 14 hours in bed.";
+  }
+  return null;
+}
+
+/// 起床時刻（只有時分）→ 從 [start] 往後算第一個那個時刻。
+DateTime wakeAfter(DateTime start, int hour, int minute) {
+  final base = DateTime(start.year, start.month, start.day, start.hour, start.minute);
+  final startMin = start.hour * 60 + start.minute;
+  final wakeMin = hour * 60 + minute;
+  return base.add(Duration(minutes: (wakeMin - startMin) % (24 * 60)));
+}
+
+/// 昨晚的起床時刻：今天早上那個時分。上床 = 起床往前推轉盤上的長度。
+DateTime lastNightWake(DateTime now, int hour, int minute) =>
+    DateTime(now.year, now.month, now.day, hour, minute);
+
 /// 超過這麼久的標記就當作沒有。
 ///
 /// ⚠️ **這是防止「上禮拜按的開始睡覺」被算進今晚**。沒有這條規則，
@@ -68,7 +124,16 @@ class BedMarks {
   final DateTime? startAt;
   final DateTime? endAt;
 
-  const BedMarks({this.startAt, this.endAt});
+  /// 這個時刻是事後補的（回想的），不是當下按的。
+  final bool startRecalled;
+  final bool endRecalled;
+
+  const BedMarks({
+    this.startAt,
+    this.endAt,
+    this.startRecalled = false,
+    this.endRecalled = false,
+  });
 
   static const BedMarks none = BedMarks();
 
@@ -79,6 +144,11 @@ class BedMarks {
 
   String? get startIso => startAt?.toIso8601String();
   String? get endIso => endAt?.toIso8601String();
+
+  /// 送給後端的 kind：'tap' 或 'recalled'；沒有那個時刻就是 null。
+  String? get startKind =>
+      startAt == null ? null : (startRecalled ? kRecalled : 'tap');
+  String? get endKind => endAt == null ? null : (endRecalled ? kRecalled : 'tap');
 }
 
 /// 讀寫本機的上床 / 下床標記。
@@ -108,10 +178,17 @@ class BedMarkStore {
       return BedMarks.none;
     }
     // 結束早於開始 = 按錯了。丟掉 end，保留 start（人可能還在床上）。
+    final startRecalled = await store.getString(kBedStartKindKey) == kRecalled;
     if (end != null && !end.isAfter(start)) {
-      return BedMarks(startAt: start);
+      return BedMarks(startAt: start, startRecalled: startRecalled);
     }
-    return BedMarks(startAt: start, endAt: end);
+    return BedMarks(
+      startAt: start,
+      endAt: end,
+      startRecalled: startRecalled,
+      endRecalled:
+          end != null && await store.getString(kBedEndKindKey) == kRecalled,
+    );
   }
 
   /// 上一晚**已經按完、但還沒上傳**的那一對。
@@ -139,7 +216,13 @@ class BedMarkStore {
       }
       return BedMarks.none;
     }
-    return BedMarks(startAt: start, endAt: end);
+    return BedMarks(
+      startAt: start,
+      endAt: end,
+      startRecalled:
+          await store.getString(kBedPendingStartKindKey) == kRecalled,
+      endRecalled: await store.getString(kBedPendingEndKindKey) == kRecalled,
+    );
   }
 
   Future<void> markStart(DateTime at) async {
@@ -168,15 +251,75 @@ class BedMarkStore {
           kBedPendingStartKey, current.startAt!.toIso8601String());
       await store.setString(
           kBedPendingEndKey, current.endAt!.toIso8601String());
+      await _setKind(kBedPendingStartKindKey, current.startRecalled);
+      await _setKind(kBedPendingEndKindKey, current.endRecalled);
     }
 
     await store.setString(kBedStartKey, at.toIso8601String());
     // 重新開始一晚 → 上一晚的結束時刻不能留在這個槽，否則會配成錯的一對。
     await store.remove(kBedEndKey);
+    await store.remove(kBedStartKindKey);
+    await store.remove(kBedEndKindKey);
+    await store.setString(kBedLogStartKey, at.toIso8601String());
+    await store.remove(kBedLogEndKey);
   }
 
-  Future<void> markEnd(DateTime at) =>
-      store.setString(kBedEndKey, at.toIso8601String());
+  /// [recalled]：「I already got up」補的下床（2026-11-12），不是當下按的。
+  Future<void> markEnd(DateTime at, {bool recalled = false}) async {
+    await store.setString(kBedEndKey, at.toIso8601String());
+    await _setKind(kBedEndKindKey, recalled);
+    await store.setString(kBedLogEndKey, at.toIso8601String());
+  }
+
+  /// 首頁「Forgot to tap last night?」要不要出現：早上 6 點後，而且最近一晚
+  /// 不是昨晚、或昨晚少了上床或下床。
+  ///
+  /// ⚠️ 從沒按過的人每天都會看到——使用者知道並同意（2026-11-12）。
+  Future<bool> needsBackfill(DateTime now) async {
+    if (now.hour < kBackfillFromHour) return false;
+    final last = await lastNight(now);
+    return !last.isComplete;
+  }
+
+  /// 昨晚（今天早上結束的那一晚）按了什麼。不是昨晚的紀錄一律當作沒有。
+  Future<BedMarks> lastNight(DateTime now) async {
+    final start = _parse(await store.getString(kBedLogStartKey));
+    if (start == null) return BedMarks.none;
+    if (nightDateOf(start) != DateTime(now.year, now.month, now.day)) {
+      return BedMarks.none;
+    }
+    final end = _parse(await store.getString(kBedLogEndKey));
+    return BedMarks(
+      startAt: start,
+      endAt: end != null && end.isAfter(start) ? end : null,
+    );
+  }
+
+  /// 首頁補昨晚：只補缺的那一個（當下按的不能被回想的蓋掉，使用者定）。
+  ///
+  /// [start] 是 null 時沿用昨晚當下按的上床。寫進目前這個槽，下一次上傳
+  /// （Insights 頁那一輪）送出去；後端也會再守一次「不蓋掉當下按的」。
+  Future<void> backfillLastNight(
+    DateTime now, {
+    DateTime? start,
+    required DateTime end,
+  }) async {
+    final last = await lastNight(now);
+    final useStart = last.startAt ?? start;
+    if (useStart == null) {
+      throw ArgumentError('start is required when last night has no tap');
+    }
+    final startRecalled = last.startAt == null;
+    await store.setString(kBedStartKey, useStart.toIso8601String());
+    await _setKind(kBedStartKindKey, startRecalled);
+    await store.setString(kBedEndKey, end.toIso8601String());
+    await _setKind(kBedEndKindKey, true);
+    await store.setString(kBedLogStartKey, useStart.toIso8601String());
+    await store.setString(kBedLogEndKey, end.toIso8601String());
+  }
+
+  Future<void> _setKind(String key, bool recalled) =>
+      recalled ? store.setString(key, kRecalled) : store.remove(key);
 
   /// 「Not sleeping? Cancel」：不小心按到「開始睡覺」時，把這次的開始刪掉。
   ///
@@ -187,12 +330,18 @@ class BedMarkStore {
   Future<void> cancelStart() async {
     await store.remove(kBedStartKey);
     await store.remove(kBedEndKey);
+    await store.remove(kBedStartKindKey);
+    await store.remove(kBedEndKindKey);
+    await store.remove(kBedLogStartKey);
+    await store.remove(kBedLogEndKey);
   }
 
   /// 上傳成功之後清掉，免得同一對標記被算進第二晚。
   Future<void> clear() async {
     await store.remove(kBedStartKey);
     await store.remove(kBedEndKey);
+    await store.remove(kBedStartKindKey);
+    await store.remove(kBedEndKindKey);
   }
 
   /// pending 那一對上傳成功之後清掉。
@@ -201,6 +350,8 @@ class BedMarkStore {
   Future<void> clearPending() async {
     await store.remove(kBedPendingStartKey);
     await store.remove(kBedPendingEndKey);
+    await store.remove(kBedPendingStartKindKey);
+    await store.remove(kBedPendingEndKindKey);
   }
 
   static DateTime? _parse(String? raw) {

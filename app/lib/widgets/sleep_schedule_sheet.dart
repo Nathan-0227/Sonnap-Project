@@ -70,6 +70,38 @@ Future<SleepScheduleResult?> showTonightAlarmSheet(
   );
 }
 
+/// 事後補時間用的轉盤（2026-11-12）：沒有 Alarm 開關，回傳拖好的上床／起床。
+///
+/// - 睡覺畫面「I already got up」：月亮鎖在按 Start Sleep 的時刻，只拖太陽。
+/// - 首頁「Forgot to tap last night?」：昨晚有按上床就鎖月亮，沒按就兩個都能拖。
+///
+/// ⚠️ 只回傳時刻，不存檔、也不判斷合不合理——換算成哪一天、能不能晚於現在，
+///    由呼叫端決定（它才知道是哪一晚）。
+Future<SleepScheduleResult?> showBedTimesSheet(
+  BuildContext context, {
+  required String title,
+  required TimeOfDay bedtime,
+  required TimeOfDay wake,
+  required bool bedLocked,
+}) {
+  return showModalBottomSheet<SleepScheduleResult>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF1B2350),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (_) => SleepScheduleSheet(
+      bedtime: bedtime,
+      wake: wake,
+      alarmEnabled: false,
+      title: title,
+      bedLocked: bedLocked,
+      showAlarm: false,
+    ),
+  );
+}
+
 class SleepScheduleSheet extends StatefulWidget {
   final TimeOfDay bedtime;
   final TimeOfDay wake;
@@ -79,13 +111,25 @@ class SleepScheduleSheet extends StatefulWidget {
   /// 睡覺畫面用的版本：標題改成 Tonight's alarm、月亮把手鎖住（已經上床了）。
   final bool tonightOnly;
 
+  /// 標題。null = 依 [tonightOnly] 決定。
+  final String? title;
+
+  /// 月亮把手鎖住。[tonightOnly] 一定鎖。
+  final bool bedLocked;
+
+  /// 顯示 Alarm 開關。事後補時間不需要。
+  final bool showAlarm;
+
   const SleepScheduleSheet({
     super.key,
     required this.bedtime,
     required this.wake,
     required this.alarmEnabled,
-    required this.scheduler,
+    this.scheduler = const PlatformAlarmScheduler(),
     this.tonightOnly = false,
+    this.title,
+    this.bedLocked = false,
+    this.showAlarm = true,
   });
 
   @override
@@ -140,7 +184,8 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
             ),
             const SizedBox(height: 16),
             Text(
-              widget.tonightOnly ? "Tonight's alarm" : 'Sleep schedule',
+              widget.title ??
+                  (widget.tonightOnly ? "Tonight's alarm" : 'Sleep schedule'),
               style: const TextStyle(
                 color: SonnapColors.textPrimary,
                 fontSize: 18,
@@ -153,10 +198,11 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
               wake: _wake,
               onBedtimeChanged: (t) => setState(() => _bed = t),
               onWakeChanged: (t) => setState(() => _wake = t),
-              bedLocked: widget.tonightOnly,
+              bedLocked: widget.tonightOnly || widget.bedLocked,
             ),
             const SizedBox(height: 12),
             SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),
+            if (widget.showAlarm) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -185,7 +231,8 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                 ],
               ),
             ),
-            if (_alarm && _blocked) ...[
+            ],
+            if (widget.showAlarm && _alarm && _blocked) ...[
               const SizedBox(height: 8),
               Row(
                 key: const Key('alarm-permission-note'),

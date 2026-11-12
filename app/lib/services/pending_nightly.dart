@@ -58,6 +58,8 @@ class PendingNight {
         //    而「沒按按鈕」與「按了但值是 null」在這裡是同一件事。
         if (marks.startIso != null) 'bed_start_at': marks.startIso,
         if (marks.endIso != null) 'bed_end_at': marks.endIso,
+        if (marks.startRecalled) 'bed_start_kind': 'recalled',
+        if (marks.endRecalled) 'bed_end_kind': 'recalled',
       };
 
   static PendingNight? fromJson(Object? raw) {
@@ -74,6 +76,8 @@ class PendingNight {
       marks: BedMarks(
         startAt: _parse(raw['bed_start_at']),
         endAt: _parse(raw['bed_end_at']),
+        startRecalled: raw['bed_start_kind'] == 'recalled',
+        endRecalled: raw['bed_end_kind'] == 'recalled',
       ),
     );
   }

@@ -258,13 +258,16 @@ class NightlyUploader {
   /// 丟掉整組等於懲罰使用者忘記按。
   BedMarks _usableMarks(LightsOutResult lightsOut, BedMarks marks) {
     if (marks.endAt == null) return marks;
+    // 事後補的下床不過這一關（2026-11-12 使用者定）：這條規則擋的是「起床好幾
+    // 小時才想起來按」，而補的時間本來就是使用者說的「我幾點起床」。
+    if (marks.endRecalled) return marks;
     if (bedEndIsPlausible(marks.endAt!, lightsOut.at, lightsOut.quietMinutes)) {
       return marks;
     }
     // ⚠️ 這裡**不是**改用推算的時刻。那會把自述欄位偷偷換成偵測值，
     //    而「使用者說的」與「手機測的」是兩個不同的量。
     debugPrint('NightlyUpload: bed_end_at 按得太晚，這一晚不送 end');
-    return BedMarks(startAt: marks.startAt);
+    return BedMarks(startAt: marks.startAt, startRecalled: marks.startRecalled);
   }
 
   /// [marks] 是使用者自己按的上床／下床時刻（可選）。
@@ -314,6 +317,9 @@ class NightlyUploader {
         // 少一個就整組是 null（見 behavior/sleep_efficiency.py）。
         if (marks.startIso != null) 'bed_start_at': marks.startIso,
         if (marks.endIso case final String v) 'bed_end_at': v,
+        // 當下按的還是事後補的（2026-11-12）。後端沒收到就當作當下按的。
+        if (marks.startKind case final String k) 'bed_start_kind': k,
+        if (marks.endKind case final String k) 'bed_end_kind': k,
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
