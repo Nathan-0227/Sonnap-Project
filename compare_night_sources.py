@@ -209,7 +209,11 @@ def report(nights, behavior):
         beh = behavior.get(date)
         cam_start = parse(cam["bed_start_at"])
         cam_onset = parse(cam["sleep_onset_at"])
-        btn_start = parse(beh["bed_start_at"]) if beh else None
+        # ⚠️ 事後補的上床時間（'recalled'）不拿來當標準答案（2026-11-12 使用者定）：
+        #    回想可能差幾十分鐘，拿來驗證會把偵測器算成錯的。
+        btn_start = (parse(beh["bed_start_at"])
+                     if beh and (beh.get("bed_start_kind") or "tap") == "tap"
+                     else None)
         lights = parse(beh["lights_out_at"]) if beh else None
 
         print(f"\n【{date}】")

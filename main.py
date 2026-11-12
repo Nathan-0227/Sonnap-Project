@@ -41,7 +41,7 @@ main.py — Sonnap 後端 API
 import json
 from datetime import date as date_cls, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -202,6 +202,11 @@ class NightlyRequest(BaseModel):
         None, description="When the user marked getting out of bed (self-reported)."
     )
     source: str = Field("phone", description="phone | self_report")
+    # 2026-11-12：那兩個時刻是當下按的還是事後補的。沒給 = 'tap'（舊版 App）。
+    # ⚠️ 'recalled' 照樣算進效率（使用者決定），但攝影機驗證不拿它當標準答案，
+    #    分數卡也會多一句警語（score_claim.RECALLED_EFFICIENCY_NOTE）。
+    bed_start_kind: Optional[Literal["tap", "recalled"]] = None
+    bed_end_kind: Optional[Literal["tap", "recalled"]] = None
 
 
 class WearableRequest(BaseModel):
@@ -279,7 +284,8 @@ def _row_for(rows: List[dict], target_date: Optional[str]) -> Optional[dict]:
 #    與 build_app_payload 那份（直讀 pipeline 的分項得分）刻意各寫一份，
 #    由 tests/test_score_composition.py 逐夜比對守著。
 
-def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
+def score_composition(wearable_row: Optional[dict],
+                      behavior_row: Optional[dict] = None) -> Optional[dict]:
     """
     這一晚的分數由哪幾項組成。沒有手錶資料那一晚回 None。
 
@@ -301,8 +307,14 @@ def score_composition(wearable_row: Optional[dict]) -> Optional[dict]:
         "deep": wearable_row.get("deep_min") is not None,
         "rem": bool(wearable_row.get("rem_measured")),
     }
-    return score_claim.compose((k for k, v in present.items() if v),
-                               efficiency_basis=wearable_row.get("efficiency_basis"))
+    basis = wearable_row.get("efficiency_basis")
+    b = behavior_row or {}
+    return score_claim.compose(
+        (k for k, v in present.items() if v),
+        efficiency_basis=basis,
+        efficiency_recalled=score_claim.efficiency_uses_recalled(
+            basis, b.get("bed_start_kind"), b.get("bed_end_kind")),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -503,18 +515,37 @@ async def post_nightly(req: NightlyRequest):
     # 實測 MySQL 裡每一晚的 bed_start_at 都是 NULL，包括補登時回過 84.6% 的 09-09。
     req_start = req.bed_start_at if same_night else None
     req_end = req.bed_end_at if same_night else None
+    req_start_kind = (req.bed_start_kind or "tap") if req_start else None
+    req_end_kind = (req.bed_end_kind or "tap") if req_end else None
     stored_start, stored_end = db.get_bed_marks(req.user_id, night["date"])
+    stored_start_kind, stored_end_kind = db.get_bed_mark_kinds(
+        req.user_id, night["date"])
+    stored_start_kind = (stored_start_kind or "tap") if stored_start else None
+    stored_end_kind = (stored_end_kind or "tap") if stored_end else None
+
+    # ⚠️ 當下按的不能被事後回想的蓋掉（2026-11-12 使用者定）：按鈕是攝影機上床
+    #    偵測的標準答案，比回想準。App 端也只讓使用者補缺的那一個，這裡再守一次。
+    if (req_start_kind == "recalled" and stored_start_kind == "tap"
+            and not _same_instant(stored_start, req_start)):
+        req_start, req_start_kind = stored_start, stored_start_kind
+    if (req_end_kind == "recalled" and stored_end_kind == "tap"
+            and not _same_instant(stored_end, req_end)):
+        req_end, req_end_kind = stored_end, stored_end_kind
+
     if req_start is not None:
         # 帶了就照帶的（更正仍然有效）。只帶上床、而且是同一次按的，
         # 下床沿用先前存下的——上床先傳、下床後補是正常的順序。
         use_start, use_end = req_start, req_end
+        start_kind, end_kind = req_start_kind, req_end_kind
         if use_end is None and _same_instant(stored_start, req_start):
-            use_end = stored_end
+            use_end, end_kind = stored_end, stored_end_kind
         marks_source = "request"
     elif stored_start is not None:
         use_start, use_end, marks_source = stored_start, stored_end, "stored"
+        start_kind, end_kind = stored_start_kind, stored_end_kind
     else:
         use_start = use_end = marks_source = None
+        start_kind = end_kind = None
 
     try:
         eff = sleep_efficiency.evaluate_efficiency(
@@ -538,6 +569,8 @@ async def post_nightly(req: NightlyRequest):
         is_late=night["is_late"],
         source=night["source"],
         efficiency=eff,
+        bed_start_kind=start_kind,
+        bed_end_kind=end_kind,
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
@@ -551,6 +584,8 @@ async def post_nightly(req: NightlyRequest):
         resp["bed_start_at"] = None
         resp["bed_end_at"] = None
     resp["bed_marks_source"] = marks_source
+    resp["bed_start_kind"] = start_kind if eff.get("bed_start_at") else None
+    resp["bed_end_kind"] = end_kind if eff.get("bed_end_at") else None
     return resp
 
 
@@ -786,7 +821,7 @@ async def get_home(
             "device_brand": w_row["device_brand"],
             # ⚠️ 分數由哪幾項組成。裝置組合因人而異，兩個都是 82 分的夜晚
             #    可能不是同一回事——見 score_composition() 的說明。
-            "composition": score_composition(w_row),
+            "composition": score_composition(w_row, b_row),
         },
         "display": display,
         "streak": {
@@ -942,7 +977,8 @@ async def get_insights(
                     "final_quality": r["final_quality"],
                     # ⚠️ 逐夜都帶，因為組成會隨當晚量到什麼而變（例如某幾晚
                     #    手錶測不到 REM）。只在最上層給一次會讓人以為每晚一樣。
-                    "composition": score_composition(r),
+                    "composition": score_composition(
+                        r, behavior_by_date.get(r["date"])),
                     "sleep_duration_hours": (
                         round(r["duration_min"] / 60.0, 2)
                         if r["duration_min"] is not None else None

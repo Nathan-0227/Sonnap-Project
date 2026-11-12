@@ -35,7 +35,8 @@ OUT = ROOT / "garmin" / "data" / "bed_marks.json"
 
 
 def collect(db_path=None):
-    """{起床日: {bed_start_at, bed_end_at, time_in_bed_minutes}}，只收有按 Start sleep 的夜晚。"""
+    """{起床日: {bed_start_at, bed_end_at, time_in_bed_minutes, bed_start_kind, bed_end_kind}}，
+    只收有按 Start sleep 的夜晚。kind 是 'tap'／'recalled'；舊資料當作 'tap'。"""
     user_id, _info = db.resolve_phone_account(db_path)
     if not user_id:
         return None
@@ -47,6 +48,8 @@ def collect(db_path=None):
             "bed_start_at": r["bed_start_at"],
             "bed_end_at": r.get("bed_end_at"),
             "time_in_bed_minutes": r.get("time_in_bed_minutes"),
+            "bed_start_kind": r.get("bed_start_kind") or "tap",
+            "bed_end_kind": (r.get("bed_end_kind") or "tap") if r.get("bed_end_at") else None,
         }
     return dict(sorted(nights.items()))
 

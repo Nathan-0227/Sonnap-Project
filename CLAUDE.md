@@ -395,6 +395,22 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 🔴 **還沒在實機驗證會響**：要在三星上測螢幕鎖住、App 被滑掉、開著勿擾三種情況。
 
+### ✅ 事後補上床／起床時間（2026-11-12，`feature/backfill-bed-times`）
+
+兩個入口，都用同一個轉盤、都沒有 Alarm 開關：睡覺畫面的 **I already got up**（月亮鎖在上床時刻），
+首頁 Start Sleep 下面的 **Forgot to tap last night? Add times**（昨晚有按上床就鎖月亮）。
+
+| 規則 | 理由 |
+|---|---|
+| 每個時刻記 `tap`（當下按）或 `recalled`（事後補）：`nightly_behavior.bed_start_kind`／`bed_end_kind`，NULL＝舊資料當 `tap` | 使用者定 |
+| **只補缺的那一個**；當下按的不能被回想的蓋掉——App 只讓補缺的，後端 `POST /nightly` 再守一次 | 按鈕是攝影機上床偵測的標準答案，比回想準 |
+| 補的照樣算進效率；用到回想那一端的晚上，效率警語後面接 `score_claim.RECALLED_EFFICIENCY_NOTE`（② 只看上床） | 使用者定。判準 `efficiency_uses_recalled()` 一份，API 與打包檔共用 |
+| 補的下床**不過** `kBedEndGrace`（比手機第一次被碰晚 2 小時）；仍檢查：晚於上床、不晚於現在、≤14 小時 | 那條擋的正是「起床好幾小時才按」 |
+| 攝影機比對（`compare_night_sources.py`）**只拿 `tap` 的上床** | 回想可能差幾十分鐘，會把偵測器算成錯的 |
+| 預設值不用手機偵測的時間：上床＝目標就寢，起床＝今晚鬧鐘或轉盤上的起床 | 使用者定 |
+| 首頁「不按也沒關係」那句**照留**，連結加在它下面 | `bed_mark_buttons_test` 守著那句 |
+| 「昨晚按齊了沒」看 `bed_log_*` 紀錄，不看上傳用的那幾個槽 | 上傳收下後槽會清掉，分不出「按齊而且傳了」與「沒按」 |
+
 ### ✅ 睡覺畫面＋助眠聲音（2026-11-12，`feature/sleep-sounds`）
 
 由上到下：大時間 → `Sleeping… your watch is tracking` → 睡著的小狗（`assets/pets/dog01/sleeping.png`，使用者生成）
@@ -1477,6 +1493,7 @@ python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／�
 python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
 python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
+python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的

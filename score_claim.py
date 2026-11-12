@@ -119,12 +119,41 @@ COMPOSITION_NOTE = (
 )
 
 
-def compose(scored, efficiency_basis=None):
+# 事後補的上床／下床時間（2026-11-12 使用者定）。
+#
+# 「I already got up」與首頁「Forgot to tap last night?」補的時間是**回想**的，
+# 照樣算進效率（使用者決定），但那一晚的效率警語要多這一句。
+# ⚠️ 只有那個 basis 真的用到回想的那一端才掛：② 只用上床，下床是回想的不影響它。
+RECALLED_EFFICIENCY_NOTE = (
+    "Bed or wake time was added afterwards from memory, so this figure may be "
+    "less precise."
+)
+
+# 每一種 basis 用到哪幾個按鈕。③ 沒用按鈕。
+_EFFICIENCY_BASIS_USES = {
+    "watch_tst__phone_tats": ("start", "end"),
+    "phone_bed_start__watch_wake": ("start",),
+}
+
+
+def efficiency_uses_recalled(efficiency_basis, bed_start_kind=None, bed_end_kind=None):
+    """這一晚進分數的效率，有沒有用到事後回想的時間。
+
+    kind 是 'tap'（當下按）或 'recalled'（事後補）；None 是舊資料，當作 'tap'。
+    """
+    kinds = {"start": bed_start_kind, "end": bed_end_kind}
+    return any(kinds[k] == "recalled"
+               for k in _EFFICIENCY_BASIS_USES.get(efficiency_basis, ()))
+
+
+def compose(scored, efficiency_basis=None, efficiency_recalled=False):
     """
     把「哪幾項有算」組成 API／payload 要回的那個 dict。
 
     efficiency_basis：效率有算時，這晚用的是哪一種（三種 basis 之一）。
                       決定 caveats 裡效率那一條寫什麼；沒算效率時忽略。
+    efficiency_recalled：那個效率用到了事後回想的時間（見 efficiency_uses_recalled）。
+                      是的話效率那條警語後面接 RECALLED_EFFICIENCY_NOTE。
     scored：有算分的分項名稱（可迭代）。呼叫端自己決定怎麼判斷——
             main.py 從資料庫的原始度量推論，build_app_payload 直接讀
             pipeline 算出來的分項得分。**判準兩邊各一份，形狀與文字共用這份。**
@@ -141,12 +170,16 @@ def compose(scored, efficiency_basis=None):
     caveat_text = dict(SCORED_COMPONENT_CAVEATS)
     if efficiency_basis in EFFICIENCY_CAVEATS:
         caveat_text["efficiency"] = EFFICIENCY_CAVEATS[efficiency_basis]
+    recalled = bool(efficiency_recalled) and "efficiency" in scored_set
+    if recalled and "efficiency" in caveat_text:
+        caveat_text["efficiency"] += " " + RECALLED_EFFICIENCY_NOTE
     return {
         "scored": ordered,
         "unscored": unscored,
         "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in ordered),
         "primary_component": PRIMARY_SCORE_COMPONENT,
         "efficiency_basis": efficiency_basis if "efficiency" in scored_set else None,
+        "efficiency_recalled": recalled,
         "caveats": [
             {"component": k, "caveat": caveat_text[k]}
             for k in ordered if k in caveat_text
