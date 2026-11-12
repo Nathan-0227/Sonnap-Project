@@ -36,10 +36,10 @@ class _NightSkyEffectsState extends State<NightSkyEffects>
   static final List<_Sparkle> _sparkles = () {
     final r = math.Random(11);
     final out = <_Sparkle>[];
-    while (out.length < 22) {
+    while (out.length < 14) {
       final x = 0.04 + r.nextDouble() * 0.92;
       final y = 0.06 + r.nextDouble() * 0.74;
-      final size = 1.2 + r.nextDouble() * 1.6; // 光點核心半徑（很小）
+      final size = 0.8 + r.nextDouble() * 1.0; // 光點核心半徑（很小）
       final phase = r.nextDouble() * math.pi * 2;
       final speed = 0.6 + r.nextDouble() * 1.2;
       // 左上角是問候文字，星星不要閃在字上。
@@ -115,7 +115,7 @@ class _SkyPainter extends CustomPainter {
           : 0.6;
       final alpha = 0.35 + 0.65 * wave;
       final core = s.size * (0.85 + 0.25 * wave);
-      final glow = core * 4.5;
+      final glow = core * 3.5;
       final c = Offset(s.x * size.width, s.y * size.height);
 
       canvas.drawCircle(
