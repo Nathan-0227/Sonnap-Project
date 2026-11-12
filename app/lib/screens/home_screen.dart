@@ -74,8 +74,20 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-/// 整頁的背景圖（原創，2026-11-12 由使用者以 prompt 生成）。
+/// 整頁的背景圖（原創，2026-11-12 由使用者以 prompt 生成，左右翻轉讓月亮避開問候文字）。
 const String kHomeBackgroundAsset = 'assets/backgrounds/night_sky.png';
+
+/// 背景圖的寬高比（853 × 1844）。
+const double kHomeBackgroundAspect = 853 / 1844;
+
+/// 山頂在圖片高度的哪個位置（實測 0.552）。寵物的腳要踩在這裡。
+const double kHomeBackgroundCrest = 0.552;
+
+/// 圖片最下緣的顏色，圖畫完之後頁面用它接下去。
+const Color kHomeBackgroundBottom = Color(0xFF090F4F);
+
+/// 寵物的大小。
+const double kHomePetSize = 230;
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
@@ -335,44 +347,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-
-    return Stack(
-      children: [
-        // 背景圖鋪滿整頁，從上方對齊（月亮與星星在上、雲在下）。
-        Positioned.fill(
-          child: Image.asset(
-            kHomeBackgroundAsset,
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            errorBuilder: (context, error, stack) =>
-                const ColoredBox(color: SonnapColors.background),
-          ),
-        ),
-        SafeArea(
-          child: Center(
-            child: SizedBox(
-              width: screenWidth > 520 ? 520 : screenWidth,
-              child: FutureBuilder<SleepSession>(
-                future: _sessionFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF8B6DFF),
-                      ),
-                    );
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return _buildError(snapshot.error);
-                  }
-                  return _buildContent(snapshot.data!);
-                },
+    // 背景圖畫在捲動內容裡（見 [_buildContent]），寵物才會一直站在山頂上。
+    // 這裡的底色接在圖的下緣之後，顏色取自圖片最下面那一列。
+    return ColoredBox(
+      color: kHomeBackgroundBottom,
+      child: FutureBuilder<SleepSession>(
+        future: _sessionFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF8B6DFF)),
               ),
-            ),
-          ),
-        ),
-      ],
+            );
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return SafeArea(child: _buildError(snapshot.error));
+          }
+          return _buildContent(snapshot.data!);
+        },
+      ),
     );
   }
 
@@ -444,34 +438,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final display = session.display;
     final mood = session.status.petMood;
     final game = _game?.value;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final topInset = media.padding.top;
+    final contentWidth = width > 520 ? 520.0 : width;
+
+    // 圖片以整個螢幕寬度從最上面鋪下來，所以山頂的位置可以算出來。
+    // 寵物的腳（圖框底部往上約 8%）踩在山頂稍下方一點的草地上。
+    final crestY = width / kHomeBackgroundAspect * kHomeBackgroundCrest;
+    final heroHeight = crestY + 14 + kHomePetSize * 0.08 - topInset;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-      child: Column(
+      child: Stack(
         children: [
-          _buildHeader(session, now, game),
-          const SizedBox(height: 8),
-          _buildPet(mood, game),
-          Text(
-            display.moodDescription,
-            key: const Key('mood-description'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: SonnapColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+          Image.asset(
+            kHomeBackgroundAsset,
+            width: width,
+            fit: BoxFit.fitWidth,
+            alignment: Alignment.topCenter,
+            errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+          ),
+          Padding(
+            padding: EdgeInsets.only(top: topInset),
+            child: Center(
+              child: SizedBox(
+                width: contentWidth,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: heroHeight,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: _buildHeader(session, now, game),
+                            ),
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: _buildPet(mood, game),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        display.moodDescription,
+                        key: const Key('mood-description'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: SonnapColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          shadows: [
+                            Shadow(blurRadius: 8, color: Colors.black54),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      WeekMoodStrip(history: session.history),
+                      const SizedBox(height: 16),
+                      _buildScoreLine(session),
+                      const SizedBox(height: 14),
+                      _buildBedtimeRow(now),
+                      const SizedBox(height: 12),
+                      _buildBedButtons(),
+                      const SizedBox(height: 18),
+                      _buildTiles(session),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          WeekMoodStrip(history: session.history),
-          const SizedBox(height: 16),
-          _buildScoreLine(session),
-          const SizedBox(height: 14),
-          _buildBedtimeRow(now),
-          const SizedBox(height: 12),
-          _buildBedButtons(),
-          const SizedBox(height: 18),
-          _buildTiles(session),
         ],
       ),
     );
@@ -589,20 +633,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildPet(String mood, GameState? game) {
     final color = moodColor(mood);
     return SizedBox(
-      height: 250,
+      height: kHomePetSize,
       child: Stack(
         alignment: Alignment.center,
+        clipBehavior: Clip.none,
         children: [
           HomePet(
             mood: mood,
-            size: 230,
+            size: kHomePetSize,
             equippedItemId: _closet?.value?.equippedItemId,
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
           ),
           Positioned(
-            right: 40,
-            bottom: 18,
+            right: 30,
+            bottom: 0,
             child: Container(
               key: const Key('mood-chip'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -903,14 +948,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         camera.status == CameraInsightsStatus.failed ||
         camera.status == CameraInsightsStatus.noUser) {
       return InfoTile(
-          key: key,
-          icon: icon,
-          iconColor: color,
-          title: title,
-          value: null,
-          missingNote: camera?.status == CameraInsightsStatus.noUser
-              ? 'Needs an account'
-              : (camera == null ? 'Loading…' : 'Backend unreachable'));
+        key: key,
+        icon: icon,
+        iconColor: color,
+        title: title,
+        value: null,
+        missingNote: camera?.status == CameraInsightsStatus.noUser
+            ? 'Needs an account'
+            : (camera == null ? 'Loading…' : 'Backend unreachable'),
+      );
     }
 
     // 只看跟首頁同一晚的那一筆；沒有就是那晚沒錄影，不退回別的晚上。
