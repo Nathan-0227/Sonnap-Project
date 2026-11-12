@@ -502,6 +502,10 @@ def build_payload(target_date=None):
                 "final_score": row.get("final_score"),
                 "final_quality": row.get("final_quality"),
                 "sleep_duration_hours": feat.get("sleep_duration_hours"),
+                # 首頁「跟上一晚比」要逐夜的效率與深睡（2026-11-12）。
+                # ⚠️ 與 metrics 同一個來源（features），所以 history[-1] 與首頁卡片逐字相同。
+                "sleep_efficiency": feat.get("sleep_efficiency"),
+                "deep_minutes": feat.get("deep_minutes"),
                 "sleep_start_time": feat.get("sleep_start_time"),
                 "wake_time": feat.get("wake_time"),
                 "pet_mood": row_mood,
