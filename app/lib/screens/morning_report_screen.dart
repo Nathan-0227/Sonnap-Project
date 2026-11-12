@@ -18,7 +18,16 @@ class MorningReportScreen extends StatefulWidget {
   final MorningReport initial;
   final Future<MorningReport> Function()? load;
 
-  const MorningReportScreen({super.key, required this.initial, this.load});
+  /// 這一晚是不是剛結束（今天早上起床的那一晚）。是的話沒分數時說「在等資料」，
+  /// 不是的話說「沒有資料」——幾天前沒戴錶的晚上，資料不會來了。
+  final bool pending;
+
+  const MorningReportScreen({
+    super.key,
+    required this.initial,
+    this.load,
+    this.pending = true,
+  });
 
   @override
   State<MorningReportScreen> createState() => _MorningReportScreenState();
@@ -320,28 +329,34 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
+  /// 沒有分數時的那一格。只有「剛結束的那一晚」才說在等資料；
+  /// 更早的晚上說沒有資料（yet：早晨匯入晚跑幾天，還是可能補進來）。
   Widget _waitingCard() => _card(
         Column(
           key: const Key('report-waiting'),
-          children: const [
-            Icon(Icons.watch_rounded, color: SonnapColors.accentSoft, size: 30),
-            SizedBox(height: 8),
+          children: [
+            const Icon(Icons.watch_rounded,
+                color: SonnapColors.accentSoft, size: 30),
+            const SizedBox(height: 8),
             Text(
-              kWaitingForWatch,
+              widget.pending ? kWaitingForWatch : kNoWatchData,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            SizedBox(height: 6),
-            Text(
-              "Once your watch syncs, tap this day in the week row on Home "
-              "to see your score.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-            ),
+            if (widget.pending) ...[
+              const SizedBox(height: 6),
+              const Text(
+                "Once your watch syncs, tap this day in the week row on Home "
+                "to see your score.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Colors.white70, fontSize: 13, height: 1.4),
+              ),
+            ],
           ],
         ),
       );

@@ -276,6 +276,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => MorningReportScreen(
+          // 今天早上起床的那一晚才說「在等手錶資料」
+          pending: date == reportDateKey(widget.clock()),
           initial: buildMorningReport(date: date, marks: marks),
           load: () async => buildMorningReport(
             date: date,
@@ -809,6 +811,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       WeekMoodStrip(
                         history: session.history,
                         onDayTap: _openReport,
+                        today: widget.clock(),
                       ),
                     ],
                   ),

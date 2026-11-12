@@ -4,8 +4,12 @@ import '../models/sleep_session.dart';
 import '../theme/sonnap_colors.dart';
 
 /// 首頁上方的一週日期列：最近 7 天，每天一個心情小圖示。
-/// 有資料的那天點了打開那一晚的早晨報告（[onDayTap]，2026-11-12）；
-/// 沒資料的那天不能點——點了也只會看到一張空報告。
+/// 每一天都能點，打開那一晚的早晨報告（[onDayTap]，2026-11-12）。
+///
+/// ⚠️ **沒有心情的那天也要能點、也要畫出來**（使用者定）：心情來自打包檔，
+///    要等電腦跑完早晨匯入才會多出那一晚；分數卻可能更早由 Health Connect
+///    送到後端。等待畫面叫使用者「回首頁點這一天」，那一天就必須在、而且點得到。
+///    所以終點是 [today] 而不是 history 最新那一晚。
 ///
 /// ⚠️ 用心情圖示而不是寵物小臉：2D 小狗目前只有兩種樣子，用小臉的話
 ///    anxious 那晚看起來會跟 bored 一樣（2026-11-12 使用者決定）。
@@ -16,12 +20,23 @@ class WeekMoodStrip extends StatelessWidget {
   /// 點某一天。參數是那一晚的日期（YYYY-MM-DD，與 history 的 date 相同）。
   final ValueChanged<String>? onDayTap;
 
-  const WeekMoodStrip({super.key, required this.history, this.onDayTap});
+  /// 今天（日曆日）。給了就以它為終點；沒給就以 history 最新那一晚為終點。
+  final DateTime? today;
+
+  const WeekMoodStrip({
+    super.key,
+    required this.history,
+    this.onDayTap,
+    this.today,
+  });
+
+  static String dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   /// 以最新那一晚為終點往回 7 個日曆天。中間沒資料的那天留空格，
   /// 不能直接取最後 7 筆——那會把「中間沒戴錶」的日子藏起來。
   static List<(DateTime, HistoryEntry?)> lastSevenDays(
-      List<HistoryEntry> history) {
+      List<HistoryEntry> history, {DateTime? today}) {
     final byDate = <String, HistoryEntry>{};
     DateTime? latest;
     for (final e in history) {
@@ -30,14 +45,16 @@ class WeekMoodStrip extends StatelessWidget {
       byDate[e.date] = e;
       if (latest == null || d.isAfter(latest)) latest = d;
     }
+    if (today != null) {
+      final t = DateTime(today.year, today.month, today.day);
+      if (latest == null || t.isAfter(latest)) latest = t;
+    }
     if (latest == null) return const [];
     return [
       for (var i = 6; i >= 0; i--)
         () {
           final d = DateTime(latest!.year, latest.month, latest.day - i);
-          final key =
-              '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-          return (d, byDate[key]);
+          return (d, byDate[dateKey(d)]);
         }(),
     ];
   }
@@ -46,7 +63,7 @@ class WeekMoodStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final days = lastSevenDays(history);
+    final days = lastSevenDays(history, today: today);
     if (days.isEmpty) return const SizedBox.shrink();
     return Container(
       key: const Key('week-strip'),
@@ -61,9 +78,7 @@ class WeekMoodStrip extends StatelessWidget {
               child: InkWell(
                 key: Key('week-day-${date.day}'),
                 borderRadius: BorderRadius.circular(12),
-                onTap: entry == null || onDayTap == null
-                    ? null
-                    : () => onDayTap!(entry.date),
+                onTap: onDayTap == null ? null : () => onDayTap!(dateKey(date)),
                 child: Column(
                 children: [
                   Text(_weekday[date.weekday - 1],

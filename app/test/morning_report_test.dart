@@ -354,6 +354,41 @@ void main() {
       expect(source.asked, isEmpty);
     });
 
+    // 2026-11-12 使用者定（問題 2 選 B）：分數可能比打包檔早到，
+    // 所以心情列要畫到今天、沒心情的那天也要點得到。
+    testWidgets('⚠️ 打包檔停在舊日期 → 心情列仍畫到今天；點今天那格說在等資料',
+        (tester) async {
+      final latest = DateTime.parse(session.history.last.date);
+      final today = latest.add(const Duration(days: 3));
+      final key = reportDateKey(today);
+      final source = _Source(homeWaiting(key));
+      await pumpHome(tester, DateTime(today.year, today.month, today.day, 9),
+          source);
+      final cell = find.byKey(Key('week-day-${today.day}'));
+      expect(cell, findsOneWidget, reason: '今天那格一定要在');
+      await tester.ensureVisible(cell);
+      await tester.tap(cell);
+      await settle(tester, 15);
+      expect(source.asked, [key]);
+      expect(find.text(kWaitingForWatch), findsOneWidget);
+    });
+
+    testWidgets('⚠️ 點更早的空日子 → 說沒有資料，不說在等', (tester) async {
+      final latest = DateTime.parse(session.history.last.date);
+      final today = latest.add(const Duration(days: 3));
+      final older = latest.add(const Duration(days: 1));
+      final source = _Source(null);
+      await pumpHome(tester, DateTime(today.year, today.month, today.day, 9),
+          source);
+      final cell = find.byKey(Key('week-day-${older.day}'));
+      await tester.ensureVisible(cell);
+      await tester.tap(cell);
+      await settle(tester, 15);
+      expect(source.asked, [reportDateKey(older)]);
+      expect(find.text(kNoWatchData), findsOneWidget);
+      expect(find.text(kWaitingForWatch), findsNothing);
+    });
+
     testWidgets('一週心情列點最新那天 → 打開那一晚的報告', (tester) async {
       final latest = session.history.last;
       final source = _Source(homeWithScore(latest.date));

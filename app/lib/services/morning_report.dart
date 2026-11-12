@@ -27,6 +27,9 @@ import 'user_identity.dart';
 /// ⚠️ 心情只在有分數時才用（使用者定：還在等資料時畫睡姿小狗）。
 const String kWaitingForWatch = 'Waiting for your watch data';
 
+/// 不是剛結束的那一晚、又沒有分數時的說法。
+const String kNoWatchData = 'No watch data for this night yet';
+
 /// 資料從哪來。畫面上會照實標出來。
 enum ReportSource {
   /// 後端 `/home?date=`
