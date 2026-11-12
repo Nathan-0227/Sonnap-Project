@@ -80,7 +80,8 @@ void main() {
   group('一頁全放（2026-11-12 定案）', () {
     testWidgets('問候、心情標籤、分數、Start sleep、四張卡都在同一頁', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      expect(find.textContaining('Good morning, Sleeper'), findsOneWidget,
+      expect(find.textContaining('Good morning'), findsOneWidget);
+      expect(find.text('Sleeper'), findsOneWidget,
           reason: '沒有帳號時用 Sleeper，不能是人名');
       for (final k in [
         'mood-chip',
@@ -111,9 +112,12 @@ void main() {
       expect(find.textContaining('detected anyway'), findsOneWidget);
     });
 
-    testWidgets('就寢時間列：23:10 → 23:30 · 20m left', (tester) async {
+    testWidgets('時鐘卡與倒數圓環：23:10 → 還剩 00:20', (tester) async {
       await pumpHome(tester, () => at(12, 23, 10));
-      expect(find.text('23:30 · 20m left'), findsOneWidget);
+      expect(find.text('23:10'), findsOneWidget);
+      expect(find.text('Target bedtime 23:30'), findsOneWidget);
+      final t = tester.widget<Text>(find.byKey(const Key('bedtime-countdown')));
+      expect(t.data, '00:20');
     });
 
     testWidgets('⚠️ 凌晨兩點：不顯示倒數數字，改成一句話', (tester) async {

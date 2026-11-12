@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -89,6 +90,9 @@ const Color kHomeBackgroundBottom = Color(0xFF090F4F);
 
 /// 寵物的大小。
 const double kHomePetSize = 230;
+
+/// 問候＋時鐘＋倒數圓環那一塊的高度。
+const double kHomeHeaderHeight = 250;
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
@@ -426,9 +430,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   static String _greeting(DateTime now) {
-    if (now.hour < 12) return 'Good morning';
-    if (now.hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (now.hour < 12) return 'Good morning ☀️';
+    if (now.hour < 18) return 'Good afternoon 🌤';
+    return 'Good evening 🌙';
   }
 
   static String _tod(TimeOfDay t) =>
@@ -447,7 +451,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // 圖片以整個螢幕寬度從最上面鋪下來，所以山頂的位置可以算出來。
     // 寵物的腳（圖框底部往上約 8%）踩在山頂稍下方一點的草地上。
     final crestY = width / kHomeBackgroundAspect * kHomeBackgroundCrest;
-    final heroHeight = crestY + 14 + kHomePetSize * 0.08 - topInset;
+    // 上半部（問候＋時鐘＋倒數圓環）大約需要 [kHomeHeaderHeight]；
+    // 螢幕窄到放不下時寵物往下移，寧可站在草地上也不要蓋到時鐘。
+    final heroHeight = math.max(
+      crestY + 14 + kHomePetSize * 0.08 - topInset,
+      kHomeHeaderHeight + kHomePetSize - 20,
+    );
 
     return SingleChildScrollView(
       child: Stack(
@@ -478,7 +487,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: _buildHeader(session, now, game),
+                              child: Column(
+                                children: [
+                                  _buildHeader(session, now, game),
+                                  const SizedBox(height: 14),
+                                  _buildClockRow(now),
+                                ],
+                              ),
                             ),
                             Positioned(
                               left: 0,
@@ -504,13 +519,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      _buildGoingToBed(),
+                      const SizedBox(height: 16),
                       WeekMoodStrip(history: session.history),
                       const SizedBox(height: 16),
                       _buildScoreLine(session),
-                      const SizedBox(height: 14),
-                      _buildBedtimeRow(now),
-                      const SizedBox(height: 12),
-                      _buildBedButtons(),
                       const SizedBox(height: 18),
                       _buildTiles(session),
                     ],
@@ -524,7 +537,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ── 頂端：問候、日期、等級、日記／衣櫃／獎勵 ─────────────────────
+  // ── 頂端：問候、名字、後端的一句話；右上是日記／衣櫃／獎勵與等級 ─────
 
   Widget _buildHeader(SleepSession session, DateTime now, GameState? game) {
     return Row(
@@ -535,22 +548,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_greeting(now)}, ${widget.displayName}',
+                _greeting(now),
                 key: const Key('day-greeting'),
                 style: const TextStyle(
-                  color: SonnapColors.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+                  color: SonnapColors.accentSoft,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 2),
               Row(
                 children: [
-                  Text(
-                    DateFormat('EEE, MMM d').format(now),
-                    style: const TextStyle(
-                      color: SonnapColors.accentSoft,
-                      fontSize: 14,
+                  Flexible(
+                    child: Text(
+                      widget.displayName,
+                      key: const Key('day-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: SonnapColors.textPrimary,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   // 等級照抄後端（GET /game），Dart 不從 XP 反推。點了開獎勵。
@@ -560,26 +578,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 ],
               ),
+              if (session.display.headerMessage.isNotEmpty)
+                Text(
+                  session.display.headerMessage,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: SonnapColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
             ],
           ),
         ),
-        _iconAction(
-          const Key('open-diary'),
-          Icons.menu_book_rounded,
-          'Dream diary',
-          () => _showDream(session),
-        ),
-        _iconAction(
-          const Key('open-closet'),
-          Icons.checkroom_rounded,
-          'Closet',
-          _openCloset,
-        ),
-        _iconAction(
-          const Key('open-rewards'),
-          Icons.card_giftcard_rounded,
-          'Rewards',
-          _openRewards,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _iconAction(
+                  const Key('open-diary'),
+                  Icons.menu_book_rounded,
+                  'Dream diary',
+                  () => _showDream(session),
+                ),
+                _iconAction(
+                  const Key('open-closet'),
+                  Icons.checkroom_rounded,
+                  'Closet',
+                  _openCloset,
+                ),
+                _iconAction(
+                  const Key('open-rewards'),
+                  Icons.card_giftcard_rounded,
+                  'Rewards',
+                  _openRewards,
+                ),
+              ],
+            ),
+          ],
         ),
       ],
     );
@@ -741,111 +779,221 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ── 就寢時間列 ────────────────────────────────────────────────
+  // ── 時鐘卡＋倒數圓環 ──────────────────────────────────────────
 
-  static String _remaining(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    return h > 0 ? '${h}h ${m}m left' : '${m}m left';
+  /// 距離下一次目標就寢時刻還有多久（永遠是「下一次」，所以剛過時是 23 小時多；
+  /// 那時要配 [bedtimeUrgencyCaption] 的 "past bedtime"，見 bedtime_urgency.dart）。
+  Duration _untilBedtime(DateTime now) {
+    final todayAt = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _bedtime.hour,
+      _bedtime.minute,
+    );
+    final next = todayAt.isAfter(now)
+        ? todayAt
+        : todayAt.add(const Duration(days: 1));
+    return next.difference(now);
   }
 
-  /// 「23:30 · 2h 10m left」。點了改目標就寢時間。
+  static String _hhmmDuration(Duration d) =>
+      '${d.inHours.toString().padLeft(2, '0')}:'
+      '${(d.inMinutes % 60).toString().padLeft(2, '0')}';
+
+  /// 左邊大時鐘（點了改目標就寢時間），右邊「Time Left」倒數圓環。
   ///
-  /// ⚠️ 過目標 60 分鐘以上（例如凌晨兩點）**不顯示數字**，改成一句話——
-  ///    那時倒數會算成「距離明天還有 21 小時」，寫「晚了 2 小時半」又只剩責備
+  /// ⚠️ 過目標 60 分鐘以上（例如凌晨兩點）**不顯示倒數數字**——那時倒數會算成
+  ///    「距離明天還有 21 小時」，寫「晚了 2 小時半」又只剩責備
   ///    （見 `bedtime_urgency.dart` 的 kOverdueWindow）。
-  Widget _buildBedtimeRow(DateTime now) {
+  Widget _buildClockRow(DateTime now) {
     final late =
         homeModeFor(now: now, bedtime: _bedtime) == HomeMode.lateEvening;
     final urgency = bedtimeUrgency(now, _bedtime);
-    final color = late ? SonnapColors.accentSoft : bedtimeUrgencyColor(urgency);
+    final color = bedtimeUrgencyColor(urgency);
+    final left = _untilBedtime(now);
 
-    final String text;
-    if (late) {
-      text = 'Bedtime was ${_tod(_bedtime)} · Your buddy is waiting';
-    } else if (urgency == BedtimeUrgency.overdue) {
-      text = '${_tod(_bedtime)} · past bedtime';
-    } else {
-      final todayAt = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        _bedtime.hour,
-        _bedtime.minute,
-      );
-      final next = todayAt.isAfter(now)
-          ? todayAt
-          : todayAt.add(const Duration(days: 1));
-      text = '${_tod(_bedtime)} · ${_remaining(next.difference(now))}';
-    }
-
-    return InkWell(
+    final clockCard = InkWell(
       key: Key(late ? 'late-evening' : 'bedtime-row'),
       onTap: _pickBedtime,
       borderRadius: BorderRadius.circular(SonnapColors.radius),
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        height: 120,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: sonnapCardDecoration(),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.alarm_rounded, color: color, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
+            FittedBox(
+              fit: BoxFit.scaleDown,
               child: Text(
-                text,
-                key: late ? null : const Key('bedtime-countdown'),
-                style: TextStyle(
-                  color: color,
-                  fontSize: 16,
+                DateFormat('HH:mm').format(now),
+                key: const Key('home-clock'),
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 52,
                   fontWeight: FontWeight.w800,
+                  height: 1.0,
                 ),
               ),
             ),
-            const Icon(
-              Icons.edit_rounded,
-              color: SonnapColors.textMuted,
-              size: 16,
+            const SizedBox(height: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    late
+                        ? 'Bedtime was ${_tod(_bedtime)}'
+                        : 'Target bedtime ${_tod(_bedtime)}',
+                    style: const TextStyle(
+                      color: SonnapColors.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.edit, color: Color(0xFFFFD96A), size: 16),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
-  }
 
-  // ── 上床／下床按鈕 ────────────────────────────────────────────
-
-  /// 首頁只有 Start sleep（2026-11-12 使用者定案）：下床在睡覺畫面裡按。
-  Widget _buildBedButtons() {
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            key: const Key('start-sleep'),
-            onPressed: _startSleep,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFFFC567),
-              foregroundColor: const Color(0xFF1B2350),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: const StadiumBorder(),
-            ),
-            child: const Text(
-              'Start sleep',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+    const ringSize = 120.0;
+    final ring = SizedBox(
+      width: ringSize,
+      height: ringSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: ringSize,
+            height: ringSize,
+            child: CircularProgressIndicator(
+              // 一整天 = 一整圈；越接近就寢圈越短。過了太久就不畫進度。
+              value: late ? 0 : (left.inMinutes / (24 * 60)).clamp(0.0, 1.0),
+              strokeWidth: 9,
+              backgroundColor: Colors.white24,
+              color: color,
+              strokeCap: StrokeCap.round,
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
-        //    少了它，忘記按的人會以為那一晚白過了——而 lights_out_at 照樣偵測得到。
-        const Text(
-          "It's fine if you forget to tap :) Bedtime is detected anyway.",
-          key: Key('optional-note'),
-          textAlign: TextAlign.center,
-          style: TextStyle(color: SonnapColors.textSecondary, fontSize: 12),
-        ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: late
+                  ? const Column(
+                      children: [
+                        Icon(
+                          Icons.bedtime_rounded,
+                          color: Color(0xFFFFD96A),
+                          size: 26,
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Your buddy\nis waiting',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        const Icon(
+                          Icons.access_time,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Time Left',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Text(
+                          _hhmmDuration(left),
+                          key: const Key('bedtime-countdown'),
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          bedtimeUrgencyCaption(urgency),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Row(
+      children: [
+        Expanded(child: clockCard),
+        const SizedBox(width: SonnapColors.gap),
+        ring,
       ],
+    );
+  }
+
+  // ── 「Going to bed?」卡：只有 Start sleep ───────────────────────
+
+  /// 首頁只有 Start sleep（2026-11-12 使用者定案）：下床在睡覺畫面裡按。
+  Widget _buildGoingToBed() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: sonnapCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Going to bed?',
+            style: TextStyle(
+              color: SonnapColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
+          //    少了它，忘記按的人會以為那一晚白過了——而 lights_out_at 照樣偵測得到。
+          const Text(
+            "It's fine if you forget to tap :) Bedtime is detected anyway.",
+            key: Key('optional-note'),
+            style: TextStyle(color: SonnapColors.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const Key('start-sleep'),
+              onPressed: _startSleep,
+              icon: const Icon(Icons.nightlight_round, size: 22),
+              label: const Text(
+                'Start sleep',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFFFD96A),
+                side: const BorderSide(color: Color(0xFFFFC567), width: 2),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: const StadiumBorder(),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
