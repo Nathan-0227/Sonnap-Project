@@ -445,6 +445,23 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 沒按按鈕時顯示手錶的 `Asleep 00:10 – 07:00`，不冒充 In bed | 入睡不是上床 |
 | Cancel 不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
 | 日期自己組（`reportDateTitle`），不用 intl 的 DateFormat | 那會跟手機語言走 |
+
+#### 早晨報告的後端（2026-11-12）
+
+| 規則 | 理由 |
+|---|---|
+| **起床自評**（`POST /rested`、表 `morning_ratings`）題目照抄 Consensus Sleep Diary-M 第 10 題；**不進分數、不給 XP、不給好友看** | `test_morning_report.py`【4】存了「很累」與「很有精神」前後比分數與 XP，並掃 `garmin/`、`game/`、`social/` 不得讀它 |
+| 標籤只收 `behavior/morning_tips.TAGS` 的 id，不收自由文字 | 隱私、無法統計，送進 AI 還可能被拿來改寫指令 |
+| 記下 `minutes_after_wake` | 日誌標準是起床一小時內；App 允許 6 小時內補填，分析時可以只取 ≤ 60 的 |
+| **小建議 12 句只在 `behavior/morning_tips.py`**，措辭與 `Research-Background/起床小建議與自評.md` 逐字一致（測試【2】讀文件比對） | 改措辭先改文件；句子由使用者審過 |
+| ⚠️ T1（晚 30–59 分）與 T2（晚 ≥ 60 分）**不重疊** | 原本 T2 是 ≥ 60、T1 是 ≥ 30 且優先，T2 永遠輪不到（寫程式時發現） |
+| **AI 不寫建議**：`/night-summary` 回 `text`（AI 寫）與 `tip`（後端挑、逐字）兩個欄位，畫面分兩列 | AI 碰不到建議，就改不壞它 |
+| AI 每晚只生成一次，存 `night_summaries`；`facts_hash` 變了才重生；手錶資料沒到不呼叫 | 每呼叫一次花一次額度 |
+| 寫不出來（沒金鑰／連不上／兩次沒過驗證）→ 退回 `/home` 畫面上那幾句話；沒金鑰不存，失敗的存起來、**60 分鐘內不再試** | 連不上時每打開一次報告就花一次額度 |
+| 驗證沿用 `ai/chat.validate_answer`，另加：≤ 60 字、≤ 3 句、不准 because／due to | 只能說同一晚發生了什麼，不能說為什麼 |
+| 時長在事實區塊裡寫成「3h 25m less」這種字串，要 AI 照抄 | 讓 AI 自己換算，換錯了看起來也很合理；測試寫錯一個數字就被數字檢查擋下過 |
+| `/home?date=` 的 `metrics.sleep_stages`：**只有 Garmin 來源**有每晚曲線 | 逐段資料只在電腦上的 `garmin_standard_data.json`（25 MB，讀一次留在記憶體，mtime 變了才重讀）；Health Connect 的逐段資料沒存 |
+| `/home` 另回 `morning_rating` 與 `previous_night`（上一個有資料的晚上的臥床、睡眠分鐘數） | 「跟上一晚比」的箭頭方向由 App 比，只代表方向 |
 | **一週心情列以「今天」為終點、每一格都能點**（使用者定） | 分數可能由 Health Connect 先送到，心情列要等早晨匯入才多出那晚；等待畫面叫人回首頁點這一天，那一格就必須在 |
 | 只有今天剛結束的那一晚寫 `Waiting for your watch data`；更早的空日子寫 `No watch data for this night yet` | 幾天前沒戴錶的晚上，資料不會來了 |
 
@@ -1374,17 +1391,18 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **後端（根目錄）**
 
-- `main.py` — FastAPI。21 個端點：
+- `main.py` — FastAPI。23 個端點：
   使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
   上傳 `POST /nightly /wearable`；
   讀取 `GET /home /insights /challenges /get-sleep-data /health`；
   攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
   遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
-  助理 `POST /chat`。
+  助理 `POST /chat`；
+  早晨報告 `POST /rested`（起床自評）、`GET /night-summary`（AI 分析＋小建議）。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — 15 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+- `db.py` — 17 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
   設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
   自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
@@ -1493,7 +1511,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 23 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 28 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1502,7 +1520,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 23 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 28 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1532,6 +1550,7 @@ python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／�
 python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
 python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
+python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```
 
