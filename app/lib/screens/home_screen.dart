@@ -821,7 +821,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Align(
       alignment: Alignment.centerLeft,
       child: FractionallySizedBox(
-        widthFactor: 0.62,
+        widthFactor: 0.5,
         child: CountdownBorder(
           key: const Key('countdown-border'),
           // 一整天 = 一整圈；剛過就寢、或過了很久都不畫進度。
@@ -845,7 +845,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       key: const Key('home-clock'),
                       style: const TextStyle(
                         color: SonnapColors.textPrimary,
-                        fontSize: 40,
+                        fontSize: 34,
                         fontWeight: FontWeight.w800,
                         height: 1.0,
                       ),
