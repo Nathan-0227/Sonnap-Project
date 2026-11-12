@@ -6,6 +6,9 @@
 //   - 沒有後端回應時不得出現任何達成度措辭
 //   - 手機上別晚的按鈕不得被當成這一晚的
 //   - 起床自評在報告之前出現，Skip 不擋報告
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/morning_report_screen.dart';
@@ -818,7 +821,7 @@ void main() {
       await settle(tester, 5);
       expect(find.byType(WakeUpScreen), findsOneWidget, reason: '先播起床動畫');
       expect(find.byType(RestedScreen), findsNothing);
-      await settle(tester, 30);
+      await settle(tester, 45);
       expect(find.byType(WakeUpScreen), findsNothing, reason: '播完自己關掉');
     }
 
@@ -836,9 +839,21 @@ void main() {
       expect(find.textContaining('XP'), findsNothing);
       expect(find.textContaining('score'), findsNothing);
       expect(source.asked, isEmpty, reason: '動畫期間還沒讀報告');
+      expect(find.byKey(const Key('wake-up-gif')), findsOneWidget,
+          reason: '有 wake_up.gif 就播它');
+    });
+
+    testWidgets('⚠️ 沒有 GIF → 退回程式版；小狗用傳進來的心情（首頁那一份），不自己挑 happy',
+        (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: WakeUpScreen(gifAsset: 'assets/does-not-exist.gif', mood: 'tired'),
+      ));
+      await settle(tester, 15);
+      expect(find.byKey(const Key('wake-up-gif')), findsNothing);
       final pet = tester.widget<HomePet>(find.byKey(const Key('wake-up-awake')));
-      expect(pet.mood, session.status.petMood,
-          reason: '照抄首頁那一份（後端的 pet_mood），不自己挑 happy');
+      expect(pet.mood, 'tired');
+      expect(find.text('Good morning'), findsOneWidget);
+      expect(find.textContaining('Great'), findsNothing);
     });
 
     test('起床 GIF 的長度：0 毫秒的格當 100 毫秒；整段夾在 1–6 秒', () {
@@ -850,6 +865,50 @@ void main() {
       expect(clampWakeUpDuration(const Duration(milliseconds: 2800)),
           const Duration(milliseconds: 2800));
     });
+
+    test('讀 GIF 檔頭算長度：真的那支是 3.33 秒、40 格；不是 GIF 回 null', () {
+      final bytes = File(kWakeUpGif).readAsBytesSync();
+      final d = gifDurationFromBytes(bytes)!;
+      // ffprobe 量到 3.33 秒（每格 8 或 9 百分之一秒交錯）
+      expect(d.inMilliseconds, inInclusiveRange(3300, 3360));
+      expect(gifDurationFromBytes(Uint8List.fromList('not a gif'.codeUnits)),
+          isNull);
+      expect(gifDurationFromBytes(Uint8List(0)), isNull);
+    });
+
+    // 2026-11-13 實機錄影抓到：睡覺畫面退場、動畫淡入、自評卡滑上來的那幾格，
+    // 底下的首頁（有分數卡）露出來半秒——自評卡要在看到分數之前問。
+    for (final reduce in [false, true]) {
+      testWidgets(
+          '⚠️ 滑完起床到自評卡之間，一格都不露出首頁'
+          '${reduce ? '（減少動態效果）' : ''}', (tester) async {
+        if (reduce) {
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              const FakeAccessibilityFeatures(disableAnimations: true);
+          addTearDown(
+              tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+        }
+        await pumpHome(tester, at(12, 7, 10), _Source(null),
+            before: (s) => s.markStart(at(11, 23, 40)));
+        // 首頁上一定有的那句話：看得到它＝首頁露出來了
+        final home = find.byKey(const Key('optional-note'));
+        await tester.drag(
+            find.byKey(const Key('slide-knob')), const Offset(1000, 0));
+        var sawRested = false;
+        for (var i = 0; i < 400 && !sawRested; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(home, findsNothing, reason: '第 ${i * 16} 毫秒露出了首頁');
+          // 自評卡要「完全滑上來」才算數：滑的途中正是會露出首頁的時候
+          final rested = find.byType(RestedScreen);
+          if (rested.evaluate().isNotEmpty) {
+            final route = ModalRoute.of(tester.element(rested))!;
+            sawRested = route.isCurrent &&
+                route.animation!.status == AnimationStatus.completed;
+          }
+        }
+        expect(sawRested, isTrue);
+      });
+    }
 
     testWidgets('起床動畫點一下就跳過', (tester) async {
       await pumpHome(tester, at(12, 7, 10), _Source(null),

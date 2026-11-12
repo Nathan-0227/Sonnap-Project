@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,25 +37,43 @@ class WakeUpScreen extends StatefulWidget {
   /// 按 Out of bed 的時刻，顯示在「Good morning」底下。null 就不顯示時間。
   final DateTime? wakeAt;
 
-  const WakeUpScreen({super.key, this.mood, this.wakeAt});
+  /// 要播的 GIF。預設 [kWakeUpGif]；測試傳一個不存在的路徑來驗「缺檔退回程式版」。
+  final String gifAsset;
+
+  /// 播完（或點了跳過）時呼叫。有給的話**不自己關掉**——由首頁把自評卡蓋上來之後再收，
+  /// 中間才不會露出首頁（首頁上有分數卡）。沒給就自己 pop。
+  final VoidCallback? onDone;
+
+  const WakeUpScreen({
+    super.key,
+    this.mood,
+    this.wakeAt,
+    this.gifAsset = kWakeUpGif,
+    this.onDone,
+  });
 
   @override
   State<WakeUpScreen> createState() => _WakeUpScreenState();
 }
 
-/// 用淡入淡出推這個畫面（從下往上滑的話，醒來的感覺會被轉場打斷）。
-Route<void> wakeUpRoute({String? mood, DateTime? wakeAt}) => PageRouteBuilder<void>(
+/// 起床動畫的頁面：**直接切進來、不淡入**。睡覺畫面與 GIF 第一格是同一個房間，
+/// 硬切看起來像沒換畫面；淡入的那一段反而會露出底下的首頁（有分數卡）。
+Route<void> wakeUpRoute({String? mood, DateTime? wakeAt, VoidCallback? onDone}) =>
+    PageRouteBuilder<void>(
       opaque: true,
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, _, _) => WakeUpScreen(mood: mood, wakeAt: wakeAt),
-      transitionsBuilder: (_, animation, _, child) =>
-          FadeTransition(opacity: animation, child: child),
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) =>
+          WakeUpScreen(mood: mood, wakeAt: wakeAt, onDone: onDone),
     );
 
 /// 使用者做的起床 GIF（2026-11-13 使用者定：改用 GIF）。
 /// **有這個檔就播它、沒有就退回下面程式畫的那一版**——缺檔不會報錯。
 /// 畫面會鋪滿（BoxFit.cover），所以 GIF 要是一整個場景、小狗放中間。
+///
+/// 現在這一支：Kling 4.0 圖生影片（第一格＝房間背景＋sleeping.png），
+/// 剪 0–4.2 秒、加速 1.25 倍、**裁掉底部 8%（去掉浮水印）**、480 寬、每秒 12 格、播一次，
+/// 3.3 秒、2.7 MB。重做的指令寫在 docs/WAKE_UP_GIF.md。
 const String kWakeUpGif = 'assets/pets/dog01/wake_up.gif';
 
 /// GIF 播一次要多久就播多久，但夾在這個範圍裡：太短看不到，太長會擋路。
@@ -71,21 +88,64 @@ Duration clampWakeUpDuration(Duration d) =>
     d < kWakeUpMin ? kWakeUpMin : (d > kWakeUpMax ? kWakeUpMax : d);
 
 /// 讀 GIF 的總長度。讀不到（沒有檔、壞檔）回 null。
-Future<Duration?> wakeUpGifDuration() async {
+///
+/// ⚠️ 不用 `instantiateImageCodec` 解碼：那要把每一格都解出來才知道長度，慢，
+///    而且在測試的假時鐘底下永遠不會完成（畫面就卡在空白，2026-11-13 踩過）。
+///    改成直接讀檔頭裡每一格的停留時間（[gifDurationFromBytes]）。
+Future<Duration?> wakeUpGifDuration([String asset = kWakeUpGif]) async {
   try {
-    final data = await rootBundle.load(kWakeUpGif);
-    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-    var total = Duration.zero;
-    for (var i = 0; i < codec.frameCount; i++) {
-      final frame = await codec.getNextFrame();
-      total += gifFrameDuration(frame.duration);
-      frame.image.dispose();
-    }
-    codec.dispose();
-    return clampWakeUpDuration(total);
+    final data = await rootBundle.load(asset);
+    final total = gifDurationFromBytes(data.buffer.asUint8List());
+    return total == null ? null : clampWakeUpDuration(total);
   } catch (_) {
     return null;
   }
+}
+
+/// 從 GIF 的位元組算出播一次的總長度（每一格的 Graphic Control Extension 裡的停留時間相加）。
+/// 不是 GIF、或一格都沒有 → null。純函式，測試直接拿真的檔案打。
+Duration? gifDurationFromBytes(Uint8List b) {
+  if (b.length < 13) return null;
+  final sig = String.fromCharCodes(b.sublist(0, 6));
+  if (sig != 'GIF89a' && sig != 'GIF87a') return null;
+  var i = 13;
+  final packed = b[10];
+  if (packed & 0x80 != 0) i += 3 * (1 << ((packed & 0x07) + 1)); // 全域色盤
+
+  // 跳過一串 sub-block（長度位元組 + 內容，以 0 結束）
+  int skipBlocks(int p) {
+    while (p < b.length && b[p] != 0) {
+      p += b[p] + 1;
+    }
+    return p + 1;
+  }
+
+  var total = Duration.zero;
+  var pending = Duration.zero; // 下一格的停留時間（GCE 在影像之前）
+  var frames = 0;
+  while (i < b.length) {
+    final block = b[i];
+    if (block == 0x3B) break; // 結尾
+    if (block == 0x21 && i + 1 < b.length) {
+      final label = b[i + 1];
+      if (label == 0xF9 && i + 5 < b.length) {
+        final cs = b[i + 4] | (b[i + 5] << 8); // 百分之一秒
+        pending = Duration(milliseconds: cs * 10);
+      }
+      i = skipBlocks(i + 2);
+    } else if (block == 0x2C && i + 9 < b.length) {
+      final local = b[i + 9];
+      i += 10;
+      if (local & 0x80 != 0) i += 3 * (1 << ((local & 0x07) + 1)); // 區域色盤
+      i = skipBlocks(i + 1); // LZW 最小碼長 1 byte，接著影像資料
+      total += gifFrameDuration(pending);
+      pending = Duration.zero;
+      frames++;
+    } else {
+      return null; // 壞檔
+    }
+  }
+  return frames == 0 ? null : total;
 }
 
 class _WakeUpScreenState extends State<WakeUpScreen>
@@ -109,7 +169,7 @@ class _WakeUpScreenState extends State<WakeUpScreen>
   }
 
   Future<void> _start() async {
-    final gif = await wakeUpGifDuration();
+    final gif = await wakeUpGifDuration(widget.gifAsset);
     if (!mounted) return;
     setState(() {
       _ready = true;
@@ -122,7 +182,12 @@ class _WakeUpScreenState extends State<WakeUpScreen>
   void _finish() {
     if (_done || !mounted) return;
     _done = true;
-    Navigator.of(context).pop();
+    final onDone = widget.onDone;
+    if (onDone != null) {
+      onDone();
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -151,7 +216,10 @@ class _WakeUpScreenState extends State<WakeUpScreen>
           child: !_ready
               ? const SizedBox.expand()
               : _gif
-                  ? _gifScene(context)
+                  ? AnimatedBuilder(
+                      animation: _t,
+                      builder: (context, _) => _gifScene(context, _t.value),
+                    )
                   : AnimatedBuilder(
                       animation: _t,
                       builder: (context, _) => _scene(context, _t.value),
@@ -161,15 +229,57 @@ class _WakeUpScreenState extends State<WakeUpScreen>
     );
   }
 
-  Widget _gifScene(BuildContext context) {
+  /// 「Good morning」＋起床時間。GIF 版與程式版共用。
+  Widget _hello() {
+    const shadow = [Shadow(blurRadius: 10, color: Colors.black45)];
+    return Column(
+      children: [
+        const Text(
+          'Good morning',
+          key: Key('wake-up-hello'),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            shadows: shadow,
+          ),
+        ),
+        if (widget.wakeAt != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            reportClock(widget.wakeAt!),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              shadows: shadow,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _gifScene(BuildContext context, double t) {
+    // 小狗坐起來、天亮之後才出現「Good morning」（跟程式版同一個時間點）
+    final hello = _seg(t, 0.6, 0.8);
     return Stack(
       fit: StackFit.expand,
       children: [
         Image.asset(
-          kWakeUpGif,
+          widget.gifAsset,
           key: const Key('wake-up-gif'),
           fit: BoxFit.cover,
           gaplessPlayback: true,
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: MediaQuery.paddingOf(context).top + 48,
+          child: Opacity(
+            opacity: hello,
+            child: _hello(),
+          ),
         ),
         Positioned(
           left: 0,
@@ -299,30 +409,7 @@ class _WakeUpScreenState extends State<WakeUpScreen>
             opacity: hello,
             child: Transform.translate(
               offset: Offset(0, 12 * (1 - hello)),
-              child: Column(
-                children: [
-                  const Text(
-                    'Good morning',
-                    key: Key('wake-up-hello'),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  if (widget.wakeAt != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      reportClock(widget.wakeAt!),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              child: _hello(),
             ),
           ),
         ),
