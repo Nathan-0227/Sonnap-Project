@@ -40,6 +40,7 @@
 //
 // ═══════════════════════════════════════════════════════════════════
 
+import 'sleep_stages.dart';
 import 'wall_clock.dart';
 
 /// Garmin 手錶的動作資料。
@@ -144,6 +145,11 @@ class Metrics {
   final int? remMinutes;
   final int? wasoMinutes;
   final double? sleepEfficiency;
+
+  /// 淺睡分鐘數與整晚的睡眠階段時間軸（2026-11-12 加，首頁 Sleep Stages 圖用）。
+  /// 舊版後端／API 路徑沒有時是 null，畫面就不畫圖，**不畫假的**。
+  final int? lightMinutes;
+  final SleepStages? sleepStages;
   final double? avgHeartRate;
   final int? restingHeartRate;
 
@@ -160,6 +166,8 @@ class Metrics {
     this.remMinutes,
     this.wasoMinutes,
     this.sleepEfficiency,
+    this.lightMinutes,
+    this.sleepStages,
     this.avgHeartRate,
     this.restingHeartRate,
   });
@@ -188,6 +196,8 @@ class Metrics {
       remMinutes: (json['rem_minutes'] as num?)?.toInt(),
       wasoMinutes: (json['waso_minutes'] as num?)?.toInt(),
       sleepEfficiency: (json['sleep_efficiency'] as num?)?.toDouble(),
+      lightMinutes: (json['light_minutes'] as num?)?.toInt(),
+      sleepStages: SleepStages.fromJsonOrNull(json['sleep_stages']),
       avgHeartRate: (json['avg_heart_rate'] as num?)?.toDouble(),
       restingHeartRate: (json['resting_heart_rate'] as num?)?.toInt(),
     );

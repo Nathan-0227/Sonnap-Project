@@ -19,6 +19,7 @@ import '../widgets/countdown_border.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
+import '../widgets/sleep_stages_card.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -679,6 +680,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: SonnapColors.gap),
                       _buildTiles(session),
+                      const SizedBox(height: SonnapColors.gap),
+                      // 睡眠階段（只呈現、不計分；不放警語）。沒有資料時老實講還沒有。
+                      if (session.metrics.sleepStages != null)
+                        SleepStagesCard(
+                          stages: session.metrics.sleepStages!,
+                          totalSleepMinutes:
+                              session.metrics.sleepDurationMinutes,
+                        )
+                      else
+                        const SleepStagesUnavailableCard(),
                       const SizedBox(height: SonnapColors.gap),
                       WeekMoodStrip(history: session.history),
                     ],
