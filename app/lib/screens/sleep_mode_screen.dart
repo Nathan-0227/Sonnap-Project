@@ -427,7 +427,12 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                       style: TextStyle(color: Colors.white70, fontSize: 15),
                     ),
                     const Spacer(),
-                    const SleepingPet(size: 260),
+                    // 往下挪，讓墊子落在背景地毯的中央（使用者 2026-11-12 看實機後要求）。
+                    // 圖片上下各有約 1/7 的透明邊，挪 48 不會壓到下面的鬧鐘列。
+                    Transform.translate(
+                      offset: const Offset(0, 48),
+                      child: const SleepingPet(size: 260),
+                    ),
                     const Spacer(),
                     if (widget.alarm != null) ...[
                       _line,
