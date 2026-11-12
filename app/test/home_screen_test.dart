@@ -6,6 +6,8 @@
 // - 凌晨兩點不顯示倒數數字（會算成「距離明天還有 21 小時」）
 // - 取消不能刪掉上一晚還沒上傳的那一對；下床要真的存進本機
 // - 睡覺畫面不寫 measuring/tracking、返回鍵離不開
+import 'dart:convert';
+
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
@@ -13,6 +15,7 @@ import 'package:app/services/bed_marks.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _ImmediateRepository implements SleepRepository {
@@ -27,12 +30,16 @@ DateTime at(int day, int h, [int m = 0]) => DateTime(2026, 11, day, h, m);
 
 void main() {
   late SleepSession sample;
+  // 原始 JSON 在 setUpAll 讀：testWidgets 裡的時鐘是假的，真的讀檔會永遠等不到。
+  late String rawPayload;
   late InMemoryKeyValueStore kv;
   late BedMarkStore store;
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     sample = await const AssetSleepRepository().load();
+    rawPayload =
+        await rootBundle.loadString(AssetSleepRepository.assetPath);
   });
 
   setUp(() {
@@ -76,6 +83,56 @@ void main() {
       await pumpHome(tester, () => at(12, 14));
       expect(find.textContaining('Good afternoon'), findsOneWidget);
       expect(find.byKey(const Key('start-sleep')), findsNothing);
+    });
+  });
+
+  group('白天版的寵物＋卡片（2026-11-12 改版）', () {
+    testWidgets('分數行照抄後端：等級 · 分數 / 100', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
+      final text = line.textSpan!.toPlainText();
+      expect(text, contains(sample.scoring.finalQuality));
+      expect(text, contains('${sample.scoring.scoreAsInt} / 100'));
+    });
+
+    testWidgets('四張卡、日期列、2D 寵物都在', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      for (final k in [
+        'tile-duration',
+        'tile-window',
+        'tile-streak',
+        'tile-waso',
+        'week-strip',
+        'home-pet',
+      ]) {
+        expect(find.byKey(Key(k)), findsOneWidget, reason: k);
+      }
+      // 深睡、REM 有警語，刻意留在 Insights
+      expect(find.text('Deep sleep'), findsNothing);
+    });
+
+    testWidgets('⚠️ 沒戴錶那晚：顯示「—」，不畫成 0', (tester) async {
+      final raw = jsonDecode(rawPayload) as Map<String, dynamic>;
+      final metrics = raw['metrics'] as Map<String, dynamic>;
+      for (final k in [
+        'sleep_duration_minutes',
+        'sleep_start_time',
+        'wake_time',
+        'waso_minutes'
+      ]) {
+        metrics[k] = null;
+      }
+      raw['scoring'] = {...raw['scoring'] as Map, 'final_score': null};
+      final original = sample;
+      sample = SleepSession.fromJson(raw);
+      addTearDown(() => sample = original);
+
+      await pumpHome(tester, () => at(12, 9));
+      expect(find.text('No watch data'), findsNWidgets(3));
+      expect(find.textContaining('0 min'), findsNothing,
+          reason: '「0 min」會被讀成整晚沒睡，真相是沒量到');
+      final line = tester.widget<Text>(find.byKey(const Key('score-line')));
+      expect(line.textSpan!.toPlainText(), contains('— / 100'));
     });
   });
 

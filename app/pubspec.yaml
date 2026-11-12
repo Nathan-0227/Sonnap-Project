@@ -64,6 +64,12 @@ flutter:
     # 睡眠資料，由 `python garmin/run_pipeline.py` 產生。
     # 讀取用 rootBundle + dart:convert，都是內建的，不需要額外套件。
     - assets/data/
+    # 隊友的 2D 分層小狗（pet_preview v4.5.10）。只有 happy、bored 兩組圖。
+    - assets/pets/dog01/happy/
+    - assets/pets/dog01/bored/
+    - assets/accessories/head/
+    - assets/accessories/face/
+    - assets/accessories/neck/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

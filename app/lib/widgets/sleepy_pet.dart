@@ -1,33 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
-
-import 'pet_mood_animation.dart';
+import 'home_pet.dart';
 
 /// 晚上版與睡覺畫面的寵物：睡在一彎月亮上。
 ///
 /// ⚠️ **這不是心情。** 晚上要傳達的是「該睡了」，不是昨晚的成績，所以
-/// 固定用 tired 的動畫，而且**不顯示任何心情標籤**（2026-11-12 使用者定案）。
+/// 固定畫想睡的樣子，而且**不顯示任何心情標籤**（2026-11-12 使用者定案）。
+/// 2D 小狗還沒有睡覺的姿勢，暫用 bored 那組、動畫放慢成呼吸的節奏；
+/// 隊友畫好睡姿後在 [HomePet] 換上即可。
 /// 心情一律照抄後端的規則只管白天版——這裡不碰 `pet_mood`，也就不會跟它衝突。
 ///
 /// 月亮墊子是程式畫的：設計圖參考了別的 App 的版面，但墊子的造型要是我們自己的。
-/// 多寵物合併之後，把 [_pet] 換成新的寵物元件即可。
 class SleepyPet extends StatelessWidget {
   final double size;
 
   const SleepyPet({super.key, this.size = 200});
 
-  Widget get _pet {
-    final petSize = size * 0.72;
-    final visual = petMoodVisual('tired');
-    return Lottie.asset(
-      visual.assetPath,
-      width: petSize,
-      height: petSize,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stack) => Icon(Icons.pets_rounded,
-          color: Colors.white54, size: petSize * 0.5),
-    );
-  }
+  Widget get _pet => HomePet(mood: 'bored', size: size * 0.72, speed: 0.55);
 
   @override
   Widget build(BuildContext context) {

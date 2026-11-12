@@ -7,11 +7,11 @@
 //
 // 兩個寫測試時踩到的坑，留著避免之後有人改回去：
 //
-// 1. **不要用 pumpAndSettle()**。PetCard 用 Lottie.asset 播動畫，預設是無限
+// 1. **不要用 pumpAndSettle()**。首頁寵物的動畫，預設是無限
 //    循環，pumpAndSettle 會一直等動畫停下來、最後逾時失敗。用固定次數的
 //    pump() 就好。
-// 2. **分數要用 findRichText**。SleepScoreCard 是用 Text.rich 把 "46" 和
-//    "/100" 併成一個 RichText，普通的 find.text('46') 抓不到。
+// 2. **分數要用 findRichText**。寵物下面那一行是用 Text.rich 把等級、分數、
+//    "/ 100" 併成一個 RichText，普通的 find.text('46') 抓不到。
 
 import 'package:app/main.dart';
 import 'package:app/models/sleep_session.dart';
@@ -99,7 +99,10 @@ void main() {
     // 分數是 Text.rich（"46" + "/100"），所以要 findRichText
     expect(find.textContaining('46', findRichText: true), findsWidgets);
     expect(find.text('Anxious'), findsOneWidget);
-    expect(find.text('Tough night.'), findsOneWidget);
+    // 寵物下面那一行：等級 · 分數（2026-11-12 改版，原本的分數卡與 score_message 退場）
+    expect(find.textContaining('Bad · 46 / 100', findRichText: true),
+        findsOneWidget);
+    expect(find.text('Your buddy is worn out.'), findsOneWidget);
 
     // 確認不再是寫死的那組值
     expect(find.textContaining('82', findRichText: true), findsNothing);

@@ -8,8 +8,11 @@ import '../models/sleep_session.dart';
 import '../services/sleep_repository.dart';
 import '../services/game_service.dart';
 import '../services/home_mode.dart';
-import '../widgets/game_level_card.dart';
+import '../theme/sonnap_colors.dart';
 import '../widgets/home_mode_toggle.dart';
+import '../widgets/home_pet.dart';
+import '../widgets/info_tile.dart';
+import '../widgets/week_mood_strip.dart';
 import '../widgets/sleepy_pet.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -17,9 +20,6 @@ import 'sleep_mode_screen.dart';
 import '../services/bed_marks.dart';
 import '../services/key_value_store.dart';
 import '../widgets/header_card.dart';
-import '../widgets/pet_card.dart';
-import '../widgets/pet_mood_animation.dart';
-import '../widgets/sleep_score_card.dart';
 import '../widgets/sleep_streak_card.dart';
 
 /// 首頁。資料來自 `assets/data/app_payload.json`（由 Python pipeline 產生）。
@@ -346,21 +346,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final mode = _visibleMode(now);
     final tonight = mode != HomeMode.day;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          HomeModeToggle(
-            tonight: tonight,
-            onChanged: (v) => setState(() => _tonightOverride = v),
-          ),
-          const SizedBox(height: 16),
-          if (tonight)
-            ..._buildEvening(session, mode)
-          else
-            ..._buildDay(session, now),
-        ],
+    // 整頁一個場景：上半部一片光暈，寵物站在上面，而不是被裝在卡片裡。
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: [0, 0.55],
+          colors: [SonnapColors.backdropTop, SonnapColors.background],
+        ),
       ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                HomeModeToggle(
+                  tonight: tonight,
+                  onChanged: (v) => setState(() => _tonightOverride = v),
+                ),
+                const Spacer(),
+                _iconAction(const Key('open-diary'), Icons.menu_book_rounded,
+                    'Dream diary', () => _showDream(session)),
+                _iconAction(const Key('open-closet'), Icons.checkroom_rounded,
+                    'Closet', _openCloset),
+                _iconAction(const Key('open-rewards'),
+                    Icons.card_giftcard_rounded, 'Rewards', _openRewards),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (tonight)
+              ..._buildEvening(session, mode)
+            else
+              ..._buildDay(session, now),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconAction(
+      Key key, IconData icon, String tooltip, VoidCallback onTap) {
+    return IconButton(
+      key: key,
+      onPressed: onTap,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(icon, color: SonnapColors.accentSoft, size: 22),
     );
   }
 
@@ -419,10 +452,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2548),
-        borderRadius: BorderRadius.circular(22),
-      ),
+      decoration: sonnapCardDecoration(),
       child: Column(
         children: [
           Text('Bedtime was $hhmm',
@@ -482,170 +512,218 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   List<Widget> _buildDay(SleepSession session, DateTime now) {
     final display = session.display;
-    final scoreColor = Color(display.colorValue);
     final mood = session.status.petMood;
+    final game = _game?.value;
 
     return [
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${_greeting(now)}, ${widget.displayName}',
-              key: const Key('day-greeting'),
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800),
-            ),
-            Text(DateFormat('EEE, MMM d').format(now),
-                style: const TextStyle(color: Color(0xFFB9A6FF), fontSize: 14)),
-          ],
-        ),
-      ),
-      const SizedBox(height: 8),
-
-      // 動畫跟著 status.pet_mood 走（照抄後端），詳見 pet_mood_animation.dart。
-      PetCard(
-        message: display.petMessage,
-        animationPath: petMoodVisual(mood).assetPath,
-        fallbackAnimationPath: kPetFallbackAnimation,
-        fallbackFilter: petMoodVisual(mood).fallbackFilter,
-        onDiaryTap: () => _showDream(session),
-        onFlowerTap: () => _showComingSoon("Pet activity"),
-        accessoryEmoji: _closet?.value?.equipped?.emoji,
-        growthStage: _game?.value?.growthStage,
-      ),
-
-      // 心情標籤：原本是旁邊一整張 PetMoodCard，跟寵物卡重複，縮成一行。
-      _buildMoodChip(mood, display.moodDescription),
-      const SizedBox(height: 12),
-
-      // IntrinsicHeight：卡片裡用 Spacer 撐版面，需要一個有限的高度。
-      // 放在可捲動的 Column 裡沒有這一層會「unbounded height」整頁畫不出來。
-      IntrinsicHeight(
-        child: SleepScoreCard(
-          score: session.scoring.scoreAsInt,
-          message: display.scoreMessage,
-          progressColor: scoreColor,
-          icon: _scoreIcon(session.scoring.finalQuality),
-        ),
-      ),
-      const SizedBox(height: 16),
-
-      SleepStreakCard(
-        streakDays: session.streak.streakDays,
-        completedDays: session.streak.completedDays,
-        encouragement: display.streakEncouragement,
-        completedColor: const Color(0xFF9AD36A),
-        iconBackgroundColor: const Color(0xFFFF7043),
-      ),
-
-      if (_game?.value != null)
-        GameLevelCard(state: _game!.value!, onRewardsTap: _openRewards),
-
-      // 衣櫃、獎勵：原本兩張大卡，縮成兩顆小按鈕。
       Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: _smallAction(Icons.checkroom_rounded, 'Closet', _openCloset),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_greeting(now)}, ${widget.displayName}',
+                  key: const Key('day-greeting'),
+                  style: const TextStyle(
+                      color: SonnapColors.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800),
+                ),
+                Text(DateFormat('EEE, MMM d').format(now),
+                    style: const TextStyle(
+                        color: SonnapColors.accentSoft, fontSize: 14)),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _smallAction(
-                Icons.card_giftcard_rounded, 'Rewards', _openRewards),
+          // 等級照抄後端（GET /game），Dart 不從 XP 反推。點了開獎勵。
+          if (game != null) _levelBadge(game.level),
+        ],
+      ),
+      const SizedBox(height: 14),
+      WeekMoodStrip(history: session.history),
+      const SizedBox(height: 8),
+
+      // 寵物是主角：沒有框，站在背景的光暈上。心情照抄 status.pet_mood。
+      Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [
+                SonnapColors.accent.withValues(alpha: 0.28),
+                SonnapColors.accent.withValues(alpha: 0),
+              ]),
+            ),
+          ),
+          HomePet(
+            mood: mood,
+            size: 230,
+            equippedItemId: _closet?.value?.equippedItemId,
+            accessoryEmoji: _closet?.value?.equipped?.emoji,
+            growthStage: game?.growthStage,
           ),
         ],
       ),
+      _buildScoreLine(session),
+      const SizedBox(height: 8),
+      _buildMoodChip(mood, display.moodDescription),
+      const SizedBox(height: 16),
+      _buildTiles(session),
     ];
   }
 
+  Widget _levelBadge(int level) {
+    return InkWell(
+      key: const Key('level-badge'),
+      onTap: _openRewards,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: SonnapColors.accent.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: SonnapColors.accent),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star_rounded, color: Color(0xFFFFD96A), size: 16),
+            const SizedBox(width: 4),
+            Text('Lv $level',
+                style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 寵物下面那一行：「Good · 82 / 100」。等級與分數都照抄後端。
+  /// ⚠️ 沒有分數時寫「—」，不能寫 0（`scoreAsInt` 在 null 時回 0）。
+  Widget _buildScoreLine(SleepSession session) {
+    final scoring = session.scoring;
+    final score = scoring.finalScore == null ? '—' : '${scoring.scoreAsInt}';
+    return Text.rich(
+      key: const Key('score-line'),
+      TextSpan(children: [
+        TextSpan(
+          text: '${scoring.finalQuality} · ',
+          style: TextStyle(
+              color: Color(session.display.colorValue),
+              fontSize: 22,
+              fontWeight: FontWeight.w800),
+        ),
+        TextSpan(
+          text: score,
+          style: const TextStyle(
+              color: SonnapColors.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w800),
+        ),
+        const TextSpan(
+          text: ' / 100',
+          style: TextStyle(color: SonnapColors.textMuted, fontSize: 14),
+        ),
+      ]),
+    );
+  }
+
   Widget _buildMoodChip(String mood, String description) {
-    final color = _moodColor(mood);
-    return Container(
+    final color = moodColor(mood);
+    return Row(
       key: const Key('mood-chip'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2548),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(_moodIcon(mood), color: color, size: 22),
-          const SizedBox(width: 8),
-          Text(_moodLabel(mood),
-              style: TextStyle(
-                  color: color, fontSize: 15, fontWeight: FontWeight.w800)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(description,
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(moodIcon(mood), color: color, size: 18),
+        const SizedBox(width: 6),
+        Text(moodLabel(mood),
+            style: TextStyle(
+                color: color, fontSize: 14, fontWeight: FontWeight.w800)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(description,
+              style: const TextStyle(
+                  color: SonnapColors.textSecondary, fontSize: 13)),
+        ),
+      ],
+    );
+  }
+
+  static String _hhmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// 四張數據卡（2026-11-12 定案）：睡眠長度、入睡→起床、連續天數、中途醒來。
+  /// 都不需要掛警語；深睡、REM、效率留在 Insights（那裡有警語的位置）。
+  Widget _buildTiles(SleepSession session) {
+    final m = session.metrics;
+    final minutes = m.sleepDurationMinutes;
+    final start = m.sleepStartTime;
+    final wake = m.wakeTime;
+    final waso = m.wasoMinutes;
+    final streak = session.streak.streakDays;
+
+    // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
+    Widget pair(Widget a, Widget b) => SizedBox(
+          height: 104,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: a),
+              const SizedBox(width: SonnapColors.gap),
+              Expanded(child: b),
+            ],
           ),
-        ],
-      ),
+        );
+
+    return Column(
+      children: [
+        pair(
+          InfoTile(
+            key: const Key('tile-duration'),
+            icon: Icons.nightlight_round,
+            iconColor: const Color(0xFFB9A6FF),
+            title: 'Sleep',
+            value: minutes == null
+                ? null
+                : [('${minutes ~/ 60}', 'hr'), ('${minutes % 60}', 'min')],
+          ),
+          InfoTile(
+            key: const Key('tile-window'),
+            icon: Icons.schedule_rounded,
+            iconColor: const Color(0xFF7EC8FF),
+            // ⚠️ 手錶偵測到「睡著」的時刻，不是放下手機的時刻（lights_out_at）。
+            title: 'Asleep → awake',
+            value: (start == null || wake == null)
+                ? null
+                : [(_hhmm(start), '→'), (_hhmm(wake), '')],
+          ),
+        ),
+        const SizedBox(height: SonnapColors.gap),
+        pair(
+          InfoTile(
+            key: const Key('tile-streak'),
+            icon: Icons.local_fire_department_rounded,
+            iconColor: const Color(0xFFFF7043),
+            title: 'Streak',
+            value: [('$streak', streak == 1 ? 'night' : 'nights')],
+          ),
+          InfoTile(
+            key: const Key('tile-waso'),
+            icon: Icons.visibility_rounded,
+            iconColor: const Color(0xFFFFD96A),
+            title: 'Awake in bed',
+            value: waso == null ? null : [('$waso', 'min')],
+          ),
+        ),
+      ],
     );
-  }
-
-  Widget _smallAction(IconData icon, String label, VoidCallback onTap) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: const BorderSide(color: Color(0xFF3A4A63)),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-    );
-  }
-
-  // ── 純呈現的對映：把後端給的字串換成圖示與顏色 ──────────────────
-  // 這裡不做任何判斷，只是查表。「哪種分數對應哪種心情」的判斷在後端。
-
-  static String _moodLabel(String mood) =>
-      mood.isEmpty ? "Unknown" : mood[0].toUpperCase() + mood.substring(1);
-
-  static IconData _moodIcon(String mood) {
-    switch (mood) {
-      case 'happy':
-        return Icons.sentiment_very_satisfied;
-      case 'bored':
-        return Icons.sentiment_neutral;
-      case 'tired':
-        return Icons.sentiment_dissatisfied;
-      case 'anxious':
-        return Icons.sentiment_very_dissatisfied;
-      default:
-        return Icons.sentiment_neutral;
-    }
-  }
-
-  static Color _moodColor(String mood) {
-    switch (mood) {
-      case 'happy':
-        return const Color(0xFF7ED957);
-      case 'bored':
-        return const Color(0xFFFFC83D);
-      case 'tired':
-        return const Color(0xFFFF9518);
-      case 'anxious':
-        return const Color(0xFFFF4F63);
-      default:
-        return const Color(0xFFFFC83D);
-    }
-  }
-
-  static IconData _scoreIcon(String quality) {
-    switch (quality) {
-      case 'Good':
-        return Icons.sentiment_satisfied_alt;
-      case 'Normal':
-        return Icons.sentiment_neutral;
-      default:
-        return Icons.sentiment_dissatisfied;
-    }
   }
 }
