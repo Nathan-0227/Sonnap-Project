@@ -267,6 +267,33 @@ void main() {
       expect(find.text('Wake up'), findsOneWidget);
     });
 
+    testWidgets('⚠️ 睡覺畫面的轉盤：月亮拖不動，太陽拖得動', (tester) async {
+      await big(tester);
+      TimeOfDay? bedSeen;
+      TimeOfDay? wakeSeen;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SleepDial(
+                bedtime: const TimeOfDay(hour: 0, minute: 0),
+                wake: const TimeOfDay(hour: 12, minute: 0),
+                onBedtimeChanged: (t) => bedSeen = t,
+                onWakeChanged: (t) => wakeSeen = t,
+                bedLocked: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      final box = tester.getRect(find.byKey(const Key('sleep-dial')));
+      // 月亮在正上方、太陽在正下方，各往右拖
+      await tester.dragFrom(box.topCenter + const Offset(0, 19), const Offset(120, 60));
+      await tester.dragFrom(box.bottomCenter - const Offset(0, 19), const Offset(-120, -60));
+      expect(bedSeen, isNull, reason: '已經上床了，就寢時刻不能改');
+      expect(wakeSeen, isNotNull);
+    });
+
     testWidgets('點首頁時鐘卡 → 滑出轉盤', (tester) async {
       await big(tester);
       await tester.pumpWidget(
@@ -319,12 +346,21 @@ void main() {
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.textContaining('07:30'), findsWidgets);
 
-      // 點鬧鐘列 → 只關今晚
+      // 點鬧鐘列 → 跳出跟外面一樣的轉盤，月亮鎖在上床時刻 → 關掉 Alarm → Save
       await tester.tap(find.byKey(const Key('sleep-alarm')));
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      await tester.tap(find.byKey(const Key('alarm-off-tonight')));
+      expect(find.byKey(const Key('sleep-dial')), findsOneWidget);
+      expect(find.text("Tonight's alarm"), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('dial-bedtime'))).data,
+        '23:40',
+        reason: '月亮固定在按 Start Sleep 的時刻',
+      );
+      await tester.tap(find.byKey(const Key('alarm-switch')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('schedule-save')));
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }

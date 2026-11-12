@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
+import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 
 /// 按了「Start sleep」之後佔滿整個畫面的睡覺畫面（2026-11-12 定案）。
@@ -19,7 +20,7 @@ import '../widgets/sleepy_pet.dart';
 ///
 /// 版面（2026-11-12 使用者定）：大時間 → 副標 → 睡著的寵物 → 鬧鐘列 → Out of bed 外框按鈕
 /// → Cancel 小字。背景是房間（`assets/backgrounds/bedroom.png`，使用者生成；沒有就退回漸層）。
-/// 點鬧鐘列可以**改今晚的時間**或**只關今晚**，轉盤上的設定不變。
+/// 點鬧鐘列打開跟外面一樣的轉盤（月亮鎖住），可以**改今晚的時間**或**關掉今晚**，轉盤上的設定不變。
 /// 助眠聲音那一列在做聲音的 PR 加；「I already got up」也在之後的 PR。
 class SleepModeScreen extends StatefulWidget {
   final BedMarkStore store;
@@ -70,76 +71,40 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     if (mounted) setState(() => _alarmAt = at);
   }
 
-  /// 點鬧鐘那一列：改今晚的時間、或只關今晚（轉盤上的設定不受影響，Q4／Q10）。
+  /// 點鬧鐘那一列：打開跟外面一樣的轉盤（使用者定），月亮固定在按 Start Sleep 的時刻，
+  /// 只撥太陽。**只改今晚**，轉盤上存的設定不變（Q4／Q10）。
   Future<void> _alarmMenu() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: const Color(0xFF1B2350),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              key: const Key('alarm-change'),
-              leading: const Icon(Icons.schedule_rounded, color: Colors.white),
-              title: Text(
-                _alarmAt == null
-                    ? 'Set an alarm for tonight'
-                    : "Change tonight's alarm",
-                style: const TextStyle(color: Colors.white),
-              ),
-              onTap: () => Navigator.pop(context, 'change'),
-            ),
-            if (_alarmAt != null)
-              ListTile(
-                key: const Key('alarm-off-tonight'),
-                leading: const Icon(
-                  Icons.alarm_off_rounded,
-                  color: Color(0xFFFF8A8A),
-                ),
-                title: const Text(
-                  'Turn off for tonight',
-                  style: TextStyle(color: Color(0xFFFF8A8A)),
-                ),
-                onTap: () => Navigator.pop(context, 'off'),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+    final alarm = widget.alarm;
+    if (alarm == null) return;
+    final started = TimeOfDay.fromDateTime(widget.startAt);
+    final current = _alarmAt;
+    final wake = current != null
+        ? TimeOfDay.fromDateTime(current)
+        : await alarm.settings.wakeTime(started);
     if (!mounted) return;
-    if (choice == 'off') {
-      await widget.alarm?.cancelTonight();
+    final result = await showTonightAlarmSheet(
+      context,
+      startedAt: started,
+      wake: wake,
+      alarmOn: current != null,
+      scheduler: alarm.scheduler,
+    );
+    if (result == null || !mounted) return;
+    if (!result.alarmEnabled) {
+      await alarm.cancelTonight();
       if (mounted) setState(() => _alarmAt = null);
-    } else if (choice == 'change') {
-      final current = _alarmAt;
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: current == null
-            ? const TimeOfDay(hour: 7, minute: 0)
-            : TimeOfDay.fromDateTime(current),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: Theme(data: ThemeData.dark(useMaterial3: true), child: child!),
+      return;
+    }
+    final at = await alarm.setTonightAt(widget.clock(), result.wake);
+    if (!mounted) return;
+    if (at == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text("That's more than 14 hours away, so nothing changed."),
         ),
       );
-      if (picked == null || !mounted) return;
-      final at = await widget.alarm?.setTonightAt(widget.clock(), picked);
-      if (!mounted) return;
-      if (at == null) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(
-            content: Text("That's more than 14 hours away, so nothing changed."),
-          ),
-        );
-      } else {
-        setState(() => _alarmAt = at);
-      }
+    } else {
+      setState(() => _alarmAt = at);
     }
   }
 

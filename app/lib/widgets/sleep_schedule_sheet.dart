@@ -44,11 +44,40 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
   return result;
 }
 
+/// 睡覺畫面點鬧鐘列：同一個轉盤，月亮固定在按 Start Sleep 的時刻，只撥太陽。
+/// **不存檔**——只改今晚，轉盤上的設定不變（呼叫端自己排今晚的鬧鐘）。
+Future<SleepScheduleResult?> showTonightAlarmSheet(
+  BuildContext context, {
+  required TimeOfDay startedAt,
+  required TimeOfDay wake,
+  required bool alarmOn,
+  required AlarmScheduler scheduler,
+}) {
+  return showModalBottomSheet<SleepScheduleResult>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF1B2350),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (_) => SleepScheduleSheet(
+      bedtime: startedAt,
+      wake: wake,
+      alarmEnabled: alarmOn,
+      scheduler: scheduler,
+      tonightOnly: true,
+    ),
+  );
+}
+
 class SleepScheduleSheet extends StatefulWidget {
   final TimeOfDay bedtime;
   final TimeOfDay wake;
   final bool alarmEnabled;
   final AlarmScheduler scheduler;
+
+  /// 睡覺畫面用的版本：標題改成 Tonight's alarm、月亮把手鎖住（已經上床了）。
+  final bool tonightOnly;
 
   const SleepScheduleSheet({
     super.key,
@@ -56,6 +85,7 @@ class SleepScheduleSheet extends StatefulWidget {
     required this.wake,
     required this.alarmEnabled,
     required this.scheduler,
+    this.tonightOnly = false,
   });
 
   @override
@@ -109,9 +139,9 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Sleep schedule',
-              style: TextStyle(
+            Text(
+              widget.tonightOnly ? "Tonight's alarm" : 'Sleep schedule',
+              style: const TextStyle(
                 color: SonnapColors.textPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -123,6 +153,7 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
               wake: _wake,
               onBedtimeChanged: (t) => setState(() => _bed = t),
               onWakeChanged: (t) => setState(() => _wake = t),
+              bedLocked: widget.tonightOnly,
             ),
             const SizedBox(height: 12),
             SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),

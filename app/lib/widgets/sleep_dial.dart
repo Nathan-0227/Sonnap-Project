@@ -51,6 +51,9 @@ class SleepDial extends StatefulWidget {
   final ValueChanged<TimeOfDay> onWakeChanged;
   final double size;
 
+  /// 月亮把手鎖住、拖不動。睡覺畫面用：已經上床了，就寢時刻是按 Start Sleep 那一刻。
+  final bool bedLocked;
+
   const SleepDial({
     super.key,
     required this.bedtime,
@@ -58,6 +61,7 @@ class SleepDial extends StatefulWidget {
     required this.onBedtimeChanged,
     required this.onWakeChanged,
     this.size = 280,
+    this.bedLocked = false,
   });
 
   @override
@@ -84,6 +88,10 @@ class _SleepDialState extends State<SleepDial> {
     final wake = (local - _handleCenter(widget.wake)).distance;
     // 只抓得到把手附近；點在別處不動，避免一碰就跳。
     const grab = 34.0;
+    if (widget.bedLocked) {
+      if (wake <= grab) _dragging = _Handle.wake;
+      return;
+    }
     if (bed > grab && wake > grab) return;
     _dragging = bed <= wake ? _Handle.bed : _Handle.wake;
   }
