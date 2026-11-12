@@ -203,6 +203,13 @@ void main() {
       expect(find.byKey(const Key('metric-sheet-duration')), findsOneWidget);
     });
 
+    testWidgets('點分數卡 → 最近 7 晚的分數長條圖', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      await tester.tap(find.byKey(const Key('score-card')));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(const Key('metric-sheet-score')), findsOneWidget);
+    });
+
     testWidgets('⚠️ 歷史沒有效率資料（舊版後端）→ 不畫比較，不編數字', (tester) async {
       final hasEff = sample.history.any((e) => e.sleepEfficiency != null);
       await pumpHome(tester, () => at(12, 9));

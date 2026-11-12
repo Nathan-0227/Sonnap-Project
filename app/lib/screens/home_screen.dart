@@ -664,7 +664,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       const SizedBox(height: 14),
                       _buildStartSleepPill(),
                       const SizedBox(height: 18),
-                      _buildScoreCard(session),
+                      // 點分數卡：最近 7 晚的分數長條圖（照抄後端每晚的 final_score）。
+                      GestureDetector(
+                        key: const Key('score-card'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _showMetricSheet(
+                          session: session,
+                          id: 'score',
+                          title: 'Sleep Score',
+                          series: _series(session.history, (e) => e.finalScore),
+                          format: (v) => v.round().toString(),
+                        ),
+                        child: _buildScoreCard(session),
+                      ),
                       const SizedBox(height: SonnapColors.gap),
                       _buildTiles(session),
                       const SizedBox(height: SonnapColors.gap),
