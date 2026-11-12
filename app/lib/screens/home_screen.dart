@@ -171,15 +171,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _loadMarks();
   }
 
-  /// 只有「開始了、沒結束、又已經超過睡覺畫面的 14 小時」才按得到——
-  /// 未滿 14 小時的話，畫面早就被睡覺畫面佔住了。
-  bool get _hasOpenStart => _marks.startAt != null && _marks.endAt == null;
-
-  Future<void> _outOfBed() async {
-    await widget.bedMarks.markEnd(widget.clock());
-    await _loadMarks();
-  }
-
   Future<void> _loadGame() async {
     final service = widget.game;
     if (service == null) return;
@@ -776,48 +767,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── 上床／下床按鈕 ────────────────────────────────────────────
 
+  /// 首頁只有 Start sleep（2026-11-12 使用者定案）：下床在睡覺畫面裡按。
   Widget _buildBedButtons() {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton(
-                key: const Key('start-sleep'),
-                onPressed: _startSleep,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFC567),
-                  foregroundColor: const Color(0xFF1B2350),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text(
-                  'Start sleep',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const Key('start-sleep'),
+            onPressed: _startSleep,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFFC567),
+              foregroundColor: const Color(0xFF1B2350),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: const StadiumBorder(),
             ),
-            const SizedBox(width: SonnapColors.gap),
-            Expanded(
-              child: OutlinedButton(
-                key: const Key('out-of-bed'),
-                // 平常按不到：開始之後的 14 小時內畫面被睡覺畫面佔住。
-                onPressed: _hasOpenStart ? _outOfBed : null,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: SonnapColors.textPrimary,
-                  disabledForegroundColor: SonnapColors.textMuted,
-                  backgroundColor: SonnapColors.card,
-                  side: const BorderSide(color: SonnapColors.cardBorder),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text(
-                  'Out of bed',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
+            child: const Text(
+              'Start sleep',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 8),
         // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。

@@ -88,7 +88,6 @@ void main() {
         'mood-legend',
         'home-pet',
         'start-sleep',
-        'out-of-bed',
         'bedtime-countdown',
         'tile-duration',
         'tile-efficiency',
@@ -125,10 +124,9 @@ void main() {
       expect(find.byKey(const Key('start-sleep')), findsOneWidget);
     });
 
-    testWidgets('下床鈕平常按不到（還沒開始睡）', (tester) async {
+    testWidgets('首頁沒有下床鈕（下床在睡覺畫面裡按）', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      final b = tester.widget<OutlinedButton>(find.byKey(const Key('out-of-bed')));
-      expect(b.onPressed, isNull);
+      expect(find.text('Out of bed'), findsNothing);
     });
 
     testWidgets('分數行照抄後端', (tester) async {
