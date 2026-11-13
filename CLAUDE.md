@@ -429,19 +429,23 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 要求音訊焦點：Spotify 會暫停；別人搶走就停、來電先靜音 | 使用者定 |
 | ⚠️ 睡姿圖或背景缺檔時退回月亮小狗／漸層，**不會報錯** | 換新圖後若畫面沒變，先查 APK 裡有沒有那張圖——2026-11-12 建置快取漏包過一次，`flutter clean` 才好 |
 
-### ✅ 早晨報告的 Heart rate 卡：睡著期間的心率曲線（2026-11-13，`feature/garmin-daily`）
+### ✅ Sleep Stages 卡的疊線：Heart rate／Movement（2026-11-13，`feature/garmin-daily`）
 
-Sleep phases 之後一張卡（`widgets/heart_rate_card.dart`）：大字＝睡著期間的平均、旁邊最低與靜止心率、下面一條線。
-後端 `garmin/sleep_heart_rate.py`（純函式）從 Garmin 原始檔每 2 分鐘的心率取入睡 → 起床那段，每 5 分鐘一點，
-經 `/home` 的 `metrics.heart_rate_curve` 給 App。
+照 Garmin Connect 的做法：Sleep Stages 卡（首頁與早晨報告同一個元件）圖下面兩顆，**點 Heart rate 疊心率線、
+點 Movement 疊手錶動作線，再點一次回到只有階梯，一次只能選一個**。後端 `garmin/sleep_heart_rate.py`（純函式）
+從 Garmin 原始檔取入睡 → 起床那段（心率每 2 分鐘、動作每 1 分鐘），每 5 分鐘一點，經 `/home` 與打包檔的
+`metrics.heart_rate_curve`／`movement_curve` 給 App。
 
 | 規則 | 理由 |
 |---|---|
-| **不寫 Normal／High**，也不畫「正常範圍」色帶；大字只寫平均（使用者定，參考圖的 Normal 不照做） | 夜間心率沒有文獻門檻（紅線 2） |
-| 平均、最低從**那一段的原始讀數**算，**不用** `avg_heart_rate`；有曲線時 More details **不再寫心率** | `avg_heart_rate` 混了清醒時段，並列會是兩個不同的「平均心率」 |
-| 線是**單調三次插值**（平滑但不衝出相鄰兩點的範圍），`heart_rate_card_test.dart` 取樣整條線驗證 | 一般平滑曲線在急轉處會畫出比實際最低還低的心率——沒發生的值（同 Sleep Stages 不畫平滑波浪的理由） |
-| 只有 Garmin 來源才有；點不到 6 個、時刻壞掉 → 整張卡不畫，不畫平線 | 同 night_stages |
-| 時間照字串的牆鐘讀（`parseWallClock`），不換 UTC | 會早 8 小時 |
+| **不寫 Normal／High**，不畫「正常範圍」色帶（使用者定，參考圖的 Normal 不照做）。心率選了之後下面一行只照抄「平均 · 最低 · 靜止」；右邊刻度寫 bpm | 夜間心率沒有文獻門檻（紅線 2） |
+| **Movement 是手錶的**，不是攝影機的；沒有單位，右邊只寫 **More／Less**（不寫 High），下面寫 `Movement from your watch` | 首頁的 Movement 小卡與 More details 是攝影機的，另一個量；High 會被讀成「太高」 |
+| 心率平均、最低從**那一段的原始讀數**算，**不用** `avg_heart_rate`；有心率曲線時 More details **不再寫心率** | `avg_heart_rate` 混了清醒時段，並列會是兩個不同的「平均心率」 |
+| 線是**單調三次插值**（`widgets/curve_path.dart`），`sleep_stages_overlay_test.dart` 沿整條線取樣驗證不衝出範圍 | 一般平滑曲線在急轉處會畫出沒發生的值（同階梯不畫平滑波浪的理由） |
+| 選了線之後階梯變淡（35%、不畫光暈）；那一條沒有 → 那顆不出現；兩條都沒有 → 原本的卡 | — |
+| 心率 0 或負數＝沒有讀數；**動作 0 是「沒動」，是真的值** | 寫錯不會報錯 |
+| 只有 Garmin 來源才有；動作也**只呈現、不計分** | movement 永不進評分 |
+| 首頁的曲線來自打包檔：`build_app_payload.py` 已經會帶，要等下一次早晨匯入重新產生 | 動 app/ 的 session 不跑 build_app_payload.py |
 
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 
@@ -1636,7 +1640,7 @@ python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜�
 python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
 python tests/test_garmin_daily.py        # 2026-11-13 新增：白天資料的解析、只增不減、429 就停、只收本人、/home 的 yesterday、不進分數也不給好友
-python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：只取睡著那段、平均從原始讀數算（不是 avg_hr）、資料不夠回 None、Health Connect 沒有
+python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶動作曲線只取睡著那段、平均從原始讀數算（不是 avg_hr）、動作 0 算真的值、資料不夠回 None、Health Connect 沒有
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```

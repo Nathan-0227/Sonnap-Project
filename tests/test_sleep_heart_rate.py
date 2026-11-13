@@ -74,6 +74,17 @@ bad[4]["value"] = -1
 bad[5]["value"] = True
 check("0、負數、布林值跳過", hr.heart_rate_curve(bad, START, WAKE)["min"], 60)
 
+print("\n【4b】手錶動作曲線")
+mv = [{"timestamp": r["timestamp"], "metric": "movement", "value": v, "unit": "arb"}
+      for r, v in zip(recs(START, [0] * 60, every_min=1),
+                      [0.0, 0.5, 1.2, 3.9] * 15)]
+c = hr.movement_curve(mv, START, WAKE)
+check("點的欄位叫 value（App 照這個讀）", sorted(c["points"][0]), ["t", "value"])
+check("⚠️ 動作 0 是「沒動」，是真的值、要算進去", c["min"], 0.0)
+check("留兩位小數", c["max"], 3.9)
+check("心率的點也叫 value",
+      sorted(hr.heart_rate_curve(recs(START, [60] * 30), START, WAKE)["points"][0]), ["t", "value"])
+
 print("\n【5】/home")
 import db  # noqa: E402
 
@@ -85,7 +96,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 db.init_db(TMP)
 client = TestClient(main.app, raise_server_exceptions=False)
 uid = client.post("/users", json={"display_name": "HR", "target_bedtime": "23:30"}).json()["user_id"]
-records = recs(START, [55 + (i % 7) for i in range(31)])
+records = recs(START, [55 + (i % 7) for i in range(31)]) + mv
 main._garmin_records = lambda: records  # 不讀真的 Garmin 原始檔
 metrics = {"duration_min": 60, "efficiency": 95, "waso_min": 0, "deep_min": 10, "rem_min": 10,
            "avg_hr": 80, "resting_hr": 50, "sleep_start_time": START, "wake_time": WAKE}
@@ -99,6 +110,8 @@ uid2 = client.post("/users", json={"display_name": "HC", "target_bedtime": "23:3
 db.upsert_wearable_nightly(uid2, "2026-11-12", source="health_connect", metrics=metrics)
 m2 = client.get("/home", params={"user_id": uid2, "date": "2026-11-12"}).json()["metrics"]
 check("Health Connect 來源沒有曲線", m2["heart_rate_curve"], None)
+check("Garmin 來源也有動作曲線", m["movement_curve"] is not None, True)
+check("Health Connect 沒有動作曲線", m2["movement_curve"], None)
 
 print("\n【6】不判斷")
 text = json.dumps(curve).lower()

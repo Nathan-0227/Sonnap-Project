@@ -1098,6 +1098,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           stages: session.metrics.sleepStages!,
                           totalSleepMinutes:
                               session.metrics.sleepDurationMinutes,
+                          // 點 Heart rate／Movement 疊線（2026-11-13）
+                          heartRate: session.metrics.heartRateCurve,
+                          movement: session.metrics.movementCurve,
+                          restingHeartRate:
+                              session.metrics.restingHeartRate?.toDouble(),
                         )
                       else
                         const SleepStagesUnavailableCard(),
