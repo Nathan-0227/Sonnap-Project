@@ -28,6 +28,7 @@ import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import 'morning_report_screen.dart';
 import 'rested_screen.dart';
+import 'wake_up_screen.dart';
 import '../widgets/week_mood_strip.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
@@ -259,7 +260,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ended = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
+        _NoExitAnimationRoute(
           fullscreenDialog: true,
           builder: (_) => SleepModeScreen(
             alarm: _alarm,
@@ -276,14 +277,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _sleepRouteOpen = false;
       if (!mounted) return;
       await _loadMarks();
-      // 滑完 Slide to get up（或 I already got up）→ 先問睡得怎樣（看到分數之前），
-      // 再出現昨晚的報告。按 Skip 也照樣進報告。
+      // 滑完 Slide to get up（或 I already got up）→ 起床動畫 → 先問睡得怎樣
+      // （看到分數之前）→ 再出現昨晚的報告。按 Skip 也照樣進報告。
+      // ⚠️ 從睡覺畫面到自評卡，中間**一格都不能露出首頁**：首頁上有分數卡，
+      //    而自評卡要在「看到分數之前」問（2026-11-13 實機錄影抓到露出半秒）。
+      //    所以：睡覺畫面退場不播動畫（_NoExitAnimationRoute）→ 起床動畫直接切進來
+      //    → 自評卡蓋在動畫最後一格上面，滑完才把動畫收掉。
       if (ended == true && mounted) {
         final date = reportDateKey(nightDateOf(startAt));
-        await _askRested(date, _marks.endAt);
+        final wakeRoute = await _playWakeUp(_marks.endAt);
+        if (!mounted) return;
+        await _askRested(date, _marks.endAt,
+            replacing: wakeRoute, instant: wakeRoute == null);
         if (mounted) await _openReport(date);
       }
     });
+  }
+
+  /// 起床動畫（GIF 或程式版，點一下跳過）。系統開「減少動態效果」就不播，回 null。
+  /// 播完**不自己關掉**，回傳那個畫面，讓自評卡蓋上去之後再收（見上面的 ⚠️）。
+  /// 小狗用首頁同一份心情（後端的 pet_mood），不自己挑。
+  Future<Route<void>?> _playWakeUp(DateTime? wakeAt) async {
+    if (!shouldPlayWakeUp(context)) return null;
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return null;
+    final done = Completer<void>();
+    final route = wakeUpRoute(
+      mood: mood,
+      wakeAt: wakeAt,
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+    );
+    // 按返回鍵關掉也算播完
+    Navigator.of(context).push(route).then((_) {
+      if (!done.isCompleted) done.complete();
+    });
+    await done.future;
+    return route;
   }
 
   /// 起床 6 小時內、那一晚還沒填 → 回傳那一晚的標記（補填小卡用）。
@@ -298,19 +334,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// 起床自評卡。回傳存下來的（Skip 是 null）。
-  Future<MorningRating?> _askRested(String date, DateTime? wakeAt) async {
-    final rating = await Navigator.of(context).push<MorningRating>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => RestedScreen(
+  ///
+  /// [replacing]：起床動畫那個畫面。自評卡滑上來**之後**才把它收掉，中間不露出首頁。
+  /// [instant]：沒有起床動畫時（減少動態效果）直接出現，不從下面滑上來——
+  ///   滑的那一段會露出底下的首頁（有分數卡）。
+  Future<MorningRating?> _askRested(String date, DateTime? wakeAt,
+      {Route<void>? replacing, bool instant = false}) async {
+    Widget builder(BuildContext _) => RestedScreen(
           date: date,
           wakeAt: wakeAt,
           store: _ratings,
           sender: widget.rested,
           clock: widget.clock,
-        ),
-      ),
-    );
+        );
+    final PageRoute<MorningRating> route = instant
+        ? PageRouteBuilder<MorningRating>(
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+            pageBuilder: (context, _, _) => builder(context),
+          )
+        : MaterialPageRoute<MorningRating>(
+            fullscreenDialog: true,
+            builder: builder,
+          );
+    final navigator = Navigator.of(context);
+    final result = navigator.push<MorningRating>(route);
+    if (replacing != null) {
+      void removeBelow(AnimationStatus s) {
+        if (s != AnimationStatus.completed) return;
+        route.animation?.removeStatusListener(removeBelow);
+        if (replacing.isActive) navigator.removeRoute(replacing);
+      }
+
+      route.animation?.addStatusListener(removeBelow);
+    }
+    final rating = await result;
+    // 自評卡還沒滑完就被關掉（例如很快按了 Skip）：動畫那一頁也要收
+    if (replacing != null && replacing.isActive) navigator.removeRoute(replacing);
     if (mounted) await _loadMarks();
     return rating;
   }
@@ -1662,4 +1722,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// 睡覺畫面用的頁面：進場照常從下往上滑，**退場不播動畫**。
+///
+/// 起床時睡覺畫面一退場，起床動畫（同一個房間）就直接接上。但中間要先讀一次本機標記
+/// 與首頁心情，實機上會花幾格；退場動畫若在播，那幾格會露出底下的首頁（有分數卡）。
+/// ⚠️ 這一條是保險：測試環境裡讀資料是瞬間完成的，`morning_report_test.dart` 的
+///    「一格都不露出首頁」守不到它（反向檢查過）。守得到的是動畫與自評卡那兩段。
+/// （Cancel 也一樣直接關掉，沒有影響。）
+class _NoExitAnimationRoute<T> extends MaterialPageRoute<T> {
+  _NoExitAnimationRoute({required super.builder, super.fullscreenDialog});
+
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
 }

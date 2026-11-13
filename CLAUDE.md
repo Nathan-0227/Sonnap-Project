@@ -428,7 +428,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 ### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
 
-滑完 Slide to get up（或 I already got up）→ **先跳起床自評卡**（`screens/rested_screen.dart`）→ 再出現報告；
+滑完 Slide to get up（或 I already got up）→ **起床動畫**（`screens/wake_up_screen.dart`）
+→ **起床自評卡**（`screens/rested_screen.dart`）→ 再出現報告；
 首頁一週心情列點任一天也會打開。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
@@ -455,6 +456,17 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 沒按按鈕時 Time in bed 是「—」、寫 `No bedtime recorded`，**不拿手錶的入睡冒充上床** | 入睡不是上床 |
 | Cancel 不開自評也不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
 | 日期自己組（`reportDateTitle`），不用 intl 的 DateFormat | 那會跟手機語言走 |
+
+**起床動畫**（2026-11-13，`feature/wake-animation`）：
+
+| 規則 | 理由 |
+|---|---|
+| 有 `assets/pets/dog01/wake_up.gif` 就播它（鋪滿畫面，上面疊 Good morning＋起床時間），**長度照 GIF 本身**（讀檔頭每格的停留時間，夾在 1–6 秒）；沒有就退回程式畫的那一版 | 使用者定改用 GIF；缺檔不會報錯。現在那支是 Kling 生的，怎麼做、怎麼重做見 [WAKE_UP_GIF.md](docs/WAKE_UP_GIF.md) |
+| ⚠️ **GIF 長度不准用 `instantiateImageCodec` 解碼來算** | 在測試的假時鐘底下永遠不會完成，畫面卡在空白（2026-11-13 踩過）；改成 `gifDurationFromBytes()` 讀檔頭 |
+| 🔴 **滑完起床到自評卡之間，一格都不能露出首頁**（首頁有分數卡）：睡覺畫面退場不播動畫、起床動畫直接切進來、播完**不自己關**，自評卡蓋上來滑完才收掉它；減少動態效果時自評卡直接出現不滑 | 自評要在看到分數之前問。11-13 實機錄影抓到露出半秒。`morning_report_test.dart` 逐格（16 毫秒）檢查，守得到動畫與自評卡兩段；睡覺畫面退場那段在測試裡測不出來（讀資料瞬間完成），是保險 |
+| **只說「Good morning」**：不放彩帶、金幣、XP、分數、Great job | 起床那一刻分數多半還沒到，慶祝＝每晚都誇（紅線 5）；而且排在自評之前，會把答案帶偏 |
+| 程式版醒來的小狗用**首頁那一份心情**（後端 `pet_mood`），不自己挑 happy | 同 `HomePet`：不認得的一律 bored |
+| 點一下跳過；系統開「減少動態效果」**整段不播** | 與首頁的流星同一條 |
 
 **起床自評卡**（`services/morning_rating.dart`）：
 
@@ -1582,7 +1594,7 @@ python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**614 條全過**，2026-11-13 實測）：
+Flutter（在 `app/` 底下跑，**625 條全過**，2026-11-13 實測）：
 
 ```bash
 flutter test
