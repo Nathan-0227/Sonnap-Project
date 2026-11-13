@@ -36,6 +36,10 @@ class SleepModeScreen extends StatefulWidget {
   /// 助眠聲音。null = 不顯示那一列（測試或舊的呼叫端）。
   final SleepSoundsController? sounds;
 
+  /// 給了就不自己關掉，改呼叫它（帶起床時刻）。首頁用：起床動畫要先蓋上來，
+  /// 才把睡覺畫面收掉——自己先關掉的話，讀手機儲存那幾格會露出首頁（有分數卡）。
+  final void Function(DateTime end)? onEnded;
+
   const SleepModeScreen({
     super.key,
     required this.store,
@@ -43,6 +47,7 @@ class SleepModeScreen extends StatefulWidget {
     this.clock = DateTime.now,
     this.alarm,
     this.sounds,
+    this.onEnded,
   });
 
   @override
@@ -249,13 +254,23 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     }
   }
 
+  void _ended(DateTime end) {
+    final done = widget.onEnded;
+    if (done != null) {
+      done(end);
+    } else {
+      Navigator.of(context).pop(true);
+    }
+  }
+
   Future<void> _outOfBed() async {
     // 下床會取消鬧鐘；但鬧鐘響了不會反過來自動按下床（使用者決定）。
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
-    await widget.store.markEnd(widget.clock());
+    final end = widget.clock();
+    await widget.store.markEnd(end);
     // 回傳 true = 這一晚結束了，首頁接著打開早晨報告（Cancel 不回 true）
-    if (mounted) Navigator.of(context).pop(true);
+    if (mounted) _ended(end);
   }
 
   /// 「I already got up」（2026-11-12）：忘了按 Out of bed，事後補起床時間。
@@ -292,7 +307,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.markEnd(end, recalled: true);
-    if (mounted) Navigator.of(context).pop(true);
+    if (mounted) _ended(end);
   }
 
   Future<void> _cancel() async {

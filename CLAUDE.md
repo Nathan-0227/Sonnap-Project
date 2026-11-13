@@ -429,8 +429,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 ### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
 
 滑完 Slide to get up（或 I already got up）→ **起床動畫**（`screens/wake_up_screen.dart`）
-→ **起床自評卡**（`screens/rested_screen.dart`）→ 再出現報告；
-首頁一週心情列點任一天也會打開。`screens/morning_report_screen.dart`，合併規則在
+→ **起床自評卡**（`screens/rested_screen.dart`）→ **等待畫面**（`screens/report_loading_screen.dart`，
+按 View sleep report）→ 報告；首頁一週心情列點任一天、補填自評之後則直接開報告（不經等待畫面）。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
 版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤 → Lv／XP 一條
@@ -454,7 +454,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | Sleep phases 圖用 `/home` 的 `metrics.sleep_stages`（Garmin 來源每晚都有）；沒有就比例條。夢境只在打包檔最新那一晚就是這一晚時才有 | 夢境還沒有 per-user |
 | 比例條要後端的 `light_minutes`（總睡眠 − 深睡 − REM），**沒量到 REM 時是 null** | 減出來的淺睡會把 REM 吃進去 |
 | 沒按按鈕時 Time in bed 是「—」、寫 `No bedtime recorded`，**不拿手錶的入睡冒充上床** | 入睡不是上床 |
-| Cancel 不開自評也不開報告：睡覺畫面只有真的結束才 `pop(true)` | `morning_report_test.dart` 守著 |
+| Cancel 不開自評也不開報告：睡覺畫面只有真的結束才呼叫 `onEnded`（Cancel 是自己 pop） | `morning_report_test.dart` 守著 |
 | 日期自己組（`reportDateTitle`），不用 intl 的 DateFormat | 那會跟手機語言走 |
 
 **起床動畫**（2026-11-13，`feature/wake-animation`）：
@@ -463,10 +463,22 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 |---|---|
 | 有 `assets/pets/dog01/wake_up.gif` 就播它（鋪滿畫面，上面疊 Good morning＋起床時間），**長度照 GIF 本身**（讀檔頭每格的停留時間，夾在 1–6 秒）；沒有就退回程式畫的那一版 | 使用者定改用 GIF；缺檔不會報錯。現在那支是 Kling 生的，怎麼做、怎麼重做見 [WAKE_UP_GIF.md](docs/WAKE_UP_GIF.md) |
 | ⚠️ **GIF 長度不准用 `instantiateImageCodec` 解碼來算** | 在測試的假時鐘底下永遠不會完成，畫面卡在空白（2026-11-13 踩過）；改成 `gifDurationFromBytes()` 讀檔頭 |
-| 🔴 **滑完起床到自評卡之間，一格都不能露出首頁**（首頁有分數卡）：睡覺畫面退場不播動畫、起床動畫直接切進來、播完**不自己關**，自評卡蓋上來滑完才收掉它；減少動態效果時自評卡直接出現不滑 | 自評要在看到分數之前問。11-13 實機錄影抓到露出半秒。`morning_report_test.dart` 逐格（16 毫秒）檢查，守得到動畫與自評卡兩段；睡覺畫面退場那段在測試裡測不出來（讀資料瞬間完成），是保險 |
+| 🔴 **從睡覺畫面到報告，一格都不能露出首頁**（首頁有分數卡）：每一步都是「新的一頁蓋上來，才收掉底下那一頁」——睡覺畫面與自評卡都**不自己關**（`onEnded`／`onDone` 交給首頁），起床動畫播完也不自己關；減少動態效果時自評卡直接出現不滑 | 自評要在看到分數之前問。11-13 實機錄影抓到露出半秒；同日測試又抓到「睡覺畫面先關、讀手機儲存那幾格露出首頁」。⚠️ `morning_report_test.dart` 的逐格（16 毫秒）檢查要用 **`slowStore: true`**——記憶體版儲存當下就回來，那種錯在測試裡看不到 |
 | **只說「Good morning」**：不放彩帶、金幣、XP、分數、Great job | 起床那一刻分數多半還沒到，慶祝＝每晚都誇（紅線 5）；而且排在自評之前，會把答案帶偏 |
 | 程式版醒來的小狗用**首頁那一份心情**（後端 `pet_mood`），不自己挑 happy | 同 `HomePet`：不認得的一律 bored |
 | 點一下跳過；系統開「減少動態效果」**整段不播** | 與首頁的流星同一條 |
+
+**等待畫面**（2026-11-13，`feature/report-loading`）：自評卡之後、報告之前。
+
+| 規則 | 理由 |
+|---|---|
+| 等分數那份（`/home`，最多 4 秒）；**有分數時 AI 那段再多等最多 10 秒**（`kReportSummaryWait`），好了或時間到才放「View sleep report」按鈕，**不自動進報告** | 使用者定（先等分數、AI 最多 10 秒）。AI 第一次生成最多 45 秒，全等會像當掉 |
+| AI 那段超時**不丟掉**：還在路上的那一個交給報告畫面，回來再補上，**不重要一次** | 重要一次＝多花一次 API 額度 |
+| 🔴 **AI 那段一定在自評送出之後才要**；分數那份則在起床動畫一開始就先抓 | `/night-summary` 會讀自評（標籤、你覺得怎樣），先要的話寫出來的不含自評 |
+| 手錶還沒到（沒分數）不要 AI 那段、按鈕直接出現；連不到後端也照樣出按鈕 | 報告裡會照實說在等資料／打包檔 |
+| 等待畫面不放分數、XP；小狗用首頁那一份心情 | 同起床動畫 |
+| 關報告直接回首頁，等待畫面不會又冒出來（報告蓋上之後就把它收掉） | — |
+
 
 **起床自評卡**（`services/morning_rating.dart`）：
 
@@ -1594,7 +1606,7 @@ python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**625 條全過**，2026-11-13 實測）：
+Flutter（在 `app/` 底下跑，**633 條全過**，2026-11-13 實測）：
 
 ```bash
 flutter test

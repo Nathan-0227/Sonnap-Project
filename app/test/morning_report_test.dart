@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/morning_report_screen.dart';
+import 'package:app/screens/report_loading_screen.dart';
 import 'package:app/screens/rested_screen.dart';
 import 'package:app/screens/sleep_mode_screen.dart';
 import 'package:app/screens/wake_up_screen.dart';
@@ -111,7 +112,9 @@ class _Source implements MorningReportSource {
   final Map<String, dynamic>? summary;
   final List<String> asked = [];
   final List<String> askedSummary = [];
-  _Source(this.json, {this.summary});
+  /// AI 那段要等多久才回來（模擬第一次生成）。
+  final Duration summaryDelay;
+  _Source(this.json, {this.summary, this.summaryDelay = Duration.zero});
   @override
   Future<Map<String, dynamic>?> fetchNight(String date) async {
     asked.add(date);
@@ -121,7 +124,33 @@ class _Source implements MorningReportSource {
   @override
   Future<Map<String, dynamic>?> fetchSummary(String date) async {
     askedSummary.add(date);
+    if (summaryDelay > Duration.zero) await Future<void>.delayed(summaryDelay);
     return summary;
+  }
+}
+
+/// 讀寫要等幾格的儲存：實機的 SharedPreferences 走 channel，不會當下就回來。
+/// 記憶體版當下就回來的話，「先收掉底下那頁、等讀完才蓋上新的」這種錯在測試裡看不到。
+class _SlowStore implements KeyValueStore {
+  final KeyValueStore inner;
+  _SlowStore(this.inner);
+  static const _lag = Duration(milliseconds: 50);
+  @override
+  Future<String?> getString(String key) async {
+    await Future<void>.delayed(_lag);
+    return inner.getString(key);
+  }
+
+  @override
+  Future<void> setString(String key, String value) async {
+    await Future<void>.delayed(_lag);
+    return inner.setString(key, value);
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    await Future<void>.delayed(_lag);
+    return inner.remove(key);
   }
 }
 
@@ -789,12 +818,16 @@ void main() {
       Future<void> Function(BedMarkStore)? before,
       RestedSender? rested,
       Size size = const Size(1200, 4200),
+      bool slowStore = false,
     }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
-      final store = BedMarkStore(InMemoryKeyValueStore());
-      if (before != null) await before(store);
+      final inner = InMemoryKeyValueStore();
+      // 先用快的寫好初始資料：測試的時鐘只在 pump 時才走，慢的在這裡會永遠等下去
+      if (before != null) await before(BedMarkStore(inner));
+      final store =
+          BedMarkStore(slowStore ? _SlowStore(inner) : inner);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -825,6 +858,19 @@ void main() {
       expect(find.byType(WakeUpScreen), findsNothing, reason: '播完自己關掉');
     }
 
+    /// 自評之後停在等待畫面 → 等按鈕出現 → 按 View sleep report。
+    Future<void> viewReport(WidgetTester tester) async {
+      expect(find.byType(ReportLoadingScreen), findsOneWidget,
+          reason: '自評之後先到等待畫面，不直接開報告');
+      expect(find.byType(MorningReportScreen), findsNothing);
+      final view = find.byKey(const Key('report-loading-view'));
+      for (var i = 0; i < 120 && view.evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(view);
+      await settle(tester, 10);
+    }
+
     testWidgets('⚠️ 起床動畫：只說早安——沒有分數、XP、Great；小狗用首頁那一份心情',
         (tester) async {
       final source = _Source(homeWithScore('2026-11-12'));
@@ -838,7 +884,8 @@ void main() {
       expect(find.textContaining('Great'), findsNothing);
       expect(find.textContaining('XP'), findsNothing);
       expect(find.textContaining('score'), findsNothing);
-      expect(source.asked, isEmpty, reason: '動畫期間還沒讀報告');
+      // 分數那份可以先在背景抓（畫面上不出現）；AI 那段讀自評，自評之前不准要
+      expect(source.askedSummary, isEmpty, reason: '自評之前不要 AI 那段');
       expect(find.byKey(const Key('wake-up-gif')), findsOneWidget,
           reason: '有 wake_up.gif 就播它');
     });
@@ -889,7 +936,7 @@ void main() {
               tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
         }
         await pumpHome(tester, at(12, 7, 10), _Source(null),
-            before: (s) => s.markStart(at(11, 23, 40)));
+            slowStore: true, before: (s) => s.markStart(at(11, 23, 40)));
         // 首頁上一定有的那句話：看得到它＝首頁露出來了
         final home = find.byKey(const Key('optional-note'));
         await tester.drag(
@@ -946,11 +993,12 @@ void main() {
       await slideUp(tester);
       expect(find.byType(RestedScreen), findsOneWidget);
       expect(find.byType(MorningReportScreen), findsNothing);
-      expect(source.asked, isEmpty, reason: '看到分數之前先問，所以還沒讀報告');
+      expect(source.askedSummary, isEmpty, reason: '自評之前不要 AI 那段');
       expect(find.byKey(const Key('report-score')), findsNothing);
 
       await tester.tap(find.byKey(const Key('rested-skip')));
       await settle(tester, 15);
+      await viewReport(tester);
       expect(find.byType(MorningReportScreen), findsOneWidget);
       expect(source.asked, ['2026-11-12'], reason: '問的是起床日那一晚');
       expect(sender.sent, isEmpty, reason: 'Skip 不送任何東西');
@@ -961,6 +1009,36 @@ void main() {
       await settle(tester);
       expect(find.byType(MorningReportScreen), findsNothing);
     });
+
+    // 2026-11-13 實機抓到：分數那份在動畫一開始就抓，那時後端還是同一晚上一次的答案
+    // （Somewhat）；剛填的 Well-rested 被它蓋掉。
+    for (final save in [true, false]) {
+      testWidgets(
+          '⚠️ 同一晚填第二次：${save ? '剛填的蓋過先抓到的後端舊答案' : 'Skip 就照後端的'}',
+          (tester) async {
+        final json = homeWaiting('2026-11-12');
+        json['morning_rating'] = {
+          'rested': 3,
+          'label': 'SENTINEL-old-answer',
+          'tags': [],
+        };
+        await pumpHome(tester, at(12, 7, 10), _Source(json),
+            rested: _Sender(), before: (s) => s.markStart(at(11, 23, 40)));
+        await slideUp(tester);
+        if (save) {
+          await tester.tap(find.byKey(const Key('rested-face-4')));
+          await tester.pump();
+          await tester.ensureVisible(find.byKey(const Key('rested-save')));
+          await tester.tap(find.byKey(const Key('rested-save')));
+        } else {
+          await tester.tap(find.byKey(const Key('rested-skip')));
+        }
+        await settle(tester, 15);
+        await viewReport(tester);
+        expect(textOf(tester, 'report-rating-label'),
+            save ? 'Well-rested' : 'SENTINEL-old-answer');
+      });
+    }
 
     testWidgets('填了自評 → 送出那一晚、起床後幾分鐘；報告出現「You felt」',
         (tester) async {
@@ -981,8 +1059,178 @@ void main() {
       expect(sender.sent.single.rested, 4);
       expect(sender.sent.single.tags, ['exercise']);
       expect(sender.sent.single.minutesAfterWake, 0);
+      await viewReport(tester);
       expect(find.byType(MorningReportScreen), findsOneWidget);
       expect(textOf(tester, 'report-rating-label'), 'Well-rested');
+    });
+
+    group('等待畫面', () {
+      Future<_Source> toLoading(WidgetTester tester, _Source source,
+          {_Sender? sender}) async {
+        await pumpHome(tester, at(12, 7, 10), source,
+            rested: sender, before: (s) => s.markStart(at(11, 23, 40)));
+        await slideUp(tester);
+        expect(source.askedSummary, isEmpty, reason: '自評卡還開著，AI 那段還沒要');
+        if (sender != null) {
+          await tester.tap(find.byKey(const Key('rested-face-4')));
+          await tester.pump();
+          await tester.ensureVisible(find.byKey(const Key('rested-save')));
+          await tester.tap(find.byKey(const Key('rested-save')));
+        } else {
+          await tester.tap(find.byKey(const Key('rested-skip')));
+        }
+        await tester.pump();
+        await tester.pump();
+        return source;
+      }
+
+      Finder button() => find.byKey(const Key('report-loading-view'));
+      Finder spinner() => find.byKey(const Key('report-loading-spinner'));
+
+      testWidgets('先轉圈；分數與 AI 都回來才出現按鈕；AI 在自評送出之後才要',
+          (tester) async {
+        final sender = _Sender();
+        final source = await toLoading(
+          tester,
+          _Source(homeWithScore('2026-11-12'),
+              summary: summaryOk('2026-11-12'),
+              summaryDelay: const Duration(seconds: 3)),
+          sender: sender,
+        );
+        await settle(tester, 5);
+        expect(sender.sent, hasLength(1));
+        expect(find.byType(ReportLoadingScreen), findsOneWidget);
+        expect(find.byType(MorningReportScreen), findsNothing,
+            reason: '不自動進報告');
+        expect(spinner(), findsOneWidget);
+        expect(button(), findsNothing);
+        expect(find.text('Preparing your sleep report…'), findsOneWidget);
+        expect(source.askedSummary, ['2026-11-12']);
+        expect(find.textContaining('XP'), findsNothing, reason: '等待畫面不放分數');
+
+        await settle(tester, 30);
+        expect(button(), findsOneWidget);
+        expect(spinner(), findsNothing);
+        await tester.tap(button());
+        await settle(tester, 10);
+        expect(find.byType(MorningReportScreen), findsOneWidget);
+        expect(textOf(tester, 'report-score'), '62');
+        expect(textOf(tester, 'report-summary'), 'SENTINEL-summary',
+            reason: '等到的 AI 那段一進去就在');
+        expect(source.askedSummary, hasLength(1), reason: '報告畫面不再要一次');
+      });
+
+      testWidgets('⚠️ AI 超過 10 秒 → 先放按鈕；進報告之後再補上，不重要一次',
+          (tester) async {
+        final source = await toLoading(
+          tester,
+          _Source(homeWithScore('2026-11-12'),
+              summary: summaryOk('2026-11-12'),
+              summaryDelay: const Duration(seconds: 25)),
+        );
+        await settle(tester, 90);
+        expect(button(), findsNothing, reason: '9 秒時還在等');
+        await settle(tester, 15);
+        expect(button(), findsOneWidget, reason: '10 秒到了先放按鈕');
+        await tester.tap(button());
+        await settle(tester, 10);
+        expect(find.byType(MorningReportScreen), findsOneWidget);
+        expect(textOf(tester, 'report-score'), '62');
+        expect(find.byKey(const Key('report-summary')), findsNothing);
+        await settle(tester, 160);
+        expect(textOf(tester, 'report-summary'), 'SENTINEL-summary',
+            reason: '還在路上的那一個回來了就補上');
+        expect(source.askedSummary, hasLength(1));
+      });
+
+      testWidgets('手錶資料還沒到 → 不要 AI 那段，按鈕直接出現', (tester) async {
+        final source =
+            await toLoading(tester, _Source(homeWaiting('2026-11-12')));
+        await settle(tester, 5);
+        expect(button(), findsOneWidget);
+        expect(source.askedSummary, isEmpty);
+        await tester.tap(button());
+        await settle(tester, 10);
+        expect(find.text(kWaitingForWatch), findsOneWidget);
+      });
+
+      testWidgets('連不到後端（沒有 /home）→ 按鈕照樣出現', (tester) async {
+        await toLoading(tester, _Source(null));
+        await settle(tester, 5);
+        expect(button(), findsOneWidget);
+      });
+
+      testWidgets('Back to home → 回首頁，不開報告', (tester) async {
+        await toLoading(tester, _Source(homeWaiting('2026-11-12')));
+        await settle(tester, 5);
+        await tester.tap(find.byKey(const Key('report-loading-close')));
+        await settle(tester, 5);
+        expect(find.byType(ReportLoadingScreen), findsNothing);
+        expect(find.byType(MorningReportScreen), findsNothing);
+        expect(find.byKey(const Key('optional-note')), findsOneWidget);
+      });
+
+      testWidgets('⚠️ 關報告直接回首頁：等待畫面不會又冒出來', (tester) async {
+        await toLoading(tester, _Source(homeWaiting('2026-11-12')));
+        await settle(tester, 5);
+        await tester.tap(button());
+        await settle(tester, 10);
+        await tester.ensureVisible(find.byKey(const Key('report-done')));
+        await tester.tap(find.byKey(const Key('report-done')));
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(find.byType(ReportLoadingScreen), findsNothing,
+              reason: '第 ${i * 16} 毫秒露出了等待畫面');
+        }
+        await settle(tester, 5);
+        expect(find.byType(MorningReportScreen), findsNothing);
+        expect(find.byKey(const Key('optional-note')), findsOneWidget);
+      });
+
+      for (final reduce in [false, true]) {
+        testWidgets(
+            '⚠️ 自評卡 → 等待畫面 → 報告，一格都不露出首頁'
+            '${reduce ? '（減少動態效果）' : ''}', (tester) async {
+          if (reduce) {
+            tester.platformDispatcher.accessibilityFeaturesTestValue =
+                const FakeAccessibilityFeatures(disableAnimations: true);
+            addTearDown(
+                tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+          }
+          await pumpHome(tester, at(12, 7, 10), _Source(homeWaiting('2026-11-12')),
+              slowStore: true, before: (s) => s.markStart(at(11, 23, 40)));
+          final home = find.byKey(const Key('optional-note'));
+          await tester.drag(
+              find.byKey(const Key('slide-knob')), const Offset(1000, 0));
+          var stage = 0; // 0 等自評卡、1 等按鈕、2 等報告滑完
+          for (var i = 0; i < 900 && stage < 3; i++) {
+            await tester.pump(const Duration(milliseconds: 16));
+            expect(home, findsNothing, reason: '第 ${i * 16} 毫秒（階段 $stage）露出了首頁');
+            if (stage == 0 && find.byKey(const Key('rested-skip')).evaluate().isNotEmpty) {
+              final route =
+                  ModalRoute.of(tester.element(find.byType(RestedScreen)))!;
+              if (route.isCurrent &&
+                  route.animation!.status == AnimationStatus.completed) {
+                await tester.tap(find.byKey(const Key('rested-skip')));
+                stage = 1;
+              }
+            } else if (stage == 1 && button().evaluate().isNotEmpty) {
+              await tester.tap(button());
+              stage = 2;
+            } else if (stage == 2) {
+              final r = find.byType(MorningReportScreen);
+              if (r.evaluate().isNotEmpty) {
+                final route = ModalRoute.of(tester.element(r))!;
+                if (route.animation!.status == AnimationStatus.completed) {
+                  stage = 3;
+                }
+              }
+            }
+          }
+          expect(stage, 3);
+          await settle(tester, 40); // 慢儲存還在路上的讀寫
+        });
+      }
     });
 
     testWidgets('⚠️ 首頁補填小卡：Skip 之後起床 6 小時內出現，填完就消失',

@@ -27,6 +27,10 @@ class RestedScreen extends StatefulWidget {
   /// 補填時帶入之前填過的（目前補填只在沒填過時出現，所以通常是 null）。
   final MorningRating? initial;
 
+  /// 給了就不自己關掉，改呼叫它（Skip 是 null）。起床流程用：等待報告的畫面要
+  /// 直接蓋在自評卡上，自己關掉的話會先露出底下的首頁（有分數卡）。
+  final void Function(MorningRating? rating)? onDone;
+
   const RestedScreen({
     super.key,
     required this.date,
@@ -35,6 +39,7 @@ class RestedScreen extends StatefulWidget {
     this.sender,
     this.clock = DateTime.now,
     this.initial,
+    this.onDone,
   });
 
   @override
@@ -45,6 +50,15 @@ class _RestedScreenState extends State<RestedScreen> {
   late int? _picked = widget.initial?.rested;
   late final Set<String> _tags = {...?widget.initial?.tags};
   bool _saving = false;
+
+  void _finish(MorningRating? rating) {
+    final done = widget.onDone;
+    if (done != null) {
+      done(rating);
+    } else {
+      Navigator.of(context).pop(rating);
+    }
+  }
 
   Future<void> _save() async {
     final picked = _picked;
@@ -62,7 +76,7 @@ class _RestedScreenState extends State<RestedScreen> {
     // ⚠️ 等它送完（最多幾秒）再進報告：AI 那段要讀得到「你覺得怎樣」。
     //    送不出去也照樣往下走，下次開首頁會補送。
     await widget.store.save(rating, widget.sender);
-    if (mounted) Navigator.of(context).pop(rating);
+    if (mounted) _finish(rating);
   }
 
   @override
@@ -234,7 +248,7 @@ class _RestedScreenState extends State<RestedScreen> {
               const SizedBox(height: 6),
               TextButton(
                 key: const Key('rested-skip'),
-                onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                onPressed: _saving ? null : () => _finish(null),
                 style: TextButton.styleFrom(
                   foregroundColor: ReportColors.muted,
                   minimumSize: const Size.fromHeight(44),
