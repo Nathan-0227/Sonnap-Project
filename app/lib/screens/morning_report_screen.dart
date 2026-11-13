@@ -98,6 +98,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       }).whenComplete(() {
         if (mounted) setState(() => _loading = false);
       });
+    } else if (widget.loadSummary != null && widget.initial.hasScore) {
+      // 等待畫面已經備好分數，只剩 AI 那段還在路上（超過等待時間）
+      _loading = true;
+      widget.loadSummary!().then((json) {
+        if (mounted) setState(() => _report = _report.withSummary(json));
+      }).whenComplete(() {
+        if (mounted) setState(() => _loading = false);
+      });
     }
   }
 

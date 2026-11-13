@@ -27,6 +27,7 @@ import '../widgets/sleep_stages_card.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import 'morning_report_screen.dart';
+import 'report_loading_screen.dart';
 import 'rested_screen.dart';
 import 'wake_up_screen.dart';
 import '../widgets/week_mood_strip.dart';
@@ -259,45 +260,172 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _sleepRouteOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final ended = await Navigator.of(context).push<bool>(
-        _NoExitAnimationRoute(
-          fullscreenDialog: true,
-          builder: (_) => SleepModeScreen(
-            alarm: _alarm,
-            sounds: SleepSoundsController(
-              settings: SleepSoundSettings(widget.bedMarks.store),
-              player: widget.soundPlayer,
-            ),
-            store: widget.bedMarks,
-            startAt: startAt,
-            clock: widget.clock,
+      final navigator = Navigator.of(context);
+      final ended = Completer<DateTime?>();
+      final sleepRoute = _NoExitAnimationRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => SleepModeScreen(
+          alarm: _alarm,
+          sounds: SleepSoundsController(
+            settings: SleepSoundSettings(widget.bedMarks.store),
+            player: widget.soundPlayer,
           ),
+          store: widget.bedMarks,
+          startAt: startAt,
+          clock: widget.clock,
+          onEnded: (end) {
+            if (!ended.isCompleted) ended.complete(end);
+          },
         ),
       );
-      _sleepRouteOpen = false;
+      // Cancel／返回鍵是睡覺畫面自己關掉的 → null
+      navigator.push<void>(sleepRoute).then((_) {
+        if (!ended.isCompleted) ended.complete(null);
+      });
+      final end = await ended.future;
       if (!mounted) return;
-      await _loadMarks();
+      if (end == null) {
+        _sleepRouteOpen = false;
+        await _loadMarks();
+        return;
+      }
       // 滑完 Slide to get up（或 I already got up）→ 起床動畫 → 先問睡得怎樣
-      // （看到分數之前）→ 再出現昨晚的報告。按 Skip 也照樣進報告。
-      // ⚠️ 從睡覺畫面到自評卡，中間**一格都不能露出首頁**：首頁上有分數卡，
+      // （看到分數之前）→ 等待畫面（按 View sleep report）→ 昨晚的報告。
+      // 按 Skip 也照樣往下走。
+      // ⚠️ 從睡覺畫面到報告，中間**一格都不能露出首頁**：首頁上有分數卡，
       //    而自評卡要在「看到分數之前」問（2026-11-13 實機錄影抓到露出半秒）。
-      //    所以：睡覺畫面退場不播動畫（_NoExitAnimationRoute）→ 起床動畫直接切進來
-      //    → 自評卡蓋在動畫最後一格上面，滑完才把動畫收掉。
-      if (ended == true && mounted) {
+      //    所以每一步都是「新的畫面蓋上去之後，才把底下那一頁收掉」：
+      //    睡覺畫面 → 起床動畫 → 自評卡 → 等待畫面 → 報告。
+      //    睡覺畫面也不自己關（onEnded）：讀手機儲存要好幾格，先關的話那幾格就是首頁。
+      try {
         final date = reportDateKey(nightDateOf(startAt));
-        final wakeRoute = await _playWakeUp(_marks.endAt);
+        // 分數那份在動畫一開始就去抓，填完自評多半已經回來了。
+        // AI 那段讀起床自評，要等自評送出之後才去要（等待畫面打開時）。
+        final early = _ReportFetch(
+          home: widget.morningReport?.fetchNight(date),
+          game: widget.game?.fetchGame(),
+        );
+        final wakeRoute = await _playWakeUp(end, below: sleepRoute);
         if (!mounted) return;
-        await _askRested(date, _marks.endAt,
-            replacing: wakeRoute, instant: wakeRoute == null);
-        if (mounted) await _openReport(date);
+        await _wakeUpFlow(date, end, early,
+            cover: wakeRoute ?? sleepRoute, instant: wakeRoute == null);
+      } finally {
+        // 沒走完（例如畫面被關掉）也要把睡覺畫面收掉
+        if (sleepRoute.isActive) navigator.removeRoute(sleepRoute);
+        _sleepRouteOpen = false;
+        if (mounted) await _loadMarks();
       }
     });
+  }
+
+  /// 起床動畫之後：自評卡 → 等待畫面 → 報告（見上面的 ⚠️）。
+  ///
+  /// [cover]：目前蓋在最上面的那一頁（起床動畫；沒播動畫時是睡覺畫面），
+  /// 自評卡蓋上去之後才收掉。[instant]：沒播動畫時自評卡直接出現、不從下面滑上來。
+  Future<void> _wakeUpFlow(String date, DateTime? wakeAt, _ReportFetch early,
+      {required Route<void> cover, required bool instant}) async {
+    final navigator = Navigator.of(context);
+    void removeWhenCovered(ModalRoute<dynamic> top, Route<dynamic>? below) {
+      if (below == null) return;
+      void listener(AnimationStatus s) {
+        if (s != AnimationStatus.completed) return;
+        top.animation?.removeStatusListener(listener);
+        if (below.isActive) navigator.removeRoute(below);
+      }
+
+      top.animation?.addStatusListener(listener);
+    }
+
+    // ① 自評卡：沒有起床動畫（減少動態效果）時直接出現，不從下面滑上來——
+    //    滑的那一段會露出底下的首頁。
+    final rated = Completer<void>();
+    Widget restedBuilder(BuildContext _) => RestedScreen(
+          date: date,
+          wakeAt: wakeAt,
+          store: _ratings,
+          sender: widget.rested,
+          clock: widget.clock,
+          onDone: (_) {
+            if (!rated.isCompleted) rated.complete();
+          },
+        );
+    final PageRoute<void> restedRoute = instant
+        ? PageRouteBuilder<void>(
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+            pageBuilder: (context, _, _) => restedBuilder(context),
+          )
+        : MaterialPageRoute<void>(fullscreenDialog: true, builder: restedBuilder);
+    var leaving = false; // 是我們自己收掉的，不是使用者按返回
+    navigator.push<void>(restedRoute).then((_) {
+      if (!leaving && !rated.isCompleted) rated.complete(); // 按返回鍵＝Skip
+    });
+    removeWhenCovered(restedRoute, cover);
+    await rated.future;
+    if (!mounted) return;
+    // 自評卡還沒滑完就按了 Skip：底下那一頁也要收
+    if (cover.isActive) navigator.removeRoute(cover);
+
+    // ② 等待畫面：瞬間蓋在自評卡上，再收掉自評卡
+    final inputs = await _reportInputs(date); // 這時才讀得到剛存的自評
+    if (!mounted) return;
+    final initial = _initialReport(date, inputs);
+    final reportF = _fetchReport(date, inputs, early)
+        .catchError((Object _) => initial);
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
+    final source = widget.morningReport;
+    final finished = Completer<String?>();
+    var viewing = false;
+    late final PageRoute<void> loadingRoute;
+    loadingRoute = PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => ReportLoadingScreen(
+        report: reportF,
+        fallback: initial,
+        mood: mood,
+        loadSummary: source == null ? null : () => source.fetchSummary(date),
+        onClose: () => navigator.removeRoute(loadingRoute),
+        onView: (prepared) async {
+          if (viewing) return;
+          viewing = true;
+          // ③ 報告蓋上去之後才收掉等待畫面：關報告時直接回首頁
+          final route = _reportRoute(
+            date,
+            initial: prepared.report,
+            loadSummary: prepared.pendingSummary == null
+                ? null
+                : () => prepared.pendingSummary!,
+          );
+          final result = navigator.push<String>(route);
+          removeWhenCovered(route, loadingRoute);
+          final r = await result;
+          if (loadingRoute.isActive) navigator.removeRoute(loadingRoute);
+          if (!finished.isCompleted) finished.complete(r);
+        },
+      ),
+    );
+    navigator.push<void>(loadingRoute).then((_) {
+      if (!viewing && !finished.isCompleted) finished.complete(null);
+    });
+    leaving = true;
+    if (restedRoute.isActive) navigator.removeRoute(restedRoute);
+    if (mounted) await _loadMarks();
+    final result = await finished.future;
+    if (result == kReportOpenInsights && mounted) widget.onOpenInsights?.call();
   }
 
   /// 起床動畫（GIF 或程式版，點一下跳過）。系統開「減少動態效果」就不播，回 null。
   /// 播完**不自己關掉**，回傳那個畫面，讓自評卡蓋上去之後再收（見上面的 ⚠️）。
   /// 小狗用首頁同一份心情（後端的 pet_mood），不自己挑。
-  Future<Route<void>?> _playWakeUp(DateTime? wakeAt) async {
+  /// [below]：睡覺畫面。動畫畫出第一格之後才把它收掉。
+  Future<Route<void>?> _playWakeUp(DateTime? wakeAt, {Route<void>? below}) async {
     if (!shouldPlayWakeUp(context)) return null;
     String? mood;
     try {
@@ -314,10 +442,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!done.isCompleted) done.complete();
       },
     );
+    final navigator = Navigator.of(context);
     // 按返回鍵關掉也算播完
-    Navigator.of(context).push(route).then((_) {
+    navigator.push(route).then((_) {
       if (!done.isCompleted) done.complete();
     });
+    if (below != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (below.isActive) navigator.removeRoute(below);
+      });
+    }
     await done.future;
     return route;
   }
@@ -333,44 +467,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         : null;
   }
 
-  /// 起床自評卡。回傳存下來的（Skip 是 null）。
-  ///
-  /// [replacing]：起床動畫那個畫面。自評卡滑上來**之後**才把它收掉，中間不露出首頁。
-  /// [instant]：沒有起床動畫時（減少動態效果）直接出現，不從下面滑上來——
-  ///   滑的那一段會露出底下的首頁（有分數卡）。
-  Future<MorningRating?> _askRested(String date, DateTime? wakeAt,
-      {Route<void>? replacing, bool instant = false}) async {
-    Widget builder(BuildContext _) => RestedScreen(
+  /// 首頁補填小卡的自評卡。回傳存下來的（Skip 是 null）。
+  /// （起床流程不走這裡，見 [_wakeUpFlow]。）
+  Future<MorningRating?> _askRested(String date, DateTime? wakeAt) async {
+    final rating = await Navigator.of(context).push<MorningRating>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => RestedScreen(
           date: date,
           wakeAt: wakeAt,
           store: _ratings,
           sender: widget.rested,
           clock: widget.clock,
-        );
-    final PageRoute<MorningRating> route = instant
-        ? PageRouteBuilder<MorningRating>(
-            transitionDuration: Duration.zero,
-            reverseTransitionDuration: Duration.zero,
-            pageBuilder: (context, _, _) => builder(context),
-          )
-        : MaterialPageRoute<MorningRating>(
-            fullscreenDialog: true,
-            builder: builder,
-          );
-    final navigator = Navigator.of(context);
-    final result = navigator.push<MorningRating>(route);
-    if (replacing != null) {
-      void removeBelow(AnimationStatus s) {
-        if (s != AnimationStatus.completed) return;
-        route.animation?.removeStatusListener(removeBelow);
-        if (replacing.isActive) navigator.removeRoute(replacing);
-      }
-
-      route.animation?.addStatusListener(removeBelow);
-    }
-    final rating = await result;
-    // 自評卡還沒滑完就被關掉（例如很快按了 Skip）：動畫那一頁也要收
-    if (replacing != null && replacing.isActive) navigator.removeRoute(replacing);
+        ),
+      ),
+    );
     if (mounted) await _loadMarks();
     return rating;
   }
@@ -384,8 +495,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (rating != null && mounted) await _openReport(date);
   }
 
-  /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
-  Future<void> _openReport(String date) async {
+  /// 組報告要用的、手機上已經有的東西。
+  Future<_ReportInputs> _reportInputs(String date) async {
     final marks = await widget.bedMarks.read(now: widget.clock());
     final localRating = await _ratings.read(date);
     CameraNight? camera;
@@ -400,46 +511,74 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     // 睡眠目標＝轉盤上「就寢→起床」的長度（使用者定，預設 8 小時）
     final wake = await _alarm.settings.wakeTime(_bedtime);
-    final goal = sleepSpan(_bedtime, wake).inMinutes;
-    if (!mounted) return;
-    final source = widget.morningReport;
-    final gameService = widget.game;
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
+    return _ReportInputs(
+      marks: marks,
+      localRating: localRating,
+      camera: camera,
+      session: session,
+      goalMinutes: sleepSpan(_bedtime, wake).inMinutes,
+    );
+  }
+
+  /// 先畫手上已經有的（XP 用首頁已經讀到的那一份）。
+  MorningReport _initialReport(String date, _ReportInputs i) =>
+      buildMorningReport(date: date, marks: i.marks).withExtras(
+        game: _game?.value,
+        goalMinutes: i.goalMinutes,
+        camera: i.camera,
+        localRating: i.localRating,
+      );
+
+  /// 問後端之後的完整版。[early] 是已經先發出去的請求（起床流程）。
+  Future<MorningReport> _fetchReport(String date, _ReportInputs i,
+      [_ReportFetch? early]) async {
+    final homeF = early?.home ?? widget.morningReport?.fetchNight(date);
+    final gameF = early?.game ?? widget.game?.fetchGame();
+    final home = await homeF;
+    final game = (await gameF)?.value ?? _game?.value;
+    return buildMorningReport(
+      date: date,
+      marks: i.marks,
+      home: home,
+      session: i.session,
+    ).withExtras(
+      game: game,
+      goalMinutes: i.goalMinutes,
+      camera: i.camera,
+      localRating: i.localRating,
+    );
+  }
+
+  PageRoute<String> _reportRoute(
+    String date, {
+    required MorningReport initial,
+    Future<MorningReport> Function()? load,
+    Future<Map<String, dynamic>?> Function()? loadSummary,
+  }) =>
+      MaterialPageRoute<String>(
         fullscreenDialog: true,
         builder: (_) => MorningReportScreen(
           // 今天早上起床的那一晚才說「在等手錶資料」
           pending: date == reportDateKey(widget.clock()),
           canOpenInsights: widget.onOpenInsights != null,
-          // 先畫手上已經有的（XP 用首頁已經讀到的那一份）
-          initial: buildMorningReport(date: date, marks: marks).withExtras(
-            game: _game?.value,
-            goalMinutes: goal,
-            camera: camera,
-            localRating: localRating,
-          ),
-          load: () async {
-            final homeF = source?.fetchNight(date);
-            final gameF = gameService?.fetchGame();
-            final home = await homeF;
-            final game = (await gameF)?.value ?? _game?.value;
-            return buildMorningReport(
-              date: date,
-              marks: marks,
-              home: home,
-              session: session,
-            ).withExtras(
-              game: game,
-              goalMinutes: goal,
-              camera: camera,
-              localRating: localRating,
-            );
-          },
-          loadSummary:
-              source == null ? null : () => source.fetchSummary(date),
+          initial: initial,
+          load: load,
+          loadSummary: loadSummary,
         ),
-      ),
-    );
+      );
+
+  /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
+  /// （首頁點某一天、補填自評之後；起床流程走 [_wakeUpFlow]，中間多一個等待畫面。）
+  Future<void> _openReport(String date) async {
+    final inputs = await _reportInputs(date);
+    if (!mounted) return;
+    final source = widget.morningReport;
+    final result = await Navigator.of(context).push<String>(_reportRoute(
+      date,
+      initial: _initialReport(date, inputs),
+      load: () => _fetchReport(date, inputs),
+      loadSummary: source == null ? null : () => source.fetchSummary(date),
+    ));
     if (result == kReportOpenInsights && mounted) widget.onOpenInsights?.call();
   }
 
@@ -1736,4 +1875,29 @@ class _NoExitAnimationRoute<T> extends MaterialPageRoute<T> {
 
   @override
   Duration get reverseTransitionDuration => Duration.zero;
+}
+
+/// 組報告要用的、手機上已經有的東西。
+class _ReportInputs {
+  final BedMarks marks;
+  final MorningRating? localRating;
+  final CameraNight? camera;
+  final SleepSession? session;
+  final int goalMinutes;
+
+  const _ReportInputs({
+    required this.marks,
+    required this.localRating,
+    required this.camera,
+    required this.session,
+    required this.goalMinutes,
+  });
+}
+
+/// 起床流程在動畫一開始就先發出去的請求。
+class _ReportFetch {
+  final Future<Map<String, dynamic>?>? home;
+  final Future<GameResult<GameState>>? game;
+
+  const _ReportFetch({this.home, this.game});
 }
