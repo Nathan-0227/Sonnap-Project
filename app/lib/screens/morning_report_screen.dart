@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import '../theme/report_style.dart';
+import '../widgets/heart_rate_card.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/yesterday_card.dart';
 import '../widgets/sleep_stages_card.dart';
@@ -153,6 +154,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       (r.hasStageSplit || r.deepMinutes != null)) ...[
                     const SizedBox(height: 14),
                     _splitCard(r),
+                  ],
+                  // 睡著期間的心率曲線（2026-11-13）：沒有曲線就整張不畫
+                  if (r.heartRate != null) ...[
+                    const SizedBox(height: 14),
+                    HeartRateCard(
+                      curve: r.heartRate!,
+                      restingHeartRate: r.restingHeartRate,
+                    ),
                   ],
                   // 前一天的 Garmin 白天資料（2026-11-13）：只呈現、不計分；那天沒資料就整塊不畫
                   if (r.yesterday != null) ...[
@@ -1068,8 +1077,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   Widget _details(MorningReport r) {
     final showWaso = r.hasScore && r.wasoMinutes != null;
-    final showHr =
-        r.hasScore && (r.avgHeartRate != null || r.restingHeartRate != null);
+    // 有心率卡就不在這裡再寫一次：這裡的 avg 是 metrics.avg_heart_rate（混了清醒時段），
+    // 跟卡上「睡著期間的平均」放在同一頁會是兩個不同的「平均心率」
+    final showHr = r.hasScore &&
+        r.heartRate == null &&
+        (r.avgHeartRate != null || r.restingHeartRate != null);
     final showEff = r.hasScore && r.efficiency != null;
     final showCam = r.camera?.usualLabel != null;
     final names = [

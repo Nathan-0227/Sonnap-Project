@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/heart_rate_curve.dart';
 import '../models/yesterday_activity.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_stages.dart';
@@ -119,6 +120,9 @@ class MorningReport {
   /// 沒有後端或那天沒資料是 null，報告整塊不畫。
   final YesterdayActivity? yesterday;
 
+  /// 睡著期間的心率曲線（`metrics.heart_rate_curve`，2026-11-13）。只有 Garmin 來源、有分數時才有。
+  final HeartRateCurve? heartRate;
+
   final ReportSource source;
 
   // ── 跟上一晚比：後端給上一個有資料的晚上的原始數字 ──
@@ -201,6 +205,7 @@ class MorningReport {
     this.stages,
     this.dream,
     this.yesterday,
+    this.heartRate,
     this.source = ReportSource.phoneOnly,
     this.previousTimeInBed,
     this.previousSleepMinutes,
@@ -242,8 +247,8 @@ class MorningReport {
   bool get hasDetails =>
       (hasScore &&
           (wasoMinutes != null ||
-              avgHeartRate != null ||
-              restingHeartRate != null ||
+              (heartRate == null &&
+                  (avgHeartRate != null || restingHeartRate != null)) ||
               efficiency != null)) ||
       camera?.usualLabel != null;
 
@@ -286,6 +291,7 @@ class MorningReport {
       stages: stages,
       dream: dream,
       yesterday: yesterday,
+      heartRate: heartRate,
       source: source,
       previousTimeInBed: previousTimeInBed,
       previousSleepMinutes: previousSleepMinutes,
@@ -482,6 +488,8 @@ MorningReport buildMorningReport({
       dream: dream,
       // 白天資料跟睡眠分數無關：那一天有就畫（手錶睡眠還沒到也一樣）
       yesterday: YesterdayActivity.fromJsonOrNull(home['yesterday']),
+      heartRate:
+          has ? HeartRateCurve.fromJsonOrNull(metrics?['heart_rate_curve']) : null,
       source: ReportSource.backend,
       previousTimeInBed: n(previous, 'time_in_bed_minutes'),
       previousSleepMinutes: n(previous, 'sleep_duration_minutes'),

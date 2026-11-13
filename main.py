@@ -68,6 +68,7 @@ from social import friends as social_friends
 #    會在某次改動後悄悄地不一致——那正是本專案最想避免的那類 bug。
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
+import sleep_heart_rate  # noqa: E402  garmin/ 已由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
 
@@ -379,6 +380,25 @@ def night_stages(w_row):
         },
         "rem_measured": bool(w_row.get("rem_measured")),
     }
+
+
+def night_heart_rate(w_row):
+    """
+    那一晚睡著期間的心率曲線（早晨報告的 Heart rate 卡，2026-11-13）。
+
+    ⚠️ 只有 Garmin 來源才有（逐 2 分鐘的心率只存在電腦上的 Garmin 原始檔），同 night_stages。
+    ⚠️ 平均與最低從曲線那一段自己算，不用 w_row["avg_hr"]（那個混了清醒時段）。
+    ⚠️ 不判斷 Normal／High（紅線 2）。資料不夠 → None，App 整張卡不畫。
+    """
+    if not w_row or w_row.get("source") != "garmin":
+        return None
+    start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
+    if not start or not wake:
+        return None
+    records = _garmin_records()
+    if not records:
+        return None
+    return sleep_heart_rate.heart_rate_curve(records, start, wake)
 
 
 def rating_block(rating):
@@ -947,6 +967,8 @@ async def get_home(
             "light_minutes": _light_minutes(w_row),
             # 每一晚的曲線（早晨報告）。只有 Garmin 來源才有，見 night_stages()。
             "sleep_stages": night_stages(w_row),
+            # 睡著期間的心率曲線（2026-11-13）。只呈現、不計分。
+            "heart_rate_curve": night_heart_rate(w_row),
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
             # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。
