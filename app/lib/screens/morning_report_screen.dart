@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import '../theme/report_style.dart';
+import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/sleepy_pet.dart';
@@ -14,7 +15,8 @@ import '../widgets/sleepy_pet.dart';
 ///
 /// 由上到下：日期 → 圓環＋山丘＋小狗＋自評小標籤 → Lv／XP 一條 → From your buddy
 /// （AI 那段＋小建議）→ Time in bed／Time asleep → Phone down｜Your target
-/// → Sleep phases → More details（收合）→ Dream diary → View sleep insights → Back to home。
+/// → Sleep phases → More details（收合）→ View sleep insights → Back to home。
+/// 那一晚有夢境時，小狗頭上有「I had a dream…」對話框，點開看夢境日記（`widgets/dream_diary.dart`）。
 ///
 /// 一打開就先畫 [initial]（手機上已經有的），[load] 回來之後換成完整版，
 /// [loadSummary] 再晚一點回來（AI 第一次生成要等模型）。
@@ -40,6 +42,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 要不要放 View sleep insights（首頁有給切分頁的方法才放）。
   final bool canOpenInsights;
 
+  /// 點開夢境之後（首頁用來記「這個夢看過了」）。
+  final VoidCallback? onDreamOpened;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -47,6 +52,7 @@ class MorningReportScreen extends StatefulWidget {
     this.loadSummary,
     this.pending = true,
     this.canOpenInsights = false,
+    this.onDreamOpened,
   });
 
   @override
@@ -174,15 +180,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       ),
                     ),
                   ],
-                  if (r.dream != null) ...[
-                    const SizedBox(height: 14),
-                    _linkRow(
-                      key: const Key('report-dream'),
-                      icon: Icons.auto_stories_rounded,
-                      label: 'Dream diary',
-                      onTap: () => _showDream(r.dream!),
-                    ),
-                  ],
+                  // 夢境改成小狗頭上的對話框（_hero），這裡不再放一列（2026-11-13）
                   if (widget.canOpenInsights) ...[
                     const SizedBox(height: 14),
                     _linkRow(
@@ -315,6 +313,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
             height: 120,
             child: CustomPaint(painter: _HillPainter()),
           ),
+          // 小狗說「I had a dream…」，點開才看完整夢境；那一晚沒有夢就不出現
+          if (r.dream != null)
+            Positioned(
+              key: const Key('report-dream'),
+              right: r.hasScore ? 40 : 30,
+              bottom: r.hasScore ? 160 : 150,
+              child: DreamBubble(onTap: () => _showDream(r)),
+            ),
           if (r.hasScore)
             Positioned(
               right: 18,
@@ -1275,42 +1281,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  void _showDream(String dream) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: ReportColors.sheet,
-      showDragHandle: true,
-      builder: (context) => ReportFont(
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Your buddy's dream diary",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  dream,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  void _showDream(MorningReport r) {
+    showDreamDiary(context, text: r.dream!, date: r.date, mood: r.mood);
+    widget.onDreamOpened?.call();
   }
 
   /// 1219 → 1,219

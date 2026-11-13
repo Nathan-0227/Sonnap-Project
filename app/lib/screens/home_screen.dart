@@ -18,6 +18,7 @@ import '../services/sleep_repository.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
+import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
@@ -152,6 +153,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final MorningRatingStore _ratings =
       MorningRatingStore(widget.bedMarks.store);
 
+  /// 夢境看過了沒（小狗旁的對話框縮成 💭 用），也存在同一個儲存裡。
+  late final DreamReadStore _dreamReads = DreamReadStore(widget.bedMarks.store);
+
+  /// 已經看過的那一晚夢境的日期。跟最新那一晚相同 → 對話框縮成 💭。
+  String? _dreamReadDate;
+
   /// 起床 6 小時內、還沒填自評 → 首頁出現補填小卡（使用者定）。null = 不出現。
   BedMarks? _restedMakeUp;
 
@@ -171,6 +178,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _bedtime = widget.targetBedtime;
     _sessionFuture = widget.repository.load();
+    _loadDreamRead();
     _loadGame();
     _loadCamera();
     _loadMarks();
@@ -567,6 +575,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // 今天早上起床的那一晚才說「在等手錶資料」
           pending: date == reportDateKey(widget.clock()),
           canOpenInsights: widget.onOpenInsights != null,
+          // 在報告裡看過夢 → 首頁的對話框也縮成 💭
+          onDreamOpened: () {
+            _dreamReads.markRead(date);
+            if (mounted) setState(() => _dreamReadDate = date);
+          },
           initial: initial,
           load: load,
           loadSummary: loadSummary,
@@ -674,6 +687,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _sessionFuture = widget.repository.load();
     });
+    _loadDreamRead();
+  }
+
+  /// 有夢境的那一晚：打包檔最新那一晚（同早晨報告的判斷）。沒有夢境 → null。
+  static String? _dreamDate(SleepSession s) =>
+      s.aiContent.hasDream && s.history.isNotEmpty ? s.history.last.date : null;
+
+  Future<void> _loadDreamRead() async {
+    try {
+      final date = _dreamDate(await _sessionFuture);
+      if (date == null) return;
+      final read = await _dreamReads.isRead(date);
+      if (mounted && read) setState(() => _dreamReadDate = date);
+    } catch (_) {
+      // 讀不到 session 時本來就沒有對話框
+    }
   }
 
   void _showComingSoon(String feature) {
@@ -688,47 +717,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 寫成「你的夢」就是誤述資料支持的範圍。disclaimer 一併顯示。
   void _showDream(SleepSession session) {
     final ai = session.aiContent;
-    if (!ai.hasDream) {
+    final date = _dreamDate(session);
+    if (!ai.hasDream || date == null) {
       _showComingSoon("Dream Diary");
       return;
     }
-
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF10265A),
-        title: const Text(
-          "Your buddy's dream diary",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                ai.dreamSummary!,
-                style: const TextStyle(color: Colors.white70, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                session.disclaimer ?? "",
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Close",
-              style: TextStyle(color: Color(0xFFFFD96A)),
-            ),
-          ),
-        ],
-      ),
+    showDreamDiary(
+      context,
+      text: ai.dreamSummary!,
+      date: date,
+      mood: session.history.last.petMood,
+      disclaimer: session.disclaimer,
     );
+    _dreamReads.markRead(date);
+    setState(() => _dreamReadDate = date);
   }
 
   /// 點卡片跳出的彈窗：最近 7 晚的長條圖（當晚那根特別亮）、跟上一晚差多少，
@@ -1054,7 +1056,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               left: 0,
                               right: 0,
                               bottom: 0,
-                              child: _buildPet(mood, game),
+                              child: _buildPet(mood, game, session),
                             ),
                           ],
                         ),
@@ -1246,7 +1248,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── 寵物：照後端的心情，右下角掛心情標籤 ─────────────────────────
 
-  Widget _buildPet(String mood, GameState? game) {
+  Widget _buildPet(String mood, GameState? game, SleepSession session) {
+    final dreamDate = _dreamDate(session);
     final color = moodColor(mood);
     final pet = SizedBox(
       height: kHomePetSize,
@@ -1261,6 +1264,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
           ),
+          // 小狗說「I had a dream…」，點開才看完整夢境（2026-11-13 使用者定）。
+          // 只有真的有夢才出現；看過就縮成 💭。
+          if (dreamDate != null)
+            Positioned(
+              key: const Key('dream-bubble'),
+              top: 4,
+              right: 16,
+              child: DreamBubble(
+                compact: _dreamReadDate == dreamDate,
+                onTap: () => _showDream(session),
+              ),
+            ),
           Positioned(
             right: 30,
             bottom: 0,
