@@ -15,6 +15,7 @@ import '../services/home_mode.dart';
 import '../services/key_value_store.dart';
 import '../services/night_compare.dart';
 import '../services/sleep_repository.dart';
+import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
@@ -90,6 +91,12 @@ class HomeScreen extends StatefulWidget {
   /// 早晨報告的 View sleep insights：切到 Insights 分頁。null = 不放那一列。
   final VoidCallback? onOpenInsights;
 
+  /// 導覽列中間的月亮送來的「開始睡覺」（2026-11-13 起首頁不再有自己的 Start Sleep 鈕）。
+  final StartSleepRequests? startSleepRequests;
+
+  /// 右上角的人像：設定頁（2026-11-13 起不在導覽列）。null＝不畫那顆。
+  final VoidCallback? onOpenSettings;
+
   const HomeScreen({
     super.key,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
@@ -100,6 +107,8 @@ class HomeScreen extends StatefulWidget {
     this.morningReport,
     this.rested,
     this.onOpenInsights,
+    this.startSleepRequests,
+    this.onOpenSettings,
     this.clock = DateTime.now,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
@@ -190,7 +199,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
+    widget.startSleepRequests?.addListener(_onStartSleepRequestListener);
   }
+
+  /// 導覽列中間那顆（2026-11-13 使用者定）：先滑出 Sleep schedule（就寢／起床／鬧鐘），
+  /// 按了底下的 Start Sleep 才開始睡覺；把面板滑掉＝不開始。
+  /// 面板跟點時鐘卡是同一個，改了照樣存（目標就寢時間、起床、鬧鐘開關）。
+  Future<void> _onStartSleepRequest() async {
+    // 睡覺畫面已經開著、或面板已經開著，就不再開一次
+    if (_sleepRouteOpen || _scheduleOpen) return;
+    _scheduleOpen = true;
+    try {
+      final result = await showSleepScheduleSheet(
+        context,
+        bedtime: _bedtime,
+        alarmSettings: _alarmSettings,
+        scheduler: widget.alarmScheduler,
+        confirmLabel: 'Start Sleep',
+      );
+      if (result == null || !mounted) return;
+      if (result.bedtime != _bedtime) {
+        setState(() => _bedtime = result.bedtime);
+        widget.onBedtimeChanged?.call(result.bedtime);
+      }
+      await _startSleep();
+    } finally {
+      _scheduleOpen = false;
+    }
+  }
+
+  bool _scheduleOpen = false;
+
+  void _onStartSleepRequestListener() => _onStartSleepRequest();
 
   @override
   void didUpdateWidget(covariant HomeScreen oldWidget) {
@@ -198,11 +238,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (oldWidget.targetBedtime != widget.targetBedtime) {
       _bedtime = widget.targetBedtime;
     }
+    if (oldWidget.startSleepRequests != widget.startSleepRequests) {
+      oldWidget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
+      widget.startSleepRequests?.addListener(_onStartSleepRequestListener);
+    }
   }
 
   @override
   void dispose() {
     _tick?.cancel();
+    widget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -268,6 +313,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!isSleeping(widget.clock(), _marks)) return;
     final startAt = _marks.startAt!;
     _sleepRouteOpen = true;
+    final introNow = _introNext;
+    _introNext = false;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final navigator = Navigator.of(context);
@@ -283,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           store: widget.bedMarks,
           startAt: startAt,
           clock: widget.clock,
+          // 剛按 Start Sleep 才播「趴下睡著」的過場；半夜重開 App 不播
+          playIntro: introNow,
           onEnded: (end) {
             if (!ended.isCompleted) ended.complete(end);
           },
@@ -608,8 +657,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await widget.bedMarks.markStart(now);
     // 鬧鐘只在按了 Start Sleep 才排（使用者決定）。
     await _alarm.onStartSleep(now, _bedtime);
+    _introNext = true;
     await _loadMarks();
   }
+
+  /// 下一次開睡覺畫面要不要先播過場（剛按 Start Sleep 才要）。
+  bool _introNext = false;
 
   Future<void> _loadGame() async {
     final service = widget.game;
@@ -1078,7 +1131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      _buildStartSleepPill(),
+                      _buildSleepNotes(),
                       const SizedBox(height: 18),
                       // 點分數卡：最近 7 晚的分數長條圖（照抄後端每晚的 final_score）。
                       GestureDetector(
@@ -1211,6 +1264,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   'Rewards',
                   _openRewards,
                 ),
+                // 設定（2026-11-13 起從導覽列搬到這裡）
+                if (widget.onOpenSettings != null)
+                  _iconAction(
+                    const Key('open-settings'),
+                    Icons.person_rounded,
+                    'Settings',
+                    widget.onOpenSettings!,
+                  ),
               ],
             ),
           ],
@@ -1589,49 +1650,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ── 小顆的 Start Sleep（LUNA 那樣的藥丸按鈕）──────────────────
+  // ── Start Sleep 底下那幾行（按鈕本身 2026-11-13 搬到導覽列中間的月亮）────
 
-  /// 首頁只有 Start sleep（2026-11-12 使用者定案）：下床在睡覺畫面裡按。
-  Widget _buildStartSleepPill() {
+  /// 「不按也沒關係」、補昨晚、補填自評。
+  Widget _buildSleepNotes() {
     return Column(
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFB9A6FF), Color(0xFF8B6DFF)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: SonnapColors.accent.withValues(alpha: 0.5),
-                blurRadius: 16,
-              ),
-            ],
-          ),
-          child: TextButton(
-            key: const Key('start-sleep'),
-            onPressed: _startSleep,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-              shape: const StadiumBorder(),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.nightlight_round, size: 20),
-                SizedBox(width: 10),
-                Text(
-                  'Start Sleep',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                SizedBox(width: 14),
-                Icon(Icons.chevron_right_rounded, size: 20),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
         // ⚠️ 這句話很重要：它是使用者唯一會看到的「不按也沒關係」。
         //    少了它，忘記按的人會以為那一晚白過了——而 lights_out_at 照樣偵測得到。
         const Text(

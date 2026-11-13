@@ -16,6 +16,7 @@ import 'package:app/services/bed_marks.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/services/start_sleep_requests.dart';
 import 'package:app/widgets/countdown_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +60,8 @@ void main() {
   late String rawPayload;
   late InMemoryKeyValueStore kv;
   late BedMarkStore store;
+  // 導覽列中間的月亮（2026-11-13 起 Start Sleep 在那裡，不在首頁）
+  late StartSleepRequests moon;
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,7 +72,19 @@ void main() {
   setUp(() {
     kv = InMemoryKeyValueStore();
     store = BedMarkStore(kv);
+    moon = StartSleepRequests();
   });
+
+  /// 按導覽列中間的月亮（＝原本首頁的 Start Sleep）
+  Future<void> pressMoon(WidgetTester tester) async {
+    moon.request();
+    // 先滑出 Sleep schedule，按底下的 Start Sleep 才開始睡覺
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.byKey(const Key('schedule-save')));
+    await tester.pump();
+  }
 
   /// [now] 是可變的：測試可以「讓時間過去」。
   Future<void> pumpHome(WidgetTester tester, DateTime Function() now) async {
@@ -84,6 +99,7 @@ void main() {
             repository: _ImmediateRepository(sample),
             bedMarks: store,
           alarmScheduler: _NoAlarm(),
+            startSleepRequests: moon,
             clock: now,
           ),
         ),
@@ -110,7 +126,7 @@ void main() {
         'mood-legend',
         'night-sky-effects',
         'home-pet',
-        'start-sleep',
+        'optional-note',
         'bedtime-countdown',
         'tile-duration',
         'tile-efficiency',
@@ -172,7 +188,13 @@ void main() {
         findsNothing,
         reason: '倒數會算成「距離明天還有 21 小時」',
       );
-      expect(find.byKey(const Key('start-sleep')), findsOneWidget);
+      expect(find.byKey(const Key('optional-note')), findsOneWidget);
+    });
+
+    testWidgets('首頁沒有自己的 Start Sleep 鈕（搬到導覽列中間的月亮）', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 10));
+      expect(find.byKey(const Key('start-sleep')), findsNothing);
+      expect(find.text('Start Sleep'), findsNothing);
     });
 
     testWidgets('首頁沒有下床鈕（下床在睡覺畫面裡按）', (tester) async {
@@ -314,11 +336,44 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
+      // 剛按 Start Sleep 會先播「趴下睡著」的過場（點一下跳過），控制項播完才出現
+      if (find.byKey(const Key('sleep-intro')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('sleep-intro')));
+        for (var i = 0; i < 8; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
     }
+
+    testWidgets('剛按 Start Sleep → 先播過場、控制項藏著；播完（約 4 秒）控制項出現', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 41));
+      await pressMoon(tester);
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('sleep-intro')), findsOneWidget);
+      final fade = tester.widget<AnimatedOpacity>(find.ancestor(
+          of: find.byKey(const Key('sleep-cancel')), matching: find.byType(AnimatedOpacity)).first);
+      expect(fade.opacity, 0, reason: '過場播的時候不疊控制項');
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const Key('sleep-intro')), findsNothing, reason: '播一次就收');
+      expect(find.byKey(const Key('sleep-scene')), findsOneWidget, reason: '接著是睡覺的循環');
+    });
+
+    testWidgets('⚠️ 半夜重開 App 回到睡覺畫面 → 不播過場', (tester) async {
+      await store.markStart(at(12, 23, 41));
+      await pumpHome(tester, () => at(13, 3));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(SleepModeScreen), findsOneWidget);
+      expect(find.byKey(const Key('sleep-intro')), findsNothing);
+    });
 
     testWidgets('按 Start sleep → 存進本機，並進入睡覺畫面', (tester) async {
       await pumpHome(tester, () => at(12, 23, 41));
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
       expect(
         await kv.getString(kBedStartKey),
@@ -327,6 +382,22 @@ void main() {
       );
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.text('Sleeping… your watch is tracking'), findsOneWidget);
+    });
+
+    testWidgets('中間那顆 → 先出 Sleep schedule；把面板關掉＝不開始睡覺', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 41));
+      moon.request();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Sleep schedule'), findsOneWidget);
+      expect(find.text('Start Sleep'), findsOneWidget);
+      expect(find.byKey(const Key('schedule-background')), findsOneWidget,
+          reason: '面板後面鋪窗景（2026-11-14）');
+      await tester.tapAt(const Offset(20, 20)); // 點面板外面
+      await settle(tester);
+      expect(await kv.getString(kBedStartKey), isNull, reason: '沒按 Start Sleep 不得記下上床');
+      expect(find.byType(SleepModeScreen), findsNothing);
     });
 
     testWidgets('半夜打開 App（還沒按下床）→ 直接是睡覺畫面', (tester) async {
@@ -346,7 +417,7 @@ void main() {
     testWidgets('按下床 → 兩個時刻都在本機，回到首頁', (tester) async {
       var now = at(12, 23, 41);
       await pumpHome(tester, () => now);
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
       now = at(13, 7, 10);
       await tester.drag(find.byKey(const Key('slide-knob')), const Offset(1000, 0));
@@ -362,7 +433,7 @@ void main() {
       await store.markStart(at(11, 23, 50));
       await store.markEnd(at(12, 7, 30));
       await pumpHome(tester, () => at(12, 23, 41));
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
 
       await tester.tap(find.byKey(const Key('sleep-cancel')));
@@ -379,7 +450,7 @@ void main() {
 
     testWidgets('取消時按「Keep sleeping」→ 什麼都沒變', (tester) async {
       await pumpHome(tester, () => at(12, 23, 41));
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
       await tester.tap(find.byKey(const Key('sleep-cancel')));
       await settle(tester);
@@ -391,7 +462,7 @@ void main() {
 
     testWidgets('⚠️ 返回鍵離不開睡覺畫面', (tester) async {
       await pumpHome(tester, () => at(12, 23, 41));
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       await navigator.maybePop();
@@ -403,7 +474,7 @@ void main() {
       // 2026-11-12 使用者定副標 `Sleeping… your watch is tracking`——量的是手錶，是事實。
       // 但 App 本身沒有在量，所以其他 measuring／monitoring／tracking 的說法一律不准。
       await pumpHome(tester, () => at(12, 23, 41));
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      await pressMoon(tester);
       await settle(tester);
       for (final word in ['easur', 'onitor']) {
         expect(find.textContaining(word), findsNothing, reason: word);

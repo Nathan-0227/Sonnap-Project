@@ -7,6 +7,8 @@ import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/health_connect_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/start_sleep_requests.dart';
+import 'widgets/moon_nav_bar.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
@@ -54,13 +56,26 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 走真的 `sonnap/health`（Health Connect）。
   final HealthPlatform? health;
 
-  const SonnapApp({super.key, this.store, this.accounts, this.reminders, this.guard, this.health});
+  const SonnapApp({
+    super.key,
+    this.store,
+    this.accounts,
+    this.reminders,
+    this.guard,
+    this.health,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(store: store, accounts: accounts, reminders: reminders, guard: guard, health: health),
+      home: MainPage(
+        store: store,
+        accounts: accounts,
+        reminders: reminders,
+        guard: guard,
+        health: health,
+      ),
     );
   }
 }
@@ -72,7 +87,14 @@ class MainPage extends StatefulWidget {
   final GuardPlatform? guard;
   final HealthPlatform? health;
 
-  const MainPage({super.key, this.store, this.accounts, this.reminders, this.guard, this.health});
+  const MainPage({
+    super.key,
+    this.store,
+    this.accounts,
+    this.reminders,
+    this.guard,
+    this.health,
+  });
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -106,8 +128,9 @@ class _MainPageState extends State<MainPage> {
 
   /// 設定存在哪。⚠️ 與 [AccountService] 用同一個 `sonnap/store`
   /// （Android SharedPreferences），**不裝 shared_preferences**。
-  late final UserSettingsStore _settings =
-      UserSettingsStore(widget.store ?? const PlatformKeyValueStore());
+  late final UserSettingsStore _settings = UserSettingsStore(
+    widget.store ?? const PlatformKeyValueStore(),
+  );
 
   /// 三個畫面**共用同一個** repository 實例。
   ///
@@ -125,7 +148,8 @@ class _MainPageState extends State<MainPage> {
   /// 第一幀就會閃過一次問暱稱的畫面，然後在解析完成後又消失。
   AccountStatus? _account;
 
-  late final AccountService _accounts = widget.accounts ??
+  late final AccountService _accounts =
+      widget.accounts ??
       AccountService(
         baseUrl: ApiSleepRepository.configuredBaseUrl,
         store: widget.store ?? const PlatformKeyValueStore(),
@@ -143,7 +167,9 @@ class _MainPageState extends State<MainPage> {
       identity: ResolvedUserIdentity(_account?.userId),
       // ⚠️ 有了這個，連不到後端的那一晚才不會永久消失（偵測視窗是往回
       //    24 小時的滑動視窗，隔天就算不出來了）。理由見 PendingNightlyStore。
-      pending: PendingNightlyStore(widget.store ?? const PlatformKeyValueStore()),
+      pending: PendingNightlyStore(
+        widget.store ?? const PlatformKeyValueStore(),
+      ),
     );
   }
 
@@ -240,14 +266,19 @@ class _MainPageState extends State<MainPage> {
       store: widget.store ?? const PlatformKeyValueStore(),
       uploader: baseUrl.isEmpty
           ? null
-          : WearableUploader(baseUrl: baseUrl, identity: ResolvedUserIdentity(_account?.userId)),
+          : WearableUploader(
+              baseUrl: baseUrl,
+              identity: ResolvedUserIdentity(_account?.userId),
+            ),
     );
   }
 
   void _openHealth() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => HealthConnectScreen(controller: _healthSync),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => HealthConnectScreen(controller: _healthSync),
+      ),
+    );
   }
 
   @override
@@ -311,9 +342,12 @@ class _MainPageState extends State<MainPage> {
   void _syncGuard() => unawaited(_guard.push(targetBedtime));
 
   void _openGuard() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => BedtimeGuardScreen(controller: _guard, bedtime: targetBedtime),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            BedtimeGuardScreen(controller: _guard, bedtime: targetBedtime),
+      ),
+    );
   }
 
   /// 就寢提醒。提前幾分鐘、通知寫什麼都在 bedtime_reminder.dart（Dart 端）。
@@ -331,7 +365,10 @@ class _MainPageState extends State<MainPage> {
   ///    而開關看起來是開著的。
   void _syncReminder({bool askIfMissing = false}) {
     unawaited(() async {
-      final canPost = await _reminder.sync(on: reminderOn, bedtime: targetBedtime);
+      final canPost = await _reminder.sync(
+        on: reminderOn,
+        bedtime: targetBedtime,
+      );
       if (askIfMissing && reminderOn && !canPost) {
         await _reminder.scheduler.requestPermission();
       }
@@ -416,6 +453,13 @@ class _MainPageState extends State<MainPage> {
     await _settings.saveReminder(value);
   }
 
+  final _startSleepRequests = StartSleepRequests();
+
+  /// 設定頁的分頁位置（2026-11-13 起不在導覽列，從首頁右上角的人像切過來）。
+  /// ⚠️ 刻意留在 IndexedStack 裡、不另開一頁：首頁與設定頁共用同一個就寢時間，
+  ///    在一頁改了另一頁要立刻跟著變（bedtime_sync_test 守著）。
+  static const _settingsIndex = 4;
+
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
   /// 新的值才傳得下去。IndexedStack 依「型別 ＋ 位置」保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
@@ -430,6 +474,9 @@ class _MainPageState extends State<MainPage> {
         rested: _rested,
         // 早晨報告的 View sleep insights → Insights 分頁（第 3 個）
         onOpenInsights: () => setState(() => currentIndex = 2),
+        // 導覽列中間的月亮 → 首頁照原本的流程開始睡覺；首頁右上角的人像 → 設定
+        startSleepRequests: _startSleepRequests,
+        onOpenSettings: () => setState(() => currentIndex = _settingsIndex),
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
@@ -481,58 +528,48 @@ class _MainPageState extends State<MainPage> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF081326),
+    return PopScope(
+      // 在設定頁按返回 → 回首頁（設定頁不在導覽列上，沒有別的路回去）
+      canPop: currentIndex != _settingsIndex,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => currentIndex = 0);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF081326),
 
-      body: IndexedStack(
-        index: currentIndex,
-        children: _buildPages(account),
-      ),
-
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1B2548),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(28),
-            topRight: Radius.circular(28),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: const Color(0xFFFFD96A),
-          unselectedItemColor: Colors.white70,
-          type: BottomNavigationBarType.fixed,
-
-          onTap: (index) {
-            setState(() {
-              currentIndex = index;
-            });
+        // 頁面延伸到月亮凸出的那一塊後面（不然那一塊是一條底色），
+        // 但內容只排到導覽列上緣為止——最底下的東西才不會被導覽列蓋住。
+        body: Builder(
+          builder: (context) {
+            // extendBody 底下，padding.bottom＝整個導覽列的高度（含月亮凸出那塊與系統手勢列）。
+            // ⚠️ 不能用 viewPadding：Scaffold 給 body 的那一份已經把系統那段拿掉了（實機量過）。
+            final navHeight = MediaQuery.of(context).padding.bottom;
+            return MediaQuery.removePadding(
+              context: context,
+              removeBottom: true,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: (navHeight - MoonNavBar.moonRise).clamp(0.0, double.infinity),
+                ),
+                child: IndexedStack(
+                  index: currentIndex,
+                  children: _buildPages(account),
+                ),
+              ),
+            );
           },
+        ),
 
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              label: "Home",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.groups_rounded),
-              label: "Friends",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_rounded),
-              label: "Insights",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.smart_toy_rounded),
-              label: "Assistants",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              label: "Settings",
-            ),
-          ],
+        // 月亮凸出導覽列上緣，頁面要延伸到導覽列後面，凸出那一塊才不會是一條底色
+        extendBody: true,
+        bottomNavigationBar: MoonNavBar(
+          currentIndex: currentIndex,
+          onTab: (index) => setState(() => currentIndex = index),
+          onMoon: () {
+            // 在別的分頁按也一樣：先回首頁，起床後的報告流程從首頁接下去
+            setState(() => currentIndex = 0);
+            _startSleepRequests.request();
+          },
         ),
       ),
     );

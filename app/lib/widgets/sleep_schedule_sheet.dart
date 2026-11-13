@@ -20,6 +20,7 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
   required TimeOfDay bedtime,
   required AlarmSettingsStore alarmSettings,
   required AlarmScheduler scheduler,
+  String confirmLabel = 'Save',
 }) async {
   final wake = await alarmSettings.wakeTime(bedtime);
   final enabled = await alarmSettings.enabled();
@@ -36,6 +37,7 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
       wake: wake,
       alarmEnabled: enabled,
       scheduler: scheduler,
+      confirmLabel: confirmLabel,
     ),
   );
   if (result != null) {
@@ -120,6 +122,10 @@ class SleepScheduleSheet extends StatefulWidget {
   /// 顯示 Alarm 開關。事後補時間不需要。
   final bool showAlarm;
 
+  /// 底下那顆按鈕的字。導覽列中間那顆打開時是「Start Sleep」（2026-11-13 使用者定：
+  /// 先看一眼就寢／起床／鬧鐘，按了才開始睡覺）。
+  final String confirmLabel;
+
   const SleepScheduleSheet({
     super.key,
     required this.bedtime,
@@ -130,6 +136,7 @@ class SleepScheduleSheet extends StatefulWidget {
     this.title,
     this.bedLocked = false,
     this.showAlarm = true,
+    this.confirmLabel = 'Save',
   });
 
   @override
@@ -166,8 +173,40 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
     }
   }
 
+  /// 面板的背景（2026-11-14 使用者生成）：晚上從房間裡看出去的窗景，上緣是窗戶、
+  /// 下半部漸暗成深藍，轉盤與按鈕壓在暗的那一塊。三個入口（時鐘卡、設定頁、導覽列中間）
+  /// 都是這個面板，所以一起換。讀不到圖就是原本的深藍，不會報錯。
+  static const backgroundAsset = 'assets/backgrounds/schedule_night.jpg';
+
   @override
   Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              backgroundAsset,
+              key: const Key('schedule-background'),
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+          // 一層薄的深藍蓋在圖上（使用者 2026-11-14 選 A）：窗戶與雲在轉盤後面，
+          // 不壓一層的話轉盤上的刻度（00）看不清楚
+          Positioned.fill(
+            child: ColoredBox(
+              color: const Color(0xFF1B2350).withValues(alpha: 0.4),
+            ),
+          ),
+          _content(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
@@ -203,34 +242,37 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
             const SizedBox(height: 12),
             SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),
             if (widget.showAlarm) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: sonnapCardDecoration(),
-              child: Row(
-                children: [
-                  const Icon(Icons.alarm_rounded, color: Color(0xFFFF7AD9)),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Alarm',
-                      style: TextStyle(
-                        color: SonnapColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                decoration: sonnapCardDecoration(),
+                child: Row(
+                  children: [
+                    const Icon(Icons.alarm_rounded, color: Color(0xFFFF7AD9)),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Alarm',
+                        style: TextStyle(
+                          color: SonnapColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  Switch(
-                    key: const Key('alarm-switch'),
-                    value: _alarm,
-                    onChanged: _toggle,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: SonnapColors.accent,
-                  ),
-                ],
+                    Switch(
+                      key: const Key('alarm-switch'),
+                      value: _alarm,
+                      onChanged: _toggle,
+                      activeThumbColor: Colors.white,
+                      activeTrackColor: SonnapColors.accent,
+                    ),
+                  ],
+                ),
               ),
-            ),
             ],
             if (widget.showAlarm && _alarm && _blocked) ...[
               const SizedBox(height: 8),
@@ -265,9 +307,12 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: const StadiumBorder(),
                 ),
-                child: const Text(
-                  'Save',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                child: Text(
+                  widget.confirmLabel,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),

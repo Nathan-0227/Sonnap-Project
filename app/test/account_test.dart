@@ -214,7 +214,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(OnboardingScreen), findsNothing);
-      expect(find.text('Home'), findsOneWidget);
+      expect(find.byKey(const Key('nav-home')), findsOneWidget);
     });
   });
 
