@@ -1134,12 +1134,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 key: const Key('day-greeting'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                // 名字淺色、細字（2026-11-13 使用者依參考圖定）
                 style: const TextStyle(
-                  color: SonnapColors.accentSoft,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  color: Color(0x99FFFFFF),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
+              const SizedBox(height: 2),
               // 「Let's get a good night's sleep!」與等級徽章 2026-11-13 拿掉（使用者定）；
               // 等級改放在寵物上面（_buildPet）。
               const FittedBox(
