@@ -18,6 +18,8 @@ import '../services/sleep_repository.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
+import '../widgets/day_heart_rate_chart.dart';
+import '../models/yesterday_activity.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
@@ -1092,7 +1094,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: _buildScoreCard(session),
                       ),
                       const SizedBox(height: SonnapColors.gap),
-                      _buildTiles(session),
+                      // 兩張主卡（2026-11-13 使用者定，參考 Otter Life）：Sleep（昨晚）與 Activity（前一天）
+                      _section(
+                        key: const Key('home-sleep-section'),
+                        title: 'Sleep',
+                        subtitle: _sleepNightLabel(session),
+                        child: _buildTiles(session),
+                      ),
+                      if (session.activity != null) ...[
+                        const SizedBox(height: SonnapColors.gap),
+                        _section(
+                          key: const Key('home-activity-section'),
+                          title: 'Activity',
+                          subtitle: _activityDayLabel(session.activity!.date),
+                          child: _buildActivity(session.activity!),
+                        ),
+                      ],
                       const SizedBox(height: SonnapColors.gap),
                       // 睡眠階段（只呈現、不計分；不放警語）。沒有資料時老實講還沒有。
                       if (session.metrics.sleepStages != null)
@@ -1831,7 +1848,376 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           _buildCameraTile(session),
         ),
+        // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
+        // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。
+        if (m.heartRateCurve != null) ...[
+          const SizedBox(height: SonnapColors.gap),
+          SizedBox(
+            height: 112,
+            child: InfoTile(
+              key: const Key('tile-night-hr'),
+              icon: Icons.favorite_rounded,
+              iconColor: const Color(0xFFFF8AB8),
+              title: 'Heart rate',
+              value: [(m.heartRateCurve!.avg.round().toString(), 'bpm')],
+              note: [
+                'avg while asleep',
+                if (m.restingHeartRate != null) 'resting ${m.restingHeartRate}',
+              ].join(' · '),
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  // ── 兩張主卡的外框 ─────────────────────────────────────────────
+
+  Widget _section({
+    required Key key,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: SonnapColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// 「Last night · Fri, Nov 13」：Sleep 卡是哪一晚（起床日）。
+  static String _sleepNightLabel(SleepSession session) {
+    final d = DateTime.tryParse(session.history.lastOrNull?.date ?? '');
+    if (d == null) return 'Last night';
+    return 'Last night · ${DateFormat('EEE, MMM d').format(d)}';
+  }
+
+  /// 「Yesterday · Thu, Nov 12」：Activity 是**前一天**的（白天資料早上才匯入，沒有「今天到目前」）。
+  static String _activityDayLabel(String iso) {
+    final d = DateTime.tryParse(iso);
+    if (d == null) return 'Yesterday';
+    return 'Yesterday · ${DateFormat('EEE, MMM d').format(d)}';
+  }
+
+  static String _comma(int v) => NumberFormat('#,##0').format(v);
+
+  /// Activity 卡（2026-11-13 使用者定）：步數、活動卡路里、活動時間、VO2 max、整天心率、Move IQ。
+  /// ⚠️ 只寫事實：步數只寫 goal、不寫達標；不畫獎盃／打勾；沒有「跟前一天比」的箭頭
+  ///    （上升紅的規矩套在步數上會很怪）。點步數／卡路里／活動時間開最近 7 天長條圖。
+  /// ⚠️ 心率是**那一整天**的（含走路），跟 Sleep 卡的睡著期間心率是兩個量；不寫 Normal／High。
+  Widget _buildActivity(YesterdayActivity a) {
+    Widget pair(Widget x, Widget y) => SizedBox(
+      height: 124,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: x),
+          const SizedBox(width: SonnapColors.gap),
+          Expanded(child: y),
+        ],
+      ),
+    );
+    Widget tap(Widget tile, VoidCallback? onTap) => onTap == null
+        ? tile
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: tile,
+          );
+    List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
+      for (final h in a.history)
+        if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
+    ];
+    VoidCallback? bars(String id, String title, List<NightValue> s,
+            String Function(double) f) =>
+        s.isEmpty
+            ? null
+            : () => _showActivityBars(
+                id: id, title: title, series: s, format: f, day: a.date);
+
+    final active = a.activeMinutes;
+    final hr = a.dayHeartRate;
+    final moves = a.moveIq ?? const <MoveIqEvent>[];
+    final walks = moves.where((m) => m.type == 'walking').length;
+    final rides = moves.where((m) => m.type == 'cycling').length;
+    final others = moves.length - walks - rides;
+
+    return Column(
+      children: [
+        pair(
+          tap(
+            InfoTile(
+              key: const Key('tile-steps'),
+              icon: Icons.directions_walk_rounded,
+              iconColor: const Color(0xFFFFB37A),
+              title: 'Steps',
+              value: a.steps == null ? null : [(_comma(a.steps!), '')],
+              missingNote: 'No step data',
+              note: a.stepGoal == null ? null : 'goal ${_comma(a.stepGoal!)}',
+            ),
+            bars('steps', 'Steps', series((h) => h.steps),
+                (v) => _comma(v.round())),
+          ),
+          tap(
+            InfoTile(
+              key: const Key('tile-kcal'),
+              icon: Icons.local_fire_department_rounded,
+              iconColor: const Color(0xFFFF8A65),
+              title: 'Active energy',
+              value: a.activeKcal == null
+                  ? null
+                  : [(_comma(a.activeKcal!), 'kcal')],
+              missingNote: 'No data',
+              note: a.distanceM == null
+                  ? null
+                  : '${(a.distanceM! / 1000).toStringAsFixed(1)} km',
+            ),
+            bars('kcal', 'Active energy', series((h) => h.activeKcal),
+                (v) => '${_comma(v.round())} kcal'),
+          ),
+        ),
+        const SizedBox(height: SonnapColors.gap),
+        pair(
+          tap(
+            InfoTile(
+              key: const Key('tile-active'),
+              icon: Icons.bolt_rounded,
+              iconColor: const Color(0xFFFFD96A),
+              title: 'Active time',
+              value: active == null ? null : _hm(active),
+              missingNote: 'No data',
+            ),
+            bars('active', 'Active time', series((h) => h.activeMinutes),
+                formatMinutes),
+          ),
+          InfoTile(
+            key: const Key('tile-vo2'),
+            icon: Icons.air_rounded,
+            iconColor: const Color(0xFF7EC8FF),
+            title: 'VO2 max',
+            value: a.vo2max == null
+                ? null
+                : [(a.vo2max!.round().toString(), '')],
+            missingNote: 'Not measured lately',
+            note: _measuredOn(a.vo2maxMeasuredOn),
+          ),
+        ),
+        if (hr != null) ...[
+          const SizedBox(height: SonnapColors.gap),
+          SizedBox(
+            height: 112,
+            child: tap(
+              InfoTile(
+                key: const Key('tile-day-hr'),
+                icon: Icons.monitor_heart_rounded,
+                iconColor: const Color(0xFFFF8AB8),
+                title: 'Heart rate (all day)',
+                value: [('${hr.min.round()}–${hr.max.round()}', 'bpm')],
+                note: a.restingHeartRate == null
+                    ? null
+                    : 'resting ${a.restingHeartRate}',
+              ),
+              () => _showDayHeartRate(a),
+            ),
+          ),
+        ],
+        if (moves.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              [
+                'Move IQ',
+                if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
+                if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
+                if (others > 0) '$others other',
+              ].join(' · '),
+              key: const Key('home-moveiq'),
+              style: const TextStyle(
+                  color: SonnapColors.textSecondary, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String? _measuredOn(String? iso) {
+    final d = iso == null ? null : DateTime.tryParse(iso);
+    return d == null ? null : 'measured ${DateFormat('MMM d').format(d)}';
+  }
+
+  /// 點步數／卡路里／活動時間：最近 7 天的長條圖（只畫數字，不判斷、不畫目標線）。
+  void _showActivityBars({
+    required String id,
+    required String title,
+    required List<NightValue> series,
+    required String Function(double) format,
+    required String day,
+  }) {
+    final bars = lastNights(series, day);
+    final maxV = bars.fold<double>(0, (m, n) => n.value > m ? n.value : m);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B2350),
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: Key('activity-sheet-$id'),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$title · last 7 days',
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 150,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (final b in bars)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              FittedBox(
+                                child: Text(
+                                  format(b.value),
+                                  style: const TextStyle(
+                                    color: SonnapColors.textSecondary,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                height: maxV <= 0 ? 0 : 100 * b.value / maxV,
+                                decoration: BoxDecoration(
+                                  color: b.date == day
+                                      ? SonnapColors.accent
+                                      : SonnapColors.accent
+                                          .withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                shortDate(b.date),
+                                style: const TextStyle(
+                                  color: SonnapColors.textMuted,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 點整天心率：那一天 0–24 點的心率線（每 10 分鐘一點）。只寫最低、最高、靜止；不判斷。
+  void _showDayHeartRate(YesterdayActivity a) {
+    final hr = a.dayHeartRate!;
+    final d = DateTime.tryParse(a.date);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B2350),
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: const Key('day-hr-sheet'),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                d == null
+                    ? 'Heart rate'
+                    : 'Heart rate · ${DateFormat('EEE, MMM d').format(d)}',
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  'lowest ${hr.min.round()}',
+                  'highest ${hr.max.round()}',
+                  if (a.restingHeartRate != null)
+                    'resting ${a.restingHeartRate}',
+                ].join(' · '),
+                key: const Key('day-hr-facts'),
+                style: const TextStyle(
+                    color: SonnapColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 160,
+                width: double.infinity,
+                child: CustomPaint(painter: DayHeartRatePainter(hr)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

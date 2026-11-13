@@ -71,6 +71,7 @@ import camera_curve  # noqa: E402  只用標準庫
 sys.path.insert(0, str(ROOT / "garmin"))
 import sleep_stages  # noqa: E402
 import sleep_heart_rate  # noqa: E402
+import daily_activity  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAPPING_VERSION = 1  # pet_mood 映射表的版本，改映射規則時要 +1
@@ -405,6 +406,86 @@ def load_ai_advice(target_date, fallback_recommendation):
     }
 
 
+VO2MAX_LOOKBACK_DAYS = 90          # 同 main.VO2MAX_LOOKBACK_DAYS（報告的 Yesterday）
+ACTIVITY_HISTORY_DAYS = 14         # 首頁 Activity 小卡點開的長條圖用（畫最近 7 天）
+
+
+def activity_block(night_iso):
+    """首頁 Activity 卡：那一晚（起床日）**前一個日曆日**的白天資料（2026-11-13 使用者定）。
+
+    形狀跟報告的 /home `yesterday` 一樣（App 用同一個解析），只是讀檔不讀資料庫：
+    garmin/data/garmin_daily_activity.json（白天資料）＋ garmin_standard_data.json（整天心率）。
+    另外多帶：
+    - heart_rate：那天整天的心率（最低、最高、靜止、每 10 分鐘的曲線）。**不給 Normal／High。**
+    - history：最近 14 天的步數、活動卡路里、活動時間（點小卡開的長條圖）。
+    ⚠️ 只呈現、不計分、不判斷（不寫達標）。那一天沒有白天資料 → None，首頁整張不畫。
+    """
+    try:
+        day = date.fromisoformat(night_iso) - timedelta(days=1)
+    except (TypeError, ValueError):
+        return None
+    days = daily_activity.load(GARMIN_DATA / "garmin_daily_activity.json")
+    row = days.get(day.isoformat())
+    if not row or not daily_activity.has_any(row):
+        return None
+
+    vo2 = None
+    since = (day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat()
+    for d in sorted(days, reverse=True):
+        if since <= d <= day.isoformat() and days[d].get("vo2max"):
+            vo2 = {"value": days[d]["vo2max"], "measured_on": d}
+            break
+
+    def group(**kw):
+        return kw if any(v is not None for v in kw.values()) else None
+
+    raw = load_json(GARMIN_DATA / "garmin_standard_data.json") or {}
+    heart = sleep_heart_rate.day_heart_rate(raw.get("records", []), day.isoformat())
+
+    history = []
+    for i in range(ACTIVITY_HISTORY_DAYS - 1, -1, -1):
+        d = (day - timedelta(days=i)).isoformat()
+        r = days.get(d)
+        if not r or not daily_activity.has_any(r):
+            continue
+        active = [r.get("active_sec"), r.get("highly_active_sec")]
+        history.append({
+            "date": d,
+            "steps": r.get("steps"),
+            "active_kcal": r.get("active_kcal"),
+            "active_minutes": (round(sum(v for v in active if v) / 60)
+                               if any(v is not None for v in active) else None),
+        })
+
+    return {
+        "date": day.isoformat(),
+        "steps": row.get("steps"),
+        "step_goal": row.get("step_goal"),
+        "distance_m": row.get("distance_m"),
+        "active_kcal": row.get("active_kcal"),
+        "floors_up": row.get("floors_up"),
+        "activity": group(
+            highly_active_sec=row.get("highly_active_sec"),
+            active_sec=row.get("active_sec"),
+            sedentary_sec=row.get("sedentary_sec"),
+        ),
+        "stress": group(
+            rest_sec=row.get("stress_rest_sec"),
+            low_sec=row.get("stress_low_sec"),
+            medium_sec=row.get("stress_medium_sec"),
+            high_sec=row.get("stress_high_sec"),
+        ),
+        "body_battery": group(
+            charged=row.get("body_battery_charged"),
+            drained=row.get("body_battery_drained"),
+        ),
+        "vo2max": vo2,
+        "move_iq": row.get("move_iq"),
+        "heart_rate": heart,
+        "history": history,
+    }
+
+
 def scored_efficiency_fields(base_row):
     """進分數的效率三個欄位（數值、basis、小卡那行字）。字只在 score_claim 定義。"""
     value, basis, label = score_claim.scored_efficiency(base_row)
@@ -727,6 +808,8 @@ def build_payload(target_date=None):
             #    回傳的對不上」這種最難查的 bug）。
             "composition": composition_for(base_by_date.get(quality.get("date"))),
         },
+        # 首頁 Activity 卡（前一個日曆日的白天資料＋整天心率，2026-11-13）。只呈現、不計分。
+        "activity": activity_block(night_iso),
         "display": {
             "lang": "en",
             "score_color": QUALITY_TO_COLOR.get(final_quality, "#FFC83D"),

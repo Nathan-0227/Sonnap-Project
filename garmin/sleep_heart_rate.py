@@ -50,6 +50,38 @@ def movement_curve(
     return _curve(records, "movement", sleep_start, wake_time, bucket_minutes, digits=2)
 
 
+DAY_BUCKET_MINUTES = 10
+
+
+def day_heart_rate(records: Iterable[dict], day: str, tz: str = "+08:00") -> Optional[dict]:
+    """一整個日曆日（00:00–24:00）的心率曲線，每 10 分鐘一點；外加那天的靜止心率。
+
+    首頁 Activity 卡的「整天心率」（2026-11-13 使用者定）。**只呈現、不給 Normal／High。**
+    - 最低／最高從那天的原始讀數（每 2 分鐘）算，跟曲線同一份資料。
+    - 靜止心率是 Garmin 每天一個數字（resting_heart_rate 紀錄，時間戳落在那一天）。
+    ⚠️ 整天的心率**算不出 HRV**：HRV 要每一下心跳之間的毫秒間隔，手錶只存 2 分鐘平均。
+    """
+    try:
+        start = datetime.fromisoformat(f"{day}T00:00:00{tz}")
+    except ValueError:
+        return None
+    # ⚠️ _curve 的終點是**含**的：用 24:00 會把隔天 00:00 那一筆也收進來（測試抓到過）
+    end = start + timedelta(days=1) - timedelta(seconds=1)
+    records = list(records)
+    curve = _curve(records, "heart_rate", start.isoformat(), end.isoformat(),
+                   DAY_BUCKET_MINUTES, digits=0)
+    if curve is None:
+        return None
+    resting = None
+    for r in records:
+        if r.get("metric") == "resting_heart_rate" and str(r.get("timestamp", "")).startswith(day):
+            v = r.get("value")
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+                resting = round(v)
+    curve["resting"] = resting
+    return curve
+
+
 def _curve(
     records: Iterable[dict],
     metric: str,
