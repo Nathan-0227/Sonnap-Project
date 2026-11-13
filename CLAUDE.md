@@ -375,6 +375,10 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | **「跟上一晚比」只代表方向：上升紅、下降綠**（台灣股市慣例，使用者定） | 改成「變好綠、變差紅」就是在 Dart 判斷好壞——睡得多不一定好，攝影機動作更已驗證與任何結果無關 |
 | 比的是**上一個有資料的晚上**；那一項沒逐夜資料時**不畫比較** | 編出比較數字。效率、深睡的逐夜資料來自後端 PR（`feat/history-eff-deep`） |
 | **警語畫面上不放**，點效率／深睡卡才跳出，文字照抄 `score_claim.py`；Sleep Stages 卡不放警語（使用者定） | — |
+| **兩張主卡**（2026-11-13 使用者定，參考 Otter Life）：**Sleep**（昨晚：原本四張＋睡著期間的心率）與 **Activity**（**前一個日曆日**：步數、活動卡路里、活動時間、VO2 max、整天心率、Move IQ）。資料來自打包檔的 `activity`（`build_app_payload.activity_block()`，讀白天資料檔＋原始檔的整天心率，不碰資料庫） | 白天資料早上才匯入，沒有「今天到目前」，所以標 Yesterday |
+| **左右兩欄**（2026-11-13 使用者定，照 Otter Life 原圖）：**左邊一格一格的小卡**（Sleep、效率、深睡、攝影機動作）往下疊，**右邊一張 Activity 卡**（步數、活動卡路里、活動時間、整天心率、Move IQ，項目之間細線分隔、**平均分配卡片高度、每項在兩條線正中間**（列的 Column 要 `mainAxisSize.min` 才置中得起來），底下不留一大塊空白；整天心率標題只寫 Heart rate、小字寫 `all day · resting N`）。兩欄上下緣對齊（IntrinsicHeight，左邊每格平均撐開）；**左右各項不逐列對齊**（使用者試過逐列對齊後決定回到原圖）。睡著心率與 VO2 max 使用者拿掉了（睡著心率在 Sleep Stages 疊線看）。⚠️ 大字一律 `softWrap: false`——FittedBox 裡的字量高度時會被當成會折行、量得過高。**沒有白天資料時 Sleep 退回整寬 2x2**（只剩半欄會空一半） | `home_activity_test.dart` 量位置守著 |
+| Activity 只寫事實：步數只寫 goal、不畫獎盃／打勾、**沒有「跟前一天比」的箭頭**；點步數／卡路里／活動時間開最近 7 天長條圖，點整天心率開那天 0–24 點的線 | 上升紅的規矩套在步數上會很怪；達標是判斷 |
+| ⚠️ **兩個心率不混**：Sleep 卡是睡著期間的平均（同 Sleep Stages 的心率線），Activity 卡是那一整天的範圍（含走路）。都不寫 Normal／High。**這支錶沒有 HRV 與呼吸**——整天的心率也算不出 HRV（手錶只存 2 分鐘平均，沒有每一下心跳的間隔） | 使用者問過「心率跟 HRV 是不是一樣」 |
 | **效率小卡顯示進分數的那一個**（2026-11-13 使用者定，同早晨報告）：按了兩個按鈕是臥床版、只按 Start 是到手錶醒來、沒按是手錶版；下面一行小字寫是哪一種（`score_claim.EFFICIENCY_BASIS_LABELS`，App 照抄）。打包檔每晚帶 `scored_efficiency`／`_basis`／`_label`，直讀評分器的 `efficiency_used`／`efficiency_basis` | 手錶版的分母從入睡算起，幾乎每晚 100%（使用者問「為什麼都是 100%」）。⚠️ 「跟上一晚比」與長條圖**只放同一種**：臥床版 88 跟手錶版 100 不是同一個量，混著比會畫出假的下降箭頭 |
 | **Sleep Stages 是圓角階梯，不是平滑波浪** | 平滑曲線會畫過那一刻沒發生的階段 |
 | 沒量到 REM 的晚上不畫 REM 那一層，圖例寫 `not measured` | 畫成 0 會被讀成整晚沒有 REM |
@@ -452,6 +456,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 舊夜晚回填用 `migrate_camera_to_db.py --curves-only`：**只補 motion_curve，不重算覆寫整列** | 整列重算會用現在的程式悄悄換掉舊夜晚的事件數 |
 | **首頁**的 Camera 線來自打包檔（`/get-sleep-data` 吐的就是 `app_payload.json`，**不是** `/home`）：`build_app_payload.camera_curve_for_night()` 直接讀那一晚的錄影 CSV（打包檔不碰資料庫）。「只留睡著那段＋貼時區」只有一份：`camera_curve.clip_curve()`，`/home` 與打包檔共用 | 2026-11-13 首頁沒有 Camera 那顆就是這個原因 |
 | `camera_curve.py` 只用標準庫；`tapo_sleep_onset` 會連帶載入 OpenCV（錄影器的相依），打包檔**用到才 import**、後端不 import | 不讓後端啟動與打包檔多一個重相依 |
+| **點線看那一刻**（2026-11-13 使用者定，照參考圖：白點＋小泡泡）：Sleep Stages 卡（首頁與報告同一個）與整天心率圖，點一下或按住左右滑，放開留著、點圖外面才收（下面那幾顆換線的按鈕不算外面）。泡泡：沒選線 `02:41 · Deep`；心率 `02:41 · 58 bpm · Deep`；手錶動作只寫 `Moving`／`Still`；攝影機寫那 5 分鐘裡動了多久 `moving 12 sec`（不寫百分比）；整天心率 `14:20 · 96 bpm`。規則只在 `widgets/chart_probe.dart` | **吸到最近的真實讀數、不內插**（內插的數字手錶沒量過）；離最近的點超過一個取樣間隔（夜間 5 分、整天 10 分）寫 `no reading`，**不吸到遠處、不寫 0**；不寫 Normal／High。`chart_probe_test.dart` 守著 |
 
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 
@@ -1649,6 +1654,7 @@ python tests/test_garmin_daily.py        # 2026-11-13 新增：白天資料的�
 python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶動作曲線只取睡著那段、平均從原始讀數算（不是 avg_hr）、動作 0 算真的值、資料不夠回 None、Health Connect 沒有
 python tests/test_camera_curve.py        # 2026-11-13 新增：攝影機曲線每 5 分鐘有幾成在動、不可用的幀不算、沒 ROI 不給、門檻呼叫時才讀、/home 只留睡著那段、回填只補曲線不動別的欄位
 python tests/test_scored_efficiency.py   # 2026-11-13 新增：首頁效率顯示進分數的那一個——每種 basis 都有那行字、與 behavior 常數一致、打包檔逐夜直讀評分器
+python tests/test_home_activity.py       # 2026-11-13 新增：首頁 Activity 是前一個日曆日、沒資料整塊 None、VO2 max 90 天內、整天心率只取那個日曆日（終點不含隔天 00:00）
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```

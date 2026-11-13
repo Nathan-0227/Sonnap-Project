@@ -1,3 +1,5 @@
+import 'night_curve.dart';
+
 /// 早晨報告「Yesterday」那一塊：前一個日曆日的 Garmin 白天資料（`/home` 的 `yesterday`）。
 ///
 /// ⚠️ **全部照抄後端**，Dart 不算、不判斷：沒有「達標」、沒有 Good/Normal、
@@ -31,6 +33,16 @@ class YesterdayActivity {
   /// Move IQ 偵測到的走路／騎車。null = 沒抓到；空 = 那天沒有。
   final List<MoveIqEvent>? moveIq;
 
+  /// 那天整天的心率（首頁 Activity 卡，只有打包檔帶）：最低、最高、每 10 分鐘的曲線。
+  /// ⚠️ 不判斷 Normal／High；也算不出 HRV（手錶只存 2 分鐘平均，沒有每一下心跳的間隔）。
+  final NightCurve? dayHeartRate;
+
+  /// 那天的靜止心率（Garmin 每天一個數字）。
+  final int? restingHeartRate;
+
+  /// 最近幾天的步數、活動卡路里、活動分鐘（首頁點小卡開的長條圖用）。
+  final List<ActivityHistoryDay> history;
+
   const YesterdayActivity({
     required this.date,
     this.steps,
@@ -50,7 +62,16 @@ class YesterdayActivity {
     this.vo2max,
     this.vo2maxMeasuredOn,
     this.moveIq,
+    this.dayHeartRate,
+    this.restingHeartRate,
+    this.history = const [],
   });
+
+  /// 活動時間（高強度＋活動）的分鐘數。兩個都沒有是 null。
+  int? get activeMinutes {
+    if (highlyActiveSec == null && activeSec == null) return null;
+    return (((highlyActiveSec ?? 0) + (activeSec ?? 0)) / 60).round();
+  }
 
   bool get hasActivity =>
       highlyActiveSec != null || activeSec != null || sedentarySec != null;
@@ -102,6 +123,12 @@ class YesterdayActivity {
       vo2max: (vo2?['value'] as num?)?.toDouble(),
       vo2maxMeasuredOn: vo2?['measured_on'] as String?,
       moveIq: moves,
+      dayHeartRate: NightCurve.fromJsonOrNull(j['heart_rate']),
+      restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)?.round(),
+      history: [
+        for (final h in (j['history'] as List?) ?? const [])
+          ?ActivityHistoryDay.fromJsonOrNull(h),
+      ],
     );
   }
 }
@@ -137,5 +164,30 @@ class MoveIqEvent {
     final minutes = raw['minutes'];
     if (type is! String || start is! String || minutes is! num) return null;
     return MoveIqEvent(type: type, start: start, minutes: minutes.round());
+  }
+}
+
+/// 一天的步數、活動卡路里、活動分鐘（首頁點小卡開的最近 7 天長條圖）。
+class ActivityHistoryDay {
+  final String date;
+  final int? steps;
+  final int? activeKcal;
+  final int? activeMinutes;
+
+  const ActivityHistoryDay({
+    required this.date,
+    this.steps,
+    this.activeKcal,
+    this.activeMinutes,
+  });
+
+  static ActivityHistoryDay? fromJsonOrNull(Object? raw) {
+    if (raw is! Map || raw['date'] is! String) return null;
+    return ActivityHistoryDay(
+      date: raw['date'] as String,
+      steps: (raw['steps'] as num?)?.round(),
+      activeKcal: (raw['active_kcal'] as num?)?.round(),
+      activeMinutes: (raw['active_minutes'] as num?)?.round(),
+    );
   }
 }

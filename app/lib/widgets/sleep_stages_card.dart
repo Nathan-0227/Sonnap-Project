@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/night_curve.dart';
 import '../models/sleep_stages.dart';
 import '../theme/sonnap_colors.dart';
+import 'chart_probe.dart';
 import 'curve_path.dart';
 
 /// 首頁與早晨報告的 Sleep Stages 卡（2026-11-12 使用者定案，參考 LUNA 的版面）。
@@ -62,6 +63,9 @@ enum _Overlay { heartRate, movement, camera }
 class _SleepStagesCardState extends State<SleepStagesCard> {
   _Overlay? _overlay;
 
+  /// 點到／滑到的那一刻（null＝沒有泡泡）。切換疊線時留著，泡泡的字跟著換。
+  DateTime? _probe;
+
   static String _hm(int m) {
     final h = m ~/ 60;
     final r = m % 60;
@@ -70,11 +74,11 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
   }
 
   NightCurve? get _curve => switch (_overlay) {
-        _Overlay.heartRate => widget.heartRate,
-        _Overlay.movement => widget.movement,
-        _Overlay.camera => widget.camera,
-        null => null,
-      };
+    _Overlay.heartRate => widget.heartRate,
+    _Overlay.movement => widget.movement,
+    _Overlay.camera => widget.camera,
+    null => null,
+  };
 
   void _toggle(_Overlay o) =>
       setState(() => _overlay = _overlay == o ? null : o);
@@ -89,7 +93,8 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
       for (var i = 0; i < 4; i++)
         stages.start.add(Duration(seconds: (span.inSeconds * i / 3).round())),
     ];
-    final hasChips = widget.heartRate != null ||
+    final hasChips =
+        widget.heartRate != null ||
         widget.movement != null ||
         widget.camera != null;
     final curve = _curve;
@@ -107,8 +112,11 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.auto_awesome,
-                  color: SleepStagesCard.rem, size: 20),
+              const Icon(
+                Icons.auto_awesome,
+                color: SleepStagesCard.rem,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -151,27 +159,50 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CustomPaint(
-                        painter: _StagePainter(
-                          stages: stages,
-                          levels: levels,
-                          dimmed: curve != null,
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final size = Size(box.maxWidth, box.maxHeight);
+                      final probe = _probe == null
+                          ? null
+                          : _probeLayer(_probe!, size, levels, curve);
+                      return ProbeGestures(
+                        key: const Key('stages-chart'),
+                        groupId: this,
+                        onX: (dx) => setState(() {
+                          final f = (dx / size.width).clamp(0.0, 1.0);
+                          _probe = stages.start.add(
+                            Duration(seconds: (span.inSeconds * f).round()),
+                          );
+                        }),
+                        onClear: () {
+                          if (_probe != null) setState(() => _probe = null);
+                        },
+                        child: Stack(
+                          fit: StackFit.expand,
+                          clipBehavior: Clip.none,
+                          children: [
+                            CustomPaint(
+                              painter: _StagePainter(
+                                stages: stages,
+                                levels: levels,
+                                dimmed: curve != null,
+                              ),
+                            ),
+                            if (curve != null)
+                              CustomPaint(
+                                key: Key('stages-overlay-${_overlay!.name}'),
+                                painter: _OverlayPainter(
+                                  curve: curve,
+                                  start: stages.start,
+                                  end: stages.end,
+                                  heartRate: _overlay == _Overlay.heartRate,
+                                ),
+                              ),
+                            ?probe,
+                          ],
                         ),
-                      ),
-                      if (curve != null)
-                        CustomPaint(
-                          key: Key('stages-overlay-${_overlay!.name}'),
-                          painter: _OverlayPainter(
-                            curve: curve,
-                            start: stages.start,
-                            end: stages.end,
-                            heartRate: _overlay == _Overlay.heartRate,
-                          ),
-                        ),
-                    ],
+                      );
+                    },
                   ),
                 ),
                 if (gutter > 0)
@@ -209,18 +240,22 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
           ),
           if (hasChips) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (widget.heartRate != null)
-                  _chip('Heart rate', _Overlay.heartRate, 'stages-chip-hr'),
-                if (widget.movement != null)
-                  _chip('Movement', _Overlay.movement, 'stages-chip-move'),
-                // 攝影機（2026-11-13）：跟手錶的 Movement 是兩個量，名字分開
-                if (widget.camera != null)
-                  _chip('Camera', _Overlay.camera, 'stages-chip-camera'),
-              ],
+            // 點這幾顆換線時，圖上的泡泡留著（字跟著換），不算點到圖外面
+            TapRegion(
+              groupId: this,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (widget.heartRate != null)
+                    _chip('Heart rate', _Overlay.heartRate, 'stages-chip-hr'),
+                  if (widget.movement != null)
+                    _chip('Movement', _Overlay.movement, 'stages-chip-move'),
+                  // 攝影機（2026-11-13）：跟手錶的 Movement 是兩個量，名字分開
+                  if (widget.camera != null)
+                    _chip('Camera', _Overlay.camera, 'stages-chip-camera'),
+                ],
+              ),
             ),
             if (curve != null) ...[
               const SizedBox(height: 8),
@@ -253,6 +288,55 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
     );
   }
 
+  /// 那一刻的白點與泡泡（規則見 chart_probe.dart）。有選線時吸到最近的真實讀數；
+  /// 沒選線或那一刻沒有讀數時，白點落在階梯上。
+  Widget _probeLayer(
+    DateTime t,
+    Size size,
+    List<String> levels,
+    NightCurve? curve,
+  ) {
+    final stages = widget.stages;
+    final total = stages.end.difference(stages.start).inSeconds;
+    double xOf(DateTime x) =>
+        (x.difference(stages.start).inSeconds / total).clamp(0.0, 1.0) *
+        size.width;
+    final rowH = size.height / levels.length;
+    double stageY(String? st) {
+      final i = st == null ? -1 : levels.indexOf(st);
+      return i < 0 ? size.height / 2 : rowH * i + rowH / 2;
+    }
+
+    final kind = switch (_overlay) {
+      _Overlay.heartRate => ProbeKind.heartRate,
+      _Overlay.movement => ProbeKind.watchMovement,
+      _Overlay.camera => ProbeKind.camera,
+      null => null,
+    };
+    NightCurvePoint? point;
+    if (curve != null) {
+      point = nearestPoint([
+        for (final p in curve.points)
+          if (!p.time.isBefore(stages.start) && !p.time.isAfter(stages.end)) p,
+      ], t);
+    }
+    final shown = point?.time ?? t;
+    final stage = stageAt(stages, shown);
+    double y;
+    if (point != null) {
+      final heart = _overlay == _Overlay.heartRate;
+      final (lo, hi) = _OverlayPainter.rangeOf(curve!, heart);
+      const pad = 4.0;
+      y = pad + (size.height - 2 * pad) * (1 - (point.value - lo) / (hi - lo));
+    } else {
+      y = stageY(stage);
+    }
+    return ProbeLayer(
+      dot: Offset(xOf(shown), y),
+      text: probeText(time: shown, kind: kind, point: point, stage: stage),
+    );
+  }
+
   /// 選了那條線之後下面那一行：只寫事實。
   String _info(NightCurve c) {
     if (_overlay == _Overlay.movement) return 'Movement from your watch';
@@ -278,7 +362,9 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
           constraints: const BoxConstraints(minHeight: 36),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: on ? Colors.white.withValues(alpha: 0.22) : Colors.transparent,
+            color: on
+                ? Colors.white.withValues(alpha: 0.22)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: on ? Colors.white : Colors.white.withValues(alpha: 0.45),
@@ -471,9 +557,7 @@ class _StagePainter extends CustomPainter {
     final shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        for (final l in levels) _colors[l]!.withValues(alpha: alpha),
-      ],
+      colors: [for (final l in levels) _colors[l]!.withValues(alpha: alpha)],
     ).createShader(Offset.zero & size);
 
     // 光暈（疊線時不畫，免得搶走上面那條線）
@@ -524,10 +608,7 @@ class _OverlayPainter extends CustomPainter {
   /// y 軸範圍（下, 上）。心率：實際最低最高各留一點空間取整到 5；動作：0 到最大值。
   static (double, double) rangeOf(NightCurve c, bool heartRate) {
     if (heartRate) {
-      return (
-        ((c.min - 3) / 5).floor() * 5.0,
-        ((c.max + 3) / 5).ceil() * 5.0,
-      );
+      return (((c.min - 3) / 5).floor() * 5.0, ((c.max + 3) / 5).ceil() * 5.0);
     }
     return (0, c.max <= 0 ? 1 : c.max);
   }
@@ -541,7 +622,8 @@ class _OverlayPainter extends CustomPainter {
     const pad = 4.0;
     double x(DateTime t) =>
         (t.difference(start).inSeconds / total).clamp(0.0, 1.0) * size.width;
-    double y(double v) => pad + (size.height - 2 * pad) * (1 - (v - lo) / (hi - lo));
+    double y(double v) =>
+        pad + (size.height - 2 * pad) * (1 - (v - lo) / (hi - lo));
 
     final pts = [
       for (final p in curve.points)
@@ -561,7 +643,10 @@ class _OverlayPainter extends CustomPainter {
         ..strokeWidth = 1;
       for (double dx = 0; dx < size.width; dx += 8) {
         canvas.drawLine(
-            Offset(dx, avgY), Offset((dx + 4).clamp(0, size.width), avgY), dash);
+          Offset(dx, avgY),
+          Offset((dx + 4).clamp(0, size.width), avgY),
+          dash,
+        );
       }
     }
     canvas.drawPath(

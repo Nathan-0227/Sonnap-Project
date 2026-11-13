@@ -1,3 +1,4 @@
+import 'yesterday_activity.dart';
 import 'ai_content.dart';
 import 'metrics.dart';
 import 'status.dart';
@@ -23,6 +24,9 @@ class SleepSession {
   final String? disclaimer;
   final DateTime? timestamp;
 
+  /// 首頁 Activity 卡：前一個日曆日的白天資料＋整天心率（2026-11-13）。舊版打包檔沒有就是 null。
+  final YesterdayActivity? activity;
+
   const SleepSession({
     required this.schemaVersion,
     required this.sessionId,
@@ -36,6 +40,7 @@ class SleepSession {
     required this.dataSources,
     this.disclaimer,
     this.timestamp,
+    this.activity,
   });
 
   factory SleepSession.fromJson(Map<String, dynamic> json) {
@@ -55,6 +60,7 @@ class SleepSession {
           .map((e) => e.toString())
           .toList(),
       disclaimer: json['disclaimer'] as String?,
+      activity: YesterdayActivity.fromJsonOrNull(json['activity']),
       timestamp: json['timestamp'] is String
           ? DateTime.tryParse(json['timestamp'] as String)
           : null,

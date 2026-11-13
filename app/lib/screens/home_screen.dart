@@ -18,6 +18,8 @@ import '../services/sleep_repository.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
+import '../widgets/day_heart_rate_chart.dart';
+import '../models/yesterday_activity.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
@@ -1092,7 +1094,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: _buildScoreCard(session),
                       ),
                       const SizedBox(height: SonnapColors.gap),
-                      _buildTiles(session),
+                      // 兩欄（2026-11-13 使用者定，照 Otter Life）：左邊 Sleep（昨晚）一張張往下疊，
+                      // 右邊一張高的 Activity 卡（前一天）。沒有白天資料時退回原本整寬的 Sleep 格子——
+                      // 只剩左半欄會空一半。
+                      if (session.activity != null)
+                        _buildMainCards(session)
+                      else
+                        _section(
+                          key: const Key('home-sleep-section'),
+                          title: 'Sleep',
+                          subtitle: _sleepNightLabel(session),
+                          child: _buildTiles(session),
+                        ),
                       const SizedBox(height: SonnapColors.gap),
                       // 睡眠階段（只呈現、不計分；不放警語）。沒有資料時老實講還沒有。
                       if (session.metrics.sleepStages != null)
@@ -1718,10 +1731,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (pick(e) != null) NightValue(e.date, pick(e)!),
   ];
 
-  /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
-  /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
-  /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。
-  Widget _buildTiles(SleepSession session) {
+  /// 睡眠的小卡（整寬 2x2 用固定高度；兩欄左邊用 compact：高度照內容、再平均撐開）。
+  ({Widget duration, Widget eff, Widget deep, Widget? hr}) _sleepTiles(
+      SleepSession session, {required bool compact}) {
     final m = session.metrics;
     final minutes = m.sleepDurationMinutes;
     // 效率：顯示**進分數的那一個**（2026-11-13 使用者定，同早晨報告）；舊版打包檔沒有就退回手錶的。
@@ -1749,31 +1761,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return d == null ? null : (deltaText(d, f), deltaColor(d));
     }
 
-    // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
-    Widget pair(Widget a, Widget b) => SizedBox(
-      height: 124,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: a),
-          const SizedBox(width: SonnapColors.gap),
-          Expanded(child: b),
-        ],
-      ),
-    );
-
     Widget tappable(Widget tile, VoidCallback onTap) => GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: tile,
     );
 
-    return Column(
-      children: [
-        pair(
-          tappable(
+    final durationTile = tappable(
             InfoTile(
               key: const Key('tile-duration'),
+              compact: compact,
               icon: Icons.nightlight_round,
               iconColor: const Color(0xFFB9A6FF),
               title: 'Sleep',
@@ -1787,10 +1784,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               series: durationSeries,
               format: formatMinutes,
             ),
-          ),
-          tappable(
+          );
+    final effTile = tappable(
             InfoTile(
               key: const Key('tile-efficiency'),
+              compact: compact,
               icon: Icons.speed_rounded,
               iconColor: const Color(0xFF7EC8FF),
               title: 'Efficiency',
@@ -1807,13 +1805,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               format: _fmtPts,
               caveatComponent: 'efficiency',
             ),
-          ),
-        ),
-        const SizedBox(height: SonnapColors.gap),
-        pair(
-          tappable(
+          );
+    final deepTile = tappable(
             InfoTile(
               key: const Key('tile-deep'),
+              compact: compact,
               icon: Icons.waves_rounded,
               iconColor: const Color(0xFF9AD36A),
               title: 'Deep sleep',
@@ -1828,16 +1824,534 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               format: formatMinutes,
               caveatComponent: 'deep',
             ),
-          ),
-          _buildCameraTile(session),
-        ),
+          );
+    // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
+    // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。
+    final hrTile = m.heartRateCurve == null
+        ? null
+        : InfoTile(
+            key: const Key('tile-night-hr'),
+              compact: compact,
+            icon: Icons.favorite_rounded,
+            iconColor: const Color(0xFFFF8AB8),
+            title: 'Heart rate',
+            value: [(m.heartRateCurve!.avg.round().toString(), 'bpm')],
+            note: [
+              'avg while asleep',
+              if (m.restingHeartRate != null) 'resting ${m.restingHeartRate}',
+            ].join(' · '),
+          );
+
+    return (duration: durationTile, eff: effTile, deep: deepTile, hr: hrTile);
+  }
+
+  /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
+  /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
+  /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。沒有白天資料時用這個整寬 2x2。
+  Widget _buildTiles(SleepSession session) {
+    final t = _sleepTiles(session, compact: false);
+    // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
+    Widget pair(Widget a, Widget b) => SizedBox(
+      height: 124,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: SonnapColors.gap),
+          Expanded(child: b),
+        ],
+      ),
+    );
+
+    return Column(
+      children: [
+        pair(t.duration, t.eff),
+        const SizedBox(height: SonnapColors.gap),
+        pair(t.deep, _buildCameraTile(session)),
+        if (t.hr != null) ...[
+          const SizedBox(height: SonnapColors.gap),
+          SizedBox(height: 112, child: t.hr!),
+        ],
       ],
+    );
+  }
+
+  /// 兩張主卡卡裡的標題：圖示＋大字一行、底下一行是哪一晚／哪一天。
+  Widget _cardHeader(IconData icon, String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: SonnapColors.textPrimary, size: 20),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: SonnapColors.textSecondary, fontSize: 11),
+          ),
+        ],
+      );
+
+  // ── 兩張主卡的外框 ─────────────────────────────────────────────
+
+  Widget _section({
+    required Key key,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: SonnapColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// 「Last night · Fri, Nov 13」：Sleep 卡是哪一晚（起床日）。
+  static String _sleepNightLabel(SleepSession session) {
+    final d = DateTime.tryParse(session.history.lastOrNull?.date ?? '');
+    if (d == null) return 'Last night';
+    return 'Last night · ${DateFormat('EEE, MMM d').format(d)}';
+  }
+
+  /// 「Yesterday · Thu, Nov 12」：Activity 是**前一天**的（白天資料早上才匯入，沒有「今天到目前」）。
+  static String _activityDayLabel(String iso) {
+    final d = DateTime.tryParse(iso);
+    if (d == null) return 'Yesterday';
+    return 'Yesterday · ${DateFormat('EEE, MMM d').format(d)}';
+  }
+
+  static String _comma(int v) => NumberFormat('#,##0').format(v);
+
+  /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
+  /// 步數、活動卡路里、活動時間、VO2 max、整天心率一列一列往下、中間細線分隔，最後一行 Move IQ。
+  /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
+  ({List<Widget> rows, Widget? moveIq}) _activityParts(YesterdayActivity a) {
+    List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
+      for (final h in a.history)
+        if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
+    ];
+    VoidCallback? bars(String id, String title, List<NightValue> s,
+            String Function(double) f) =>
+        s.isEmpty
+            ? null
+            : () => _showActivityBars(
+                id: id, title: title, series: s, format: f, day: a.date);
+
+    final active = a.activeMinutes;
+    final hr = a.dayHeartRate;
+    final moves = a.moveIq ?? const <MoveIqEvent>[];
+    final walks = moves.where((m) => m.type == 'walking').length;
+    final rides = moves.where((m) => m.type == 'cycling').length;
+    final others = moves.length - walks - rides;
+
+    final rows = <Widget>[
+      _activityRow(
+        key: 'tile-steps',
+        icon: Icons.directions_walk_rounded,
+        color: const Color(0xFFFFB37A),
+        title: 'Steps',
+        value: a.steps == null ? null : [(_comma(a.steps!), '')],
+        note: a.stepGoal == null ? null : 'goal ${_comma(a.stepGoal!)}',
+        onTap: bars('steps', 'Steps', series((h) => h.steps),
+            (v) => _comma(v.round())),
+      ),
+      _activityRow(
+        key: 'tile-kcal',
+        icon: Icons.local_fire_department_rounded,
+        color: const Color(0xFFFF8A65),
+        title: 'Active energy',
+        value: a.activeKcal == null ? null : [(_comma(a.activeKcal!), 'kcal')],
+        note: a.distanceM == null
+            ? null
+            : '${(a.distanceM! / 1000).toStringAsFixed(1)} km',
+        onTap: bars('kcal', 'Active energy', series((h) => h.activeKcal),
+            (v) => '${_comma(v.round())} kcal'),
+      ),
+      _activityRow(
+        key: 'tile-active',
+        icon: Icons.bolt_rounded,
+        color: const Color(0xFFFFD96A),
+        title: 'Active time',
+        value: active == null ? null : _hm(active),
+        onTap: bars('active', 'Active time', series((h) => h.activeMinutes),
+            formatMinutes),
+      ),
+      if (hr != null)
+        _activityRow(
+          key: 'tile-day-hr',
+          icon: Icons.monitor_heart_rounded,
+          color: const Color(0xFFFF8AB8),
+          title: 'Heart rate',
+          value: [('${hr.min.round()}–${hr.max.round()}', 'bpm')],
+          // 「all day」寫在小字（標題放不下括號）：跟 Sleep Stages 的睡著心率分得開
+          note: [
+            'all day',
+            if (a.restingHeartRate != null) 'resting ${a.restingHeartRate}',
+          ].join(' · '),
+          onTap: () => _showDayHeartRate(a),
+        ),
+    ];
+
+    final moveIq = moves.isEmpty
+        ? null
+        : Text(
+            [
+              'Move IQ',
+              if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
+              if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
+              if (others > 0) '$others other',
+            ].join(' · '),
+            key: const Key('home-moveiq'),
+            style: const TextStyle(
+                color: SonnapColors.textSecondary, fontSize: 12),
+          );
+    return (rows: rows, moveIq: moveIq);
+  }
+
+  /// 兩欄（左 Sleep、右 Activity，照 Otter Life，2026-11-13 使用者定）：
+  /// 左邊一格一格的小卡往下疊，右邊一張 Activity 卡、項目之間細線分隔。
+  /// 兩欄上下緣對齊：IntrinsicHeight 量較高的那一欄，左邊每一格平均撐開、右邊整張撐滿。
+  /// ⚠️ 大字都不折行（softWrap: false）——放在 FittedBox 裡的字，量高度時會被當成會折行而量得過高。
+  Widget _buildMainCards(SleepSession session) {
+    final t = _sleepTiles(session, compact: true);
+    final left = <Widget>[
+      t.duration,
+      t.eff,
+      t.deep,
+      _buildCameraTile(session, compact: true),
+    ];
+    final a = session.activity!;
+    final act = _activityParts(a);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Column(
+              key: const Key('home-sleep-section'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < left.length; i++) ...[
+                  if (i > 0) const SizedBox(height: SonnapColors.gap),
+                  Expanded(child: left[i]),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: SonnapColors.gap),
+          Expanded(
+            child: Container(
+              key: const Key('home-activity-section'),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              decoration: sonnapCardDecoration(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
+                  // 每一項平均分配卡片的高度、在自己那一段裡上下置中，分隔線因此落在兩項正中間
+                  // （使用者 2026-11-13：「不要下面留那麼多空間」「線條也平衡一下」）
+                  const SizedBox(height: 10),
+                  const Divider(height: 1, color: SonnapColors.cardBorder),
+                  for (final (i, r) in [...act.rows, ?act.moveIq].indexed) ...[
+                    if (i > 0) const Divider(height: 1, color: SonnapColors.cardBorder),
+                    Expanded(
+                      child: Align(alignment: Alignment.centerLeft, child: r),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Activity 卡裡的一列：圖示＋標題、大字、一行小字。沒有值寫「—」＋說明，**不畫成 0**。
+  Widget _activityRow({
+    required String key,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required List<(String, String)>? value,
+    String? note,
+    String missing = 'No data',
+    VoidCallback? onTap,
+  }) {
+    final row = Column(
+      key: Key(key),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 17),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: value == null
+              ? const Text(
+                  '—',
+                  softWrap: false,
+                  style: TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              : Text.rich(
+                  softWrap: false,
+                  TextSpan(
+                    children: [
+                      for (final (n, unit) in value) ...[
+                        TextSpan(
+                          text: n,
+                          style: const TextStyle(
+                            color: SonnapColors.textPrimary,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (unit.isNotEmpty)
+                          TextSpan(
+                            text: ' $unit ',
+                            style: const TextStyle(
+                              color: SonnapColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+        ),
+        if (value == null || note != null)
+          Text(
+            value == null ? missing : note!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: SonnapColors.textMuted, fontSize: 11),
+          ),
+      ],
+    );
+    return onTap == null
+        ? row
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: row,
+          );
+  }
+
+  /// 點步數／卡路里／活動時間：最近 7 天的長條圖（只畫數字，不判斷、不畫目標線）。
+  void _showActivityBars({
+    required String id,
+    required String title,
+    required List<NightValue> series,
+    required String Function(double) format,
+    required String day,
+  }) {
+    final bars = lastNights(series, day);
+    final maxV = bars.fold<double>(0, (m, n) => n.value > m ? n.value : m);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B2350),
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: Key('activity-sheet-$id'),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$title · last 7 days',
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 150,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (final b in bars)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              FittedBox(
+                                child: Text(
+                                  format(b.value),
+                                  style: const TextStyle(
+                                    color: SonnapColors.textSecondary,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                height: maxV <= 0 ? 0 : 100 * b.value / maxV,
+                                decoration: BoxDecoration(
+                                  color: b.date == day
+                                      ? SonnapColors.accent
+                                      : SonnapColors.accent
+                                          .withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                shortDate(b.date),
+                                style: const TextStyle(
+                                  color: SonnapColors.textMuted,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 點整天心率：那一天 0–24 點的心率線（每 10 分鐘一點）。只寫最低、最高、靜止；不判斷。
+  void _showDayHeartRate(YesterdayActivity a) {
+    final hr = a.dayHeartRate!;
+    final d = DateTime.tryParse(a.date);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1B2350),
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: const Key('day-hr-sheet'),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                d == null
+                    ? 'Heart rate'
+                    : 'Heart rate · ${DateFormat('EEE, MMM d').format(d)}',
+                style: const TextStyle(
+                  color: SonnapColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  'lowest ${hr.min.round()}',
+                  'highest ${hr.max.round()}',
+                  if (a.restingHeartRate != null)
+                    'resting ${a.restingHeartRate}',
+                ].join(' · '),
+                key: const Key('day-hr-facts'),
+                style: const TextStyle(
+                    color: SonnapColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 160,
+                width: double.infinity,
+                child: DayHeartRateChart(hr),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   /// 睡眠中的動作（攝影機）。大字是每小時幾次，下面一行照抄後端的
   /// 「跟你平常比」。⚠️ 不跟文獻常模並列（跨夜不穩，見 CLAUDE.md 紅線 2 展開）。
-  Widget _buildCameraTile(SleepSession session) {
+  Widget _buildCameraTile(SleepSession session, {bool compact = false}) {
     const key = Key('tile-camera');
     const icon = Icons.videocam_rounded;
     const color = Color(0xFFFFD96A);
@@ -1846,8 +2360,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final camera = _camera;
     if (widget.cameraInsights == null ||
         camera?.status == CameraInsightsStatus.noBackend) {
-      return const InfoTile(
+      return InfoTile(
         key: key,
+        compact: compact,
         icon: icon,
         iconColor: color,
         title: title,
@@ -1862,6 +2377,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         camera.status == CameraInsightsStatus.noUser) {
       return InfoTile(
         key: key,
+        compact: compact,
         icon: icon,
         iconColor: color,
         title: title,
@@ -1879,8 +2395,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     final rate = night?.eventsPerHour;
     if (night == null || rate == null) {
-      return const InfoTile(
+      return InfoTile(
         key: key,
+        compact: compact,
         icon: icon,
         iconColor: color,
         title: title,
@@ -1904,6 +2421,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: InfoTile(
         key: key,
+        compact: compact,
         icon: icon,
         iconColor: color,
         title: title,
