@@ -233,10 +233,13 @@ class YesterdayCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             child: SizedBox(
               height: 12,
+              // ⚠️ stretch：不撐滿高度的話，沒有內容的色塊會縮成 0 高（實機截圖抓到：整條不見）
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (final p in shown)
                     Expanded(
+                      key: Key('$key-seg-${p.$1.toLowerCase().replaceAll(' ', '-')}'),
                       flex: p.$2!,
                       child: ColoredBox(color: p.$3),
                     ),

@@ -132,6 +132,29 @@ void main() {
       expect(tester.takeException(), isNull, reason: '實機大小不溢出');
     });
 
+    testWidgets('⚠️ 活動與壓力的橫條真的畫出來（實機截圖抓到過：整條 0 高、看不見）',
+        (tester) async {
+      await pumpCard(tester, YesterdayActivity.fromJsonOrNull(fullJson())!);
+      for (final k in [
+        'yesterday-activity-seg-sedentary',
+        'yesterday-activity-seg-active',
+        'yesterday-activity-seg-highly-active',
+        'yesterday-stress-seg-rest',
+        'yesterday-stress-seg-high',
+      ]) {
+        final size = tester.getSize(find.byKey(Key(k)));
+        expect(size.height, greaterThan(8), reason: k);
+        expect(size.width, greaterThan(0), reason: k);
+      }
+      // 寬度照秒數比例：久坐 62062 秒遠比高強度 1747 秒寬
+      expect(
+          tester.getSize(find.byKey(const Key('yesterday-activity-seg-sedentary'))).width,
+          greaterThan(tester
+                  .getSize(find.byKey(const Key('yesterday-activity-seg-highly-active')))
+                  .width *
+              20));
+    });
+
     testWidgets('⚠️ 只寫事實：沒有達標、等級、警告字眼', (tester) async {
       await pumpCard(tester, YesterdayActivity.fromJsonOrNull(fullJson())!);
       final texts = tester
