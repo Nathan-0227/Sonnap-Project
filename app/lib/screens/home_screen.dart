@@ -1044,7 +1044,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               child: Column(
                                 children: [
                                   _buildHeader(session, now, game),
-                                  const SizedBox(height: 14),
+                                  // Hi 上方加了留白，這裡收一點，免得時鐘卡壓到寵物上面的等級
+                                  const SizedBox(height: 8),
                                   _buildClockRow(now),
                                 ],
                               ),
@@ -1124,7 +1125,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
+          // Hi 上面多留一點空間（2026-11-13 使用者定）；右上的圖示不跟著往下
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 2026-11-13 使用者定：小字「Hi, 暱稱!」＋大字「Welcome to Sonnap」，
@@ -1159,6 +1163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ],
+            ),
           ),
         ),
         Column(
@@ -1297,7 +1302,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       mainAxisSize: MainAxisSize.min,
       children: [
         _levelBadge(game.level),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         pet,
       ],
     );

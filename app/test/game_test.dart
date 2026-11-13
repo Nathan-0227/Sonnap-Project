@@ -439,6 +439,9 @@ void main() {
       expect(badge.bottom, lessThanOrEqualTo(pet.top));
       expect(badge.center.dx, closeTo(pet.center.dx, 2));
       expect(badge.top, greaterThan(title.bottom));
+      // Hi 上方加留白之後，時鐘卡曾經壓到這個徽章（實機截圖抓到）
+      final clock = tester.getRect(find.byKey(const Key('bedtime-countdown')));
+      expect(badge.top, greaterThanOrEqualTo(clock.bottom));
     });
 
     testWidgets('點衣櫃 → 打開衣櫃畫面', (tester) async {
