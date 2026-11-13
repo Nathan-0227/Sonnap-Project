@@ -20,6 +20,8 @@ import 'services/friends_service.dart';
 import 'services/game_service.dart';
 import 'services/health_connect.dart';
 import 'services/home_service.dart';
+import 'services/morning_rating.dart';
+import 'services/morning_report.dart';
 import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
 import 'services/notification_service.dart';
@@ -168,6 +170,26 @@ class _MainPageState extends State<MainPage> {
   }
 
   /// 熬夜比率的來源。與 [_challenges] 一樣依 [_account] 重建。
+  /// 早晨報告讀 `/home?date=`。與 [_home] 同一個理由依 [_account] 重建。
+  MorningReportService? get _morningReport {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return MorningReportService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
+  /// 起床自評送後端。與 [_morningReport] 同一個理由依 [_account] 重建。
+  RestedService? get _rested {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return RestedService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+    );
+  }
+
   HomeService? get _home {
     final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
     if (baseUrl.isEmpty) return null;
@@ -404,6 +426,10 @@ class _MainPageState extends State<MainPage> {
         repository: _repository,
         game: _game,
         cameraInsights: _cameraInsights,
+        morningReport: _morningReport,
+        rested: _rested,
+        // 早晨報告的 View sleep insights → Insights 分頁（第 3 個）
+        onOpenInsights: () => setState(() => currentIndex = 2),
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,

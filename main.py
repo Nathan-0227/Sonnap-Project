@@ -52,8 +52,8 @@ import camera_clips
 import camera_usual
 import db
 import score_claim
-from behavior import (adherence, challenges as challenge_engine, pet_state,
-                      sleep_efficiency)
+from behavior import (adherence, challenges as challenge_engine, morning_tips,
+                      pet_state, sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
 # 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
@@ -67,6 +67,7 @@ from social import friends as social_friends
 #    必須只有一個定義處，否則 App 的 asset 畫面與 API 回傳的心情
 #    會在某次改動後悄悄地不一致——那正是本專案最想避免的那類 bug。
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
+import build_app_payload as _payload
 
 app = FastAPI(title="Sonnap API")
 
@@ -246,6 +247,102 @@ def pick_latest_date(*row_lists) -> Optional[str]:
     """幾組資料裡最新的那個日期。全空回 None。"""
     dates = [r["date"] for rows in row_lists for r in rows if r.get("date")]
     return max(dates) if dates else None
+
+
+def _light_minutes(w_row: dict) -> Optional[float]:
+    """淺睡分鐘 = 總睡眠 − 深睡 − REM。沒量到 REM 或缺任何一項時回 None。"""
+    if not w_row.get("rem_measured"):
+        return None
+    total, deep, rem = w_row.get("duration_min"), w_row.get("deep_min"), w_row.get("rem_min")
+    if total is None or deep is None or rem is None:
+        return None
+    return round(max(0.0, total - deep - rem), 1)
+
+
+def display_for(mood, driver, w_row):
+    """畫面上的那幾句話：兩層各有自己的文案，依 driver 決定用哪一套。
+    /home 與早晨報告的 AI 退回文字共用這一份（兩份的話同一晚會講兩種話）。"""
+    if driver in ("wearable", "wearable_override") and w_row:
+        quality = w_row.get("final_quality") or "Normal"
+        return {
+            "lang": "en",
+            "score_color": QUALITY_TO_COLOR.get(quality, "#FFC83D"),
+            **DISPLAY_STRINGS.get(quality, DISPLAY_STRINGS["Normal"]),
+        }
+    return pet_state.build_display(mood)
+
+
+# ── 每一晚的睡眠階段時間軸（2026-11-12，早晨報告用）──────────────────
+# 原始檔 garmin_standard_data.json 約 25 MB：讀一次留在記憶體，檔案更新（mtime 變了）才重讀。
+_STANDARD_CACHE = {"mtime": None, "records": None}
+
+
+def _garmin_records():
+    path = _payload.GARMIN_DATA / "garmin_standard_data.json"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    if _STANDARD_CACHE["mtime"] != mtime:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        _STANDARD_CACHE.update(mtime=mtime, records=data.get("records", []))
+    return _STANDARD_CACHE["records"]
+
+
+def night_stages(w_row):
+    """
+    那一晚的 Sleep phases 曲線（與打包檔 metrics.sleep_stages 同一個形狀，App 用同一個解析）。
+
+    ⚠️ 只有 Garmin 來源才有：逐段時間軸只存在電腦上的 Garmin 原始檔。
+       Health Connect 上傳時有逐段資料，但後端算完分數就沒存——那些晚上 App 改畫比例條。
+    ⚠️ 圖例數字用手錶自己的總數，還原出來的段只畫曲線（理由同 build_app_payload.sleep_stages_block）。
+    """
+    if not w_row or w_row.get("source") != "garmin":
+        return None
+    start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
+    if not start or not wake:
+        return None
+    records = _garmin_records()
+    if not records:
+        return None
+    segments = _payload.sleep_stages.stage_segments(records, start, wake)
+    if not segments:
+        return None
+    return {
+        "segments": segments,
+        "minutes": {
+            "awake": w_row.get("waso_min"),
+            "rem": w_row.get("rem_min"),
+            "light": _light_minutes(w_row),
+            "deep": w_row.get("deep_min"),
+        },
+        "rem_measured": bool(w_row.get("rem_measured")),
+    }
+
+
+def rating_block(rating):
+    """起床自評給畫面的樣子；沒填就是 None。"""
+    if not rating:
+        return None
+    return {
+        "rested": rating["rested"],
+        "label": morning_tips.RESTED_LABELS.get(rating["rested"]),
+        "tags": [{"id": t, "label": morning_tips.TAGS[t]} for t in rating["tags"]
+                 if t in morning_tips.TAGS],
+        "minutes_after_wake": rating.get("minutes_after_wake"),
+    }
+
+
+def _previous(rows, target_date, need):
+    """target_date 之前、最近一個 need 欄位有值的那一列（「跟上一晚比」用）。"""
+    best = None
+    for r in rows:
+        if target_date and r["date"] < target_date and r.get(need) is not None:
+            best = r
+    return best
 
 
 def _row_for(rows: List[dict], target_date: Optional[str]) -> Optional[dict]:
@@ -690,17 +787,7 @@ async def get_home(
     w_row = _row_for(wearable_rows, target_date)
 
     mood, mood_reason, driver = resolve_mood(b_row, w_row)
-
-    # ── display：兩層各有自己的文案，依 driver 決定用哪一套 ──
-    if driver in ("wearable", "wearable_override") and w_row:
-        quality = w_row.get("final_quality") or "Normal"
-        display = {
-            "lang": "en",
-            "score_color": QUALITY_TO_COLOR.get(quality, "#FFC83D"),
-            **DISPLAY_STRINGS.get(quality, DISPLAY_STRINGS["Normal"]),
-        }
-    else:
-        display = pet_state.build_display(mood)
+    display = display_for(mood, driver, w_row)
 
     # ── streak：用 Tier A 算，因為那是每個人都有的 ──
     streak_days, streak_as_of = challenge_engine.current_streak(behavior_rows)
@@ -796,6 +883,12 @@ async def get_home(
             "waso_minutes": w_row["waso_min"],
             "deep_minutes": w_row["deep_min"],
             "rem_minutes": w_row["rem_min"],
+            # 早晨報告的淺睡／深睡／REM 比例條用（2026-11-12）。表裡沒有淺睡欄位，
+            # 所以是「總睡眠 − 深睡 − REM」。⚠️ 那晚沒量到 REM 時回 null：
+            # 減出來的數字會把 REM 吃進淺睡裡，跟 Sleep Stages 圖「沒量到就不畫」同一條規矩。
+            "light_minutes": _light_minutes(w_row),
+            # 每一晚的曲線（早晨報告）。只有 Garmin 來源才有，見 night_stages()。
+            "sleep_stages": night_stages(w_row),
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
             # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。
@@ -824,6 +917,18 @@ async def get_home(
             "composition": score_composition(w_row, b_row),
         },
         "display": display,
+        # ── 早晨報告（2026-11-12）──
+        # 起床自評：**不進分數、不給 XP**，只並列顯示。
+        "morning_rating": rating_block(
+            db.get_morning_rating(user_id, target_date) if target_date else None),
+        # 「跟上一晚比」的箭頭：給上一個有資料的晚上的原始數字，箭頭方向由 App 比
+        # （只代表方向，上升紅、下降綠，與首頁同一條規矩；好壞不在這裡判斷）。
+        "previous_night": {
+            "time_in_bed_minutes": (_previous(behavior_rows, target_date, "time_in_bed_minutes")
+                                    or {}).get("time_in_bed_minutes"),
+            "sleep_duration_minutes": (_previous(wearable_rows, target_date, "duration_min")
+                                       or {}).get("duration_min"),
+        },
         "streak": {
             "streak_days": streak_days,
             "as_of": streak_as_of.isoformat() if streak_as_of else None,
@@ -1435,3 +1540,116 @@ def chat(req: ChatRequest):
     except chat_engine.ChatUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {"answer": result["answer"], "source": "llm"}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 早晨報告：起床自評與 AI 分析（2026-11-12）
+# ═══════════════════════════════════════════════════════════════════
+
+class RestedRequest(BaseModel):
+    user_id: str
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$",
+                      description="The night (wake-up day), same convention as /nightly.")
+    rested: int = Field(..., ge=1, le=5,
+                        description="Consensus Sleep Diary-M item 10, 1 = Not at all rested.")
+    tags: List[str] = Field(default_factory=list)
+    minutes_after_wake: Optional[int] = Field(None, ge=0, le=24 * 60)
+
+
+@app.post("/rested")
+def post_rested(req: RestedRequest):
+    """
+    存一晚的起床自評（同一晚再送一次就覆蓋）。
+
+    ⚠️ **不進分數、不給 XP、不給好友看。** 評分層與遊戲化層都不讀 morning_ratings。
+    ⚠️ 標籤只收 behavior/morning_tips.TAGS 裡的 id：不收自由文字（隱私、無法統計，
+       送進 AI 還可能被拿來改寫指令）。
+    """
+    require_user(req.user_id)
+    try:
+        date_cls.fromisoformat(req.date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date must be a real YYYY-MM-DD date")
+    unknown = [t for t in req.tags if t not in morning_tips.TAGS]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"unknown tags: {unknown}")
+    tags = list(dict.fromkeys(req.tags))            # 去重、保留順序
+    db.upsert_morning_rating(req.user_id, req.date, req.rested, tags, req.minutes_after_wake)
+    return {"date": req.date,
+            "morning_rating": rating_block(db.get_morning_rating(req.user_id, req.date))}
+
+
+# fallback 那一列多久之後再試一次（避免連不上時每打開一次報告就花一次額度）
+SUMMARY_RETRY_MINUTES = 60
+
+
+@app.get("/night-summary")
+def get_night_summary(
+    user_id: str = Query(...),
+    date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+):
+    """
+    早晨報告那張「From your buddy」卡：AI 寫的兩三句（寵物口吻）＋一句從清單挑的小建議。
+
+    - 手錶資料還沒到 → status "waiting"，**不呼叫 AI**（使用者定）。
+    - 每晚只生成一次；事實變了（手錶晚到、補了自評）才重生。
+    - AI 沒設定／連不上／兩次沒過驗證 → 退回 /home 那兩句話（score_message + mood_description），
+      source = "fallback"；過 SUMMARY_RETRY_MINUTES 才再試。
+    - 小建議 tip 由 behavior/morning_tips.pick_tip() 挑，**逐字**；AI 碰不到它。
+
+    ⚠️ 用同步的 def：AI 呼叫最多等 60 秒，async 會卡住整個事件迴圈（同 /chat）。
+    """
+    from ai import night_summary as ns
+
+    user = require_user(user_id)
+    wearable_rows = db.get_wearable_nightly(user_id, days=366)
+    behavior_rows = db.get_nightly_behavior(user_id, days=366)
+    w_row = _row_for(wearable_rows, date)
+    b_row = _row_for(behavior_rows, date)
+    rating = db.get_morning_rating(user_id, date)
+
+    if not w_row or w_row.get("final_score") is None:
+        return {"date": date, "status": "waiting", "text": None, "source": None, "tip": None}
+
+    tip = morning_tips.pick_tip(
+        rating["tags"] if rating else (),
+        b_row.get("adherence_minutes") if b_row else None,
+    )
+    facts = ns.build_night_facts(
+        date, user, w_row, _previous(wearable_rows, date, "final_score"), b_row,
+        rating_label=morning_tips.RESTED_LABELS.get(rating["rested"]) if rating else None,
+        tag_labels=[morning_tips.TAGS[t] for t in (rating["tags"] if rating else [])
+                    if t in morning_tips.TAGS],
+    )
+    digest = ns.facts_hash(facts)
+
+    mood, _, driver = resolve_mood(b_row, w_row)
+    shown = display_for(mood, driver, w_row)
+    fallback_text = " ".join(x for x in (shown.get("score_message"), shown.get("mood_description")) if x)
+
+    def reply(text, source):
+        return {"date": date, "status": "ok", "text": text, "source": source, "tip": tip}
+
+    stored = db.get_night_summary(user_id, date)
+    if stored and stored["facts_hash"] == digest:
+        if stored["source"] == "llm":
+            return reply(stored["text"], "llm")
+        try:
+            age = (datetime.now(datetime.fromisoformat(stored["created_at"]).tzinfo)
+                   - datetime.fromisoformat(stored["created_at"])).total_seconds() / 60
+        except (TypeError, ValueError):
+            age = SUMMARY_RETRY_MINUTES
+        if age < SUMMARY_RETRY_MINUTES:
+            return reply(fallback_text, "fallback")
+
+    if not ns.key_available():
+        # 沒設定金鑰：一次都沒試，不寫進資料庫（設定好之後下一次打開就會生成）
+        return reply(fallback_text, "fallback")
+    try:
+        result = ns.summarize_night(facts)
+    except ns.SummaryUnavailable as exc:
+        print(f"night-summary: fallback for one night - {exc}")   # 不印 user_id
+        db.save_night_summary(user_id, date, fallback_text, "fallback", digest)
+        return reply(fallback_text, "fallback")
+    db.save_night_summary(user_id, date, result["text"], "llm", digest, result.get("model"))
+    return reply(result["text"], "llm")

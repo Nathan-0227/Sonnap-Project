@@ -101,7 +101,16 @@ void main() {
 
     // 分數是 Text.rich（"46" + "/100"），所以要 findRichText
     expect(find.textContaining('46', findRichText: true), findsWidgets);
-    expect(find.text('Anxious'), findsOneWidget);
+    // 2026-11-12：一週心情列改成畫到今天，沒有歷史時也會出現，它的圖例也有一個
+    // "Anxious"。寵物旁的心情標籤要在圖例之外另有一個。
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mood-legend')),
+        matching: find.text('Anxious'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Anxious'), findsNWidgets(2));
     // 寵物下面那一行：等級 · 分數（2026-11-12 改版，原本的分數卡與 score_message 退場）
     expect(find.text('46'), findsOneWidget);
     expect(find.text('Bad sleep'), findsOneWidget);
@@ -110,7 +119,15 @@ void main() {
 
     // 確認不再是寫死的那組值
     expect(find.textContaining('82', findRichText: true), findsNothing);
-    expect(find.text('Happy'), findsNothing);
+    // 圖例裡那個 "Happy" 不算；圖例以外不得有（寵物不是寫死的開心）
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mood-legend')),
+        matching: find.text('Happy'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Happy'), findsOneWidget);
   });
 
   // 讀真實 asset 的測試在 test/sleep_repository_test.dart，刻意分開放——

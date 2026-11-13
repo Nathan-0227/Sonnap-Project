@@ -35,4 +35,22 @@ void main() {
   test('沒有任何歷史 → 不畫', () {
     expect(WeekMoodStrip.lastSevenDays(const []), isEmpty);
   });
+
+  test('⚠️ 給了 today 而歷史比較舊 → 終點是今天，後面幾天留空', () {
+    final days = WeekMoodStrip.lastSevenDays(
+      [night('2026-11-08', 'bored')],
+      today: DateTime(2026, 11, 12, 9, 30),
+    );
+    expect(days.last.$1, DateTime(2026, 11, 12));
+    expect(days.map((d) => d.$2?.petMood).toList(),
+        [null, null, 'bored', null, null, null, null]);
+  });
+
+  test('歷史比今天還新（不該發生，但不能把它藏起來）→ 終點仍是最新那晚', () {
+    final days = WeekMoodStrip.lastSevenDays(
+      [night('2026-11-14', 'happy')],
+      today: DateTime(2026, 11, 12),
+    );
+    expect(days.last.$1, DateTime(2026, 11, 14));
+  });
 }

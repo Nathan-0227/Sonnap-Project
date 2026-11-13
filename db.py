@@ -43,6 +43,7 @@ AI 功能用標準庫 `urllib.request` 打 API 而不裝 SDK，理由完全相�
 """
 
 import argparse
+import json
 import os
 import sqlite3
 import sys
@@ -497,6 +498,41 @@ CREATE TABLE IF NOT EXISTS friendships (
     PRIMARY KEY (user_id, friend_id),
     FOREIGN KEY (user_id)   REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- ── 起床自評（2026-11-12）──────────────────────────────────────
+-- 題目照抄 Consensus Sleep Diary-M 第 10 題（Carney 2012），出處與取捨見
+-- Research-Background/起床小建議與自評.md。
+-- ⚠️ **不進分數、不給 XP、不給好友看**：主觀感受與手錶分數並列顯示，不判斷誰對。
+--    評分層與遊戲化層都不讀這張表（tests/test_morning_report.py 守著）。
+-- ⚠️ minutes_after_wake：起床後幾分鐘才填。日誌標準是一小時內，App 允許 6 小時內補填，
+--    分析時可以只取 ≤ 60 的。NULL = App 不知道起床時刻（例如沒按 Out of bed）。
+CREATE TABLE IF NOT EXISTS morning_ratings (
+    user_id            TEXT NOT NULL,
+    date               TEXT NOT NULL,         -- 起床日，與 nightly_behavior 同一個約定
+    rested             INTEGER NOT NULL,      -- 1 Not at all rested … 5 Very well-rested
+    tags               TEXT NOT NULL,         -- JSON 陣列，值只能是 behavior/morning_tips.TAGS
+    minutes_after_wake INTEGER,
+    rated_at           TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- ── 早晨報告的 AI 分析（2026-11-12）────────────────────────────
+-- 每晚只生成一次（花一次 API 額度）。facts_hash 變了（手錶晚到、補了自評）才重生。
+-- source='fallback' 的那一列是「這次沒生成成功」，過一段時間會再試（main.py）。
+CREATE TABLE IF NOT EXISTS night_summaries (
+    user_id    TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    source     TEXT NOT NULL,                 -- 'llm' | 'fallback'
+    facts_hash TEXT NOT NULL,
+    model      TEXT,
+    created_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 -- 查詢模式幾乎都是「某個使用者的最近 N 天」，所以索引建在 (user_id, date)。
@@ -1896,6 +1932,89 @@ def list_friend_ids(user_id, db_path=None):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 起床自評與早晨報告的 AI 分析（2026-11-12）
+# ═══════════════════════════════════════════════════════════════════
+
+def upsert_morning_rating(user_id, date, rested, tags, minutes_after_wake=None,
+                          db_path=None):
+    """存一晚的起床自評（同一晚再存一次就覆蓋）。值的合法性由呼叫端（main.py）檢查。"""
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO morning_ratings
+                (user_id, date, rested, tags, minutes_after_wake, rated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                rested             = excluded.rested,
+                tags               = excluded.tags,
+                minutes_after_wake = excluded.minutes_after_wake,
+                rated_at           = excluded.rated_at
+            """,
+            (user_id, date, int(rested), json.dumps(list(tags)), minutes_after_wake,
+             now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_morning_rating(user_id, date, db_path=None):
+    """那一晚的自評；沒填就回 None。tags 已解成 list。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM morning_ratings WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return None
+    row = dict(rows[0])
+    try:
+        row["tags"] = json.loads(row.get("tags") or "[]")
+    except ValueError:
+        row["tags"] = []
+    return row
+
+
+def get_night_summary(user_id, date, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM night_summaries WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchall()
+        return dict(rows[0]) if rows else None
+    finally:
+        conn.close()
+
+
+def save_night_summary(user_id, date, text, source, facts_hash, model=None,
+                       db_path=None):
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO night_summaries
+                (user_id, date, text, source, facts_hash, model, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                text       = excluded.text,
+                source     = excluded.source,
+                facts_hash = excluded.facts_hash,
+                model      = excluded.model,
+                created_at = excluded.created_at
+            """,
+            (user_id, date, text, source, facts_hash, model, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1914,7 +2033,8 @@ def print_stats(db_path=None):
         return
 
     tables = ["users", "nightly_behavior", "app_usage_daily", "block_events",
-              "wearable_nightly", "camera_nightly", "challenges", "challenge_progress"]
+              "wearable_nightly", "camera_nightly", "challenges", "challenge_progress",
+              "morning_ratings", "night_summaries"]
     conn = connect(db_path)
     try:
         print(f"Database: {path}")

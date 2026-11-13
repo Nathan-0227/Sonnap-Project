@@ -221,6 +221,18 @@ check("Tier B 的臥床時間出現在 metrics",
 ok("data_sources 兩層都有", set(h5["data_sources"]) == {"behavior", "health_connect"},
    str(h5["data_sources"]))
 
+# ── 早晨報告的比例條（2026-11-12）：淺睡 = 總睡眠 − 深睡 − REM ──
+# 上面那段 LIGHT 加起來是 60+90+90+25 = 265 分鐘
+check("/home 回淺睡分鐘數", h5["metrics"]["light_minutes"], 265.0)
+check("/home?date= 指定那一晚也拿得到", client.get(
+    f"/home?user_id={u5}&date={E}").json()["metrics"]["light_minutes"], 265.0)
+check("⚠️ 沒量到 REM → 淺睡回 null（不然 REM 會被算進淺睡）",
+      main._light_minutes({"rem_measured": 0, "duration_min": 400,
+                           "deep_min": 60, "rem_min": None}), None)
+check("REM 量到是 0 分鐘也算有量到（不可用真假值判斷）",
+      main._light_minutes({"rem_measured": 1, "duration_min": 400,
+                           "deep_min": 60, "rem_min": 0}), 340.0)
+
 print()
 print("=" * 78)
 print("【額外】sleep_start_time / wake_time 是「睡著」不是「上床」")
