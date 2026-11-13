@@ -339,13 +339,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // ① 自評卡：沒有起床動畫（減少動態效果）時直接出現，不從下面滑上來——
     //    滑的那一段會露出底下的首頁。
     final rated = Completer<void>();
+    MorningRating? justRated;
     Widget restedBuilder(BuildContext _) => RestedScreen(
           date: date,
           wakeAt: wakeAt,
           store: _ratings,
           sender: widget.rested,
           clock: widget.clock,
-          onDone: (_) {
+          onDone: (rating) {
+            justRated = rating;
             if (!rated.isCompleted) rated.complete();
           },
         );
@@ -367,7 +369,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (cover.isActive) navigator.removeRoute(cover);
 
     // ② 等待畫面：瞬間蓋在自評卡上，再收掉自評卡
-    final inputs = await _reportInputs(date); // 這時才讀得到剛存的自評
+    var inputs = await _reportInputs(date); // 這時才讀得到剛存的自評
+    // 剛填的那一份比動畫一開始就抓的後端資料新，要蓋過它（Skip 就照一般規則）
+    if (justRated != null) inputs = inputs.withFreshRating(justRated!);
     if (!mounted) return;
     final initial = _initialReport(date, inputs);
     final reportF = _fetchReport(date, inputs, early)
@@ -527,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         goalMinutes: i.goalMinutes,
         camera: i.camera,
         localRating: i.localRating,
+        ratingIsFresh: i.ratingIsFresh,
       );
 
   /// 問後端之後的完整版。[early] 是已經先發出去的請求（起床流程）。
@@ -546,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       goalMinutes: i.goalMinutes,
       camera: i.camera,
       localRating: i.localRating,
+      ratingIsFresh: i.ratingIsFresh,
     );
   }
 
@@ -1885,13 +1891,26 @@ class _ReportInputs {
   final SleepSession? session;
   final int goalMinutes;
 
+  /// localRating 是起床流程裡剛填的（見 MorningReport.withExtras）。
+  final bool ratingIsFresh;
+
   const _ReportInputs({
     required this.marks,
     required this.localRating,
     required this.camera,
     required this.session,
     required this.goalMinutes,
+    this.ratingIsFresh = false,
   });
+
+  _ReportInputs withFreshRating(MorningRating rating) => _ReportInputs(
+        marks: marks,
+        localRating: rating,
+        camera: camera,
+        session: session,
+        goalMinutes: goalMinutes,
+        ratingIsFresh: true,
+      );
 }
 
 /// 起床流程在動畫一開始就先發出去的請求。

@@ -313,18 +313,22 @@ class MorningReport {
   /// ⚠️ +N XP 照抄後端那一晚的數字，**差的晚上就是 +0，不藏**（紅線 5）。
   ///    手錶資料還沒到時，後端那一晚只有行為那部分 → 標成 so far。
   /// ⚠️ 自評：後端已經有那一晚的就用後端的，手機上的只在後端沒有時補上。
+  ///    例外 [ratingIsFresh]：起床流程裡剛填的那一份——後端那份是動畫一開始就抓的，
+  ///    比它舊（同一晚填第二次時，會把剛填的蓋回上一次的答案；2026-11-13 實機抓到）。
   MorningReport withExtras({
     GameState? game,
     int? goalMinutes,
     CameraNight? camera,
     MorningRating? localRating,
+    bool ratingIsFresh = false,
   }) {
     NightXp? night;
     for (final n in game?.recentNights ?? const <NightXp>[]) {
       if (n.date == date) night = n;
     }
     final forNext = game?.xpForNext;
-    final useLocal = rating == null && localRating?.date == date;
+    final useLocal =
+        (rating == null || ratingIsFresh) && localRating?.date == date;
     return _copy(
       replaceGame: true,
       level: game?.level,

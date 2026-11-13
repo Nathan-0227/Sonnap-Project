@@ -1010,6 +1010,36 @@ void main() {
       expect(find.byType(MorningReportScreen), findsNothing);
     });
 
+    // 2026-11-13 實機抓到：分數那份在動畫一開始就抓，那時後端還是同一晚上一次的答案
+    // （Somewhat）；剛填的 Well-rested 被它蓋掉。
+    for (final save in [true, false]) {
+      testWidgets(
+          '⚠️ 同一晚填第二次：${save ? '剛填的蓋過先抓到的後端舊答案' : 'Skip 就照後端的'}',
+          (tester) async {
+        final json = homeWaiting('2026-11-12');
+        json['morning_rating'] = {
+          'rested': 3,
+          'label': 'SENTINEL-old-answer',
+          'tags': [],
+        };
+        await pumpHome(tester, at(12, 7, 10), _Source(json),
+            rested: _Sender(), before: (s) => s.markStart(at(11, 23, 40)));
+        await slideUp(tester);
+        if (save) {
+          await tester.tap(find.byKey(const Key('rested-face-4')));
+          await tester.pump();
+          await tester.ensureVisible(find.byKey(const Key('rested-save')));
+          await tester.tap(find.byKey(const Key('rested-save')));
+        } else {
+          await tester.tap(find.byKey(const Key('rested-skip')));
+        }
+        await settle(tester, 15);
+        await viewReport(tester);
+        expect(textOf(tester, 'report-rating-label'),
+            save ? 'Well-rested' : 'SENTINEL-old-answer');
+      });
+    }
+
     testWidgets('填了自評 → 送出那一晚、起床後幾分鐘；報告出現「You felt」',
         (tester) async {
       final source = _Source(homeWaiting('2026-11-12'));
