@@ -152,6 +152,14 @@ void main() {
     // 使用者 2026-11-13 拿掉：左邊的睡著心率（Sleep Stages 疊線還看得到）、右邊的 VO2 max
     expect(find.byKey(const Key('tile-night-hr')), findsNothing);
     expect(find.byKey(const Key('tile-vo2')), findsNothing);
+    // 右邊四項平均分配高度：最後一項下面不留一大塊空白
+    final hrRow = tester.getRect(find.byKey(const Key('tile-day-hr')));
+    final steps = tester.getRect(find.byKey(const Key('tile-steps')));
+    final kcal = tester.getRect(find.byKey(const Key('tile-kcal')));
+    final pitch = kcal.center.dy - steps.center.dy;
+    expect(act.bottom - tester.getRect(find.byKey(const Key('home-moveiq'))).bottom,
+        lessThan(pitch / 2 + 12), reason: '底下不留整段空白');
+    expect(hrRow.top, greaterThan(kcal.bottom));
     // 左欄的小卡一張張往下疊（不是 2x2）
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
     final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
@@ -191,7 +199,7 @@ void main() {
   testWidgets('⚠️ 兩個心率不混：首頁兩欄只放整天心率；沒有白天資料時 Sleep 格子才放睡著期間的', (tester) async {
     await pumpHome(tester, session());
     await scrollTo(tester, find.byKey(const Key('tile-day-hr')));
-    textIn(tester, 'tile-day-hr', 'Heart rate (all day)');
+    textIn(tester, 'tile-day-hr', 'all day · resting 59');
     textIn(tester, 'tile-day-hr', 'resting 59');
     expect(find.byKey(const Key('tile-night-hr')), findsNothing);
   });

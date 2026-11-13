@@ -2037,11 +2037,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           key: 'tile-day-hr',
           icon: Icons.monitor_heart_rounded,
           color: const Color(0xFFFF8AB8),
-          title: 'Heart rate (all day)',
+          title: 'Heart rate',
           value: [('${hr.min.round()}–${hr.max.round()}', 'bpm')],
-          note: a.restingHeartRate == null
-              ? null
-              : 'resting ${a.restingHeartRate}',
+          // 「all day」寫在小字（標題放不下括號）：跟 Sleep Stages 的睡著心率分得開
+          note: [
+            'all day',
+            if (a.restingHeartRate != null) 'resting ${a.restingHeartRate}',
+          ].join(' · '),
           onTap: () => _showDayHeartRate(a),
         ),
     ];
@@ -2102,14 +2104,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
-                  for (final r in act.rows) ...[
-                    const Divider(height: 22, color: SonnapColors.cardBorder),
-                    r,
-                  ],
-                  if (act.moveIq != null) ...[
-                    const Divider(height: 22, color: SonnapColors.cardBorder),
-                    act.moveIq!,
-                  ],
+                  // 每一項平均分配卡片的高度、在自己那一段裡置中（使用者 2026-11-13：「不要下面留那麼多空間」）
+                  for (final r in [...act.rows, ?act.moveIq])
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          const Divider(height: 1, color: SonnapColors.cardBorder),
+                          Expanded(
+                            child: Align(alignment: Alignment.centerLeft, child: r),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
