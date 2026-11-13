@@ -569,7 +569,7 @@ void main() {
       expect(find.text('On time'), findsNothing);
     });
 
-    testWidgets('More details 預設收著；打開後照抄 WASO、心率、效率＋警語＋basis、攝影機',
+    testWidgets('昨晚的格子：直接攤開（不再收合），照抄 WASO、心率、效率＋警語＋basis、攝影機',
         (tester) async {
       const camera = CameraNight(
         date: '2026-11-12',
@@ -581,21 +581,27 @@ void main() {
         buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
             .withExtras(camera: camera),
       );
-      expect(find.byKey(const Key('report-waso')), findsNothing,
-          reason: '使用者定：收成 More details，點了才展開');
-      await tester.ensureVisible(find.byKey(const Key('report-details-toggle')));
-      await tester.tap(find.byKey(const Key('report-details-toggle')));
-      await settle(tester);
+      expect(find.byKey(const Key('report-details-toggle')), findsNothing,
+          reason: '2026-11-14 改成圖形格子，不再收成 More details');
+      await tester.scrollUntilVisible(find.byKey(const Key('report-camera')), 300,
+          scrollable: find.byType(Scrollable).first);
       expect(textOf(tester, 'report-waso'), '14m');
       expect(textOf(tester, 'report-hr'), '56 bpm avg · 51 resting');
       expect(textOf(tester, 'report-efficiency'), '98.9%',
           reason: '照抄，不四捨五入掉小數');
+      expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
+      expect(find.text('Camera data is not part of your score.'), findsOneWidget);
+      expect(find.byKey(const Key('report-efficiency-ring')), findsOneWidget);
+      // 效率的警語與 basis 很長：點格子才跳出來（以前也是收在 More details 裡）
+      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
+      await tester.tap(find.byKey(const Key('report-efficiency-tile')));
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsOneWidget,
           reason: '原文照抄，前面接項目名稱（與 Insights 頁同一個寫法）');
       expect(find.text('Basis: SENTINEL-basis-measured'), findsOneWidget,
           reason: 'App 裡有好幾個「效率」，只有 basis 分得開');
-      expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
-      expect(find.text('Camera data is not part of your score.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('別晚的攝影機不放進這一晚', (tester) async {

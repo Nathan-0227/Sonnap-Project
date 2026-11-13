@@ -2078,6 +2078,20 @@ def get_garmin_daily(user_id, date, db_path=None):
     return _garmin_daily_row(rows[0]) if rows else None
 
 
+def list_garmin_daily(user_id, since, until, db_path=None):
+    """since..until（含）之間每一天的白天資料，照日期排；move_iq 已解成 list。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM garmin_daily WHERE user_id = ? AND date >= ? AND date <= ? "
+            "ORDER BY date",
+            (user_id, since, until),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [_garmin_daily_row(r) for r in rows]
+
+
 def latest_vo2max(user_id, on_or_before, since, db_path=None):
     """since..on_or_before 之間最近一次量到的 VO2 max → (值, 日期)；沒有就 None。"""
     conn = connect(db_path)

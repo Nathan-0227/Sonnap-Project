@@ -39,6 +39,9 @@ class SleepStagesCard extends StatefulWidget {
   /// 靜止心率（後端 metrics.resting_heart_rate）。只在選了心率時寫在下面那一行。
   final double? restingHeartRate;
 
+  /// 一打開就疊哪條線（'heartRate'／'movement'／'camera'）。報告點心率、攝影機格子時用。
+  final String? initialOverlay;
+
   const SleepStagesCard({
     super.key,
     required this.stages,
@@ -47,6 +50,7 @@ class SleepStagesCard extends StatefulWidget {
     this.movement,
     this.camera,
     this.restingHeartRate,
+    this.initialOverlay,
   });
 
   static const awake = Color(0xFFFF8AD8);
@@ -61,7 +65,9 @@ class SleepStagesCard extends StatefulWidget {
 enum _Overlay { heartRate, movement, camera }
 
 class _SleepStagesCardState extends State<SleepStagesCard> {
-  _Overlay? _overlay;
+  late _Overlay? _overlay = _Overlay.values
+      .where((o) => o.name == widget.initialOverlay)
+      .firstOrNull;
 
   /// 點到／滑到的那一刻（null＝沒有泡泡）。切換疊線時留著，泡泡的字跟著換。
   DateTime? _probe;

@@ -7,7 +7,11 @@ import '../services/morning_report.dart';
 import '../theme/report_style.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
-import '../widgets/yesterday_card.dart';
+import '../models/night_curve.dart';
+import '../models/yesterday_activity.dart';
+import '../services/night_compare.dart' show shortDate;
+import '../widgets/day_heart_rate_chart.dart';
+import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/sleepy_pet.dart';
 
@@ -67,11 +71,27 @@ const String kReportOpenInsights = 'insights';
 /// （中文手機上變成中文，或沒初始化語系時直接丟錯），而全 App 的輸出是英文。
 String reportDateTitle(DateTime d) {
   const days = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
 }
@@ -86,7 +106,6 @@ String? adherenceLine(double? minutes) {
 class _MorningReportScreenState extends State<MorningReportScreen> {
   late MorningReport _report = widget.initial;
   bool _loading = false;
-  bool _detailsOpen = false;
 
   @override
   void initState() {
@@ -94,25 +113,29 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final load = widget.load;
     if (load != null) {
       _loading = true;
-      load().then((r) async {
-        if (!mounted) return;
-        setState(() => _report = r);
-        final summary = widget.loadSummary;
-        if (summary != null && r.hasScore) {
-          final json = await summary();
-          if (mounted) setState(() => _report = _report.withSummary(json));
-        }
-      }).whenComplete(() {
-        if (mounted) setState(() => _loading = false);
-      });
+      load()
+          .then((r) async {
+            if (!mounted) return;
+            setState(() => _report = r);
+            final summary = widget.loadSummary;
+            if (summary != null && r.hasScore) {
+              final json = await summary();
+              if (mounted) setState(() => _report = _report.withSummary(json));
+            }
+          })
+          .whenComplete(() {
+            if (mounted) setState(() => _loading = false);
+          });
     } else if (widget.loadSummary != null && widget.initial.hasScore) {
       // 等待畫面已經備好分數，只剩 AI 那段還在路上（超過等待時間）
       _loading = true;
-      widget.loadSummary!().then((json) {
-        if (mounted) setState(() => _report = _report.withSummary(json));
-      }).whenComplete(() {
-        if (mounted) setState(() => _loading = false);
-      });
+      widget.loadSummary!()
+          .then((json) {
+            if (mounted) setState(() => _report = _report.withSummary(json));
+          })
+          .whenComplete(() {
+            if (mounted) setState(() => _loading = false);
+          });
     }
   }
 
@@ -135,20 +158,15 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                   _header(r),
                   const SizedBox(height: 14),
                   _hero(r),
-                  if (r.level != null) ...[
-                    const SizedBox(height: 14),
-                    _xp(r),
-                  ],
-                  if (hasBuddy) ...[
-                    const SizedBox(height: 14),
-                    _buddy(r),
-                  ],
-                  const SizedBox(height: 14),
-                  _timeCards(r),
-                  if (r.lightsOutAt != null) ...[
-                    const SizedBox(height: 14),
-                    _phoneDown(r),
-                  ],
+                  if (r.level != null) ...[const SizedBox(height: 14), _xp(r)],
+                  if (hasBuddy) ...[const SizedBox(height: 14), _buddy(r)],
+                  // 昨晚的數字（2026-11-14 改成圖形格子，參考圖：每一格的圖就是那個數字）
+                  const SizedBox(height: 18),
+                  reportSectionTitle(
+                    'Last night',
+                    key: const Key('report-last-night'),
+                  ),
+                  _lastNightTiles(r),
                   if (r.stages != null) ...[
                     const SizedBox(height: 14),
                     SleepStagesCard(
@@ -165,14 +183,15 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     const SizedBox(height: 14),
                     _splitCard(r),
                   ],
-                  // 前一天的 Garmin 白天資料（2026-11-13）：只呈現、不計分；那天沒資料就整塊不畫
-                  if (r.yesterday != null) ...[
-                    const SizedBox(height: 14),
-                    YesterdayCard(data: r.yesterday!),
-                  ],
-                  if (r.hasDetails) ...[
-                    const SizedBox(height: 14),
-                    _details(r),
+                  // 前一天的 Garmin 白天資料：只呈現、不計分；那天沒資料就整段不畫
+                  if (r.yesterday != null &&
+                      _yesterdayTiles(r.yesterday!) != null) ...[
+                    const SizedBox(height: 18),
+                    reportSectionTitle(
+                      'Yesterday · ${_dayLabel(r.yesterday!.date)}',
+                      key: const Key('report-yesterday'),
+                    ),
+                    _yesterdayTiles(r.yesterday!)!,
                   ],
                   if (!r.hasScore && widget.pending) ...[
                     const SizedBox(height: 14),
@@ -288,7 +307,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               backgroundColor: Colors.white.withValues(alpha: 0.06),
               side: const BorderSide(color: Color(0x2EFFFFFF)),
             ),
-            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
         ),
       ],
@@ -445,7 +468,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.watch_rounded, color: ReportColors.lilac, size: 30),
+            const Icon(
+              Icons.watch_rounded,
+              color: ReportColors.lilac,
+              size: 30,
+            ),
             const SizedBox(height: 8),
             Text(
               widget.pending ? kWaitingForWatch : kNoWatchData,
@@ -567,7 +594,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                             : '${_n(into)} / ${_n(size)} XP',
                         key: const Key('report-xp-text'),
                         style: const TextStyle(
-                            color: ReportColors.muted, fontSize: 12),
+                          color: ReportColors.muted,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     if (size != null)
@@ -575,7 +604,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                         '${_n(size - into)} to Lv${(r.level ?? 0) + 1}',
                         key: const Key('report-xp-to-next'),
                         style: const TextStyle(
-                            color: ReportColors.muted, fontSize: 12),
+                          color: ReportColors.muted,
+                          fontSize: 12,
+                        ),
                       ),
                   ],
                 ),
@@ -594,7 +625,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                           child: const DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [ReportColors.purple, Color(0xFFFFB36B)],
+                                colors: [
+                                  ReportColors.purple,
+                                  Color(0xFFFFB36B),
+                                ],
                               ),
                             ),
                           ),
@@ -666,8 +700,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.auto_awesome_rounded,
-                  size: 16, color: ReportColors.accent),
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 16,
+                color: ReportColors.accent,
+              ),
               SizedBox(width: 8),
               Text(
                 'From your buddy',
@@ -710,7 +747,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       tip.isNote
                           ? Icons.info_outline_rounded
                           : Icons.lightbulb_outline_rounded,
-                      key: Key(tip.isNote ? 'report-tip-note' : 'report-tip-tip'),
+                      key: Key(
+                        tip.isNote ? 'report-tip-note' : 'report-tip-tip',
+                      ),
                       size: 18,
                       color: ReportColors.gold,
                     ),
@@ -737,150 +776,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   // ── Time in bed／Time asleep ─────────────────────────────────────
 
-  Widget _timeCards(MorningReport r) {
-    final inBed = r.timeInBedMinutes;
-    final asleep = r.hasScore ? r.sleepMinutes : null;
-    final goal = r.goalMinutes;
-    final Widget asleepFooter;
-    if (asleep == null) {
-      asleepFooter = const Text(
-        'From your watch',
-        style: TextStyle(color: ReportColors.faint, fontSize: 12),
-      );
-    } else if (goal == null) {
-      asleepFooter = const SizedBox.shrink();
-    } else {
-      asleepFooter = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              key: const Key('report-goal-bar'),
-              value: (asleep / goal).clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: Colors.white.withValues(alpha: 0.14),
-              // 不依達標與否變色（使用者定）
-              color: ReportColors.lilac,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'of your ${reportHm(goal)} goal',
-            key: const Key('report-goal-line'),
-            style: const TextStyle(color: ReportColors.muted, fontSize: 12),
-          ),
-        ],
-      );
-    }
-    final start = r.bedStart;
-    final end = r.bedEnd;
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: _timeCard(
-              key: const Key('report-in-bed'),
-              icon: Icons.bed_rounded,
-              label: 'Time in bed',
-              value: inBed == null ? '—' : reportHm(inBed),
-              valueKey: 'report-in-bed-value',
-              change:
-                  inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
-              changeKey: 'report-in-bed-change',
-              dashed: inBed == null,
-              footer: Text(
-                start == null
-                    ? 'No bedtime recorded'
-                    : '${reportClock(start)} → '
-                        '${end == null ? '—' : reportClock(end)}',
-                key: const Key('report-times'),
-                style: const TextStyle(color: ReportColors.muted, fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _timeCard(
-              key: const Key('report-asleep'),
-              icon: Icons.nightlight_round,
-              label: 'Time asleep',
-              value: asleep == null ? '—' : reportHm(asleep),
-              valueKey: 'report-duration',
-              change: asleep == null
-                  ? null
-                  : changeOf(asleep, r.previousSleepMinutes),
-              changeKey: 'report-duration-change',
-              dashed: asleep == null,
-              footer: asleepFooter,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _timeCard({
-    required Key key,
-    required IconData icon,
-    required String label,
-    required String value,
-    required String valueKey,
-    required ChangeDirection? change,
-    required String changeKey,
-    required Widget footer,
-    bool dashed = false,
-  }) {
-    return Container(
-      key: key,
-      padding: const EdgeInsets.all(14),
-      decoration: reportCard(dashed: dashed),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: ReportColors.muted),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  style:
-                      const TextStyle(color: ReportColors.muted, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    value,
-                    key: Key(valueKey),
-                    style: TextStyle(
-                      color: dashed ? ReportColors.dim : Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              if (change != null && change != ChangeDirection.same)
-                _changeBadge(change, changeKey),
-            ],
-          ),
-          const SizedBox(height: 8),
-          footer,
-        ],
-      ),
-    );
-  }
-
   /// 跟上一晚比：**只代表方向**，上升紅、下降綠（使用者定）。
   Widget _changeBadge(ChangeDirection d, String key) {
     final up = d == ChangeDirection.up;
@@ -903,66 +798,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       ),
     );
   }
-
-  // ── Phone down｜Your target ─────────────────────────────────────
-
-  Widget _phoneDown(MorningReport r) {
-    final line = adherenceLine(r.adherenceMinutes);
-    return Container(
-      key: const Key('report-phone-down'),
-      padding: const EdgeInsets.all(16),
-      decoration: reportCard(),
-      child: Column(
-        children: [
-          IntrinsicHeight(
-            child: Row(
-              children: [
-                Expanded(
-                  child: _centerStat('Phone down', reportClock(r.lightsOutAt!),
-                      Colors.white, 'report-phone-down-at'),
-                ),
-                if (r.targetBedtime != null) ...[
-                  const VerticalDivider(
-                      width: 1, thickness: 1, color: ReportColors.border),
-                  Expanded(
-                    child: _centerStat('Your target', r.targetBedtime!,
-                        ReportColors.accent, 'report-target'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (line != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              line,
-              key: const Key('report-adherence'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: ReportColors.soft, fontSize: 13),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _centerStat(String label, String value, Color color, String key) =>
-      Column(
-        children: [
-          Text(label,
-              style: const TextStyle(color: ReportColors.muted, fontSize: 13)),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            key: Key(key),
-            style: TextStyle(
-              color: color,
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      );
 
   // ── 淺睡／深睡／REM 比例（沒有 Sleep phases 圖的晚上） ─────────────
 
@@ -1078,179 +913,621 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   // ── More details（收合）：WASO、心率、效率、攝影機 ──────────────────
 
-  Widget _details(MorningReport r) {
-    final showWaso = r.hasScore && r.wasoMinutes != null;
-    // 有心率曲線（Sleep Stages 卡點 Heart rate 會寫睡著期間的平均）就不在這裡再寫一次：
-    // 這裡的 avg 是 metrics.avg_heart_rate（混了清醒時段），同一頁會是兩個不同的「平均心率」
-    final showHr = r.hasScore &&
-        r.heartRate == null &&
-        (r.avgHeartRate != null || r.restingHeartRate != null);
-    final showEff = r.hasScore && r.efficiency != null;
-    final showCam = r.camera?.usualLabel != null;
-    final names = [
-      if (showWaso) 'Awake time',
-      if (showHr) 'Heart rate',
-      if (showEff) 'Efficiency',
-      if (showCam) 'Movement',
+  // ── 圖形格子（2026-11-14 使用者定，參考圖：每一格的圖就是那個數字）─────────
+  //
+  // ⚠️ 底下那行只寫事實（參考圖寫 Elevated／Perfect day，我們不寫）；沒值的格子不畫、不畫成 0。
+
+  static const _cAsleep = Color(0xFFB9A6FF);
+  static const _cBed = Color(0xFF8FA8FF);
+  static const _cPhone = Color(0xFFFFC97A);
+  static const _cEff = Color(0xFF7EC8FF);
+  static const _cAwake = Color(0xFFFF8AD8);
+  static const _cHr = Color(0xFFFF8AB8);
+  static const _cCam = Color(0xFFFFD96A);
+  static const _cSteps = Color(0xFFFFB37A);
+  static const _cActive = Color(0xFFFFD96A);
+  static const _cStress = Color(0xFFA996FF);
+  static const _cBattery = Color(0xFF6FE3C1);
+  static const _cMove = Color(0xFF7ED957);
+
+  Widget? _badge(ChangeDirection? d, String key) =>
+      d == null || d == ChangeDirection.same ? null : _changeBadge(d, key);
+
+  /// 曲線 → 小折線的點（x 照時間，0–1）。
+  static List<(double, double)> _curvePoints(NightCurve c) {
+    final pts = c.points;
+    final t0 = pts.first.time;
+    final span = pts.last.time.difference(t0).inSeconds;
+    if (span <= 0) return const [];
+    return [
+      for (final p in pts) (p.time.difference(t0).inSeconds / span, p.value),
     ];
-    return Container(
-      decoration: reportCard(radius: 18),
-      child: Column(
-        children: [
-          InkWell(
-            key: const Key('report-details-toggle'),
-            borderRadius: BorderRadius.circular(18),
-            onTap: () => setState(() => _detailsOpen = !_detailsOpen),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 52),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.monitor_heart_outlined,
-                        size: 18, color: ReportColors.accent),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'More details',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            names.join(' · '),
-                            style: const TextStyle(
-                                color: ReportColors.muted, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    AnimatedRotation(
-                      turns: _detailsOpen ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: const Icon(Icons.expand_more_rounded,
-                          color: ReportColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+  }
+
+  void _openCurve(MorningReport r, String overlay) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ReportColors.sheet,
+      builder: (_) => SafeArea(
+        child: Padding(
+          key: Key('report-curve-$overlay'),
+          padding: const EdgeInsets.all(16),
+          child: SleepStagesCard(
+            stages: r.stages!,
+            totalSleepMinutes: r.sleepMinutes?.round(),
+            heartRate: r.heartRate,
+            movement: r.movement,
+            camera: r.cameraMotion,
+            restingHeartRate: r.restingHeartRate,
+            initialOverlay: overlay,
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topCenter,
-            child: !_detailsOpen
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    key: const Key('report-details'),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Divider(height: 1, color: ReportColors.border),
-                        if (showWaso)
-                          _detailRow(
-                            'Awake during the night',
-                            reportHm(r.wasoMinutes!),
-                            'report-waso',
-                          ),
-                        if (showHr)
-                          _detailRow(
-                            'Heart rate',
-                            [
-                              if (r.avgHeartRate != null)
-                                '${r.avgHeartRate!.round()} bpm avg',
-                              if (r.restingHeartRate != null)
-                                '${r.restingHeartRate!.round()} resting',
-                            ].join(' · '),
-                            'report-hr',
-                          ),
-                        if (showEff)
-                          _detailRow(
-                            'Sleep efficiency',
-                            // 照抄，不四捨五入掉小數
-                            '${r.efficiency}%',
-                            'report-efficiency',
-                            notes: [
-                              // 與 Insights 頁同一個寫法（「Efficiency - 原文」）：
-                              // 後端那段字是接在項目名稱後面用的，原文不改
-                              if (r.efficiencyCaveat != null)
-                                'Efficiency - ${r.efficiencyCaveat!}',
-                              if (r.efficiencyBasis != null)
-                                'Basis: ${r.efficiencyBasis}',
-                            ],
-                          ),
-                        if (showCam)
-                          _detailRow(
-                            'Movement (camera)',
-                            r.camera!.usualLabel!,
-                            'report-camera',
-                            notes: const [
-                              'Camera data is not part of your score.',
-                            ],
-                            valueBelow: true,
-                          ),
-                      ],
-                    ),
-                  ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _detailRow(String label, String value, String key,
-      {List<String> notes = const [], bool valueBelow = false}) {
-    final valueText = Text(
-      value,
-      key: Key(key),
-      textAlign: valueBelow ? TextAlign.start : TextAlign.end,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 15,
-        fontWeight: FontWeight.w800,
+  Widget _lastNightTiles(MorningReport r) {
+    final asleep = r.hasScore ? r.sleepMinutes : null;
+    final goal = r.goalMinutes;
+    final inBed = r.timeInBedMinutes;
+    final start = r.bedStart;
+    final end = r.bedEnd;
+
+    final asleepTile = ReportTile(
+      key: const Key('report-asleep'),
+      icon: Icons.nightlight_round,
+      color: _cAsleep,
+      title: 'Time asleep',
+      value: asleep == null ? '—' : reportHm(asleep),
+      valueKey: const Key('report-duration'),
+      valueTrailing: _badge(
+        asleep == null ? null : changeOf(asleep, r.previousSleepMinutes),
+        'report-duration-change',
       ),
+      dashed: asleep == null,
+      // 光帶長度＝睡了多久÷目標；**不依達標與否變色**（使用者定）
+      graphic: asleep != null && goal != null && goal > 0
+          ? paintBox(
+              WaveBarPainter(asleep / goal, _cAsleep),
+              key: const Key('report-goal-bar'),
+            )
+          : null,
+      graphicHeight: 30,
+      lines: [
+        if (asleep == null)
+          const Text('From your watch')
+        else if (goal != null)
+          Text(
+            'of your ${reportHm(goal)} goal',
+            key: const Key('report-goal-line'),
+          ),
+      ],
     );
-    const labelStyle = TextStyle(color: ReportColors.muted, fontSize: 13);
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (valueBelow) ...[
-            Text(label, style: labelStyle),
-            const SizedBox(height: 2),
-            valueText,
-          ] else
-            // 標籤照自己的寬度，數值拿剩下的（各佔一半的話「75 bpm avg · 53 resting」會被擠成兩行）
-            Row(
+
+    final inBedTile = ReportTile(
+      key: const Key('report-in-bed'),
+      icon: Icons.bed_rounded,
+      color: _cBed,
+      title: 'Time in bed',
+      value: inBed == null ? '—' : reportHm(inBed),
+      valueKey: const Key('report-in-bed-value'),
+      valueTrailing: _badge(
+        inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
+        'report-in-bed-change',
+      ),
+      dashed: inBed == null,
+      graphic: start == null
+          ? null
+          : paintBox(
+              NightTimelinePainter(
+                nightMinute(start.hour, start.minute),
+                end == null ? null : nightMinute(end.hour, end.minute),
+                _cBed,
+              ),
+              key: const Key('report-bed-timeline'),
+            ),
+      graphicHeight: 30,
+      lines: [
+        // 沒按按鈕：不拿手錶的入睡冒充上床
+        Text(
+          start == null
+              ? 'No bedtime recorded'
+              : '${reportClock(start)} → ${end == null ? '—' : reportClock(end)}',
+          key: const Key('report-times'),
+        ),
+      ],
+    );
+
+    Widget? phoneTile;
+    final lightsOut = r.lightsOutAt;
+    if (lightsOut != null) {
+      final target = r.targetBedtime;
+      final tParts = target?.split(':');
+      final ok = tParts != null && tParts.length == 2;
+      final th = ok ? int.tryParse(tParts[0]) : null;
+      final tm = ok ? int.tryParse(tParts[1]) : null;
+      final line = adherenceLine(r.adherenceMinutes);
+      phoneTile = ReportTile(
+        key: const Key('report-phone-down'),
+        icon: Icons.phone_android_rounded,
+        color: _cPhone,
+        title: 'Phone down',
+        value: reportClock(lightsOut),
+        valueKey: const Key('report-phone-down-at'),
+        graphic: th == null || tm == null
+            ? null
+            : paintBox(
+                ClockArcPainter(
+                  nightMinute(th, tm),
+                  nightMinute(lightsOut.hour, lightsOut.minute),
+                  _cPhone,
+                ),
+                key: const Key('report-phone-arc'),
+              ),
+        graphicHeight: 40,
+        lines: [
+          if (target != null)
+            // Wrap：半格放不下時換行，不溢出
+            Wrap(
               children: [
-                Text(label, style: labelStyle),
-                const SizedBox(width: 12),
-                Expanded(child: valueText),
+                const Text('Your target '),
+                Text(
+                  target,
+                  key: const Key('report-target'),
+                  style: const TextStyle(
+                    color: ReportColors.accent,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
-          for (final n in notes)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                n,
-                style: const TextStyle(
-                  color: ReportColors.faint,
-                  fontSize: 11,
-                  height: 1.35,
+          // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
+          if (line != null) Text(line, key: const Key('report-adherence')),
+        ],
+      );
+    }
+
+    Widget? awakeTile;
+    if (r.hasScore && r.wasoMinutes != null) {
+      final st = r.stages;
+      List<(double, double)>? segs;
+      if (st != null) {
+        final total = st.end.difference(st.start).inSeconds;
+        if (total > 0) {
+          segs = [
+            for (final s in st.segments)
+              if (s.stage == 'awake')
+                (
+                  s.start.difference(st.start).inSeconds / total,
+                  s.end.difference(st.start).inSeconds / total,
+                ),
+          ];
+        }
+      }
+      awakeTile = ReportTile(
+        key: const Key('report-awake'),
+        icon: Icons.visibility_rounded,
+        color: _cAwake,
+        title: 'Awake',
+        value: reportHm(r.wasoMinutes!),
+        valueKey: const Key('report-waso'),
+        graphic: segs == null
+            ? null
+            : paintBox(
+                SegmentStripPainter(segs, _cAwake),
+                key: const Key('report-awake-strip'),
+              ),
+        graphicHeight: 20,
+        lines: const [Text('during the night')],
+      );
+    }
+
+    // 心率：有曲線就用曲線那一段的平均（跟 Sleep Stages 點 Heart rate 同一個數）；
+    // 沒有曲線才用 metrics 的平均。⚠️ 同一頁不得出現兩個不同的「平均心率」。
+    Widget? hrTile;
+    final hrCurve = r.heartRate;
+    final hrAvg = hrCurve?.avg ?? r.avgHeartRate;
+    if (r.hasScore && (hrAvg != null || r.restingHeartRate != null)) {
+      hrTile = ReportTile(
+        key: const Key('report-hr-tile'),
+        icon: Icons.favorite_rounded,
+        color: _cHr,
+        title: 'Heart rate',
+        value: hrAvg == null ? null : '${hrAvg.round()} bpm',
+        graphic: hrCurve == null
+            ? null
+            : paintBox(
+                SparklinePainter(_curvePoints(hrCurve), _cHr),
+                key: const Key('report-hr-line'),
+              ),
+        onTap: hrCurve == null || r.stages == null
+            ? null
+            : () => _openCurve(r, 'heartRate'),
+        lines: [
+          Text(
+            [
+              if (hrAvg != null) '${hrAvg.round()} bpm avg',
+              if (r.restingHeartRate != null)
+                '${r.restingHeartRate!.round()} resting',
+            ].join(' · '),
+            key: const Key('report-hr'),
+          ),
+        ],
+      );
+    }
+
+    Widget? camTile;
+    if (r.camera?.usualLabel != null) {
+      final cam = r.cameraMotion;
+      camTile = ReportTile(
+        key: const Key('report-camera-tile'),
+        icon: Icons.videocam_rounded,
+        color: _cCam,
+        title: 'Movement (camera)',
+        graphic: cam == null
+            ? null
+            : paintBox(
+                SparklinePainter(_curvePoints(cam), _cCam, lo: 0),
+                key: const Key('report-camera-line'),
+              ),
+        onTap: cam == null || r.stages == null
+            ? null
+            : () => _openCurve(r, 'camera'),
+        lines: [
+          // 後端寫好的那句「跟你平常比」，照抄
+          Text(
+            r.camera!.usualLabel!,
+            key: const Key('report-camera'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Text(
+            'Camera data is not part of your score.',
+            style: TextStyle(color: ReportColors.faint, fontSize: 11),
+          ),
+        ],
+      );
+    }
+
+    // 效率：圓環＝百分比。警語與 basis 很長，點格子才跳出來（以前也是收在 More details 裡）
+    Widget? effTile;
+    if (r.hasScore && r.efficiency != null) {
+      final notes = [
+        // 與 Insights 頁同一個寫法（「Efficiency - 原文」）：後端那段字照抄
+        if (r.efficiencyCaveat != null) 'Efficiency - ${r.efficiencyCaveat!}',
+        // App 裡有好幾個「效率」，只有 basis 分得開
+        if (r.efficiencyBasis != null) 'Basis: ${r.efficiencyBasis}',
+      ];
+      effTile = ReportTile(
+        key: const Key('report-efficiency-tile'),
+        icon: Icons.speed_rounded,
+        color: _cEff,
+        title: 'Efficiency',
+        // 照抄，不四捨五入掉小數
+        value: '${r.efficiency}%',
+        valueKey: const Key('report-efficiency'),
+        graphic: paintBox(
+          RingPainter(r.efficiency!, _cEff),
+          key: const Key('report-efficiency-ring'),
+        ),
+        graphicHeight: 56,
+        onTap: notes.isEmpty
+            ? null
+            : () => showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: ReportColors.sheet,
+                builder: (_) => SafeArea(
+                  child: Padding(
+                    key: const Key('report-efficiency-sheet'),
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sleep efficiency · ${r.efficiency}%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        for (final n in notes)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              n,
+                              style: const TextStyle(
+                                color: ReportColors.soft,
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
+        lines: [if (notes.isNotEmpty) const Text('How it is measured')],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        reportTileGrid([
+          asleepTile,
+          inBedTile,
+          phoneTile,
+          awakeTile,
+          effTile,
+          hrTile,
+          camTile,
+        ]),
+      ],
+    );
+  }
+
+  static String _dayLabel(String iso) {
+    final d = DateTime.tryParse(iso);
+    if (d == null) return iso;
+    const w = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return '${w[d.weekday - 1]}, ${shortDate(iso)}';
+  }
+
+  static String _comma(int v) {
+    final s = v.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+
+  static String _secHm(int sec) => reportHm(sec / 60);
+
+  /// 那一天的白天資料格子。一格都沒有 → null（整段不畫）。
+  Widget? _yesterdayTiles(YesterdayActivity y) {
+    // 最近 7 天（到那一天為止）
+    List<(String, double)> last7(int? Function(ActivityHistoryDay) pick) {
+      final days = [
+        for (final h in y.history)
+          if (h.date.compareTo(y.date) <= 0 && pick(h) != null) h,
+      ]..sort((a, b) => a.date.compareTo(b.date));
+      final tail = days.length > 7 ? days.sublist(days.length - 7) : days;
+      return [for (final h in tail) (shortDate(h.date), pick(h)!.toDouble())];
+    }
+
+    Widget? stepsTile;
+    if (y.steps != null) {
+      final hist = last7((h) => h.steps);
+      stepsTile = ReportTile(
+        key: const Key('report-steps'),
+        icon: Icons.directions_walk_rounded,
+        color: _cSteps,
+        title: 'Steps',
+        value: _comma(y.steps!),
+        valueKey: const Key('report-steps-value'),
+        graphic: hist.length < 2
+            ? null
+            : paintBox(
+                MountainPainter([for (final h in hist) h.$2], _cSteps),
+                key: const Key('report-steps-mountain'),
+              ),
+        onTap: hist.length < 2
+            ? null
+            : () => showReportBarsSheet(
+                context,
+                id: 'steps',
+                title: 'Steps',
+                bars: hist,
+                format: (v) => _comma(v.round()),
+              ),
+        lines: [
+          // 只寫 goal，不寫 reached（紅線 2）
+          if (y.stepGoal != null) Text('goal ${_comma(y.stepGoal!)}'),
+          if (y.distanceM != null || y.floorsUp != null)
+            Text(
+              [
+                if (y.distanceM != null)
+                  '${(y.distanceM! / 1000).toStringAsFixed(1)} km',
+                if (y.floorsUp != null)
+                  '${y.floorsUp!.toStringAsFixed(0)} floors up',
+              ].join(' · '),
             ),
         ],
-      ),
-    );
+      );
+    }
+
+    Widget? activeTile;
+    if (y.hasActivity) {
+      final hist = last7((h) => h.activeMinutes);
+      final active = y.activeMinutes;
+      activeTile = ReportTile(
+        key: const Key('report-active'),
+        icon: Icons.bolt_rounded,
+        color: _cActive,
+        title: 'Active time',
+        value: active == null ? null : reportHm(active),
+        graphic: paintBox(
+          StackedBarPainter([
+            ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
+            ((y.activeSec ?? 0).toDouble(), _cActive.withValues(alpha: 0.55)),
+            (
+              (y.sedentarySec ?? 0).toDouble(),
+              Colors.white.withValues(alpha: 0.16),
+            ),
+          ]),
+          key: const Key('report-active-bar'),
+        ),
+        graphicHeight: 18,
+        onTap: hist.length < 2
+            ? null
+            : () => showReportBarsSheet(
+                context,
+                id: 'active',
+                title: 'Active time',
+                bars: hist,
+                format: (v) => reportHm(v),
+              ),
+        lines: [
+          Text(
+            [
+              if (y.highlyActiveSec != null)
+                'high ${_secHm(y.highlyActiveSec!)}',
+              if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
+              if (y.sedentarySec != null) 'still ${_secHm(y.sedentarySec!)}',
+            ].join(' · '),
+          ),
+        ],
+      );
+    }
+
+    Widget? stressTile;
+    if (y.hasStress) {
+      // 同一色系深淺，不用紅黃（使用者定）；只給各段的時間，不加說明
+      final parts = [
+        ('Rest', y.stressRestSec, _cStress.withValues(alpha: 0.3)),
+        ('Low', y.stressLowSec, _cStress.withValues(alpha: 0.55)),
+        ('Medium', y.stressMediumSec, _cStress.withValues(alpha: 0.8)),
+        ('High', y.stressHighSec, _cStress),
+      ];
+      stressTile = ReportTile(
+        key: const Key('report-stress'),
+        icon: Icons.spa_rounded,
+        color: _cStress,
+        title: 'Stress',
+        graphic: paintBox(
+          GaugePainter([for (final p in parts) ((p.$2 ?? 0).toDouble(), p.$3)]),
+          key: const Key('report-stress-gauge'),
+        ),
+        graphicHeight: 52,
+        lines: [
+          Text(
+            [
+              for (final p in parts)
+                if (p.$2 != null) '${p.$1} ${_secHm(p.$2!)}',
+            ].join(' · '),
+          ),
+        ],
+      );
+    }
+
+    Widget? batteryTile;
+    if (y.hasBodyBattery) {
+      final up = y.bodyBatteryCharged;
+      final down = y.bodyBatteryDrained;
+      batteryTile = ReportTile(
+        key: const Key('report-body-battery'),
+        icon: Icons.battery_charging_full_rounded,
+        color: _cBattery,
+        title: 'Body Battery',
+        value: [if (up != null) '+$up', if (down != null) '−$down'].join(' / '),
+        // 不畫成電池：Garmin 只給充了多少、用掉多少，沒有「剩幾 %」
+        graphic: paintBox(
+          TwoBarsPainter(
+            (up ?? 0).toDouble(),
+            (down ?? 0).toDouble(),
+            _cBattery,
+            _cBattery.withValues(alpha: 0.4),
+          ),
+          key: const Key('report-body-battery-bars'),
+        ),
+        lines: const [Text('charged · drained')],
+      );
+    }
+
+    Widget? dayHrTile;
+    final dayHr = y.dayHeartRate;
+    if (dayHr != null) {
+      dayHrTile = ReportTile(
+        key: const Key('report-day-hr'),
+        icon: Icons.monitor_heart_rounded,
+        color: _cHr,
+        title: 'Heart rate',
+        value: '${dayHr.min.round()}–${dayHr.max.round()} bpm',
+        graphic: paintBox(
+          SparklinePainter(_curvePoints(dayHr), _cHr),
+          key: const Key('report-day-hr-line'),
+        ),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: ReportColors.sheet,
+          builder: (_) => SafeArea(
+            child: Padding(
+              key: const Key('report-day-hr-sheet'),
+              padding: const EdgeInsets.all(20),
+              child: SizedBox(height: 180, child: DayHeartRateChart(dayHr)),
+            ),
+          ),
+        ),
+        lines: [
+          Text(
+            [
+              'all day',
+              if (y.restingHeartRate != null) 'resting ${y.restingHeartRate}',
+            ].join(' · '),
+          ),
+        ],
+      );
+    }
+
+    Widget? moveTile;
+    final moves = y.moveIq;
+    if (moves != null && moves.isNotEmpty) {
+      final walks = moves.where((m) => m.type == 'walking').length;
+      final rides = moves.where((m) => m.type == 'cycling').length;
+      final others = moves.length - walks - rides;
+      moveTile = ReportTile(
+        key: const Key('report-moveiq'),
+        icon: Icons.route_rounded,
+        color: _cMove,
+        title: 'Move IQ',
+        value: [
+          if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
+          if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
+          if (others > 0) '$others other',
+        ].join(' · '),
+        graphic: paintBox(
+          SegmentStripPainter(
+            [
+              for (final m in moves)
+                if (m.startMinuteOfDay != null)
+                  (
+                    m.startMinuteOfDay! / 1440,
+                    (m.startMinuteOfDay! + m.minutes) / 1440,
+                  ),
+            ],
+            _cMove,
+            ticks: const [
+              (0, '0'),
+              (0.25, '6'),
+              (0.5, '12'),
+              (0.75, '18'),
+              (1, '24'),
+            ],
+          ),
+          key: const Key('report-moveiq-timeline'),
+        ),
+        graphicHeight: 30,
+      );
+    }
+
+    final tiles = [
+      stepsTile,
+      activeTile,
+      stressTile,
+      batteryTile,
+      dayHrTile,
+      moveTile,
+    ];
+    if (tiles.every((t) => t == null)) return null;
+    return reportTileGrid(tiles);
   }
 
   Widget _linkRow({
@@ -1285,8 +1562,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       ),
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: ReportColors.muted),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: ReportColors.muted,
+                  ),
                 ],
               ),
             ),
