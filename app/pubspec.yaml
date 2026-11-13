@@ -76,6 +76,7 @@ flutter:
     - assets/backgrounds/
     # 起床自評的五張臉（使用者以 prompt 生成，384×384 透明背景）
     - assets/rested/
+    - assets/moods/
 
   # 早晨報告與起床自評用的字（使用者 2026-11-12 定）。SIL OFL 1.1，授權檔在同一個資料夾。
   # 官方只出可變字型；Flutter 不會把 fontWeight 對應到 wght 軸，所以切成五個固定粗細

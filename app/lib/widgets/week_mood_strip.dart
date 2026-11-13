@@ -11,8 +11,11 @@ import '../theme/sonnap_colors.dart';
 ///    送到後端。等待畫面叫使用者「回首頁點這一天」，那一天就必須在、而且點得到。
 ///    所以終點是 [today] 而不是 history 最新那一晚。
 ///
-/// ⚠️ 用心情圖示而不是寵物小臉：2D 小狗目前只有兩種樣子，用小臉的話
-///    anxious 那晚看起來會跟 bored 一樣（2026-11-12 使用者決定）。
+/// 每一天畫的是**寵物的狗頭表情**（[MoodFace]，2026-11-13 使用者給的四張圖）。
+/// 起床自評卡那五顆圓臉是「你覺得怎樣」，這裡是「寵物的心情」——兩種不能用同一套臉，
+/// 不然同一個早上會看到兩個意思不同的同一張臉。
+/// （11-12 不用小臉，是因為 2D 小狗當時只有兩種身體，anxious 會跟 bored 一樣；
+///  狗頭四種表情都不同，那個理由不再成立。）
 /// ⚠️ 心情照抄 history 每晚的 `pet_mood`，Dart 不從分數推。
 class WeekMoodStrip extends StatelessWidget {
   final List<HistoryEntry> history;
@@ -124,7 +127,7 @@ class _MoodLegend extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(moodIcon(m), color: moodColor(m), size: 14),
+              MoodFace(mood: m, size: 18),
               const SizedBox(width: 3),
               Text(moodLabel(m),
                   style: const TextStyle(
@@ -157,19 +160,47 @@ class MoodDot extends StatelessWidget {
     }
     return Container(
       key: Key('mood-dot-$m'),
-      width: 26,
-      height: 26,
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: moodColor(m).withValues(alpha: 0.18),
+        border: Border.all(color: moodColor(m).withValues(alpha: 0.7), width: 1.5),
       ),
-      child: Icon(moodIcon(m), color: moodColor(m), size: 18),
+      child: MoodFace(mood: m, size: 26),
     );
   }
 }
 
 // ── 純呈現的對映：後端給的心情字串 → 圖示與顏色 ─────────────────
 // 這裡不做判斷，只是查表。首頁的心情標籤與日期列共用這一份。
+
+/// 心情 → 狗頭表情圖。不認得的一律 bored（同 HomePet：絕不退回 happy）。
+String moodFaceAsset(String mood) => switch (mood) {
+      'happy' => 'assets/moods/dog_happy.png',
+      'tired' => 'assets/moods/dog_tired.png',
+      'anxious' => 'assets/moods/dog_anxious.png',
+      _ => 'assets/moods/dog_bored.png',
+    };
+
+/// 寵物心情的狗頭表情。圖讀不到時退回 [moodIcon]（不會報錯、也不會空白）。
+class MoodFace extends StatelessWidget {
+  final String mood;
+  final double size;
+  const MoodFace({super.key, required this.mood, this.size = 24});
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+        moodFaceAsset(mood),
+        key: Key('mood-face-$mood'),
+        width: size,
+        height: size,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, _, _) =>
+            Icon(moodIcon(mood), color: moodColor(mood), size: size * 0.8),
+      );
+}
 
 String moodLabel(String mood) =>
     mood.isEmpty ? 'Unknown' : mood[0].toUpperCase() + mood.substring(1);

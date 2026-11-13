@@ -1274,11 +1274,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    moodIcon(mood),
-                    color: const Color(0xFF1B2350),
-                    size: 16,
-                  ),
+                  MoodFace(mood: mood, size: 20),
                   const SizedBox(width: 4),
                   Text(
                     moodLabel(mood),
