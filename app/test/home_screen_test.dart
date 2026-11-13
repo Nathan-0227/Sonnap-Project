@@ -336,7 +336,40 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
+      // 剛按 Start Sleep 會先播「趴下睡著」的過場（點一下跳過），控制項播完才出現
+      if (find.byKey(const Key('sleep-intro')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('sleep-intro')));
+        for (var i = 0; i < 8; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
     }
+
+    testWidgets('剛按 Start Sleep → 先播過場、控制項藏著；播完（約 4 秒）控制項出現', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 41));
+      await pressMoon(tester);
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('sleep-intro')), findsOneWidget);
+      final fade = tester.widget<AnimatedOpacity>(find.ancestor(
+          of: find.byKey(const Key('sleep-cancel')), matching: find.byType(AnimatedOpacity)).first);
+      expect(fade.opacity, 0, reason: '過場播的時候不疊控制項');
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const Key('sleep-intro')), findsNothing, reason: '播一次就收');
+      expect(find.byKey(const Key('sleep-scene')), findsOneWidget, reason: '接著是睡覺的循環');
+    });
+
+    testWidgets('⚠️ 半夜重開 App 回到睡覺畫面 → 不播過場', (tester) async {
+      await store.markStart(at(12, 23, 41));
+      await pumpHome(tester, () => at(13, 3));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(SleepModeScreen), findsOneWidget);
+      expect(find.byKey(const Key('sleep-intro')), findsNothing);
+    });
 
     testWidgets('按 Start sleep → 存進本機，並進入睡覺畫面', (tester) async {
       await pumpHome(tester, () => at(12, 23, 41));

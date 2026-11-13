@@ -313,6 +313,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!isSleeping(widget.clock(), _marks)) return;
     final startAt = _marks.startAt!;
     _sleepRouteOpen = true;
+    final introNow = _introNext;
+    _introNext = false;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final navigator = Navigator.of(context);
@@ -328,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           store: widget.bedMarks,
           startAt: startAt,
           clock: widget.clock,
+          // 剛按 Start Sleep 才播「趴下睡著」的過場；半夜重開 App 不播
+          playIntro: introNow,
           onEnded: (end) {
             if (!ended.isCompleted) ended.complete(end);
           },
@@ -653,8 +657,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await widget.bedMarks.markStart(now);
     // 鬧鐘只在按了 Start Sleep 才排（使用者決定）。
     await _alarm.onStartSleep(now, _bedtime);
+    _introNext = true;
     await _loadMarks();
   }
+
+  /// 下一次開睡覺畫面要不要先播過場（剛按 Start Sleep 才要）。
+  bool _introNext = false;
 
   Future<void> _loadGame() async {
     final service = widget.game;

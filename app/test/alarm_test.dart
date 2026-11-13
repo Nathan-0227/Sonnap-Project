@@ -350,6 +350,11 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
+      // 先播「趴下睡著」的過場，點一下跳過
+      await tester.tap(find.byKey(const Key('sleep-intro')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(fake.scheduled, [at(13, 7, 30)], reason: '目標 23:30 → 預設起床 07:30');
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.textContaining('07:30'), findsWidgets);

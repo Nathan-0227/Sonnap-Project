@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
@@ -8,6 +9,7 @@ import '../services/sleep_sounds.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 import '../widgets/slide_to_confirm.dart';
+import 'wake_up_screen.dart' show wakeUpGifDuration;
 
 /// 按了「Start sleep」之後佔滿整個畫面的睡覺畫面（2026-11-12 定案）。
 ///
@@ -25,6 +27,18 @@ import '../widgets/slide_to_confirm.dart';
 /// 點鬧鐘列打開跟外面一樣的轉盤（月亮鎖住），可以**改今晚的時間**或**關掉今晚**，轉盤上的設定不變。
 /// 鬧鐘列下面是助眠聲音（喇叭鈕選聲音與時間、播放鈕播／停），按 Out of bed／Cancel 會停。
 /// 「I already got up」在之後的 PR。
+/// 睡覺畫面的場景（2026-11-14 使用者用 Adobe Firefly 做的，見 docs/SLEEP_GIF.md）：
+/// 夜晚的臥室、小狗捲在墊子上睡覺，呼吸、耳朵動一下，**無縫循環**。
+/// 有這個檔就鋪滿畫面（小狗在場景裡，不另外畫）；沒有就退回臥室背景＋程式放的小狗。
+const String kSleepLoopGif = 'assets/pets/dog01/sleeping_loop.gif';
+
+/// 系統開「減少動態效果」時用的靜止圖（循環的第一格）。
+const String kSleepStill = 'assets/pets/dog01/sleeping_still.jpg';
+
+/// 剛按 Start Sleep 時先播一次的過場：小狗坐著 → 趴下睡著（最後一格＝循環的第一格）。
+/// 半夜重開 App 不播；減少動態效果不播；點一下跳過。
+const String kSleepIntroGif = 'assets/pets/dog01/go_to_sleep.gif';
+
 class SleepModeScreen extends StatefulWidget {
   final BedMarkStore store;
   final DateTime startAt;
@@ -40,6 +54,13 @@ class SleepModeScreen extends StatefulWidget {
   /// 才把睡覺畫面收掉——自己先關掉的話，讀手機儲存那幾格會露出首頁（有分數卡）。
   final void Function(DateTime end)? onEnded;
 
+  /// 剛按 Start Sleep 才是 true：先播 [kSleepIntroGif]。半夜重開 App 回到這頁時是 false。
+  final bool playIntro;
+
+  /// 場景與過場的檔名。測試傳不存在的路徑來驗「缺檔退回」。
+  final String sceneAsset;
+  final String introAsset;
+
   const SleepModeScreen({
     super.key,
     required this.store,
@@ -48,6 +69,9 @@ class SleepModeScreen extends StatefulWidget {
     this.alarm,
     this.sounds,
     this.onEnded,
+    this.playIntro = false,
+    this.sceneAsset = kSleepLoopGif,
+    this.introAsset = kSleepIntroGif,
   });
 
   @override
@@ -71,9 +95,52 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     return end != null && widget.clock().isBefore(end);
   }
 
+  /// 場景檔讀不讀得到。null＝還在查（這幾格不畫小狗，免得一閃而過）。
+  bool? _hasScene;
+
+  /// 過場正在播：控制項先藏起來，播完才淡入。
+  bool _introPlaying = false;
+  Timer? _introTimer;
+  bool _introChecked = false;
+
+  Future<void> _checkScene() async {
+    var ok = false;
+    try {
+      await rootBundle.load(widget.sceneAsset);
+      ok = true;
+    } catch (_) {}
+    if (mounted) setState(() => _hasScene = ok);
+  }
+
+  Future<void> _startIntro() async {
+    final d = await wakeUpGifDuration(widget.introAsset);
+    if (d == null || !mounted) return;
+    // GIF 的動畫狀態在圖片快取裡是共用的：前一晚播過的話會從中間開始，先清掉
+    await AssetImage(widget.introAsset).evict();
+    if (!mounted) return;
+    setState(() => _introPlaying = true);
+    _introTimer = Timer(d, _endIntro);
+  }
+
+  void _endIntro() {
+    _introTimer?.cancel();
+    if (mounted && _introPlaying) setState(() => _introPlaying = false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_introChecked) return;
+    _introChecked = true;
+    if (widget.playIntro && !MediaQuery.of(context).disableAnimations) {
+      _startIntro();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _checkScene();
     _loadAlarm();
     _loadSounds();
     _tick = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -84,6 +151,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
   @override
   void dispose() {
     _tick?.cancel();
+    _introTimer?.cancel();
     super.dispose();
   }
 
@@ -299,9 +367,9 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     final end = wakeAfter(widget.startAt, result.wake.hour, result.wake.minute);
     final problem = recalledTimesProblem(widget.startAt, end, widget.clock());
     if (problem != null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text(problem)),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(problem)));
       return;
     }
     unawaited(widget.sounds?.stop());
@@ -419,168 +487,210 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
         backgroundColor: const Color(0xFF0F1530),
         body: Stack(
           children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/backgrounds/bedroom.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const DecoratedBox(
+            if (_hasScene == true)
+              Positioned.fill(
+                child: Image.asset(
+                  MediaQuery.of(context).disableAnimations
+                      ? kSleepStill
+                      : widget.sceneAsset,
+                  key: const Key('sleep-scene'),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/backgrounds/bedroom.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF0F1530),
+                          Color(0xFF1B2350),
+                          Color(0xFF2A2766),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // 過場（只在剛按 Start Sleep 時）：蓋在場景上、壓暗層之下，播完收掉就是同一格的循環
+            if (_introPlaying)
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const Key('sleep-intro'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _endIntro, // 點一下跳過
+                  child: Image.asset(widget.introAsset, fit: BoxFit.cover),
+                ),
+              ),
+            // 上下壓暗，字放在任何背景圖上都讀得到。
+            // ⚠️ IgnorePointer：漸層會吃掉點擊，底下過場的「點一下跳過」就點不到（2026-11-14 測試抓到）
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Color(0xFF0F1530),
-                        Color(0xFF1B2350),
-                        Color(0xFF2A2766),
+                        Color(0x99000000),
+                        Color(0x00000000),
+                        Color(0x00000000),
+                        Color(0xCC0B1028),
                       ],
+                      stops: [0, 0.3, 0.55, 0.8],
                     ),
                   ),
                 ),
               ),
             ),
-            // 上下壓暗，字放在任何背景圖上都讀得到。
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0x99000000),
-                      Color(0x00000000),
-                      Color(0x00000000),
-                      Color(0xCC0B1028),
-                    ],
-                    stops: [0, 0.3, 0.55, 0.8],
-                  ),
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 40),
-                    FittedBox(
-                      child: Text(
-                        _hhmm(now),
-                        key: const Key('sleep-clock'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 72,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
+            // 過場播的時候控制項藏起來（也點不到），播完淡入
+            IgnorePointer(
+              ignoring: _introPlaying,
+              child: AnimatedOpacity(
+                opacity: _introPlaying ? 0 : 1,
+                duration: const Duration(milliseconds: 600),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 40),
+                        FittedBox(
+                          child: Text(
+                            _hhmm(now),
+                            key: const Key('sleep-clock'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 72,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Sleeping… your watch is tracking',
-                      key: Key('sleep-since'),
-                      style: TextStyle(color: Colors.white70, fontSize: 15),
-                    ),
-                    const Spacer(),
-                    // 往下挪，讓墊子落在背景地毯的中央（使用者 2026-11-12 看實機後要求）。
-                    // 圖片上下各有約 1/7 的透明邊，挪 48 不會壓到下面的鬧鐘列。
-                    Transform.translate(
-                      offset: const Offset(0, 48),
-                      child: const SleepingPet(size: 260),
-                    ),
-                    const Spacer(),
-                    if (widget.alarm != null) ...[
-                      _line,
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Row(
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Sleeping… your watch is tracking',
+                          key: Key('sleep-since'),
+                          style: TextStyle(color: Colors.white70, fontSize: 15),
+                        ),
+                        const Spacer(),
+                        // 往下挪，讓墊子落在背景地毯的中央（使用者 2026-11-12 看實機後要求）。
+                        // 圖片上下各有約 1/7 的透明邊，挪 48 不會壓到下面的鬧鐘列。
+                        // 場景裡已經有小狗；沒有場景（缺檔）才放程式的小狗
+                        if (_hasScene == false)
+                          Transform.translate(
+                            offset: const Offset(0, 48),
+                            child: const SleepingPet(size: 260),
+                          ),
+                        const Spacer(),
+                        if (widget.alarm != null) ...[
+                          _line,
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: Row(
+                              children: [
+                                const Text(
+                                  'Alarm',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const Spacer(),
+                                InkWell(
+                                  key: const Key('sleep-alarm'),
+                                  onTap: _alarmMenu,
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    width: 150,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.white38),
+                                    ),
+                                    child: Text(
+                                      _alarmAt == null
+                                          ? 'Off'
+                                          : _hhmm(_alarmAt!),
+                                      key: const Key('sleep-alarm-time'),
+                                      style: TextStyle(
+                                        color: _alarmAt == null
+                                            ? Colors.white54
+                                            : Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _line,
+                        ],
+                        if (widget.sounds != null) ...[
+                          if (widget.alarm == null) _line,
+                          _soundsRow(),
+                          _line,
+                        ],
+                        const SizedBox(height: 28),
+                        // 用滑的結束（使用者要求）：點一下不算，半夜被碰到不會記成下床。
+                        SlideToConfirm(
+                          key: const Key('sleep-out-of-bed'),
+                          label: 'Slide to get up',
+                          onConfirmed: _outOfBed,
+                        ),
+                        // 兩個併成一列：分兩行的話 6.4 吋手機底部溢出 21 像素（2026-11-12 實機）。
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Alarm',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
+                            Flexible(
+                              child: TextButton(
+                                key: const Key('sleep-already-up'),
+                                onPressed: _alreadyUp,
+                                child: const Text(
+                                  'I already got up',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
                               ),
                             ),
-                            const Spacer(),
-                            InkWell(
-                              key: const Key('sleep-alarm'),
-                              onTap: _alarmMenu,
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                width: 150,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 10,
-                                ),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.10),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white38),
-                                ),
-                                child: Text(
-                                  _alarmAt == null ? 'Off' : _hhmm(_alarmAt!),
-                                  key: const Key('sleep-alarm-time'),
+                            Flexible(
+                              child: TextButton(
+                                key: const Key('sleep-cancel'),
+                                onPressed: _cancel,
+                                child: const Text(
+                                  'Not sleeping? Cancel',
                                   style: TextStyle(
-                                    color: _alarmAt == null
-                                        ? Colors.white54
-                                        : Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white60,
+                                    fontSize: 14,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Colors.white60,
                                   ),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      _line,
-                    ],
-                    if (widget.sounds != null) ...[
-                      if (widget.alarm == null) _line,
-                      _soundsRow(),
-                      _line,
-                    ],
-                    const SizedBox(height: 28),
-                    // 用滑的結束（使用者要求）：點一下不算，半夜被碰到不會記成下床。
-                    SlideToConfirm(
-                      key: const Key('sleep-out-of-bed'),
-                      label: 'Slide to get up',
-                      onConfirmed: _outOfBed,
-                    ),
-                    // 兩個併成一列：分兩行的話 6.4 吋手機底部溢出 21 像素（2026-11-12 實機）。
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: TextButton(
-                            key: const Key('sleep-already-up'),
-                            onPressed: _alreadyUp,
-                            child: const Text(
-                              'I already got up',
-                              style: TextStyle(color: Colors.white, fontSize: 14),
-                            ),
-                          ),
-                        ),
-                        Flexible(
-                          child: TextButton(
-                            key: const Key('sleep-cancel'),
-                            onPressed: _cancel,
-                            child: const Text(
-                              'Not sleeping? Cancel',
-                              style: TextStyle(
-                                color: Colors.white60,
-                                fontSize: 14,
-                                decoration: TextDecoration.underline,
-                                decorationColor: Colors.white60,
-                              ),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(height: 8),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                  ],
+                  ),
                 ),
               ),
             ),

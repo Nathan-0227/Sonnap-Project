@@ -423,7 +423,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 ### ✅ 睡覺畫面＋助眠聲音（2026-11-12，`feature/sleep-sounds`）
 
-由上到下：大時間 → `Sleeping… your watch is tracking` → 睡著的小狗（`assets/pets/dog01/sleeping.png`，使用者生成）
+背景是**房間＋睡覺小狗的循環 GIF**（`sleeping_loop.gif`，剛按 Start Sleep 先播一次 `go_to_sleep.gif` 過場、半夜重開不播、減少動態效果用靜止圖、缺檔退回 bedroom.png＋`sleeping.png`；怎麼做見 [SLEEP_GIF.md](docs/SLEEP_GIF.md)）。由上到下：大時間 → `Sleeping… your watch is tracking` → （小狗在場景裡）
 → 鬧鐘列 → 助眠聲音列 → 外框 Out of bed → Cancel 小字。背景是房間（`assets/backgrounds/bedroom.png`）。
 
 | 規則 | 理由 |
