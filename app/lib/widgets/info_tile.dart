@@ -21,6 +21,9 @@ class InfoTile extends StatelessWidget {
   /// 「跟上一晚比」那一行與它的顏色（上升紅、下降綠，只代表方向）。
   final (String, Color)? compare;
 
+  /// false：不畫自己的卡片外框、高度照內容（放進首頁 Sleep 那一張大卡當一列，2026-11-13）。
+  final bool boxed;
+
   const InfoTile({
     super.key,
     required this.icon,
@@ -30,11 +33,13 @@ class InfoTile extends StatelessWidget {
     this.missingNote = 'No watch data',
     this.note,
     this.compare,
+    this.boxed = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final parts = value;
+    if (!boxed) return _flat(parts);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: sonnapCardDecoration(),
@@ -76,6 +81,47 @@ class InfoTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// 大卡裡的一列：標題、大字（太寬才縮）、小字各一行（超出就截掉），不溢出也不撐高。
+  Widget _flat(List<(String, String)>? parts) {
+    final body = _body(parts);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: iconColor, size: 17),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: iconColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: body.first,
+        ),
+        for (final line in body.skip(1))
+          DefaultTextStyle.merge(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            child: line,
+          ),
+      ],
     );
   }
 

@@ -1098,22 +1098,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // 右邊一張高的 Activity 卡（前一天）。沒有白天資料時退回原本整寬的 Sleep 格子——
                       // 只剩左半欄會空一半。
                       if (session.activity != null)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                key: const Key('home-sleep-section'),
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _columnHeader('Sleep', _sleepNightLabel(session)),
-                                  _buildTiles(session, column: true),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: SonnapColors.gap),
-                            Expanded(child: _buildActivityCard(session.activity!)),
-                          ],
+                        // 兩張卡一樣高（上下緣都對齊）：IntrinsicHeight 量較高的那一張，另一張撐滿。
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: _buildTiles(session, column: true)),
+                              const SizedBox(width: SonnapColors.gap),
+                              Expanded(child: _buildActivityCard(session.activity!)),
+                            ],
+                          ),
                         )
                       else
                         _section(
@@ -1800,9 +1794,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final durationTile = tappable(
             InfoTile(
               key: const Key('tile-duration'),
+              boxed: !column,
               icon: Icons.nightlight_round,
               iconColor: const Color(0xFFB9A6FF),
-              title: 'Sleep',
+              title: column ? 'Time asleep' : 'Sleep',
               value: minutes == null ? null : _hm(minutes),
               compare: cmp(durationSeries, formatMinutes),
             ),
@@ -1817,6 +1812,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final effTile = tappable(
             InfoTile(
               key: const Key('tile-efficiency'),
+              boxed: !column,
               icon: Icons.speed_rounded,
               iconColor: const Color(0xFF7EC8FF),
               title: 'Efficiency',
@@ -1837,6 +1833,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final deepTile = tappable(
             InfoTile(
               key: const Key('tile-deep'),
+              boxed: !column,
               icon: Icons.waves_rounded,
               iconColor: const Color(0xFF9AD36A),
               title: 'Deep sleep',
@@ -1858,6 +1855,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ? null
         : InfoTile(
             key: const Key('tile-night-hr'),
+              boxed: !column,
             icon: Icons.favorite_rounded,
             iconColor: const Color(0xFFFF8AB8),
             title: 'Heart rate',
@@ -1868,22 +1866,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ].join(' · '),
           );
 
-    // 一欄（左右兩欄的左邊，照 Otter Life）：一張張往下疊
+    // 左右兩欄的左邊（照 Otter Life）：一張大卡，跟右邊 Activity 卡同一種排法——
+    // 標題在卡裡、一列一列往下、中間細線分隔。跟這一晚睡眠有關的都在這張裡。
     if (column) {
-      final tiles = [
+      final rows = [
         durationTile,
         effTile,
         deepTile,
-        _buildCameraTile(session),
         ?hrTile,
+        _buildCameraTile(session, boxed: false),
       ];
-      return Column(
-        children: [
-          for (var i = 0; i < tiles.length; i++) ...[
-            if (i > 0) const SizedBox(height: SonnapColors.gap),
-            SizedBox(height: 124, child: tiles[i]),
+      return Container(
+        key: const Key('home-sleep-section'),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        decoration: sonnapCardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.nightlight_round, 'Sleep', _sleepNightLabel(session)),
+            for (final r in rows) ...[
+              const Divider(height: 22, color: SonnapColors.cardBorder),
+              r,
+            ],
           ],
-        ],
+        ),
       );
     }
 
@@ -1900,31 +1906,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// 左欄上面那一行：「Sleep  Last night · Fri, Nov 13」（右邊的 Activity 卡標題在卡裡）。
-  Widget _columnHeader(String title, String subtitle) => Padding(
-        padding: const EdgeInsets.fromLTRB(6, 2, 6, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: SonnapColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+  /// 兩張主卡卡裡的標題：圖示＋大字一行、底下一行是哪一晚／哪一天。
+  Widget _cardHeader(IconData icon, String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: SonnapColors.textPrimary, size: 20),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            ),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: SonnapColors.textSecondary,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: SonnapColors.textSecondary, fontSize: 11),
+          ),
+        ],
       );
 
   // ── 兩張主卡的外框 ─────────────────────────────────────────────
@@ -2081,32 +2092,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.bolt_rounded,
-                  color: SonnapColors.textPrimary, size: 20),
-              const SizedBox(width: 4),
-              const Flexible(
-                child: Text(
-                  'Activity',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: SonnapColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Text(
-            _activityDayLabel(a.date),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                color: SonnapColors.textSecondary, fontSize: 11),
-          ),
+          _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
           for (final r in rows) ...[
             const Divider(height: 22, color: SonnapColors.cardBorder),
             r,
@@ -2360,7 +2346,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// 睡眠中的動作（攝影機）。大字是每小時幾次，下面一行照抄後端的
   /// 「跟你平常比」。⚠️ 不跟文獻常模並列（跨夜不穩，見 CLAUDE.md 紅線 2 展開）。
-  Widget _buildCameraTile(SleepSession session) {
+  Widget _buildCameraTile(SleepSession session, {bool boxed = true}) {
     const key = Key('tile-camera');
     const icon = Icons.videocam_rounded;
     const color = Color(0xFFFFD96A);
@@ -2369,8 +2355,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final camera = _camera;
     if (widget.cameraInsights == null ||
         camera?.status == CameraInsightsStatus.noBackend) {
-      return const InfoTile(
+      return InfoTile(
         key: key,
+        boxed: boxed,
         icon: icon,
         iconColor: color,
         title: title,
@@ -2385,6 +2372,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         camera.status == CameraInsightsStatus.noUser) {
       return InfoTile(
         key: key,
+        boxed: boxed,
         icon: icon,
         iconColor: color,
         title: title,
@@ -2402,8 +2390,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     final rate = night?.eventsPerHour;
     if (night == null || rate == null) {
-      return const InfoTile(
+      return InfoTile(
         key: key,
+        boxed: boxed,
         icon: icon,
         iconColor: color,
         title: title,
@@ -2427,6 +2416,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: InfoTile(
         key: key,
+        boxed: boxed,
         icon: icon,
         iconColor: color,
         title: title,

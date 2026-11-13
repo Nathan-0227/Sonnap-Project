@@ -132,13 +132,19 @@ void main() {
     expect(tester.takeException(), isNull, reason: '實機大小不溢出');
   });
 
-  testWidgets('兩欄（照 Otter Life）：左邊 Sleep、右邊 Activity，上緣對齊、各佔一半', (tester) async {
+  testWidgets('兩欄（照 Otter Life）：左邊一張 Sleep 卡、右邊一張 Activity 卡，上下緣對齊、各佔一半', (tester) async {
     await pumpHome(tester, session());
     await scrollTo(tester, find.byKey(const Key('home-activity-section')));
     final sleep = tester.getRect(find.byKey(const Key('home-sleep-section')));
     final act = tester.getRect(find.byKey(const Key('home-activity-section')));
     expect(act.left, greaterThan(sleep.right), reason: 'Activity 在右邊');
     expect((act.top - sleep.top).abs(), lessThan(1), reason: '上緣對齊');
+    expect((act.bottom - sleep.bottom).abs(), lessThan(1), reason: '下緣對齊（兩張一樣高）');
+    // 跟睡眠有關的都在 Sleep 那一張卡裡（不是一張張分開的小卡）
+    for (final k in ['tile-duration', 'tile-efficiency', 'tile-deep', 'tile-night-hr', 'tile-camera']) {
+      expect(find.descendant(of: find.byKey(const Key('home-sleep-section')), matching: find.byKey(Key(k))),
+          findsOneWidget, reason: k);
+    }
     expect((act.width - sleep.width).abs(), lessThan(1), reason: '一樣寬');
     // 左欄的小卡一張張往下疊（不是 2x2）
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
