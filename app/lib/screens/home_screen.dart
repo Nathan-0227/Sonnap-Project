@@ -2340,7 +2340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               SizedBox(
                 height: 160,
                 width: double.infinity,
-                child: CustomPaint(painter: DayHeartRatePainter(hr)),
+                child: DayHeartRateChart(hr),
               ),
             ],
           ),
