@@ -313,13 +313,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
             height: 120,
             child: CustomPaint(painter: _HillPainter()),
           ),
-          // 小狗說「I had a dream…」，點開才看完整夢境；那一晚沒有夢就不出現
+          // 小狗頭邊一朵小雲，點開看完整夢境；那一晚沒有夢就不出現。
+          // 報告用小的（不寫字）：大的那朵會蓋到分數圓環的右半邊，圓環右邊只剩約 70 寬。
           if (r.dream != null)
             Positioned(
               key: const Key('report-dream'),
-              right: r.hasScore ? 40 : 30,
-              bottom: r.hasScore ? 160 : 150,
-              child: DreamBubble(onTap: () => _showDream(r)),
+              right: 4,
+              bottom: r.hasScore ? 162 : 150,
+              child: DreamBubble(compact: true, onTap: () => _showDream(r)),
             ),
           if (r.hasScore)
             Positioned(

@@ -18,46 +18,128 @@ import 'home_pet.dart';
 /// 對話框那一句。
 const String kDreamBubbleText = 'I had a dream…';
 
-/// 小狗旁邊的對話框。[compact] = 看過了，只剩一個小 💭。
+/// 雲朵對話框的圖（使用者生成，去背；字由 App 疊上去，圖裡沒有字）。
+const String kDreamCloudAsset = 'assets/moods/dream_cloud.png';
+
+/// 完整那朵雲的寬度（首頁排位置要用）。
+const double kDreamBubbleWidth = 150;
+
+/// 雲身的中心（佔圖寬、高的比例）：字放這裡。右下那兩顆小圓點與四周的星星月亮不算。
+const Offset _cloudTextCenter = Offset(0.494, 0.476);
+const double _cloudAspect = 720 / 427;
+
+/// 小狗旁邊的對話框（雲朵）。[compact] = 看過了，只剩一朵小雲、不寫字。
+/// 雲朵圖讀不到時退回程式畫的白色對話框（[_PaintedBubble]），不會報錯。
 class DreamBubble extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
+  final String cloudAsset;
 
-  const DreamBubble({super.key, required this.onTap, this.compact = false});
+  const DreamBubble({
+    super.key,
+    required this.onTap,
+    this.compact = false,
+    this.cloudAsset = kDreamCloudAsset,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final width = compact ? 58.0 : kDreamBubbleWidth;
+    final height = width / _cloudAspect;
     return Semantics(
       button: true,
       label: compact ? 'Open dream diary' : kDreamBubbleText,
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: CustomPaint(
-          painter: const _BubbleTailPainter(),
-          child: Container(
-            // 尾巴畫在左下角外面，留一點邊讓點得到
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: compact
-                ? const EdgeInsets.symmetric(horizontal: 9, vertical: 6)
-                : const EdgeInsets.fromLTRB(14, 9, 14, 9),
-            decoration: BoxDecoration(
-              color: _bubbleColor,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: const [
-                BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 3)),
-              ],
-            ),
-            child: Text(
-              compact ? '💭' : '$kDreamBubbleText 💭',
-              key: Key(compact ? 'dream-bubble-compact' : 'dream-bubble-text'),
-              style: TextStyle(
-                fontFamily: kReportFont,
-                color: ReportColors.navy,
-                fontSize: compact ? 16 : 14,
-                fontWeight: FontWeight.w800,
+        child: Image.asset(
+          cloudAsset,
+          key: const Key('dream-cloud'),
+          width: width,
+          height: height,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, _, _) => _PaintedBubble(compact: compact),
+          frameBuilder: (context, child, frame, sync) {
+            if (compact) {
+              return SizedBox(
+                key: const Key('dream-bubble-compact'),
+                width: width,
+                height: height,
+                child: child,
+              );
+            }
+            return SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: child),
+                  // 字限制在雲身裡（左右各留 16%、上下置中在雲身中心）；放不下就縮小，
+                  // 不換行、不跑出雲外（系統字體放大時也一樣）
+                  Positioned(
+                    left: width * (_cloudTextCenter.dx - 0.34),
+                    right: width * (1 - _cloudTextCenter.dx - 0.34),
+                    top: height * (_cloudTextCenter.dy - 0.2),
+                    height: height * 0.4,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: const Text(
+                        kDreamBubbleText,
+                        key: Key('dream-bubble-text'),
+                        style: TextStyle(
+                          fontFamily: kReportFont,
+                          color: Color(0xFF6B3E22),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 雲朵圖讀不到時的退路：程式畫的白色對話框。
+class _PaintedBubble extends StatelessWidget {
+  final bool compact;
+  const _PaintedBubble({required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: const _BubbleTailPainter(),
+      child: Container(
+        // 尾巴畫在左下角外面，留一點邊讓點得到
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: compact
+            ? const EdgeInsets.symmetric(horizontal: 9, vertical: 6)
+            : const EdgeInsets.fromLTRB(14, 9, 14, 9),
+        decoration: BoxDecoration(
+          color: _bubbleColor,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x40000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
             ),
+          ],
+        ),
+        child: Text(
+          compact ? '💭' : '$kDreamBubbleText 💭',
+          key: Key(compact ? 'dream-bubble-compact' : 'dream-bubble-text'),
+          style: TextStyle(
+            fontFamily: kReportFont,
+            color: ReportColors.navy,
+            fontSize: compact ? 16 : 14,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
@@ -166,7 +248,10 @@ Future<void> showDreamDiary(
                   Text(
                     disclaimer,
                     key: const Key('dream-diary-disclaimer'),
-                    style: const TextStyle(color: ReportColors.dim, fontSize: 11),
+                    style: const TextStyle(
+                      color: ReportColors.dim,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ],

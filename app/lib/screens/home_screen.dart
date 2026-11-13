@@ -1264,18 +1264,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
           ),
-          // 小狗說「I had a dream…」，點開才看完整夢境（2026-11-13 使用者定）。
-          // 只有真的有夢才出現；看過就縮成 💭。
-          if (dreamDate != null)
-            Positioned(
-              key: const Key('dream-bubble'),
-              top: 4,
-              right: 16,
-              child: DreamBubble(
-                compact: _dreamReadDate == dreamDate,
-                onTap: () => _showDream(session),
-              ),
-            ),
           Positioned(
             right: 30,
             bottom: 0,
@@ -1306,15 +1294,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+    // 小狗說「I had a dream…」，點開才看完整夢境（2026-11-13 使用者定）。
+    // 只有真的有夢才出現；看過就縮成一朵小雲。
+    // ⚠️ 位置照整個畫面寬度算，不是照小狗那個 230 的框：小狗的頭在框的左半邊、
+    //    右緣大約就在中線，雲朵要從中線右邊開始才不會蓋到臉（實機截圖抓到過蓋住半張臉）。
+    //    放在框裡面的話推不出去，推到框外又點不到。
+    final petWithDream = dreamDate == null
+        ? pet
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              return SizedBox(
+                width: w,
+                height: kHomePetSize,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Center(child: pet),
+                    Positioned(
+                      key: const Key('dream-bubble'),
+                      top: 4,
+                      left: math.min(w / 2 + 14, w - kDreamBubbleWidth - 4),
+                      child: DreamBubble(
+                        compact: _dreamReadDate == dreamDate,
+                        onTap: () => _showDream(session),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
     // 等級在寵物上面（2026-11-13 使用者定）。照抄後端（GET /game），Dart 不從 XP 反推；
     // 點了開獎勵。沒有後端就不畫。
-    if (game == null) return pet;
+    if (game == null) return petWithDream;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _levelBadge(game.level),
         const SizedBox(height: 4),
-        pet,
+        petWithDream,
       ],
     );
   }
