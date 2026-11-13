@@ -1064,6 +1064,61 @@ void main() {
       expect(textOf(tester, 'report-rating-label'), 'Well-rested');
     });
 
+    group('等待畫面的場景', () {
+      Future<void> pumpLoading(WidgetTester tester,
+          {String? gif, String? still}) async {
+        tester.view.physicalSize = const Size(1080, 2340);
+        tester.view.devicePixelRatio = 2.625;
+        addTearDown(tester.view.reset);
+        final r = buildMorningReport(date: '2026-11-12');
+        await tester.pumpWidget(MaterialApp(
+          home: ReportLoadingScreen(
+            report: Future.value(r),
+            fallback: r,
+            onView: (_) {},
+            onClose: () {},
+            mood: 'tired',
+            sceneGif: gif ?? kReportWaitGif,
+            sceneStill: still ?? kReportWaitStill,
+          ),
+        ));
+        // 讀資產是真的 I/O，假時鐘底下要 runAsync 才會回來
+        await tester.runAsync(() => Future<void>.delayed(
+            const Duration(milliseconds: 300)));
+        await settle(tester, 5);
+      }
+
+      test('GIF 與靜止圖都在；GIF 不超過 4 MB', () {
+        expect(File(kReportWaitGif).existsSync(), isTrue);
+        expect(File(kReportWaitStill).existsSync(), isTrue);
+        expect(File(kReportWaitGif).lengthSync(), lessThan(4 * 1024 * 1024));
+      });
+
+      testWidgets('預設播翻日記的 GIF，不另外畫首頁那隻小狗', (tester) async {
+        await pumpLoading(tester);
+        expect(find.byKey(const Key('report-wait-gif')), findsOneWidget);
+        expect(find.byType(HomePet), findsNothing);
+        expect(tester.takeException(), isNull, reason: '1080×2340 不溢出');
+      });
+
+      testWidgets('減少動態效果 → 同一場景的靜止圖', (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(disableAnimations: true);
+        addTearDown(
+            tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+        await pumpLoading(tester);
+        expect(find.byKey(const Key('report-wait-still')), findsOneWidget);
+        expect(find.byKey(const Key('report-wait-gif')), findsNothing);
+      });
+
+      testWidgets('⚠️ 圖讀不到 → 退回星空＋首頁那一份心情的小狗，不報錯', (tester) async {
+        await pumpLoading(tester, gif: 'assets/nope.gif');
+        final pet = tester.widget<HomePet>(find.byType(HomePet));
+        expect(pet.mood, 'tired');
+        expect(find.byKey(const Key('report-loading-close')), findsOneWidget);
+      });
+    });
+
     group('等待畫面', () {
       Future<_Source> toLoading(WidgetTester tester, _Source source,
           {_Sender? sender}) async {
