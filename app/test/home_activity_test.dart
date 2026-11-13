@@ -146,6 +146,17 @@ void main() {
           findsOneWidget, reason: k);
     }
     expect((act.width - sleep.width).abs(), lessThan(1), reason: '一樣寬');
+    // 左右第 N 項在同一條線上
+    for (final (l, r) in [
+      ('tile-duration', 'tile-steps'),
+      ('tile-efficiency', 'tile-kcal'),
+      ('tile-deep', 'tile-active'),
+      ('tile-camera', 'tile-vo2'),
+      ('tile-night-hr', 'tile-day-hr'),
+    ]) {
+      expect((tester.getRect(find.byKey(Key(l))).top - tester.getRect(find.byKey(Key(r))).top).abs(),
+          lessThan(1), reason: '$l 跟 $r 同一列');
+    }
     // 左欄的小卡一張張往下疊（不是 2x2）
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
     final e = tester.getRect(find.byKey(const Key('tile-efficiency')));

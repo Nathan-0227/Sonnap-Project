@@ -1873,8 +1873,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         durationTile,
         effTile,
         deepTile,
-        ?hrTile,
         _buildCameraTile(session, boxed: false),
+        // 心率放最後，跟右邊 Activity 的整天心率同一列（兩個心率並排，各寫清楚是哪一段）
+        ?hrTile,
       ];
       return Container(
         key: const Key('home-sleep-section'),
@@ -1886,7 +1887,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _cardHeader(Icons.nightlight_round, 'Sleep', _sleepNightLabel(session)),
             for (final r in rows) ...[
               const Divider(height: 22, color: SonnapColors.cardBorder),
-              r,
+              _alignedRow(r),
             ],
           ],
         ),
@@ -1905,6 +1906,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ],
     );
   }
+
+  /// 兩張主卡的每一列一樣高，左右第 N 項才會在同一條線上（使用者 2026-11-13：「左右 5 個對不齊」）。
+  /// 高度放得下：標題一行＋大字＋兩行小字（效率有「哪一種」＋「跟上一晚比」）。
+  static const double _rowHeight = 102;
+  Widget _alignedRow(Widget r) => SizedBox(
+        height: _rowHeight,
+        child: Align(alignment: Alignment.topLeft, child: r),
+      );
 
   /// 兩張主卡卡裡的標題：圖示＋大字一行、底下一行是哪一晚／哪一天。
   Widget _cardHeader(IconData icon, String title, String subtitle) => Column(
@@ -2095,7 +2104,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
           for (final r in rows) ...[
             const Divider(height: 22, color: SonnapColors.cardBorder),
-            r,
+            _alignedRow(r),
           ],
           if (moves.isNotEmpty) ...[
             const Divider(height: 22, color: SonnapColors.cardBorder),
