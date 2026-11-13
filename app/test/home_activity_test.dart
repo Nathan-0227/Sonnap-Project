@@ -125,14 +125,12 @@ void main() {
 
   testWidgets('兩張主卡：Sleep（昨晚）與 Activity（Yesterday · 那一天）', (tester) async {
     await pumpHome(tester, session());
-    await scrollTo(tester, find.byKey(const Key('home-sleep-section')));
-    expect(find.textContaining('Last night · '), findsOneWidget);
     await scrollTo(tester, find.byKey(const Key('home-activity-section')));
     expect(find.text('Yesterday · Thu, Nov 12'), findsOneWidget);
     expect(tester.takeException(), isNull, reason: '實機大小不溢出');
   });
 
-  testWidgets('兩欄（照 Otter Life）：左邊一張 Sleep 卡、右邊一張 Activity 卡，上下緣對齊、各佔一半', (tester) async {
+  testWidgets('兩欄（照 Otter Life）：左邊一格一格、右邊一張 Activity 卡，上下緣對齊、各佔一半', (tester) async {
     await pumpHome(tester, session());
     await scrollTo(tester, find.byKey(const Key('home-activity-section')));
     final sleep = tester.getRect(find.byKey(const Key('home-sleep-section')));
@@ -140,7 +138,7 @@ void main() {
     expect(act.left, greaterThan(sleep.right), reason: 'Activity 在右邊');
     expect((act.top - sleep.top).abs(), lessThan(1), reason: '上緣對齊');
     expect((act.bottom - sleep.bottom).abs(), lessThan(1), reason: '下緣對齊（兩張一樣高）');
-    // 跟睡眠有關的都在 Sleep 那一張卡裡；Activity 的在右邊那張
+    // 睡眠的在左欄；Activity 的在右邊那張
     bool inside(String k, Rect box) {
       final r = tester.getRect(find.byKey(Key(k)));
       return r.left >= box.left && r.right <= box.right && r.top >= box.top && r.bottom <= box.bottom;
@@ -154,16 +152,6 @@ void main() {
     // 使用者 2026-11-13 拿掉：左邊的睡著心率（Sleep Stages 疊線還看得到）、右邊的 VO2 max
     expect(find.byKey(const Key('tile-night-hr')), findsNothing);
     expect(find.byKey(const Key('tile-vo2')), findsNothing);
-    // 左右第 N 項在同一條線上
-    for (final (l, r) in [
-      ('tile-duration', 'tile-steps'),
-      ('tile-efficiency', 'tile-kcal'),
-      ('tile-deep', 'tile-active'),
-      ('tile-camera', 'tile-day-hr'),
-    ]) {
-      expect((tester.getRect(find.byKey(Key(l))).top - tester.getRect(find.byKey(Key(r))).top).abs(),
-          lessThan(1), reason: '$l 跟 $r 同一列');
-    }
     // 左欄的小卡一張張往下疊（不是 2x2）
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
     final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
@@ -177,6 +165,7 @@ void main() {
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
     final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
     expect((e.top - d.top).abs(), lessThan(1), reason: '同一列');
+    expect(find.textContaining('Last night · '), findsOneWidget);
   });
 
   testWidgets('Activity：步數只寫 goal、Move IQ 寫幾段；不判斷', (tester) async {

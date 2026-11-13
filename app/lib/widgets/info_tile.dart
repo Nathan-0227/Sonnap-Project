@@ -21,8 +21,8 @@ class InfoTile extends StatelessWidget {
   /// 「跟上一晚比」那一行與它的顏色（上升紅、下降綠，只代表方向）。
   final (String, Color)? compare;
 
-  /// false：不畫自己的卡片外框、高度照內容（放進首頁 Sleep 那一張大卡當一列，2026-11-13）。
-  final bool boxed;
+  /// true：有卡片外框，但高度照內容（首頁兩欄左邊一格一格往下疊，2026-11-13）。
+  final bool compact;
 
   const InfoTile({
     super.key,
@@ -33,13 +33,19 @@ class InfoTile extends StatelessWidget {
     this.missingNote = 'No watch data',
     this.note,
     this.compare,
-    this.boxed = true,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final parts = value;
-    if (!boxed) return _flat(parts);
+    if (compact) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: sonnapCardDecoration(),
+        child: _flat(parts),
+      );
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: sonnapCardDecoration(),
@@ -84,7 +90,7 @@ class InfoTile extends StatelessWidget {
     );
   }
 
-  /// 大卡裡的一列：標題、大字（太寬才縮）、小字各一行（超出就截掉），不溢出也不撐高。
+  /// compact 的內容：標題、大字（太寬才縮）、小字各一行（超出就截掉），不溢出也不撐高。
   Widget _flat(List<(String, String)>? parts) {
     final body = _body(parts);
     return Column(
@@ -130,6 +136,7 @@ class InfoTile extends StatelessWidget {
       return [
         const Text(
           '—',
+          softWrap: false,
           style: TextStyle(
             color: SonnapColors.textPrimary,
             fontSize: 26,
@@ -143,7 +150,9 @@ class InfoTile extends StatelessWidget {
       ];
     }
     return [
+      // 不折行：放在 FittedBox 裡，量高度時才不會被當成兩行（兩欄要量高度對齊）
       Text.rich(
+        softWrap: false,
         TextSpan(
           children: [
             for (final (number, unit) in parts) ...[
