@@ -432,6 +432,13 @@ void main() {
       await pumpHome(tester, stub);
       expect(find.byKey(const Key('level-badge')), findsOneWidget);
       expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
+      // 2026-11-13 使用者定：等級在寵物上面，不在標題旁邊
+      final badge = tester.getRect(find.byKey(const Key('level-badge')));
+      final pet = tester.getRect(find.byKey(const Key('home-pet')));
+      final title = tester.getRect(find.byKey(const Key('day-title')));
+      expect(badge.bottom, lessThanOrEqualTo(pet.top));
+      expect(badge.center.dx, closeTo(pet.center.dx, 2));
+      expect(badge.top, greaterThan(title.bottom));
     });
 
     testWidgets('點衣櫃 → 打開衣櫃畫面', (tester) async {
