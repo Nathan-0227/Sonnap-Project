@@ -447,6 +447,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 心率 0 或負數＝沒有讀數；**動作 0 是「沒動」，是真的值** | 寫錯不會報錯 |
 | 只有 Garmin 來源才有；動作也**只呈現、不計分** | movement 永不進評分 |
 | 首頁的曲線來自打包檔：`build_app_payload.py` 已經會帶，要等下一次早晨匯入重新產生 | 動 app/ 的 session 不跑 build_app_payload.py |
+| **Camera**（第三顆）：攝影機在床鋪範圍看到的動作，**每 5 分鐘有幾成時間在動**（同一個校準門檻，`tapo_sleep_onset.motion_curve()`，門檻呼叫時才讀）。早晨匯入時從 CSV 算好存進 `camera_nightly.motion_curve`；`/home` 只留手錶入睡 → 起床那段（**牆鐘比**，攝影機時間沒有時區標記）。只收有床鋪 ROI 的夜晚；下面寫 `Movement seen by the camera` | 攝影機動作率已驗證與任何結果都沒有相關，只呈現。CSV 只在電腦上，後端讀不到 |
+| 舊夜晚回填用 `migrate_camera_to_db.py --curves-only`：**只補 motion_curve，不重算覆寫整列** | 整列重算會用現在的程式悄悄換掉舊夜晚的事件數 |
 
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 
@@ -1642,6 +1644,7 @@ python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時�
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
 python tests/test_garmin_daily.py        # 2026-11-13 新增：白天資料的解析、只增不減、429 就停、只收本人、/home 的 yesterday、不進分數也不給好友
 python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶動作曲線只取睡著那段、平均從原始讀數算（不是 avg_hr）、動作 0 算真的值、資料不夠回 None、Health Connect 沒有
+python tests/test_camera_curve.py        # 2026-11-13 新增：攝影機曲線每 5 分鐘有幾成在動、不可用的幀不算、沒 ROI 不給、門檻呼叫時才讀、/home 只留睡著那段、回填只補曲線不動別的欄位
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```

@@ -155,6 +155,9 @@ class Metrics {
   /// 睡著期間的心率與手錶動作曲線（2026-11-13，Sleep Stages 卡疊線用）。只呈現、不計分。
   final NightCurve? heartRateCurve;
   final NightCurve? movementCurve;
+
+  /// 攝影機看到的動作（只有 /home 有；打包檔沒有）。
+  final NightCurve? cameraCurve;
   final double? avgHeartRate;
   final int? restingHeartRate;
 
@@ -175,6 +178,7 @@ class Metrics {
     this.sleepStages,
     this.heartRateCurve,
     this.movementCurve,
+    this.cameraCurve,
     this.avgHeartRate,
     this.restingHeartRate,
   });
@@ -207,6 +211,7 @@ class Metrics {
       sleepStages: SleepStages.fromJsonOrNull(json['sleep_stages']),
       heartRateCurve: NightCurve.fromJsonOrNull(json['heart_rate_curve']),
       movementCurve: NightCurve.fromJsonOrNull(json['movement_curve']),
+      cameraCurve: NightCurve.fromJsonOrNull(json['camera_curve']),
       avgHeartRate: (json['avg_heart_rate'] as num?)?.toDouble(),
       restingHeartRate: (json['resting_heart_rate'] as num?)?.toInt(),
     );

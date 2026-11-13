@@ -157,6 +157,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       // 點 Heart rate／Movement 疊線（2026-11-13）
                       heartRate: r.heartRate,
                       movement: r.movement,
+                      camera: r.cameraMotion,
                       restingHeartRate: r.restingHeartRate,
                     ),
                   ] else if (r.hasScore &&

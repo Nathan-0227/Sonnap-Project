@@ -50,7 +50,7 @@ Map<String, dynamic> curveJson({required bool hr}) => {
     };
 
 Future<void> pumpCard(WidgetTester tester,
-    {bool hr = true, bool move = true, double? resting = 53}) async {
+    {bool hr = true, bool move = true, bool camera = false, double? resting = 53}) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 2.625;
   addTearDown(tester.view.reset);
@@ -63,6 +63,7 @@ Future<void> pumpCard(WidgetTester tester,
           totalSleepMinutes: 235,
           heartRate: hr ? NightCurve.fromJsonOrNull(curveJson(hr: true)) : null,
           movement: move ? NightCurve.fromJsonOrNull(curveJson(hr: false)) : null,
+          camera: camera ? NightCurve.fromJsonOrNull(curveJson(hr: false)) : null,
           restingHeartRate: resting,
         ),
       ),
@@ -146,9 +147,34 @@ void main() {
     expect(tester.widgetList<Text>(axis).map((t) => t.data), ['More', 'Less']);
   });
 
-  testWidgets('⚠️ 不寫 Normal／High 之類的判斷', (tester) async {
+  testWidgets('Camera：攝影機的動作，跟手錶的 Movement 分開；軸 More／Less', (tester) async {
+    await pumpCard(tester, camera: true);
+    expect(find.byKey(const Key('stages-chip-camera')), findsOneWidget);
+    expect(find.byKey(const Key('stages-chip-move')), findsOneWidget,
+        reason: '兩個是不同的量，各一顆');
+    await tester.tap(find.byKey(const Key('stages-chip-camera')));
+    await tester.pump();
+    expect(find.byKey(const Key('stages-overlay-camera')), findsOneWidget);
+    expect(textOf(tester, 'stages-overlay-info'), 'Movement seen by the camera');
+    final axis = find.descendant(
+        of: find.byKey(const Key('stages-overlay-axis')),
+        matching: find.byType(Text));
+    expect(tester.widgetList<Text>(axis).map((t) => t.data), ['More', 'Less']);
+    // 一次只選一個：換到心率，攝影機那條收掉
+    await tester.tap(find.byKey(const Key('stages-chip-hr')));
+    await tester.pump();
+    expect(find.byKey(const Key('stages-overlay-camera')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('沒有錄影的晚上 → 沒有 Camera 那顆', (tester) async {
     await pumpCard(tester);
-    for (final chip in ['stages-chip-hr', 'stages-chip-move']) {
+    expect(find.byKey(const Key('stages-chip-camera')), findsNothing);
+  });
+
+  testWidgets('⚠️ 不寫 Normal／High 之類的判斷', (tester) async {
+    await pumpCard(tester, camera: true);
+    for (final chip in ['stages-chip-hr', 'stages-chip-move', 'stages-chip-camera']) {
       await tester.tap(find.byKey(Key(chip)));
       await tester.pump();
       final texts = tester

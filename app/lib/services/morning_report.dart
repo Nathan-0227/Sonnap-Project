@@ -125,6 +125,9 @@ class MorningReport {
   final NightCurve? heartRate;
   final NightCurve? movement;
 
+  /// 攝影機看到的動作（`metrics.camera_curve`）。有錄影、有床鋪範圍的晚上才有。
+  final NightCurve? cameraMotion;
+
   final ReportSource source;
 
   // ── 跟上一晚比：後端給上一個有資料的晚上的原始數字 ──
@@ -209,6 +212,7 @@ class MorningReport {
     this.yesterday,
     this.heartRate,
     this.movement,
+    this.cameraMotion,
     this.source = ReportSource.phoneOnly,
     this.previousTimeInBed,
     this.previousSleepMinutes,
@@ -296,6 +300,7 @@ class MorningReport {
       yesterday: yesterday,
       heartRate: heartRate,
       movement: movement,
+      cameraMotion: cameraMotion,
       source: source,
       previousTimeInBed: previousTimeInBed,
       previousSleepMinutes: previousSleepMinutes,
@@ -496,6 +501,8 @@ MorningReport buildMorningReport({
           has ? NightCurve.fromJsonOrNull(metrics?['heart_rate_curve']) : null,
       movement:
           has ? NightCurve.fromJsonOrNull(metrics?['movement_curve']) : null,
+      cameraMotion:
+          has ? NightCurve.fromJsonOrNull(metrics?['camera_curve']) : null,
       source: ReportSource.backend,
       previousTimeInBed: n(previous, 'time_in_bed_minutes'),
       previousSleepMinutes: n(previous, 'sleep_duration_minutes'),

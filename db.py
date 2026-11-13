@@ -396,6 +396,7 @@ CREATE TABLE IF NOT EXISTS camera_nightly (
     motion_threshold_basis TEXT,             -- 'roi' | 'frame'，分母是哪一個
     roi            TEXT,                     -- "x,y,w,h"；沒有 ROI 時 NULL
     csv_name       TEXT,                     -- 哪一份錄影算出來的
+    motion_curve   TEXT,                     -- JSON：每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線）
     created_at     TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -599,6 +600,8 @@ CREATE INDEX IF NOT EXISTS idx_block_events_user_date
 # 要改型別或刪欄位的話，SQLite 的標準作法是「建新表 → 搬資料 → 換名」，
 # 那已經超出這個機制的範圍，屆時請另寫一次性腳本。
 COLUMN_MIGRATIONS = [
+    # 2026-11-13：攝影機整晚的動作曲線（只呈現、不計分）。Sleep Stages 卡點 Camera 疊上去。
+    ("camera_nightly", "motion_curve", "TEXT"),
     # 2026-08-26：Health Connect 能給臥床時間（Garmin 不能），
     #             以及把 final_score 存起來不讓 API 層自己算。
     ("wearable_nightly", "time_in_bed_min", "REAL"),
@@ -1189,6 +1192,25 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
         conn.close()
 
 
+def set_camera_motion_curve(user_id, date, curve, db_path=None):
+    """**只**補那一晚的 motion_curve，其他欄位一個都不動（2026-11-13，回填舊夜晚用）。
+
+    ⚠️ 不用 upsert_camera_nightly 回填：那會用現在的分析程式把整列重算覆寫，
+       舊夜晚的事件數、入睡時刻若因程式改過而不同，會悄悄被換掉。
+    回傳改了幾列（那一晚不存在就是 0，不新增）。
+    """
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE camera_nightly SET motion_curve = ? WHERE user_id = ? AND date = ?",
+            (json.dumps(curve) if curve else None, user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def upsert_camera_nightly(user_id, date, result, db_path=None):
     """把 `tapo_sleep_onset.analyse()` 的結果寫成一列（可重複執行）。
 
@@ -1213,8 +1235,8 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
                  events_total, events_per_hour,
                  bed_times_provenance, sleep_onset_provenance,
                  motion_threshold_pct, motion_threshold_basis, roi,
-                 csv_name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 csv_name, motion_curve, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 bed_start_at                = excluded.bed_start_at,
                 bed_end_at                  = excluded.bed_end_at,
@@ -1230,7 +1252,8 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
                 motion_threshold_pct        = excluded.motion_threshold_pct,
                 motion_threshold_basis      = excluded.motion_threshold_basis,
                 roi                         = excluded.roi,
-                csv_name                    = excluded.csv_name
+                csv_name                    = excluded.csv_name,
+                motion_curve                = excluded.motion_curve
             """,
             (user_id, date,
              result.get("bed_start_at"), result.get("bed_end_at"),
@@ -1244,7 +1267,9 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
              result.get("sleep_onset_provenance"),
              threshold, basis,
              ",".join(str(v) for v in roi) if roi else None,
-             result.get("csv"), now_iso()),
+             result.get("csv"),
+             json.dumps(result["motion_curve"]) if result.get("motion_curve") else None,
+             now_iso()),
         )
         conn.commit()
     finally:

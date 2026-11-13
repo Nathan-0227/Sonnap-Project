@@ -418,6 +418,43 @@ def night_movement(w_row):
     return sleep_heart_rate.movement_curve(records, start, wake)
 
 
+def night_camera_curve(user_id, night_date, w_row):
+    """那一晚**攝影機**的動作曲線，只留手錶的入睡 → 起床那段（Sleep Stages 卡點 Camera，2026-11-13）。
+
+    每 5 分鐘一點、值是那 5 分鐘裡有幾成時間在動（0–1），在早晨匯入時從錄影 CSV 算好存進
+    camera_nightly.motion_curve（CSV 只在電腦上）。
+    ⚠️ 只呈現、不計分：攝影機動作率已驗證與任何結果都沒有相關。不判斷動得多是好是壞。
+    ⚠️ 只收有床鋪 ROI 的夜晚（motion_threshold_basis == "roi"）。
+    ⚠️ 攝影機的時間沒有時區標記、手錶的有：兩邊都當**牆鐘**比，不換 UTC。
+    """
+    if not night_date or not w_row:
+        return None
+    start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
+    if not start or not wake:
+        return None
+    rows = [r for r in db.get_camera_nightly(user_id, days=60) if r.get("date") == night_date]
+    if not rows or rows[0].get("motion_threshold_basis") != "roi" or not rows[0].get("motion_curve"):
+        return None
+    try:
+        curve = json.loads(rows[0]["motion_curve"])
+        lo = datetime.fromisoformat(start).replace(tzinfo=None)
+        hi = datetime.fromisoformat(wake).replace(tzinfo=None)
+        pts = [p for p in curve.get("points", [])
+               if lo <= datetime.fromisoformat(p["t"]).replace(tzinfo=None) <= hi]
+    except (TypeError, ValueError, KeyError):
+        return None
+    if len(pts) < 6:
+        return None
+    values = [p["value"] for p in pts]
+    return {
+        "points": pts,
+        "avg": round(sum(values) / len(values), 3),
+        "min": min(values),
+        "max": max(values),
+        "bucket_minutes": curve.get("bucket_minutes", 5),
+    }
+
+
 def rating_block(rating):
     """起床自評給畫面的樣子；沒填就是 None。"""
     if not rating:
@@ -987,6 +1024,7 @@ async def get_home(
             # 睡著期間的心率與手錶動作曲線（2026-11-13）。只呈現、不計分。
             "heart_rate_curve": night_heart_rate(w_row),
             "movement_curve": night_movement(w_row),
+            "camera_curve": night_camera_curve(user_id, target_date, w_row),
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
             # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。
