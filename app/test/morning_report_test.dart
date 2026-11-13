@@ -683,9 +683,9 @@ void main() {
            'total': 30, 'final_quality': 'Poor'},
         ])),
       );
-      expect(textOf(tester, 'report-level'), 'Lv6');
+      expect(textOf(tester, 'report-level'), 'Lv.6');
       expect(textOf(tester, 'report-xp-text'), '830 / 1,219 XP');
-      expect(textOf(tester, 'report-xp-to-next'), '389 to Lv7');
+      expect(textOf(tester, 'report-xp-to-next'), '389 to Lv.7');
       final pill = find.byKey(const Key('report-night-xp'));
       expect(hasText(tester, pill, '+30 XP'), isTrue,
           reason: '是那一晚的 30，不是前一晚的 50');

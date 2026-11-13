@@ -172,11 +172,19 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                           _header(r),
                           const SizedBox(height: 14),
                           _hero(r),
+                          if (r.level != null) ...[
+                            const SizedBox(height: 4),
+                            _xp(r),
+                          ],
+                          if (_moodLine(r) != null) ...[
+                            const SizedBox(height: 14),
+                            _moodLine(r)!,
+                          ],
+                          const SizedBox(height: 8),
                         ],
                       ),
                     ],
                   ),
-                  if (r.level != null) ...[const SizedBox(height: 14), _xp(r)],
                   if (hasBuddy) ...[const SizedBox(height: 14), _buddy(r)],
                   // 昨晚的數字（2026-11-14 改成圖形格子，參考圖：每一格的圖就是那個數字）
                   const SizedBox(height: 18),
@@ -347,98 +355,98 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   static const double _arcBaseFromBottom = 80;
 
   Widget _hero(MorningReport r) {
-    final mood =
-        r.hasScore && r.moodDescription != null && r.moodDescription!.isNotEmpty
-        ? r.moodDescription!
-        : null;
-    return Column(
-      children: [
-        SizedBox(
-          height: _sceneHeight,
-          child: LayoutBuilder(
-            builder: (context, box) {
-              final w = box.maxWidth;
-              const arcTop = _sceneHeight - _arcBaseFromBottom - _arcRadius;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 半圓線
-                  Positioned(
-                    left: w / 2 - _arcRadius - 10,
-                    top: arcTop - 10,
-                    width: (_arcRadius + 10) * 2,
-                    height: _arcRadius + 20,
-                    child: CustomPaint(
-                      key: Key(r.hasScore ? 'report-gauge' : 'report-waiting'),
-                      painter: r.hasScore
-                          ? _ArcPainter(value: (r.score! / 100).clamp(0.0, 1.0))
-                          : const _DashedArcPainter(),
-                    ),
+    return SizedBox(
+      height: _sceneHeight,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          const arcTop = _sceneHeight - _arcBaseFromBottom - _arcRadius;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 半圓線
+              Positioned(
+                left: w / 2 - _arcRadius - 10,
+                top: arcTop - 10,
+                width: (_arcRadius + 10) * 2,
+                height: _arcRadius + 20,
+                child: CustomPaint(
+                  key: Key(r.hasScore ? 'report-gauge' : 'report-waiting'),
+                  painter: r.hasScore
+                      ? _ArcPainter(value: (r.score! / 100).clamp(0.0, 1.0))
+                      : const _DashedArcPainter(),
+                ),
+              ),
+              // 弧裡面的字（小狗頭上）
+              Positioned(
+                left: w / 2 - _arcRadius + 24,
+                width: (_arcRadius - 24) * 2,
+                top: arcTop + 18,
+                child: r.hasScore ? _scoreText(r) : _waitingText(),
+              ),
+              // 小狗坐在弧底下的草坡上：腳下一片淡影子
+              Positioned(
+                left: w / 2 - 44,
+                bottom: 6,
+                child: const _GroundShadow(width: 88),
+              ),
+              if (r.hasScore)
+                Positioned(
+                  left: w / 2 - 58,
+                  bottom: 4,
+                  child: HomePet(
+                    key: const Key('report-pet-awake'),
+                    mood: r.mood,
+                    size: 116,
                   ),
-                  // 弧裡面的字（小狗頭上）
-                  Positioned(
-                    left: w / 2 - _arcRadius + 24,
-                    width: (_arcRadius - 24) * 2,
-                    top: arcTop + 18,
-                    child: r.hasScore ? _scoreText(r) : _waitingText(),
+                )
+              else
+                Positioned(
+                  left: w / 2 - 65,
+                  bottom: -4,
+                  child: const SleepingPet(
+                    key: Key('report-pet-asleep'),
+                    size: 130,
                   ),
-                  // 小狗坐在弧底下的草坡上：腳下一片淡影子
-                  Positioned(
-                    left: w / 2 - 44,
-                    bottom: 6,
-                    child: const _GroundShadow(width: 88),
-                  ),
-                  if (r.hasScore)
-                    Positioned(
-                      left: w / 2 - 58,
-                      bottom: 4,
-                      child: HomePet(
-                        key: const Key('report-pet-awake'),
-                        mood: r.mood,
-                        size: 116,
-                      ),
-                    )
-                  else
-                    Positioned(
-                      left: w / 2 - 65,
-                      bottom: -4,
-                      child: const SleepingPet(
-                        key: Key('report-pet-asleep'),
-                        size: 130,
-                      ),
-                    ),
-                  // 左下：You felt
-                  if (r.rating != null)
-                    Positioned(
-                      left: 0,
-                      bottom: 4,
-                      width: w / 2 - 54,
-                      child: _ratingChip(r),
-                    ),
-                  // 右下：夢境日記（使用者生成）。點開看完整夢境；那一晚沒有夢就不出現。
-                  // 2026-11-14 取代頭邊小雲：雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上。
-                  if (r.dream != null)
-                    Positioned(
-                      key: const Key('report-dream'),
-                      right: 6,
-                      bottom: 0,
-                      child: _DreamBook(onTap: () => _showDream(r)),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        if (mood != null) ...[
-          const SizedBox(height: 10),
-          Text(
-            mood,
-            key: const Key('report-mood-line'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: ReportColors.soft, fontSize: 13),
-          ),
-        ],
-      ],
+                ),
+              // 左下：You felt
+              if (r.rating != null)
+                Positioned(
+                  left: 0,
+                  bottom: 4,
+                  width: w / 2 - 54,
+                  child: _ratingChip(r),
+                ),
+              // 右下：夢境日記（使用者生成）。點開看完整夢境；那一晚沒有夢就不出現。
+              // 2026-11-14 取代頭邊小雲：雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上。
+              if (r.dream != null)
+                Positioned(
+                  key: const Key('report-dream'),
+                  // 草坡往右邊斜下去，書要放低一點才在草地上
+                  right: 6,
+                  bottom: -30,
+                  child: _DreamBook(onTap: () => _showDream(r)),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 小狗那句話（照抄後端 mood_description），放在經驗條下面置中。
+  Widget? _moodLine(MorningReport r) {
+    final mood = r.moodDescription;
+    if (!r.hasScore || mood == null || mood.isEmpty) return null;
+    return Text(
+      mood,
+      key: const Key('report-mood-line'),
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: ReportColors.soft,
+        fontSize: 13,
+        shadows: _onSky,
+      ),
     );
   }
 
@@ -580,62 +588,86 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final size = r.xpLevelSize;
     final into = r.xpIntoLevel ?? 0;
     final night = r.nightXp;
-    return Container(
+    // 2026-11-14 使用者定（參考圖）：不要卡片框，直接放在草坡上——
+    // 大字 Lv.6 → 「Your experience」＋右邊這一晚的 +N XP → 經驗條（字寫在條裡）。
+    return Column(
       key: const Key('report-xp'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: reportCard(radius: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [ReportColors.purple, Color(0xFFC08BFF)],
-              ),
-            ),
-            child: Text(
-              'Lv${r.level}',
-              key: const Key('report-level'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Lv.${r.level}',
+          key: const Key('report-level'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 34,
+            fontWeight: FontWeight.w900,
+            height: 1.1,
+            shadows: _onSky,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _XpBar(
-                  date: r.date,
-                  into: into,
-                  size: size,
-                  nights: r.recentNightXp,
-                  nightXp: night,
-                  soFar: r.nightXpSoFar,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Expanded(
+              child: Text(
+                'Your experience',
+                style: TextStyle(
+                  color: ReportColors.soft,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  shadows: _onSky,
                 ),
-                if (size != null) ...[
-                  const SizedBox(height: 4),
+              ),
+            ),
+            // 這一晚 +N（照抄 /game）；差的晚上照實寫 +0，不藏（紅線 5）
+            if (night != null)
+              Row(
+                key: const Key('report-night-xp'),
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
                   Text(
-                    '${_n(size - into)} to Lv${(r.level ?? 0) + 1}',
-                    key: const Key('report-xp-to-next'),
-                    textAlign: TextAlign.right,
+                    '+$night XP',
                     style: const TextStyle(
-                      color: ReportColors.muted,
-                      fontSize: 11,
+                      color: ReportColors.gold,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      shadows: _onSky,
                     ),
                   ),
+                  if (r.nightXpSoFar)
+                    const Text(
+                      ' so far',
+                      key: Key('report-night-xp-so-far'),
+                      style: TextStyle(
+                        color: ReportColors.gold,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                 ],
-              ],
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        _XpBar(date: r.date, into: into, size: size, nights: r.recentNightXp),
+        if (size != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${_n(size - into)} to Lv.${(r.level ?? 0) + 1}',
+            key: const Key('report-xp-to-next'),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: ReportColors.soft,
+              fontSize: 11,
+              shadows: _onSky,
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -1557,28 +1589,30 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   }
 }
 
-/// 經驗條（2026-11-14 使用者定，參考圖）：「215 / 400 XP」寫在條裡面；
-/// 最近幾晚一晚一格（`xpBarSegments`，只排版不算 XP），這份報告那一晚最亮、上面標 +N；
-/// 更早累積的合成一段、顏色淡。+0 的晚上沒有格子。
+/// 經驗條（2026-11-14 使用者定，參考圖）：沒有框，「215 / 400 XP」寫在條裡。
+/// 條是**一種顏色**（白），最近幾晚之間一條細線分開（`xpBarSegments`，只排版不算 XP），
+/// 只有這份報告那一晚是金色（跟上面的 +N XP 同色）。+0 的晚上沒有格子。
+/// （第一版每晚換深淺、更早的另一色，使用者覺得顏色太多。）
 class _XpBar extends StatelessWidget {
   final String date;
   final int into;
   final int? size;
   final List<NightXp> nights;
-  final int? nightXp;
-  final bool soFar;
 
   const _XpBar({
     required this.date,
     required this.into,
     required this.size,
     required this.nights,
-    required this.nightXp,
-    required this.soFar,
   });
 
-  static const double _height = 24;
-  static const double _labelRoom = 20;
+  static const double _height = 22;
+  static const _fill = Color(0xF2FFFFFF);
+  static const _mine = ReportColors.gold;
+  static const _ink = Color(0xFF1D2860);
+
+  /// 條內文字大約佔的寬度（左邊距 12 ＋「1,219 / 1,500 XP」）。
+  static const double _textRoom = 128;
 
   @override
   Widget build(BuildContext context) {
@@ -1589,125 +1623,70 @@ class _XpBar extends StatelessWidget {
     final text = total == null
         ? 'Max level'
         : '${_MorningReportScreenState._n(into)} / ${_MorningReportScreenState._n(total)} XP';
+    final progress = total == null || total <= 0
+        ? 1.0
+        : (into / total).clamp(0.0, 1.0);
     return SizedBox(
-      height: _height + _labelRoom,
+      height: _height,
       child: LayoutBuilder(
         builder: (context, box) {
           final w = box.maxWidth;
           double x(int v) =>
               total == null || total <= 0 ? 0 : (v / total).clamp(0.0, 1.0) * w;
-          XpSegment? mine;
-          for (final g in segments) {
-            if (g.date == date) mine = g;
-          }
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: _height,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_height / 2),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                      if (total == null)
-                        const Positioned.fill(
-                          child: ColoredBox(color: ReportColors.purple),
-                        ),
-                      for (final (i, g) in segments.indexed)
-                        Positioned(
-                          key: Key('xp-seg-${g.date ?? 'earlier'}'),
-                          left: x(g.start),
-                          top: 0,
-                          bottom: 0,
-                          width: x(g.end) - x(g.start),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: g.date == null
-                                  ? const Color(0x998B6CF0)
-                                  : g.date == date
-                                  ? const Color(0xFFFFB36B)
-                                  // 相鄰兩晚兩種深淺，不靠留縫分開（縫多了像條碼）
-                                  : i.isEven
-                                  ? const Color(0xFFB9A6FF)
-                                  : const Color(0xFFA48CF5),
-                              border: const Border(
-                                right: BorderSide(
-                                  color: Color(0x660B1636),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      Center(
-                        child: Text(
-                          text,
-                          key: const Key('report-xp-text'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(color: Color(0xCC060A20), blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+          // 字放在條的左邊；進度太短時字落在空的那段，改用白字
+          final onFill = progress * w > 120;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(_height / 2),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.white.withValues(alpha: 0.22),
                   ),
                 ),
-              ),
-              // 這一晚 +N：浮在那一格上面；+0 沒有格子，就放在進度的尾端（照實，不藏）。
-              if (nightXp != null)
-                Positioned(
-                  left:
-                      ((mine == null
-                                  ? x(into)
-                                  : (x(mine.start) + x(mine.end)) / 2) -
-                              60)
-                          .clamp(0.0, math.max(0.0, w - 120)),
-                  width: 120,
-                  top: 0,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      key: const Key('report-night-xp'),
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '+$nightXp XP',
-                          style: const TextStyle(
-                            color: ReportColors.gold,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
+                if (total == null)
+                  const Positioned.fill(child: ColoredBox(color: _fill)),
+                for (final g in segments)
+                  Positioned(
+                    key: Key('xp-seg-${g.date ?? 'earlier'}'),
+                    left: x(g.start),
+                    top: 0,
+                    bottom: 0,
+                    width: x(g.end) - x(g.start),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: g.date == date ? _mine : _fill,
+                        // 字底下那段不畫分隔線（線會穿過字）
+                        border: g.end < into && x(g.end) > _textRoom
+                            ? const Border(
+                                right: BorderSide(
+                                  color: Color(0x591D2860),
+                                  width: 1,
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        text,
+                        key: const Key('report-xp-text'),
+                        style: TextStyle(
+                          color: onFill ? _ink : Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
                         ),
-                        if (soFar)
-                          const Text(
-                            ' so far',
-                            key: Key('report-night-xp-so-far'),
-                            style: TextStyle(
-                              color: ReportColors.gold,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -1844,7 +1823,7 @@ class ReportDawnBackdrop extends StatelessWidget {
               key: const Key('report-dawn'),
               fit: BoxFit.cover,
               // 不貼底：往下挪，太陽才從分數圓環下面露出來、草坡落在小狗腳下
-              alignment: const Alignment(0, 0.3),
+              alignment: const Alignment(0, 0.6),
               errorBuilder: (_, _, _) => _hill,
             ),
             // 壓一層深藍，白字與圓環才看得清楚；上緣接狀態列、下緣接格子
