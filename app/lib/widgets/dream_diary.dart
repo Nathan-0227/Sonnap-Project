@@ -15,30 +15,37 @@ import 'home_pet.dart';
 ///
 /// 夢境本身是 AI 寫的虛構內容（`ai/generate_advice.py`），只呈現、不計分。
 
-/// 對話框那一句。
-const String kDreamBubbleText = 'I had a dream…';
+/// 對話框那一句（還沒看過）。雲朵小，拆兩行寫。
+const String kDreamBubbleText = 'I had a\ndream…';
+
+/// 看過之後雲朵上的字（2026-11-13 使用者定：看過就變成 Dream diary，雲朵大小不變）。
+const String kDreamBubbleReadText = 'Dream\ndiary';
 
 /// 雲朵對話框的圖（使用者生成，去背；字由 App 疊上去，圖裡沒有字）。
 const String kDreamCloudAsset = 'assets/moods/dream_cloud.png';
 
-/// 完整那朵雲的寬度（首頁排位置要用）。
-const double kDreamBubbleWidth = 150;
+/// 雲朵的寬度（首頁排位置要用）。使用者定：要比小狗的頭小（頭約 115 寬）。
+const double kDreamBubbleWidth = 110;
 
 /// 雲身的中心（佔圖寬、高的比例）：字放這裡。右下那兩顆小圓點與四周的星星月亮不算。
 const Offset _cloudTextCenter = Offset(0.494, 0.476);
 const double _cloudAspect = 720 / 427;
 
-/// 小狗旁邊的對話框（雲朵）。[compact] = 看過了，只剩一朵小雲、不寫字。
+/// 小狗旁邊的對話框（雲朵）。
+/// [read] = 首頁看過了，字換成「Dream diary」、大小不變。
+/// [compact] = 報告用的小雲，不寫字（大的會蓋到分數圓環）。
 /// 雲朵圖讀不到時退回程式畫的白色對話框（[_PaintedBubble]），不會報錯。
 class DreamBubble extends StatelessWidget {
   final VoidCallback onTap;
   final bool compact;
+  final bool read;
   final String cloudAsset;
 
   const DreamBubble({
     super.key,
     required this.onTap,
     this.compact = false,
+    this.read = false,
     this.cloudAsset = kDreamCloudAsset,
   });
 
@@ -46,9 +53,12 @@ class DreamBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = compact ? 58.0 : kDreamBubbleWidth;
     final height = width / _cloudAspect;
+    final text = read ? kDreamBubbleReadText : kDreamBubbleText;
     return Semantics(
       button: true,
-      label: compact ? 'Open dream diary' : kDreamBubbleText,
+      label: compact || read
+          ? 'Open dream diary'
+          : kDreamBubbleText.replaceAll('\n', ' '),
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
@@ -59,7 +69,8 @@ class DreamBubble extends StatelessWidget {
           height: height,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
-          errorBuilder: (_, _, _) => _PaintedBubble(compact: compact),
+          errorBuilder: (_, _, _) =>
+              _PaintedBubble(compact: compact, text: text),
           frameBuilder: (context, child, frame, sync) {
             if (compact) {
               return SizedBox(
@@ -76,21 +87,23 @@ class DreamBubble extends StatelessWidget {
                 children: [
                   Positioned.fill(child: child),
                   // 字限制在雲身裡（左右各留 16%、上下置中在雲身中心）；放不下就縮小，
-                  // 不換行、不跑出雲外（系統字體放大時也一樣）
+                  // 不跑出雲外（系統字體放大時也一樣）
                   Positioned(
                     left: width * (_cloudTextCenter.dx - 0.34),
                     right: width * (1 - _cloudTextCenter.dx - 0.34),
-                    top: height * (_cloudTextCenter.dy - 0.2),
-                    height: height * 0.4,
+                    top: height * (_cloudTextCenter.dy - 0.26),
+                    height: height * 0.52,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: const Text(
-                        kDreamBubbleText,
-                        key: Key('dream-bubble-text'),
-                        style: TextStyle(
+                      child: Text(
+                        text,
+                        key: const Key('dream-bubble-text'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
                           fontFamily: kReportFont,
                           color: Color(0xFF6B3E22),
-                          fontSize: 14,
+                          fontSize: 13,
+                          height: 1.1,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -109,7 +122,8 @@ class DreamBubble extends StatelessWidget {
 /// 雲朵圖讀不到時的退路：程式畫的白色對話框。
 class _PaintedBubble extends StatelessWidget {
   final bool compact;
-  const _PaintedBubble({required this.compact});
+  final String text;
+  const _PaintedBubble({required this.compact, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +147,7 @@ class _PaintedBubble extends StatelessWidget {
           ],
         ),
         child: Text(
-          compact ? '💭' : '$kDreamBubbleText 💭',
+          compact ? '💭' : "${text.replaceAll('\n', ' ')} 💭",
           key: Key(compact ? 'dream-bubble-compact' : 'dream-bubble-text'),
           style: TextStyle(
             fontFamily: kReportFont,

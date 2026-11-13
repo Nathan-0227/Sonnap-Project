@@ -1316,7 +1316,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       top: 4,
                       left: math.min(w / 2 + 14, w - kDreamBubbleWidth - 4),
                       child: DreamBubble(
-                        compact: _dreamReadDate == dreamDate,
+                        read: _dreamReadDate == dreamDate,
                         onTap: () => _showDream(session),
                       ),
                     ),

@@ -86,7 +86,7 @@ void main() {
           reason: '使用者定：對話框不要那麼多字，點開才看');
     });
 
-    testWidgets('點對話框 → 夢境日記：全文、那一晚的日期、AI 小字；看過縮成 💭 並記住',
+    testWidgets('點對話框 → 夢境日記：全文、那一晚的日期、AI 小字；看過字換成 Dream diary、大小不變並記住',
         (tester) async {
       await pumpHome(tester, withDream);
       await tester.tap(find.byKey(const Key('dream-bubble-text')));
@@ -98,18 +98,21 @@ void main() {
           reason: '舊的夢也要看得出是哪一晚，不被當成昨晚的');
       expect(find.byKey(const Key('dream-diary-disclaimer')), findsOneWidget);
 
+      final before = tester.getSize(find.byKey(const Key('dream-bubble')));
       Navigator.of(tester.element(find.byKey(const Key('dream-diary')))).pop();
       await frames(tester);
-      expect(find.byKey(const Key('dream-bubble-compact')), findsOneWidget);
-      expect(find.byKey(const Key('dream-bubble-text')), findsNothing);
+      expect(find.text(kDreamBubbleReadText), findsOneWidget);
+      expect(find.text(kDreamBubbleText), findsNothing);
+      expect(tester.getSize(find.byKey(const Key('dream-bubble'))), before,
+          reason: '使用者定：看過只換字，雲朵不縮');
       expect(
           await DreamReadStore(kv).isRead(withDream.history.last.date), isTrue);
     });
 
-    testWidgets('這個夢已經看過 → 一打開就是 💭', (tester) async {
+    testWidgets('這個夢已經看過 → 一打開就寫 Dream diary', (tester) async {
       await DreamReadStore(kv).markRead(withDream.history.last.date);
       await pumpHome(tester, withDream);
-      expect(find.byKey(const Key('dream-bubble-compact')), findsOneWidget);
+      expect(find.text(kDreamBubbleReadText), findsOneWidget);
     });
 
     testWidgets('看過的是別晚的夢 → 新的夢照樣大聲說', (tester) async {
@@ -145,6 +148,8 @@ void main() {
       final pet = tester.getRect(find.byKey(const Key('home-pet')));
       // 小狗的頭在圖的左半邊，右緣大約就在中線（2026-11-13 實機截圖量的）
       expect(cloud.left, greaterThan(pet.center.dx + 8));
+      // 使用者定：雲朵要比小狗的頭小（頭約佔小狗圖寬的一半）
+      expect(cloud.width, lessThan(pet.width / 2));
       expect(cloud.right, lessThanOrEqualTo(tester.view.physicalSize.width / 2.625));
     });
 
@@ -193,7 +198,7 @@ void main() {
 
     testWidgets('⚠️ 雲朵圖讀不到 → 退回程式畫的對話框，字還在、不報錯', (tester) async {
       await pumpBubble(tester, asset: 'assets/nope.png');
-      expect(find.text('$kDreamBubbleText 💭'), findsOneWidget);
+      expect(find.text('I had a dream… 💭'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
