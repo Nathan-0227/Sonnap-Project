@@ -1094,22 +1094,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: _buildScoreCard(session),
                       ),
                       const SizedBox(height: SonnapColors.gap),
-                      // 兩張主卡（2026-11-13 使用者定，參考 Otter Life）：Sleep（昨晚）與 Activity（前一天）
-                      _section(
-                        key: const Key('home-sleep-section'),
-                        title: 'Sleep',
-                        subtitle: _sleepNightLabel(session),
-                        child: _buildTiles(session),
-                      ),
-                      if (session.activity != null) ...[
-                        const SizedBox(height: SonnapColors.gap),
+                      // 兩欄（2026-11-13 使用者定，照 Otter Life）：左邊 Sleep（昨晚）一張張往下疊，
+                      // 右邊一張高的 Activity 卡（前一天）。沒有白天資料時退回原本整寬的 Sleep 格子——
+                      // 只剩左半欄會空一半。
+                      if (session.activity != null)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                key: const Key('home-sleep-section'),
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _columnHeader('Sleep', _sleepNightLabel(session)),
+                                  _buildTiles(session, column: true),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: SonnapColors.gap),
+                            Expanded(child: _buildActivityCard(session.activity!)),
+                          ],
+                        )
+                      else
                         _section(
-                          key: const Key('home-activity-section'),
-                          title: 'Activity',
-                          subtitle: _activityDayLabel(session.activity!.date),
-                          child: _buildActivity(session.activity!),
+                          key: const Key('home-sleep-section'),
+                          title: 'Sleep',
+                          subtitle: _sleepNightLabel(session),
+                          child: _buildTiles(session),
                         ),
-                      ],
                       const SizedBox(height: SonnapColors.gap),
                       // 睡眠階段（只呈現、不計分；不放警語）。沒有資料時老實講還沒有。
                       if (session.metrics.sleepStages != null)
@@ -1738,7 +1750,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
   /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
   /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。
-  Widget _buildTiles(SleepSession session) {
+  Widget _buildTiles(SleepSession session, {bool column = false}) {
     final m = session.metrics;
     final minutes = m.sleepDurationMinutes;
     // 效率：顯示**進分數的那一個**（2026-11-13 使用者定，同早晨報告）；舊版打包檔沒有就退回手錶的。
@@ -1785,10 +1797,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: tile,
     );
 
-    return Column(
-      children: [
-        pair(
-          tappable(
+    final durationTile = tappable(
             InfoTile(
               key: const Key('tile-duration'),
               icon: Icons.nightlight_round,
@@ -1804,8 +1813,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               series: durationSeries,
               format: formatMinutes,
             ),
-          ),
-          tappable(
+          );
+    final effTile = tappable(
             InfoTile(
               key: const Key('tile-efficiency'),
               icon: Icons.speed_rounded,
@@ -1824,11 +1833,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               format: _fmtPts,
               caveatComponent: 'efficiency',
             ),
-          ),
-        ),
-        const SizedBox(height: SonnapColors.gap),
-        pair(
-          tappable(
+          );
+    final deepTile = tappable(
             InfoTile(
               key: const Key('tile-deep'),
               icon: Icons.waves_rounded,
@@ -1845,31 +1851,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               format: formatMinutes,
               caveatComponent: 'deep',
             ),
-          ),
-          _buildCameraTile(session),
-        ),
-        // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
-        // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。
-        if (m.heartRateCurve != null) ...[
+          );
+    // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
+    // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。
+    final hrTile = m.heartRateCurve == null
+        ? null
+        : InfoTile(
+            key: const Key('tile-night-hr'),
+            icon: Icons.favorite_rounded,
+            iconColor: const Color(0xFFFF8AB8),
+            title: 'Heart rate',
+            value: [(m.heartRateCurve!.avg.round().toString(), 'bpm')],
+            note: [
+              'avg while asleep',
+              if (m.restingHeartRate != null) 'resting ${m.restingHeartRate}',
+            ].join(' · '),
+          );
+
+    // 一欄（左右兩欄的左邊，照 Otter Life）：一張張往下疊
+    if (column) {
+      final tiles = [
+        durationTile,
+        effTile,
+        deepTile,
+        _buildCameraTile(session),
+        ?hrTile,
+      ];
+      return Column(
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(height: SonnapColors.gap),
+            SizedBox(height: 124, child: tiles[i]),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        pair(durationTile, effTile),
+        const SizedBox(height: SonnapColors.gap),
+        pair(deepTile, _buildCameraTile(session)),
+        if (hrTile != null) ...[
           const SizedBox(height: SonnapColors.gap),
-          SizedBox(
-            height: 112,
-            child: InfoTile(
-              key: const Key('tile-night-hr'),
-              icon: Icons.favorite_rounded,
-              iconColor: const Color(0xFFFF8AB8),
-              title: 'Heart rate',
-              value: [(m.heartRateCurve!.avg.round().toString(), 'bpm')],
-              note: [
-                'avg while asleep',
-                if (m.restingHeartRate != null) 'resting ${m.restingHeartRate}',
-              ].join(' · '),
-            ),
-          ),
+          SizedBox(height: 112, child: hrTile),
         ],
       ],
     );
   }
+
+  /// 左欄上面那一行：「Sleep  Last night · Fri, Nov 13」（右邊的 Activity 卡標題在卡裡）。
+  Widget _columnHeader(String title, String subtitle) => Padding(
+        padding: const EdgeInsets.fromLTRB(6, 2, 6, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: SonnapColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: SonnapColors.textSecondary,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      );
 
   // ── 兩張主卡的外框 ─────────────────────────────────────────────
 
@@ -1941,29 +1997,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   static String _comma(int v) => NumberFormat('#,##0').format(v);
 
-  /// Activity 卡（2026-11-13 使用者定）：步數、活動卡路里、活動時間、VO2 max、整天心率、Move IQ。
-  /// ⚠️ 只寫事實：步數只寫 goal、不寫達標；不畫獎盃／打勾；沒有「跟前一天比」的箭頭
-  ///    （上升紅的規矩套在步數上會很怪）。點步數／卡路里／活動時間開最近 7 天長條圖。
-  /// ⚠️ 心率是**那一整天**的（含走路），跟 Sleep 卡的睡著期間心率是兩個量；不寫 Normal／High。
-  Widget _buildActivity(YesterdayActivity a) {
-    Widget pair(Widget x, Widget y) => SizedBox(
-      height: 124,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: x),
-          const SizedBox(width: SonnapColors.gap),
-          Expanded(child: y),
-        ],
-      ),
-    );
-    Widget tap(Widget tile, VoidCallback? onTap) => onTap == null
-        ? tile
-        : GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: tile,
-          );
+  /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
+  /// 步數、活動卡路里、活動時間、VO2 max、整天心率一列一列往下、中間細線分隔，最後一行 Move IQ。
+  /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
+  Widget _buildActivityCard(YesterdayActivity a) {
     List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
       for (final h in a.history)
         if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
@@ -1982,90 +2019,101 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final rides = moves.where((m) => m.type == 'cycling').length;
     final others = moves.length - walks - rides;
 
-    return Column(
-      children: [
-        pair(
-          tap(
-            InfoTile(
-              key: const Key('tile-steps'),
-              icon: Icons.directions_walk_rounded,
-              iconColor: const Color(0xFFFFB37A),
-              title: 'Steps',
-              value: a.steps == null ? null : [(_comma(a.steps!), '')],
-              missingNote: 'No step data',
-              note: a.stepGoal == null ? null : 'goal ${_comma(a.stepGoal!)}',
-            ),
-            bars('steps', 'Steps', series((h) => h.steps),
-                (v) => _comma(v.round())),
-          ),
-          tap(
-            InfoTile(
-              key: const Key('tile-kcal'),
-              icon: Icons.local_fire_department_rounded,
-              iconColor: const Color(0xFFFF8A65),
-              title: 'Active energy',
-              value: a.activeKcal == null
-                  ? null
-                  : [(_comma(a.activeKcal!), 'kcal')],
-              missingNote: 'No data',
-              note: a.distanceM == null
-                  ? null
-                  : '${(a.distanceM! / 1000).toStringAsFixed(1)} km',
-            ),
-            bars('kcal', 'Active energy', series((h) => h.activeKcal),
-                (v) => '${_comma(v.round())} kcal'),
-          ),
+    final rows = <Widget>[
+      _activityRow(
+        key: 'tile-steps',
+        icon: Icons.directions_walk_rounded,
+        color: const Color(0xFFFFB37A),
+        title: 'Steps',
+        value: a.steps == null ? null : [(_comma(a.steps!), '')],
+        note: a.stepGoal == null ? null : 'goal ${_comma(a.stepGoal!)}',
+        onTap: bars('steps', 'Steps', series((h) => h.steps),
+            (v) => _comma(v.round())),
+      ),
+      _activityRow(
+        key: 'tile-kcal',
+        icon: Icons.local_fire_department_rounded,
+        color: const Color(0xFFFF8A65),
+        title: 'Active energy',
+        value: a.activeKcal == null ? null : [(_comma(a.activeKcal!), 'kcal')],
+        note: a.distanceM == null
+            ? null
+            : '${(a.distanceM! / 1000).toStringAsFixed(1)} km',
+        onTap: bars('kcal', 'Active energy', series((h) => h.activeKcal),
+            (v) => '${_comma(v.round())} kcal'),
+      ),
+      _activityRow(
+        key: 'tile-active',
+        icon: Icons.bolt_rounded,
+        color: const Color(0xFFFFD96A),
+        title: 'Active time',
+        value: active == null ? null : _hm(active),
+        onTap: bars('active', 'Active time', series((h) => h.activeMinutes),
+            formatMinutes),
+      ),
+      _activityRow(
+        key: 'tile-vo2',
+        icon: Icons.air_rounded,
+        color: const Color(0xFF7EC8FF),
+        title: 'VO2 max',
+        value: a.vo2max == null ? null : [(a.vo2max!.round().toString(), '')],
+        missing: 'Not measured lately',
+        note: _measuredOn(a.vo2maxMeasuredOn),
+      ),
+      if (hr != null)
+        _activityRow(
+          key: 'tile-day-hr',
+          icon: Icons.monitor_heart_rounded,
+          color: const Color(0xFFFF8AB8),
+          title: 'Heart rate (all day)',
+          value: [('${hr.min.round()}–${hr.max.round()}', 'bpm')],
+          note: a.restingHeartRate == null
+              ? null
+              : 'resting ${a.restingHeartRate}',
+          onTap: () => _showDayHeartRate(a),
         ),
-        const SizedBox(height: SonnapColors.gap),
-        pair(
-          tap(
-            InfoTile(
-              key: const Key('tile-active'),
-              icon: Icons.bolt_rounded,
-              iconColor: const Color(0xFFFFD96A),
-              title: 'Active time',
-              value: active == null ? null : _hm(active),
-              missingNote: 'No data',
-            ),
-            bars('active', 'Active time', series((h) => h.activeMinutes),
-                formatMinutes),
-          ),
-          InfoTile(
-            key: const Key('tile-vo2'),
-            icon: Icons.air_rounded,
-            iconColor: const Color(0xFF7EC8FF),
-            title: 'VO2 max',
-            value: a.vo2max == null
-                ? null
-                : [(a.vo2max!.round().toString(), '')],
-            missingNote: 'Not measured lately',
-            note: _measuredOn(a.vo2maxMeasuredOn),
-          ),
-        ),
-        if (hr != null) ...[
-          const SizedBox(height: SonnapColors.gap),
-          SizedBox(
-            height: 112,
-            child: tap(
-              InfoTile(
-                key: const Key('tile-day-hr'),
-                icon: Icons.monitor_heart_rounded,
-                iconColor: const Color(0xFFFF8AB8),
-                title: 'Heart rate (all day)',
-                value: [('${hr.min.round()}–${hr.max.round()}', 'bpm')],
-                note: a.restingHeartRate == null
-                    ? null
-                    : 'resting ${a.restingHeartRate}',
+    ];
+
+    return Container(
+      key: const Key('home-activity-section'),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: sonnapCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bolt_rounded,
+                  color: SonnapColors.textPrimary, size: 20),
+              const SizedBox(width: 4),
+              const Flexible(
+                child: Text(
+                  'Activity',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-              () => _showDayHeartRate(a),
-            ),
+            ],
           ),
-        ],
-        if (moves.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Text(
+          Text(
+            _activityDayLabel(a.date),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                color: SonnapColors.textSecondary, fontSize: 11),
+          ),
+          for (final r in rows) ...[
+            const Divider(height: 22, color: SonnapColors.cardBorder),
+            r,
+          ],
+          if (moves.isNotEmpty) ...[
+            const Divider(height: 22, color: SonnapColors.cardBorder),
+            Text(
               [
                 'Move IQ',
                 if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
@@ -2076,10 +2124,99 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               style: const TextStyle(
                   color: SonnapColors.textSecondary, fontSize: 12),
             ),
-          ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Activity 卡裡的一列：圖示＋標題、大字、一行小字。沒有值寫「—」＋說明，**不畫成 0**。
+  Widget _activityRow({
+    required String key,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required List<(String, String)>? value,
+    String? note,
+    String missing = 'No data',
+    VoidCallback? onTap,
+  }) {
+    final row = Column(
+      key: Key(key),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 17),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: value == null
+              ? const Text(
+                  '—',
+                  style: TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              : Text.rich(
+                  TextSpan(
+                    children: [
+                      for (final (n, unit) in value) ...[
+                        TextSpan(
+                          text: n,
+                          style: const TextStyle(
+                            color: SonnapColors.textPrimary,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (unit.isNotEmpty)
+                          TextSpan(
+                            text: ' $unit ',
+                            style: const TextStyle(
+                              color: SonnapColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+        ),
+        if (value == null || note != null)
+          Text(
+            value == null ? missing : note!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: SonnapColors.textMuted, fontSize: 11),
+          ),
       ],
     );
+    return onTap == null
+        ? row
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: row,
+          );
   }
 
   static String? _measuredOn(String? iso) {

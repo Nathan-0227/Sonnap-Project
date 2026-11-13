@@ -132,6 +132,29 @@ void main() {
     expect(tester.takeException(), isNull, reason: '實機大小不溢出');
   });
 
+  testWidgets('兩欄（照 Otter Life）：左邊 Sleep、右邊 Activity，上緣對齊、各佔一半', (tester) async {
+    await pumpHome(tester, session());
+    await scrollTo(tester, find.byKey(const Key('home-activity-section')));
+    final sleep = tester.getRect(find.byKey(const Key('home-sleep-section')));
+    final act = tester.getRect(find.byKey(const Key('home-activity-section')));
+    expect(act.left, greaterThan(sleep.right), reason: 'Activity 在右邊');
+    expect((act.top - sleep.top).abs(), lessThan(1), reason: '上緣對齊');
+    expect((act.width - sleep.width).abs(), lessThan(1), reason: '一樣寬');
+    // 左欄的小卡一張張往下疊（不是 2x2）
+    final d = tester.getRect(find.byKey(const Key('tile-duration')));
+    final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
+    expect(e.top, greaterThan(d.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('沒有白天資料 → Sleep 退回整寬 2x2', (tester) async {
+    await pumpHome(tester, session(withActivity: false));
+    await scrollTo(tester, find.byKey(const Key('tile-efficiency')));
+    final d = tester.getRect(find.byKey(const Key('tile-duration')));
+    final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
+    expect((e.top - d.top).abs(), lessThan(1), reason: '同一列');
+  });
+
   testWidgets('Activity：步數只寫 goal、VO2 max 寫量到的日期、Move IQ 寫幾段；不判斷', (tester) async {
     await pumpHome(tester, session());
     await scrollTo(tester, find.byKey(const Key('tile-vo2')));
