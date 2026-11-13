@@ -68,19 +68,21 @@ Future<void> _settleWithoutAnimations(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('App boots and shows all five tabs', (tester) async {
+  testWidgets('App boots: four tabs and the moon in the middle (2026-11-13)', (tester) async {
     await tester.pumpWidget(const SonnapApp());
     await _settleWithoutAnimations(tester);
 
-    for (final label in [
-      'Home',
-      'Friends',
-      'Insights',
-      'Assistants',
-      'Settings',
+    for (final key in [
+      'nav-home',
+      'nav-friends',
+      'start-sleep',
+      'nav-insights',
+      'nav-assistant',
     ]) {
-      expect(find.text(label), findsOneWidget, reason: 'missing tab: $label');
+      expect(find.byKey(Key(key)), findsOneWidget, reason: 'missing: $key');
     }
+    // 導覽列只有圖示（參考圖），Settings 搬到首頁右上角
+    expect(find.byKey(const Key('nav-settings')), findsNothing);
   });
 
   testWidgets('HomeScreen renders real values from the payload', (

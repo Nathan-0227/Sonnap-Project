@@ -14,6 +14,7 @@ import 'package:app/services/key_value_store.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/widgets/sleep_dial.dart';
 import 'package:app/widgets/sleep_schedule_sheet.dart';
+import 'package:app/services/start_sleep_requests.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -323,6 +324,7 @@ void main() {
       final kv = InMemoryKeyValueStore();
       final fake = FakeAlarm();
       var now = at(12, 23, 40);
+      final moon = StartSleepRequests();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -330,6 +332,7 @@ void main() {
               repository: _Repo(session),
               bedMarks: BedMarkStore(kv),
               alarmScheduler: fake,
+              startSleepRequests: moon,
               clock: () => now,
             ),
           ),
@@ -338,7 +341,7 @@ void main() {
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
-      await tester.tap(find.byKey(const Key('start-sleep')));
+      moon.request(); // 導覽列中間的月亮
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
