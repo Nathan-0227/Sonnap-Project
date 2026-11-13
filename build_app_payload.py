@@ -44,6 +44,7 @@ Flutter 只做渲染。理由跟 AI 那邊完全一樣：判斷邏輯集中在�
 
 import argparse
 import json
+import re
 import math
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -64,6 +65,7 @@ OUTPUT_PATH = ROOT / "app" / "assets" / "data" / "app_payload.json"
 sys.path.insert(0, str(ROOT))
 import score_claim  # noqa: E402
 import tapo_index  # noqa: E402
+import camera_curve  # noqa: E402  只用標準庫
 
 # garmin/ 不是套件（沒有 __init__.py），sleep_stages 與其他 pipeline 步驟一樣直接以檔案 import。
 sys.path.insert(0, str(ROOT / "garmin"))
@@ -424,16 +426,70 @@ def composition_for(base_row):
     )
 
 
-def night_curves_block(night_features):
-    """睡著期間的心率與手錶動作曲線（與 /home 的 metrics 同一個形狀，App 用同一個解析）。
+# 攝影機錄影 CSV 的位置與檔名（同 migrate_camera_to_db.py：用檔名格式當判準，
+# clip_measure.csv 這類工具檔不是錄影）。CSV 只在電腦上、不進版控。
+TAPO_METRICS = ROOT / "tapo_metrics"
+_RECORDING_NAME = re.compile(r"^\d{8}_\d{6}\.csv$")
+_MIN_CAMERA_NIGHT_MINUTES = 120   # 同 migrate_camera_to_db.MIN_NIGHT_MINUTES
+
+
+def camera_curve_for_night(night_iso, sleep_start, wake_time, metrics_dir=None):
+    """首頁 Sleep Stages 卡的 Camera 線：那一晚的錄影 CSV → 每 5 分鐘有幾成時間在動，
+    只留手錶入睡 → 起床那段（2026-11-13）。
+
+    跟 /home 的 metrics.camera_curve **同一個算法**（tapo_sleep_onset.motion_curve＋clip_curve），
+    只是這裡直接讀 CSV——打包檔不碰資料庫。
+    - 那一晚 = 開始錄影時刻的 adherence.night_date（同攝影機匯入）；同一晚有多份取臥床最長的
+    - 只收有床鋪 ROI 的錄影、臥床至少 120 分鐘
+    - 只呈現、不計分。找不到 → None，首頁那一晚就沒有 Camera 那顆。
+    """
+    d = Path(metrics_dir) if metrics_dir else TAPO_METRICS
+    if not d.is_dir() or not sleep_start or not wake_time:
+        return None
+    try:
+        night = date.fromisoformat(night_iso)
+    except (TypeError, ValueError):
+        return None
+    # ⚠️ 分析模組會連帶載入 OpenCV（錄影器的相依），所以用到才 import；載入失敗就不給 Camera 線
+    try:
+        import tapo_sleep_onset as onset
+        from behavior import adherence
+    except Exception:                                       # noqa: BLE001
+        return None
+    prefixes = {night.strftime("%Y%m%d"), (night - timedelta(days=1)).strftime("%Y%m%d")}
+    best = None
+    for path in sorted(d.glob("*.csv")):
+        if not _RECORDING_NAME.match(path.name) or path.name[:8] not in prefixes:
+            continue
+        try:
+            r = onset.analyse(path)
+        except Exception:                                   # noqa: BLE001
+            continue
+        if r.get("error") or not r.get("roi") or not r.get("motion_curve"):
+            continue
+        if (r.get("time_in_bed_minutes") or 0) < _MIN_CAMERA_NIGHT_MINUTES:
+            continue
+        if adherence.night_date(datetime.fromisoformat(r["bed_start_at"])) != night:
+            continue
+        if best is None or r["time_in_bed_minutes"] > best["time_in_bed_minutes"]:
+            best = r
+    if best is None:
+        return None
+    return camera_curve.clip_curve(best["motion_curve"], sleep_start, wake_time)
+
+
+def night_curves_block(night_features, night_iso=None):
+    """睡著期間的心率、手錶動作與攝影機曲線（與 /home 的 metrics 同一個形狀，App 用同一個解析）。
 
     原始檔不在、資料不夠時那一條是 None。只呈現、不計分。
     """
     start = night_features.get("sleep_start_time")
     wake = night_features.get("wake_time")
-    out = {"heart_rate_curve": None, "movement_curve": None}
+    out = {"heart_rate_curve": None, "movement_curve": None, "camera_curve": None}
     if not start or not wake:
         return out
+    if night_iso:
+        out["camera_curve"] = camera_curve_for_night(night_iso, start, wake)
     raw = load_json(GARMIN_DATA / "garmin_standard_data.json")
     if not raw:
         return out
@@ -635,7 +691,7 @@ def build_payload(target_date=None):
                 features, composition_for(base_by_date.get(night_iso))
             ),
             # Sleep Stages 卡上點 Heart rate／Movement 疊上去的線（2026-11-13）。只呈現、不計分。
-            **night_curves_block(features),
+            **night_curves_block(features, night_iso),
             "avg_heart_rate": features.get("avg_heart_rate"),
             "resting_heart_rate": features.get("resting_heart_rate"),
         },

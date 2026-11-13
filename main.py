@@ -68,6 +68,7 @@ from social import friends as social_friends
 #    會在某次改動後悄悄地不一致——那正是本專案最想避免的那類 bug。
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
+import camera_curve  # noqa: E402  攝影機曲線只留睡著那段（純函式，不載入 OpenCV）
 from build_app_payload import sleep_heart_rate  # noqa: E402  garmin/ 由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
@@ -437,30 +438,10 @@ def night_camera_curve(user_id, night_date, w_row):
         return None
     try:
         curve = json.loads(rows[0]["motion_curve"])
-        start_dt = datetime.fromisoformat(start)
-        lo = start_dt.replace(tzinfo=None)
-        hi = datetime.fromisoformat(wake).replace(tzinfo=None)
-        # ⚠️ 輸出時把手錶的時區標記貼上去：攝影機的牆鐘時間沒有標記，App 解析時
-        #    「有標記」與「沒標記」會被當成不同時區，比較時差 8 小時、整條線被濾光
-        #    （2026-11-13 實機抓到：選了 Camera 什麼線都沒有）。
-        pts = []
-        for p in curve.get("points", []):
-            t = datetime.fromisoformat(p["t"]).replace(tzinfo=None)
-            if lo <= t <= hi:
-                pts.append({"t": t.replace(tzinfo=start_dt.tzinfo).isoformat(),
-                            "value": p["value"]})
-    except (TypeError, ValueError, KeyError):
+    except (TypeError, ValueError):
         return None
-    if len(pts) < 6:
-        return None
-    values = [p["value"] for p in pts]
-    return {
-        "points": pts,
-        "avg": round(sum(values) / len(values), 3),
-        "min": min(values),
-        "max": max(values),
-        "bucket_minutes": curve.get("bucket_minutes", 5),
-    }
+    # 只留入睡 → 起床那段、貼上手錶的時區標記（與首頁打包檔共用同一個函式）
+    return camera_curve.clip_curve(curve, start, wake)
 
 
 def rating_block(rating):
