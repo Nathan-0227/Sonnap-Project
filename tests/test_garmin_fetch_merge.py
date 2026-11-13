@@ -230,7 +230,11 @@ with tempfile.TemporaryDirectory() as d:
     ok("  今天的步數加進來了", [r["value"] for r in on(got, today, "daily_steps")] == [4321])
     ok("  total_records 跟著更新", json.loads(out_path.read_text(encoding="utf-8"))["total_records"] == len(got))
     ok("  輸出有說這次是合併", "mode: merge" in text)
-    ok("  沒有留下暫存檔", [p.name for p in Path(d).iterdir()] == ["garmin_standard_data.json"])
+    names = sorted(p.name for p in Path(d).iterdir())
+    ok("  沒有留下暫存檔", not any(n.endswith(".tmp") for n in names), str(names))
+    # 白天資料（2026-11-13）跟著 --output 寫進同一個暫存資料夾，不碰真的 garmin/data/
+    ok("  白天資料的檔跟著 --output 走", names == ["garmin_daily_activity.json",
+                                                "garmin_standard_data.json"], str(names))
 
     write_old(out_path)
     run_fetch(out_path, "--start-date", "2026-06-05", "--end-date", "2026-06-05")

@@ -429,6 +429,48 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 要求音訊焦點：Spotify 會暫停；別人搶走就停、來電先靜音 | 使用者定 |
 | ⚠️ 睡姿圖或背景缺檔時退回月亮小狗／漸層，**不會報錯** | 換新圖後若畫面沒變，先查 APK 裡有沒有那張圖——2026-11-12 建置快取漏包過一次，`flutter clean` 才好 |
 
+### ✅ Sleep Stages 卡的疊線：Heart rate／Movement（2026-11-13，`feature/garmin-daily`）
+
+照 Garmin Connect 的做法：Sleep Stages 卡（首頁與早晨報告同一個元件）圖下面兩顆，**點 Heart rate 疊心率線、
+點 Movement 疊手錶動作線，再點一次回到只有階梯，一次只能選一個**。後端 `garmin/sleep_heart_rate.py`（純函式）
+從 Garmin 原始檔取入睡 → 起床那段（心率每 2 分鐘、動作每 1 分鐘），每 5 分鐘一點，經 `/home` 與打包檔的
+`metrics.heart_rate_curve`／`movement_curve` 給 App。
+
+| 規則 | 理由 |
+|---|---|
+| **不寫 Normal／High**，不畫「正常範圍」色帶（使用者定，參考圖的 Normal 不照做）。心率選了之後下面一行只照抄「平均 · 最低 · 靜止」；右邊刻度寫 bpm | 夜間心率沒有文獻門檻（紅線 2） |
+| **Movement 是手錶的**，不是攝影機的；沒有單位，右邊只寫 **More／Less**（不寫 High），下面寫 `Movement from your watch` | 首頁的 Movement 小卡與 More details 是攝影機的，另一個量；High 會被讀成「太高」 |
+| 心率平均、最低從**那一段的原始讀數**算，**不用** `avg_heart_rate`；有心率曲線時 More details **不再寫心率** | `avg_heart_rate` 混了清醒時段，並列會是兩個不同的「平均心率」 |
+| 線是**單調三次插值**（`widgets/curve_path.dart`），`sleep_stages_overlay_test.dart` 沿整條線取樣驗證不衝出範圍 | 一般平滑曲線在急轉處會畫出沒發生的值（同階梯不畫平滑波浪的理由） |
+| 選了線之後階梯變淡（35%、不畫光暈）；那一條沒有 → 那顆不出現；兩條都沒有 → 原本的卡 | — |
+| 心率 0 或負數＝沒有讀數；**動作 0 是「沒動」，是真的值** | 寫錯不會報錯 |
+| 只有 Garmin 來源才有；動作也**只呈現、不計分** | movement 永不進評分 |
+| 首頁的曲線來自打包檔：`build_app_payload.py` 已經會帶，要等下一次早晨匯入重新產生 | 動 app/ 的 session 不跑 build_app_payload.py |
+
+### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
+
+前一個**日曆日**的步數、距離、活動卡路里、活動時間（高強度／活動／久坐）、爬樓、各壓力程度的時間、
+Body Battery、VO2 max、Move IQ。報告裡 Sleep phases 之後、More details 之前一張卡（`widgets/yesterday_card.dart`）。
+
+```
+garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activity.json（只增不減）
+  → migrate_garmin_to_db.py → garmin_daily 表 → /home 的 yesterday → App
+```
+
+| 規則 | 理由 |
+|---|---|
+| **只呈現、不計分**：評分、寵物心情、XP、挑戰、好友一律不讀（`tests/test_garmin_daily.py`【9】守著） | 紅線 4 |
+| **不判斷**：步數只寫「goal 9,430」（不寫 reached、不變色）；VO2 max 只給數字＋量到的日期（不分等級）；**壓力只給各程度的時間，不加說明、不用紅黃**（使用者定） | 紅線 2；VO2 max 的常模要年齡與性別 |
+| 寫到**另一個檔**，不碰 `garmin_standard_data.json`；這個檔**只增不減**（沒抓到的欄位留舊的、從不刪一天）；**進版控**（使用者定，Move IQ 會露出每天幾點出門走路） | 那份有自己的合併規則，也丟過資料 |
+| 白天資料的檔放在 `--output` **同一個資料夾** | 測試把 --output 指到暫存資料夾時，不會寫到真的 `garmin/data/`（2026-11-13 測試抓到過） |
+| **429 立刻停**，已經抓到的照樣存；白天資料失敗**不影響**睡眠那份 | Garmin 會擋（2026-11-13 試抓三次都先 429） |
+| 補抓從本人戴錶那天（`WEARER_SEGMENTS` 最後一段的起日，08-28）起，一次最多 30 天，早晨匯入自動帶 `--daily-since` | 更早是另外三個人戴的 |
+| 匯入只寫**手機那個帳號**、只收 `wearer_c` 那段；找不到手機帳號就整個跳過 | 同手錶與攝影機匯入的判準 |
+| 那一天沒資料 → **整塊不畫**；單一項沒值 → 那一項不畫（不畫成 0）；VO2 max 只給 **90 天內**最近一次；Move IQ 沒抓到是 null、那天沒有是 [] | 不編數字 |
+| 白天資料跟睡眠分數無關：手錶睡眠還沒到（沒分數）也照樣畫 | — |
+| ⚠️ Move IQ 的 `duration` **單位是分鐘**（對過起訖時刻）；一整天沒戴錶時 Garmin 回步數 0，那是「沒資料」不是「走了 0 步」；Garmin 用負數表示沒有值 | 寫錯都不會報錯 |
+| 這支錶（Vivoactive 3）**沒有** SpO2、HRV、呼吸、訓練準備度；VO2 max 只在有 GPS 走路／跑步的日子更新 | 2026-11-13 試抓 |
+
 ### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
 
 滑完 Slide to get up（或 I already got up）→ **起床動畫**（`screens/wake_up_screen.dart`）
@@ -1597,6 +1639,8 @@ python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／�
 python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
 python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
+python tests/test_garmin_daily.py        # 2026-11-13 新增：白天資料的解析、只增不減、429 就停、只收本人、/home 的 yesterday、不進分數也不給好友
+python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶動作曲線只取睡著那段、平均從原始讀數算（不是 avg_hr）、動作 0 算真的值、資料不夠回 None、Health Connect 沒有
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```

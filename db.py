@@ -535,6 +535,38 @@ CREATE TABLE IF NOT EXISTS night_summaries (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- ── Garmin 白天資料（2026-11-13）──────────────────────────────
+-- 早晨報告「Yesterday」那一塊用。一天一列，date 是**日曆日**（白天的活動），
+-- 報告某一晚（起床日 D）顯示的是 D 的前一天。來源 garmin/data/garmin_daily_activity.json
+-- （garmin/daily_activity.py），由 migrate_garmin_to_db.py 寫進來。
+-- ⚠️ **只呈現、不計分**：評分層、寵物心情、XP、挑戰、好友都不讀這張表（紅線 4），
+--    也不給 Good/Normal（紅線 2）。欄位名與 daily_activity.FIELDS 一一對應。
+-- ⚠️ vo2max 只有「那天有量到」才有值；報告顯示的是 90 天內最近一次（讀取時找）。
+CREATE TABLE IF NOT EXISTS garmin_daily (
+    user_id              TEXT NOT NULL,
+    date                 TEXT NOT NULL,
+    steps                INTEGER,
+    step_goal            INTEGER,
+    distance_m           INTEGER,
+    active_kcal          INTEGER,
+    highly_active_sec    INTEGER,
+    active_sec           INTEGER,
+    sedentary_sec        INTEGER,
+    floors_up            REAL,
+    stress_rest_sec      INTEGER,
+    stress_low_sec       INTEGER,
+    stress_medium_sec    INTEGER,
+    stress_high_sec      INTEGER,
+    body_battery_charged INTEGER,
+    body_battery_drained INTEGER,
+    vo2max               REAL,
+    move_iq              TEXT,                 -- JSON 陣列 [{type, start, minutes}]；NULL = 沒抓到
+    updated_at           TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- 查詢模式幾乎都是「某個使用者的最近 N 天」，所以索引建在 (user_id, date)。
 -- 主鍵已經涵蓋 nightly_behavior 與 wearable_nightly，只有 block_events 要補。
 CREATE INDEX IF NOT EXISTS idx_block_events_user_date
@@ -1957,6 +1989,88 @@ def upsert_morning_rating(user_id, date, rested, tags, minutes_after_wake=None,
         conn.commit()
     finally:
         conn.close()
+
+
+# 白天資料的欄位（不含 user_id、date、updated_at）。⚠️ 要與 garmin/daily_activity.FIELDS 一致
+# （tests/test_garmin_daily.py 守著）。
+GARMIN_DAILY_FIELDS = (
+    "steps", "step_goal", "distance_m", "active_kcal",
+    "highly_active_sec", "active_sec", "sedentary_sec", "floors_up",
+    "stress_rest_sec", "stress_low_sec", "stress_medium_sec", "stress_high_sec",
+    "body_battery_charged", "body_battery_drained", "vo2max", "move_iq",
+)
+
+
+def upsert_garmin_daily(user_id, date, row, db_path=None):
+    """存一天的白天資料（同一天再存一次就覆蓋整列——來源檔本身已經是只增不減）。"""
+    values = []
+    for k in GARMIN_DAILY_FIELDS:
+        v = row.get(k)
+        if k == "move_iq" and v is not None:
+            v = json.dumps(v, ensure_ascii=False)
+        values.append(v)
+    cols = ", ".join(GARMIN_DAILY_FIELDS)
+    marks = ", ".join("?" for _ in GARMIN_DAILY_FIELDS)
+    updates = ",\n                ".join(f"{k} = excluded.{k}" for k in GARMIN_DAILY_FIELDS)
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            f"""
+            INSERT INTO garmin_daily (user_id, date, {cols}, updated_at)
+            VALUES (?, ?, {marks}, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                {updates},
+                updated_at = excluded.updated_at
+            """,
+            (user_id, date, *values, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _garmin_daily_row(row):
+    row = dict(row)
+    raw = row.get("move_iq")
+    if raw is not None:
+        try:
+            row["move_iq"] = json.loads(raw)
+        except ValueError:
+            row["move_iq"] = None
+    return row
+
+
+def get_garmin_daily(user_id, date, db_path=None):
+    """那一天的白天資料；沒有就回 None。move_iq 已解成 list。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM garmin_daily WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchall()
+    finally:
+        conn.close()
+    return _garmin_daily_row(rows[0]) if rows else None
+
+
+def latest_vo2max(user_id, on_or_before, since, db_path=None):
+    """since..on_or_before 之間最近一次量到的 VO2 max → (值, 日期)；沒有就 None。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT date, vo2max FROM garmin_daily
+            WHERE user_id = ? AND vo2max IS NOT NULL AND date <= ? AND date >= ?
+            ORDER BY date DESC LIMIT 1
+            """,
+            (user_id, on_or_before, since),
+        ).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return None
+    r = dict(rows[0])
+    return r["vo2max"], r["date"]
 
 
 def get_morning_rating(user_id, date, db_path=None):

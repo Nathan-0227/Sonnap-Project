@@ -40,6 +40,7 @@
 //
 // ═══════════════════════════════════════════════════════════════════
 
+import 'night_curve.dart';
 import 'sleep_stages.dart';
 import 'wall_clock.dart';
 
@@ -150,6 +151,10 @@ class Metrics {
   /// 舊版後端／API 路徑沒有時是 null，畫面就不畫圖，**不畫假的**。
   final int? lightMinutes;
   final SleepStages? sleepStages;
+
+  /// 睡著期間的心率與手錶動作曲線（2026-11-13，Sleep Stages 卡疊線用）。只呈現、不計分。
+  final NightCurve? heartRateCurve;
+  final NightCurve? movementCurve;
   final double? avgHeartRate;
   final int? restingHeartRate;
 
@@ -168,6 +173,8 @@ class Metrics {
     this.sleepEfficiency,
     this.lightMinutes,
     this.sleepStages,
+    this.heartRateCurve,
+    this.movementCurve,
     this.avgHeartRate,
     this.restingHeartRate,
   });
@@ -198,6 +205,8 @@ class Metrics {
       sleepEfficiency: (json['sleep_efficiency'] as num?)?.toDouble(),
       lightMinutes: (json['light_minutes'] as num?)?.toInt(),
       sleepStages: SleepStages.fromJsonOrNull(json['sleep_stages']),
+      heartRateCurve: NightCurve.fromJsonOrNull(json['heart_rate_curve']),
+      movementCurve: NightCurve.fromJsonOrNull(json['movement_curve']),
       avgHeartRate: (json['avg_heart_rate'] as num?)?.toDouble(),
       restingHeartRate: (json['resting_heart_rate'] as num?)?.toInt(),
     );

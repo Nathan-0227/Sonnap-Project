@@ -39,7 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import json
-from datetime import date as date_cls, datetime
+from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -68,6 +68,7 @@ from social import friends as social_friends
 #    會在某次改動後悄悄地不一致——那正是本專案最想避免的那類 bug。
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
+from build_app_payload import sleep_heart_rate  # noqa: E402  garmin/ 由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
 
@@ -292,6 +293,64 @@ def _garmin_records():
     return _STANDARD_CACHE["records"]
 
 
+# VO2 max 不是每天都有（只有 GPS 走路、跑步的日子會更新），報告顯示最近一次；
+# 太舊就不顯示（2026-11-13 使用者定）。
+VO2MAX_LOOKBACK_DAYS = 90
+
+
+def yesterday_block(user_id, night_date):
+    """
+    早晨報告「Yesterday」那一塊：那一晚（起床日）**前一個日曆日**的 Garmin 白天資料。
+
+    ⚠️ 只呈現、不計分（紅線 4）；不給 Good/Normal、不判斷步數有沒有達標（紅線 2，
+       步數目標只照實給 step_goal）。好友端點不讀這裡。
+    ⚠️ 那一天沒有資料（沒戴錶、只有 Health Connect、還沒匯入）→ 整塊 None，App 整塊不畫；
+       不回 0。單一項沒有值 → 那一項是 null。
+    """
+    if not night_date:
+        return None
+    try:
+        day = date_cls.fromisoformat(night_date) - timedelta(days=1)
+    except ValueError:
+        return None
+    row = db.get_garmin_daily(user_id, day.isoformat())
+    if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
+        return None
+    vo2 = db.latest_vo2max(
+        user_id, on_or_before=day.isoformat(),
+        since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
+
+    def group(**kw):
+        return kw if any(v is not None for v in kw.values()) else None
+
+    return {
+        "date": day.isoformat(),
+        "steps": row.get("steps"),
+        "step_goal": row.get("step_goal"),
+        "distance_m": row.get("distance_m"),
+        "active_kcal": row.get("active_kcal"),
+        "floors_up": row.get("floors_up"),
+        "activity": group(
+            highly_active_sec=row.get("highly_active_sec"),
+            active_sec=row.get("active_sec"),
+            sedentary_sec=row.get("sedentary_sec"),
+        ),
+        "stress": group(
+            rest_sec=row.get("stress_rest_sec"),
+            low_sec=row.get("stress_low_sec"),
+            medium_sec=row.get("stress_medium_sec"),
+            high_sec=row.get("stress_high_sec"),
+        ),
+        "body_battery": group(
+            charged=row.get("body_battery_charged"),
+            drained=row.get("body_battery_drained"),
+        ),
+        "vo2max": None if vo2 is None else {"value": vo2[0], "measured_on": vo2[1]},
+        # 沒有事件是 []（照實），沒抓到是 null
+        "move_iq": row.get("move_iq"),
+    }
+
+
 def night_stages(w_row):
     """
     那一晚的 Sleep phases 曲線（與打包檔 metrics.sleep_stages 同一個形狀，App 用同一個解析）。
@@ -321,6 +380,42 @@ def night_stages(w_row):
         },
         "rem_measured": bool(w_row.get("rem_measured")),
     }
+
+
+def night_heart_rate(w_row):
+    """
+    那一晚睡著期間的心率曲線（早晨報告的 Heart rate 卡，2026-11-13）。
+
+    ⚠️ 只有 Garmin 來源才有（逐 2 分鐘的心率只存在電腦上的 Garmin 原始檔），同 night_stages。
+    ⚠️ 平均與最低從曲線那一段自己算，不用 w_row["avg_hr"]（那個混了清醒時段）。
+    ⚠️ 不判斷 Normal／High（紅線 2）。資料不夠 → None，App 整張卡不畫。
+    """
+    if not w_row or w_row.get("source") != "garmin":
+        return None
+    start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
+    if not start or not wake:
+        return None
+    records = _garmin_records()
+    if not records:
+        return None
+    return sleep_heart_rate.heart_rate_curve(records, start, wake)
+
+
+def night_movement(w_row):
+    """那一晚睡著期間的**手錶**動作曲線（Sleep Stages 卡點 Movement 疊上去的線，2026-11-13）。
+
+    ⚠️ 只呈現、不計分（movement 永不進評分）。沒有單位，App 只寫 More／Less。
+    ⚠️ 這是手錶的，不是攝影機的動作（那個在 camera 區塊，是另一個量）。
+    """
+    if not w_row or w_row.get("source") != "garmin":
+        return None
+    start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
+    if not start or not wake:
+        return None
+    records = _garmin_records()
+    if not records:
+        return None
+    return sleep_heart_rate.movement_curve(records, start, wake)
 
 
 def rating_block(rating):
@@ -889,6 +984,9 @@ async def get_home(
             "light_minutes": _light_minutes(w_row),
             # 每一晚的曲線（早晨報告）。只有 Garmin 來源才有，見 night_stages()。
             "sleep_stages": night_stages(w_row),
+            # 睡著期間的心率與手錶動作曲線（2026-11-13）。只呈現、不計分。
+            "heart_rate_curve": night_heart_rate(w_row),
+            "movement_curve": night_movement(w_row),
             "avg_heart_rate": w_row["avg_hr"],
             "resting_heart_rate": w_row["resting_hr"],
             # ⚠️ 「睡著」與「醒來」的時刻，不是「上床」與「下床」。
@@ -923,6 +1021,8 @@ async def get_home(
             db.get_morning_rating(user_id, target_date) if target_date else None),
         # 「跟上一晚比」的箭頭：給上一個有資料的晚上的原始數字，箭頭方向由 App 比
         # （只代表方向，上升紅、下降綠，與首頁同一條規矩；好壞不在這裡判斷）。
+        # Garmin 白天資料（2026-11-13）：只呈現、不計分；沒有資料就整塊 null
+        "yesterday": yesterday_block(user_id, target_date),
         "previous_night": {
             "time_in_bed_minutes": (_previous(behavior_rows, target_date, "time_in_bed_minutes")
                                     or {}).get("time_in_bed_minutes"),

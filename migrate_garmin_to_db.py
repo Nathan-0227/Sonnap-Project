@@ -55,6 +55,7 @@ import db
 # 戴錶者分段的唯一定義在 pipeline 裡，這裡直接引用，不另外抄一份日期
 sys.path.insert(0, str(Path(__file__).parent / "garmin"))
 from apply_recovery_modifier import wearer_segment  # noqa: E402
+import daily_activity  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -537,6 +538,28 @@ def simulate_challenges(feats):
           f"(bedtime SD 84 min).\n   These thresholds are provisional; re-run once D2 supplies real data.")
 
 
+def import_daily_activity(phone, db_path=None, path=None):
+    """Garmin 白天資料（garmin_daily_activity.json）→ garmin_daily，只寫手機那個帳號。
+
+    ⚠️ 只收負責人本人戴錶的那一段（wearer_c）：更早是另外三個人戴的，
+       寫進手機帳號就是把別人的步數、壓力、Move IQ 當成本人的。
+    ⚠️ 找不到手機帳號就整個跳過（不寫進研究者帳號——那個帳號沒有人會打開早晨報告）。
+    回傳 (寫了幾天, 略過幾天)。
+    """
+    days = daily_activity.load(path or daily_activity.DATA_FILE)
+    if phone is None:
+        return 0, len(days)
+    written = skipped = 0
+    for date, row in sorted(days.items()):
+        name, _trusted, _start, _end = wearer_segment(date)
+        if name != "wearer_c" or not daily_activity.has_any(row):
+            skipped += 1
+            continue
+        db.upsert_garmin_daily(phone, date, row, db_path=db_path)
+        written += 1
+    return written, skipped
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Load the Garmin data into wearable_nightly, one account per wearer segment."
@@ -611,6 +634,14 @@ def main():
         if replaced:
             print(f"  Replaced Health Connect data with Garmin on {len(replaced)} nights "
                   f"(Garmin takes priority): {sorted(replaced)}")
+
+        # 白天資料（步數、壓力時間、VO2 max、Move IQ…）：只呈現、不計分
+        written, skipped = import_daily_activity(phone, args.db)
+        if phone is None:
+            print("  Daytime activity: skipped (no phone account yet)")
+        else:
+            print(f"  Daytime activity: {written} days written to the phone account"
+                  + (f", {skipped} skipped (other wearers / empty)" if skipped else ""))
 
         # 評分檔已經沒有的手錶夜晚：備份後清掉（理由見 find_excluded）。
         excluded = find_excluded(owners, args.db)

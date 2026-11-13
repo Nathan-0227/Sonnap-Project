@@ -68,6 +68,7 @@ import tapo_index  # noqa: E402
 # garmin/ 不是套件（沒有 __init__.py），sleep_stages 與其他 pipeline 步驟一樣直接以檔案 import。
 sys.path.insert(0, str(ROOT / "garmin"))
 import sleep_stages  # noqa: E402
+import sleep_heart_rate  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAPPING_VERSION = 1  # pet_mood 映射表的版本，改映射規則時要 +1
@@ -423,6 +424,25 @@ def composition_for(base_row):
     )
 
 
+def night_curves_block(night_features):
+    """睡著期間的心率與手錶動作曲線（與 /home 的 metrics 同一個形狀，App 用同一個解析）。
+
+    原始檔不在、資料不夠時那一條是 None。只呈現、不計分。
+    """
+    start = night_features.get("sleep_start_time")
+    wake = night_features.get("wake_time")
+    out = {"heart_rate_curve": None, "movement_curve": None}
+    if not start or not wake:
+        return out
+    raw = load_json(GARMIN_DATA / "garmin_standard_data.json")
+    if not raw:
+        return out
+    records = raw.get("records", [])
+    out["heart_rate_curve"] = sleep_heart_rate.heart_rate_curve(records, start, wake)
+    out["movement_curve"] = sleep_heart_rate.movement_curve(records, start, wake)
+    return out
+
+
 def sleep_stages_block(night_features, composition):
     """首頁 Sleep Stages 圖用（2026-11-12）。**只呈現、不計分。**
 
@@ -614,6 +634,8 @@ def build_payload(target_date=None):
             "sleep_stages": sleep_stages_block(
                 features, composition_for(base_by_date.get(night_iso))
             ),
+            # Sleep Stages 卡上點 Heart rate／Movement 疊上去的線（2026-11-13）。只呈現、不計分。
+            **night_curves_block(features),
             "avg_heart_rate": features.get("avg_heart_rate"),
             "resting_heart_rate": features.get("resting_heart_rate"),
         },
