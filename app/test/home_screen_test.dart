@@ -78,6 +78,11 @@ void main() {
   /// 按導覽列中間的月亮（＝原本首頁的 Start Sleep）
   Future<void> pressMoon(WidgetTester tester) async {
     moon.request();
+    // 先滑出 Sleep schedule，按底下的 Start Sleep 才開始睡覺
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.byKey(const Key('schedule-save')));
     await tester.pump();
   }
 
@@ -344,6 +349,20 @@ void main() {
       );
       expect(find.byType(SleepModeScreen), findsOneWidget);
       expect(find.text('Sleeping… your watch is tracking'), findsOneWidget);
+    });
+
+    testWidgets('中間那顆 → 先出 Sleep schedule；把面板關掉＝不開始睡覺', (tester) async {
+      await pumpHome(tester, () => at(12, 23, 41));
+      moon.request();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Sleep schedule'), findsOneWidget);
+      expect(find.text('Start Sleep'), findsOneWidget);
+      await tester.tapAt(const Offset(20, 20)); // 點面板外面
+      await settle(tester);
+      expect(await kv.getString(kBedStartKey), isNull, reason: '沒按 Start Sleep 不得記下上床');
+      expect(find.byType(SleepModeScreen), findsNothing);
     });
 
     testWidgets('半夜打開 App（還沒按下床）→ 直接是睡覺畫面', (tester) async {

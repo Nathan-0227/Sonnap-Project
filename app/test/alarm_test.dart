@@ -341,7 +341,12 @@ void main() {
       for (var i = 0; i < 6; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
-      moon.request(); // 導覽列中間的月亮
+      moon.request(); // 導覽列中間那顆 → 先滑出 Sleep schedule
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Start Sleep'), findsOneWidget, reason: '面板底下那顆是 Start Sleep');
+      await tester.tap(find.byKey(const Key('schedule-save')));
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }

@@ -199,14 +199,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _tick = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
-    widget.startSleepRequests?.addListener(_onStartSleepRequest);
+    widget.startSleepRequests?.addListener(_onStartSleepRequestListener);
   }
 
-  void _onStartSleepRequest() {
-    // 睡覺畫面已經開著就不再開一次
-    if (_sleepRouteOpen) return;
-    _startSleep();
+  /// 導覽列中間那顆（2026-11-13 使用者定）：先滑出 Sleep schedule（就寢／起床／鬧鐘），
+  /// 按了底下的 Start Sleep 才開始睡覺；把面板滑掉＝不開始。
+  /// 面板跟點時鐘卡是同一個，改了照樣存（目標就寢時間、起床、鬧鐘開關）。
+  Future<void> _onStartSleepRequest() async {
+    // 睡覺畫面已經開著、或面板已經開著，就不再開一次
+    if (_sleepRouteOpen || _scheduleOpen) return;
+    _scheduleOpen = true;
+    try {
+      final result = await showSleepScheduleSheet(
+        context,
+        bedtime: _bedtime,
+        alarmSettings: _alarmSettings,
+        scheduler: widget.alarmScheduler,
+        confirmLabel: 'Start Sleep',
+      );
+      if (result == null || !mounted) return;
+      if (result.bedtime != _bedtime) {
+        setState(() => _bedtime = result.bedtime);
+        widget.onBedtimeChanged?.call(result.bedtime);
+      }
+      await _startSleep();
+    } finally {
+      _scheduleOpen = false;
+    }
   }
+
+  bool _scheduleOpen = false;
+
+  void _onStartSleepRequestListener() => _onStartSleepRequest();
 
   @override
   void didUpdateWidget(covariant HomeScreen oldWidget) {
@@ -215,15 +239,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _bedtime = widget.targetBedtime;
     }
     if (oldWidget.startSleepRequests != widget.startSleepRequests) {
-      oldWidget.startSleepRequests?.removeListener(_onStartSleepRequest);
-      widget.startSleepRequests?.addListener(_onStartSleepRequest);
+      oldWidget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
+      widget.startSleepRequests?.addListener(_onStartSleepRequestListener);
     }
   }
 
   @override
   void dispose() {
     _tick?.cancel();
-    widget.startSleepRequests?.removeListener(_onStartSleepRequest);
+    widget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

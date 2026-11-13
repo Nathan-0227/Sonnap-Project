@@ -20,6 +20,7 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
   required TimeOfDay bedtime,
   required AlarmSettingsStore alarmSettings,
   required AlarmScheduler scheduler,
+  String confirmLabel = 'Save',
 }) async {
   final wake = await alarmSettings.wakeTime(bedtime);
   final enabled = await alarmSettings.enabled();
@@ -36,6 +37,7 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
       wake: wake,
       alarmEnabled: enabled,
       scheduler: scheduler,
+      confirmLabel: confirmLabel,
     ),
   );
   if (result != null) {
@@ -120,6 +122,10 @@ class SleepScheduleSheet extends StatefulWidget {
   /// 顯示 Alarm 開關。事後補時間不需要。
   final bool showAlarm;
 
+  /// 底下那顆按鈕的字。導覽列中間那顆打開時是「Start Sleep」（2026-11-13 使用者定：
+  /// 先看一眼就寢／起床／鬧鐘，按了才開始睡覺）。
+  final String confirmLabel;
+
   const SleepScheduleSheet({
     super.key,
     required this.bedtime,
@@ -130,6 +136,7 @@ class SleepScheduleSheet extends StatefulWidget {
     this.title,
     this.bedLocked = false,
     this.showAlarm = true,
+    this.confirmLabel = 'Save',
   });
 
   @override
@@ -265,9 +272,10 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: const StadiumBorder(),
                 ),
-                child: const Text(
-                  'Save',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                child: Text(
+                  widget.confirmLabel,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w800),
                 ),
               ),
             ),
