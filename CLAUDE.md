@@ -369,7 +369,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 |---|---|
 | 頂端只有小字「Hi, 暱稱!」＋大字「Welcome to Sonnap」（2026-11-13 使用者定），**不分早午晚、不放後端的 `header_message`**；暱稱一律來自帳號，沒有帳號是 `Hi, Sleeper!` | 不得拿任何人的名字當佔位符（見上方） |
 | 一週心情列、圖例、寵物旁的心情標籤畫**狗頭表情**（`assets/moods/dog_*.png`，使用者生成），**不用起床自評那五顆圓臉**；不認得的心情退回 bored | 圓臉是「你覺得怎樣」、狗頭是「寵物的心情」，共用一套臉同一個早上會看到兩個意思 |
-| 夢境日記：小狗頭右邊一朵雲（`assets/moods/dream_cloud.png`，使用者生成；**比小狗的頭小**，110 寬）寫「I had a dream…」（固定一句，**不截夢境內容**），點開才看全文（`widgets/dream_diary.dart`，標題下寫那一晚的日期）。看過之後**雲朵不縮、字換成 Dream diary**，有新的一晚的夢才換回來。**沒有夢就不出現、小狗不說「沒做夢」**。報告裡改成**小狗前腳邊一本攤開的日記**（`assets/moods/dream_book.png`，使用者生成；2026-11-14 取代頭邊小雲——雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上），取代原本的 Dream diary 那一列；小狗坐進草坡、腳下一片淡影子。⚠️ 首頁雲朵照**整個畫面寬度**從中線右邊開始放：小狗的頭右緣約在中線，照小狗那個 230 的框放會蓋到臉 | 使用者定。沒有夢是資料沒來，不是牠沒做夢 |
+| 夢境日記：小狗頭右邊一朵雲（`assets/moods/dream_cloud.png`，使用者生成；**比小狗的頭小**，110 寬）寫「I had a dream…」（固定一句，**不截夢境內容**），點開才看全文（`widgets/dream_diary.dart`，標題下寫那一晚的日期）。看過之後**雲朵不縮、字換成 Dream diary**，有新的一晚的夢才換回來。**沒有夢就不出現、小狗不說「沒做夢」**。報告裡改成**右下草地上一本攤開的日記**（`assets/moods/dream_book.png`，使用者生成；2026-11-14 取代頭邊小雲——雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上），取代原本的 Dream diary 那一列；小狗坐進草坡、腳下一片淡影子。⚠️ 首頁雲朵照**整個畫面寬度**從中線右邊開始放：小狗的頭右緣約在中線，照小狗那個 230 的框放會蓋到臉 | 使用者定。沒有夢是資料沒來，不是牠沒做夢 |
 | **導覽列**（2026-11-13 使用者定，照參考圖）：只有圖示、沒有文字；Home · Friends ｜ **中間一顆凸出的紫色圓鈕＝開始睡覺**（畫睡著的狗頭 `dog_tired.png`，缺圖退回月亮）：**先滑出 Sleep schedule**（同時鐘卡那個轉盤，按鈕字換成 Start Sleep），按了才開始；把面板關掉＝不開始、不記上床。面板背景是使用者生成的夜晚窗景 `assets/backgrounds/schedule_night.jpg`（三個入口共用；讀不到退回深藍）｜ Insights · Assistant。**Settings 搬到首頁右上角的人像**，按返回回首頁。選中的分頁紫色＋底下小點，圖示保留朗讀名稱（`widgets/moon_nav_bar.dart`） | 中間那顆只送一個請求（`StartSleepRequests`），**開始睡覺的流程只在首頁一份**；在別的分頁按會先切回 Home，起床報告才接得下去。⚠️ Settings 刻意留在 IndexedStack（不另開一頁）：首頁與設定頁共用就寢時間，要即時同步（`bedtime_sync_test`）。⚠️ 頁面延伸到導覽列後面（extendBody），但內容只排到導覽列上緣：高度用 body 的 `padding.bottom`，**不能用 `viewPadding`**（Scaffold 已經拿掉系統那段，實機量過，首頁最底那列會被蓋住） |
 | **等級徽章在寵物正上方**，不在標題旁（2026-11-13 使用者定）；沒有後端不畫 | `game_test.dart` 量位置守著 |
 | **寵物用隊友的 2D 分層小狗**（`lib/pet2d/`，經 `widgets/home_pet.dart` 這個插槽）。**缺圖的心情畫 bored，絕不畫 happy** | tired／anxious 只有 bored 的圖；隊友原版退回 happy，焦慮的夜晚畫成開心的狗（紅線 5）。`pet2d_test.dart` 守著 |
@@ -490,7 +490,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 按 View sleep report）→ 報告；首頁一週心情列點任一天、補填自評之後則直接開報告（不經等待畫面）。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
-版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤（日期與分數區的背景是使用者生成的日出山丘 `assets/backgrounds/report_dawn.jpg`（為這個位置生成：中間留給圓環、太陽在圓環下緣、右下草坡給小狗；`Alignment(0, 0.3)` 讓太陽露出來），壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘） → Lv／XP 一條
+版面（11-13 依示意圖定案，11-14 依參考圖改）：日期 → **一條半圓線**的分數（只有線、不墊深色底盤；數字在弧裡、小狗頭上）＋小狗置中坐在弧下的草坡（腳下淡影子）＋左下「You felt」＋右下夢境日記本 → 那句話置中（背景是使用者生成的日出 `assets/backgrounds/report_dawn.jpg`，壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘）→ Lv／XP 一條（「215 / 400 XP」寫在條裡；最近 7 晚一晚一格，`xpBarSegments()` 只排版不算 XP，這一晚那格最亮、上面浮著 +N XP；+0 的晚上沒有格子、+N 放在進度尾端照實寫）
 → From your buddy（AI 那段＋小建議）→ **Last night 圖形格子** → Sleep phases → **Yesterday 圖形格子**
 → View sleep insights → Back to home。
 

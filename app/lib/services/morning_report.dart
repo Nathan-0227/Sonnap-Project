@@ -186,6 +186,9 @@ class MorningReport {
   /// 真時：手錶那部分還沒算進來，畫成「+N XP so far」。
   final bool nightXpSoFar;
 
+  /// 最近幾晚各拿幾 XP（照抄 /game 的 recent_nights，由舊到新），經驗條上一晚畫一格。
+  final List<NightXp> recentNightXp;
+
   /// 睡眠目標（分鐘）＝轉盤上「就寢→起床」的長度。只拿來寫事實，不判斷達標。
   final int? goalMinutes;
 
@@ -237,6 +240,7 @@ class MorningReport {
     this.xpProgress,
     this.nightXp,
     this.nightXpSoFar = false,
+    this.recentNightXp = const [],
     this.goalMinutes,
   });
 
@@ -274,6 +278,7 @@ class MorningReport {
     double? xpProgress,
     int? nightXp,
     bool? nightXpSoFar,
+    List<NightXp>? recentNightXp,
     int? goalMinutes,
     bool replaceGame = false,
   }) {
@@ -326,6 +331,8 @@ class MorningReport {
       xpProgress: replaceGame ? xpProgress : this.xpProgress,
       nightXp: replaceGame ? nightXp : this.nightXp,
       nightXpSoFar: replaceGame ? (nightXpSoFar ?? false) : this.nightXpSoFar,
+      recentNightXp:
+          replaceGame ? (recentNightXp ?? const []) : this.recentNightXp,
       goalMinutes: goalMinutes ?? this.goalMinutes,
     );
   }
@@ -360,6 +367,7 @@ class MorningReport {
       xpProgress: game?.progress,
       nightXp: night?.total,
       nightXpSoFar: night != null && night.finalQuality == null,
+      recentNightXp: game?.recentNights,
       goalMinutes: goalMinutes != null && goalMinutes > 0 ? goalMinutes : null,
       camera: camera?.date == date ? camera : null,
       rating: useLocal ? localRating : null,
@@ -621,4 +629,41 @@ class MorningReportService implements MorningReportSource {
       client.close(force: true);
     }
   }
+}
+
+/// 經驗條上的一格。`date == null` 是「更早累積的」那一段（含挑戰獎勵）。
+@immutable
+class XpSegment {
+  final String? date;
+  final int start;
+  final int end;
+  const XpSegment({required this.date, required this.start, required this.end});
+
+  int get xp => end - start;
+
+  @override
+  String toString() => 'XpSegment($date, $start-$end)';
+}
+
+/// 經驗條一晚一格：從目前的進度（`into`）往回，依序排最近幾晚（`nights` 由舊到新）。
+/// 跨進這一級之前的那一晚只畫在這一級裡的部分；排完剩下的是「更早累積的」一段。
+///
+/// ⚠️ 只排版、不算 XP：每格的寬度就是後端那一晚的 `total`。+0 的晚上沒有格子（照實）。
+/// ⚠️ 挑戰獎勵沒有日期，一律算在「更早累積的」那段——剛領獎勵時，
+///    最近幾晚的格子會整體往後挪一點，但每格的大小仍是對的。
+List<XpSegment> xpBarSegments({
+  required int into,
+  required List<NightXp> nights,
+}) {
+  final out = <XpSegment>[];
+  var cursor = into;
+  for (final n in nights.reversed) {
+    if (cursor <= 0) break;
+    if (n.total <= 0) continue;
+    final start = cursor - n.total < 0 ? 0 : cursor - n.total;
+    out.add(XpSegment(date: n.date, start: start, end: cursor));
+    cursor = start;
+  }
+  if (cursor > 0) out.add(XpSegment(date: null, start: 0, end: cursor));
+  return out.reversed.toList();
 }
