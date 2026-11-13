@@ -1696,9 +1696,9 @@ class _DashedRingPainter extends CustomPainter {
   bool shouldRepaint(_DashedRingPainter old) => false;
 }
 
-/// 頂端背景：日出山丘的圖（小狗坐在山上），上下兩端淡進報告的深藍。
+/// 頂端背景：使用者為這個位置生成的日出山丘（右下草坡給小狗坐），上下兩端淡進報告的深藍。
 /// 讀不到圖時退回程式畫的山丘。
-const String kReportDawnAsset = 'assets/backgrounds/dawn.png';
+const String kReportDawnAsset = 'assets/backgrounds/report_dawn.jpg';
 
 class ReportDawnBackdrop extends StatelessWidget {
   const ReportDawnBackdrop({super.key});
@@ -1732,7 +1732,8 @@ class ReportDawnBackdrop extends StatelessWidget {
               kReportDawnAsset,
               key: const Key('report-dawn'),
               fit: BoxFit.cover,
-              alignment: Alignment.bottomCenter,
+              // 不貼底：往下挪，太陽才從分數圓環下面露出來、草坡落在小狗腳下
+              alignment: const Alignment(0, 0.3),
               errorBuilder: (_, _, _) => _hill,
             ),
             // 壓一層深藍，白字與圓環才看得清楚；上緣接狀態列、下緣接格子
@@ -1743,9 +1744,9 @@ class ReportDawnBackdrop extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     ReportColors.bgTop,
-                    Color(0x990B1636),
-                    Color(0x400B1636),
-                    Color(0x330B1636),
+                    Color(0x590B1636),
+                    Color(0x140B1636),
+                    Color(0x260B1636),
                   ],
                   stops: [0, 0.18, 0.5, 1],
                 ),

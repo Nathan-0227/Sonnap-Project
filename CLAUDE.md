@@ -490,7 +490,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 按 View sleep report）→ 報告；首頁一週心情列點任一天、補填自評之後則直接開報告（不經等待畫面）。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
-版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤（日期與分數區的背景是使用者生成的日出山丘 `assets/backgrounds/dawn.png`，壓一層深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘） → Lv／XP 一條
+版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤（日期與分數區的背景是使用者生成的日出山丘 `assets/backgrounds/report_dawn.jpg`（為這個位置生成：中間留給圓環、太陽在圓環下緣、右下草坡給小狗；`Alignment(0, 0.3)` 讓太陽露出來），壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘） → Lv／XP 一條
 → From your buddy（AI 那段＋小建議）→ **Last night 圖形格子** → Sleep phases → **Yesterday 圖形格子**
 → View sleep insights → Back to home。
 
