@@ -173,8 +173,33 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
     }
   }
 
+  /// 面板的背景（2026-11-14 使用者生成）：晚上從房間裡看出去的窗景，上緣是窗戶、
+  /// 下半部漸暗成深藍，轉盤與按鈕壓在暗的那一塊。三個入口（時鐘卡、設定頁、導覽列中間）
+  /// 都是這個面板，所以一起換。讀不到圖就是原本的深藍，不會報錯。
+  static const backgroundAsset = 'assets/backgrounds/schedule_night.jpg';
+
   @override
   Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              backgroundAsset,
+              key: const Key('schedule-background'),
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+          _content(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
@@ -210,34 +235,37 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
             const SizedBox(height: 12),
             SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),
             if (widget.showAlarm) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: sonnapCardDecoration(),
-              child: Row(
-                children: [
-                  const Icon(Icons.alarm_rounded, color: Color(0xFFFF7AD9)),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Alarm',
-                      style: TextStyle(
-                        color: SonnapColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                decoration: sonnapCardDecoration(),
+                child: Row(
+                  children: [
+                    const Icon(Icons.alarm_rounded, color: Color(0xFFFF7AD9)),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Alarm',
+                        style: TextStyle(
+                          color: SonnapColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  Switch(
-                    key: const Key('alarm-switch'),
-                    value: _alarm,
-                    onChanged: _toggle,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: SonnapColors.accent,
-                  ),
-                ],
+                    Switch(
+                      key: const Key('alarm-switch'),
+                      value: _alarm,
+                      onChanged: _toggle,
+                      activeThumbColor: Colors.white,
+                      activeTrackColor: SonnapColors.accent,
+                    ),
+                  ],
+                ),
               ),
-            ),
             ],
             if (widget.showAlarm && _alarm && _blocked) ...[
               const SizedBox(height: 8),
@@ -275,7 +303,9 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                 child: Text(
                   widget.confirmLabel,
                   style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w800),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),

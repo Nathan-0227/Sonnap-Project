@@ -359,6 +359,8 @@ void main() {
       }
       expect(find.text('Sleep schedule'), findsOneWidget);
       expect(find.text('Start Sleep'), findsOneWidget);
+      expect(find.byKey(const Key('schedule-background')), findsOneWidget,
+          reason: '面板後面鋪窗景（2026-11-14）');
       await tester.tapAt(const Offset(20, 20)); // 點面板外面
       await settle(tester);
       expect(await kv.getString(kBedStartKey), isNull, reason: '沒按 Start Sleep 不得記下上床');
