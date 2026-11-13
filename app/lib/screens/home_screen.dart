@@ -968,11 +968,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  static String _greeting(DateTime now) {
-    if (now.hour < 12) return 'Good morning ☀️';
-    if (now.hour < 18) return 'Good afternoon 🌤';
-    return 'Good evening 🌙';
-  }
 
   static String _tod(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -1132,9 +1127,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 2026-11-13 使用者定：小字「Hi, 暱稱!」＋大字「Welcome to Sonnap」，
+              // 不再分早午晚。名字一律來自帳號（不得寫死任何人的名字）。
               Text(
-                _greeting(now),
+                'Hi, ${widget.displayName}!',
                 key: const Key('day-greeting'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: SonnapColors.accentSoft,
                   fontSize: 17,
@@ -1143,16 +1142,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               Row(
                 children: [
-                  Flexible(
-                    child: Text(
-                      widget.displayName,
-                      key: const Key('day-name'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: SonnapColors.textPrimary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
+                  const Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Welcome to Sonnap',
+                        key: Key('day-title'),
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: SonnapColors.textPrimary,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),

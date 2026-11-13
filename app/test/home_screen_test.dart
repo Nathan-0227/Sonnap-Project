@@ -98,9 +98,9 @@ void main() {
   group('一頁全放（2026-11-12 定案）', () {
     testWidgets('問候、心情標籤、分數、Start sleep、四張卡都在同一頁', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      expect(find.textContaining('Good morning'), findsOneWidget);
+      expect(find.text('Welcome to Sonnap'), findsOneWidget);
       expect(
-        find.text('Sleeper'),
+        find.text('Hi, Sleeper!'),
         findsOneWidget,
         reason: '沒有帳號時用 Sleeper，不能是人名',
       );
@@ -121,9 +121,11 @@ void main() {
       }
     });
 
-    testWidgets('下午的問候是 afternoon', (tester) async {
+    testWidgets('問候不分早午晚（使用者定）', (tester) async {
       await pumpHome(tester, () => at(12, 14));
-      expect(find.textContaining('Good afternoon'), findsOneWidget);
+      expect(find.text('Hi, Sleeper!'), findsOneWidget);
+      expect(find.text('Welcome to Sonnap'), findsOneWidget);
+      expect(find.textContaining('Good afternoon'), findsNothing);
     });
 
     testWidgets('「不按也沒關係」那句話在按鈕旁邊', (tester) async {
