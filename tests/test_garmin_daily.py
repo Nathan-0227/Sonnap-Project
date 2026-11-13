@@ -227,6 +227,12 @@ check("壓力只給秒數", y["stress"], {"rest_sec": 27660, "low_sec": 11340,
                                      "medium_sec": 14880, "high_sec": 2100})
 check("VO2 max：最近一次＋量到的日期", y["vo2max"], {"value": 45.7, "measured_on": "2026-10-09"})
 check("Move IQ 三段", len(y["move_iq"]), 3)
+check("history：最近幾天（到那一天為止），照日期排；活動分鐘＝高強度＋活動",
+      [(x["date"], x["steps"]) for x in y["history"]][-1], ("2026-11-12", 9955))
+check("history 不含那一天之後的", all(x["date"] <= "2026-11-12" for x in y["history"]), True)
+check("history 跟打包檔同一個形狀", sorted(y["history"][-1]),
+      ["active_kcal", "active_minutes", "date", "steps"])
+ok("整天心率欄位在（沒有原始讀數時是 null，不回 0）", "heart_rate" in y)
 ok("不給任何判斷字眼", not any(w in json.dumps(y).lower()
                                for w in ("good", "normal", "poor", "reached", "achieved")))
 check("⚠️ 前一天沒資料 → 整塊 null（不回 0）",

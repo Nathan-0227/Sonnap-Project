@@ -235,31 +235,50 @@ void main() {
     }
   }
 
-  // 報告是可捲動的清單，畫面外的還沒建出來：先捲到 More details 再點開
-  Future<void> openDetails(WidgetTester tester) async {
-    final toggle = find.byKey(const Key('report-details-toggle'));
-    await tester.scrollUntilVisible(toggle, 300,
+  // 報告是可捲動的清單，畫面外的還沒建出來：先捲到那一格
+  Future<void> scrollTo(WidgetTester tester, Finder f) async {
+    await tester.scrollUntilVisible(f, 300,
         scrollable: find.byType(Scrollable).first);
-    await tester.tap(toggle);
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  testWidgets('報告：Sleep Stages 卡有兩顆；More details 不再寫一次心率', (tester) async {
+  testWidgets('⚠️ 報告：有曲線時心率格寫曲線那段的平均（53），不寫混了清醒時段的 avg_heart_rate（80）',
+      (tester) async {
     final r = buildMorningReport(date: '2026-11-08', home: home());
     await pumpReport(tester, r, 'with');
-    expect(find.byKey(const Key('stages-chip-hr')), findsOneWidget);
+    await scrollTo(tester, find.byKey(const Key('report-hr')));
+    expect(tester.widget<Text>(find.byKey(const Key('report-hr'))).data,
+        '53 bpm avg · 53 resting',
+        reason: '同一頁不得出現兩個不同的「平均心率」');
+    expect(find.textContaining('80 bpm'), findsNothing);
+    expect(find.byKey(const Key('report-hr-line')), findsOneWidget, reason: '格子裡畫那條線');
+    await scrollTo(tester, find.byKey(const Key('stages-chip-hr')));
     expect(find.byKey(const Key('stages-chip-move')), findsOneWidget);
-    await openDetails(tester);
-    expect(find.byKey(const Key('report-hr')), findsNothing,
-        reason: 'avg_heart_rate 混了清醒時段，不能跟睡著期間的平均並列');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('報告：沒有曲線 → 沒有那兩顆，More details 照舊寫心率', (tester) async {
+  testWidgets('報告：沒有曲線 → 沒有那兩顆、心率格不畫線，照舊寫 avg_heart_rate', (tester) async {
     final r = buildMorningReport(date: '2026-11-08', home: home(curves: false));
     await pumpReport(tester, r, 'without');
+    await scrollTo(tester, find.byKey(const Key('report-hr')));
+    expect(tester.widget<Text>(find.byKey(const Key('report-hr'))).data,
+        '80 bpm avg · 53 resting');
+    expect(find.byKey(const Key('report-hr-line')), findsNothing);
     expect(find.byKey(const Key('stages-chip-hr')), findsNothing);
-    await openDetails(tester);
-    expect(find.byKey(const Key('report-hr')), findsOneWidget);
+  });
+
+  testWidgets('報告：點心率格 → 打開疊好心率線的 Sleep Stages', (tester) async {
+    final r = buildMorningReport(date: '2026-11-08', home: home());
+    await pumpReport(tester, r, 'tap');
+    await scrollTo(tester, find.byKey(const Key('report-hr-tile')));
+    await tester.tap(find.byKey(const Key('report-hr-tile')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('report-curve-heartRate')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('report-curve-heartRate')),
+            matching: find.byKey(const Key('stages-overlay-heartRate'))),
+        findsOneWidget,
+        reason: '一打開就疊好心率線');
   });
 }

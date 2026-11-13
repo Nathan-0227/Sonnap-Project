@@ -446,8 +446,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 規則 | 理由 |
 |---|---|
 | **不寫 Normal／High**，不畫「正常範圍」色帶（使用者定，參考圖的 Normal 不照做）。心率選了之後下面一行只照抄「平均 · 最低 · 靜止」；右邊刻度寫 bpm | 夜間心率沒有文獻門檻（紅線 2） |
-| **Movement 是手錶的**，不是攝影機的；沒有單位，右邊只寫 **More／Less**（不寫 High），下面寫 `Movement from your watch` | 首頁的 Movement 小卡與 More details 是攝影機的，另一個量；High 會被讀成「太高」 |
-| 心率平均、最低從**那一段的原始讀數**算，**不用** `avg_heart_rate`；有心率曲線時 More details **不再寫心率** | `avg_heart_rate` 混了清醒時段，並列會是兩個不同的「平均心率」 |
+| **Movement 是手錶的**，不是攝影機的；沒有單位，右邊只寫 **More／Less**（不寫 High），下面寫 `Movement from your watch` | 首頁的 Movement 小卡與報告的 Movement (camera) 格子是攝影機的，另一個量；High 會被讀成「太高」 |
+| 心率平均、最低從**那一段的原始讀數**算，**不用** `avg_heart_rate`；報告的心率格**有曲線就用曲線那段的平均**、沒曲線才用 `avg_heart_rate` | `avg_heart_rate` 混了清醒時段，並列會是兩個不同的「平均心率」 |
 | 線是**單調三次插值**（`widgets/curve_path.dart`），`sleep_stages_overlay_test.dart` 沿整條線取樣驗證不衝出範圍 | 一般平滑曲線在急轉處會畫出沒發生的值（同階梯不畫平滑波浪的理由） |
 | 選了線之後階梯變淡（35%、不畫光暈）；那一條沒有 → 那顆不出現；兩條都沒有 → 原本的卡 | — |
 | 心率 0 或負數＝沒有讀數；**動作 0 是「沒動」，是真的值** | 寫錯不會報錯 |
@@ -462,7 +462,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 
 前一個**日曆日**的步數、距離、活動卡路里、活動時間（高強度／活動／久坐）、爬樓、各壓力程度的時間、
-Body Battery、VO2 max、Move IQ。報告裡 Sleep phases 之後、More details 之前一張卡（`widgets/yesterday_card.dart`）。
+Body Battery、VO2 max、Move IQ。報告裡 Sleep phases 之後的「Yesterday」那段圖形格子（`widgets/report_tiles.dart`；VO2 max 同首頁不放）。`/home` 的 yesterday 另帶 `history`（最近 14 天，步數那座山與長條圖）與 `heart_rate`（整天心率線），形狀與打包檔 `activity_block` 相同。
 
 ```
 garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activity.json（只增不減）
@@ -491,8 +491,15 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
 版面（11-13 依示意圖定案）：日期 → 分數圓環＋山丘＋小狗（右下）＋「You felt」小標籤 → Lv／XP 一條
-→ From your buddy（AI 那段＋小建議）→ Time in bed／Time asleep → Phone down｜Your target → Sleep phases
-→ More details（收合：WASO、心率、效率、攝影機）→ Dream diary → View sleep insights → Back to home。
+→ From your buddy（AI 那段＋小建議）→ **Last night 圖形格子** → Sleep phases → **Yesterday 圖形格子**
+→ View sleep insights → Back to home。
+
+**圖形格子**（2026-11-14 使用者定，參考圖：每一格的圖就是那個數字，`widgets/report_tiles.dart`）：
+Last night＝睡多久（波浪光帶＝睡了多久÷目標）、臥床（18:00→12:00 時間軸上的上床／下床）、Phone down（半圓弧上目標與實際兩點）、
+Awake（整晚一條、只亮清醒段）、Efficiency（圓環；警語與 basis **點了才跳出**）、心率（睡著那段的小折線）、攝影機（小折線＋後端那句）；
+Yesterday＝步數（最近 7 天連成的山，昨天亮點）、活動時間（高強度／活動／久坐三段橫條）、壓力（半圓四段，**同色系不用紅黃**）、
+Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %）、整天心率、Move IQ（一天的時間軸）。
+⚠️ 底下那行只寫事實（參考圖的 Elevated／Perfect day 不照做）；沒值的格子不畫、不畫成 0；兩個一列一樣高，單數的最後一格佔整列。
 字是 **Nunito**，只用在報告與自評卡（`assets/fonts/nunito/`，OFL；官方只出可變字型，切成五個固定粗細，
 **刻意不裝 `google_fonts`**——它會在執行時上網抓字）。
 
@@ -506,7 +513,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 | 跟上一晚比（Time in bed／Time asleep）照抄 `previous_night`，**上升紅、下降綠、只代表方向**；沒有上一晚不畫 | 與首頁同一條；睡得多不一定好 |
 | 睡眠目標＝轉盤「就寢→起床」的長度，**只寫「of your 8h goal」，不寫 reached、不變色** | 好壞只有後端能判斷；分數以時長為主，兩個說法會打架 |
 | 達成度那一行（`2h 12m after your target`／`On time`）**只照抄 `adherence_minutes`**，沒有後端就整張 Phone down 卡不出現 | 跨午夜只在 `behavior/adherence.py` 算 |
-| More details 的效率是**進分數的那一個**：依 `composition.efficiency_basis` 去 behavior 找同一個 basis 的欄位，都對不上才用手錶的；**basis 字串不寫死在 Dart**，畫面上照列 basis 與警語 | App 裡有五個叫「效率」的數字，只有 basis 分得開 |
+| 報告的效率是**進分數的那一個**：依 `composition.efficiency_basis` 去 behavior 找同一個 basis 的欄位，都對不上才用手錶的；**basis 字串不寫死在 Dart**，畫面上照列 basis 與警語 | App 裡有五個叫「效率」的數字，只有 basis 分得開 |
 | 攝影機只顯示後端那句「跟你平常比」＋「not part of your score」 | 攝影機計分項 0 項 |
 | Sleep phases 圖用 `/home` 的 `metrics.sleep_stages`（Garmin 來源每晚都有）；沒有就比例條。夢境只在打包檔最新那一晚就是這一晚時才有 | 夢境還沒有 per-user |
 | 比例條要後端的 `light_minutes`（總睡眠 − 深睡 − REM），**沒量到 REM 時是 null** | 減出來的淺睡會把 REM 吃進去 |
