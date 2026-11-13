@@ -2104,20 +2104,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
-                  // 每一項平均分配卡片的高度、在自己那一段裡置中（使用者 2026-11-13：「不要下面留那麼多空間」）
-                  for (final r in [...act.rows, ?act.moveIq])
+                  // 每一項平均分配卡片的高度、在自己那一段裡上下置中，分隔線因此落在兩項正中間
+                  // （使用者 2026-11-13：「不要下面留那麼多空間」「線條也平衡一下」）
+                  const SizedBox(height: 10),
+                  const Divider(height: 1, color: SonnapColors.cardBorder),
+                  for (final (i, r) in [...act.rows, ?act.moveIq].indexed) ...[
+                    if (i > 0) const Divider(height: 1, color: SonnapColors.cardBorder),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          const Divider(height: 1, color: SonnapColors.cardBorder),
-                          Expanded(
-                            child: Align(alignment: Alignment.centerLeft, child: r),
-                          ),
-                        ],
-                      ),
+                      child: Align(alignment: Alignment.centerLeft, child: r),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -2140,6 +2136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) {
     final row = Column(
       key: Key(key),
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(

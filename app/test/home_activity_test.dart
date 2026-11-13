@@ -160,6 +160,25 @@ void main() {
     expect(act.bottom - tester.getRect(find.byKey(const Key('home-moveiq'))).bottom,
         lessThan(pitch / 2 + 12), reason: '底下不留整段空白');
     expect(hrRow.top, greaterThan(kcal.bottom));
+    // 分隔線在兩項正中間：每一項在自己那一段上下置中，上下留白差不多
+    final dividers = tester
+        .widgetList<Divider>(find.descendant(
+            of: find.byKey(const Key('home-activity-section')), matching: find.byType(Divider)))
+        .length;
+    expect(dividers, 5, reason: '標題下一條＋四項之間三條＋Move IQ 前一條');
+    final lines = tester
+        .getRect(find.byKey(const Key('home-activity-section')))
+        .top; // 只為了讀起來清楚：以下都是螢幕座標
+    final ys = [
+      for (final e in find
+          .descendant(of: find.byKey(const Key('home-activity-section')), matching: find.byType(Divider))
+          .evaluate())
+        (e.renderObject! as RenderBox).localToGlobal(Offset.zero).dy +
+            (e.renderObject! as RenderBox).size.height / 2,
+    ]..sort();
+    expect(ys.first, greaterThan(lines));
+    // Steps 夾在第一、二條線之間，上下留白一樣多（線在兩項正中間）
+    expect(((steps.top - ys[0]) - (ys[1] - steps.bottom)).abs(), lessThan(2));
     // 左欄的小卡一張張往下疊（不是 2x2）
     final d = tester.getRect(find.byKey(const Key('tile-duration')));
     final e = tester.getRect(find.byKey(const Key('tile-efficiency')));
