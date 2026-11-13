@@ -356,19 +356,16 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               ),
             ),
           ),
-          // 小狗頭邊一朵小雲，點開看完整夢境；那一晚沒有夢就不出現。
-          // 報告用小的（不寫字）：大的那朵會蓋到分數圓環的右半邊，圓環右邊只剩約 70 寬。
-          if (r.dream != null)
-            Positioned(
-              key: const Key('report-dream'),
-              right: 4,
-              bottom: r.hasScore ? 162 : 150,
-              child: DreamBubble(compact: true, onTap: () => _showDream(r)),
-            ),
+          // 小狗坐在草坡上：腳下一片淡影子，看起來才像坐在地上、不是貼上去的
+          Positioned(
+            right: 34,
+            bottom: r.hasScore ? 22 : 30,
+            child: const _GroundShadow(width: 84),
+          ),
           if (r.hasScore)
             Positioned(
               right: 18,
-              bottom: 50,
+              bottom: 20,
               child: HomePet(
                 key: const Key('report-pet-awake'),
                 mood: r.mood,
@@ -378,8 +375,17 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           else
             const Positioned(
               right: 8,
-              bottom: 40,
+              bottom: 16,
               child: SleepingPet(key: Key('report-pet-asleep'), size: 140),
+            ),
+          // 小狗前腳邊一本攤開的夢境日記（使用者生成；左邊是 You felt 標籤，不能再往左），點開看完整夢境；那一晚沒有夢就不出現。
+          // 2026-11-14 取代頭邊的小雲：雲裡畫月亮星星＝正在睡，跟日出、醒著的小狗對不上。
+          if (r.dream != null)
+            Positioned(
+              key: const Key('report-dream'),
+              right: 76,
+              bottom: -2,
+              child: _DreamBook(onTap: () => _showDream(r)),
             ),
           Positioned(
             left: 0,
@@ -1752,6 +1758,57 @@ class ReportDawnBackdrop extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 報告裡的夢境入口：草地上一本攤開的日記。讀不到圖時退回小雲。
+const String kDreamBookAsset = 'assets/moods/dream_book.png';
+
+class _DreamBook extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DreamBook({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Open dream diary',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Image.asset(
+          kDreamBookAsset,
+          key: const Key('report-dream-book'),
+          width: 66,
+          errorBuilder: (_, _, _) => DreamBubble(compact: true, onTap: onTap),
+        ),
+      ),
+    );
+  }
+}
+
+/// 角色腳下的淡影子（橢圓、邊緣模糊）。
+class _GroundShadow extends StatelessWidget {
+  final double width;
+  const _GroundShadow({required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: width,
+        height: width * 0.16,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.all(
+            Radius.elliptical(width / 2, width * 0.08),
+          ),
+          color: const Color(0x40060A20),
+          boxShadow: const [
+            BoxShadow(color: Color(0x40060A20), blurRadius: 8, spreadRadius: 2),
           ],
         ),
       ),
