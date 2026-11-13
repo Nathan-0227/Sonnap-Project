@@ -2,10 +2,12 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import daily_activity as daily
 import merge_standard_data as merge
 from migrate_daily_series_tz import TZ_MARKER_KEY, TZ_MARKER_VALUE, is_converted
 
@@ -217,7 +219,93 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Include a small sanitized sample of raw API data in debug output.",
     )
+    # ── 白天資料（2026-11-13）：同一次登入，寫到另一個檔 ──────────────
+    parser.add_argument(
+        "--no-daily",
+        action="store_true",
+        help="Skip daytime activity (steps, calories, stress minutes, VO2 max, Move IQ…).",
+    )
+    parser.add_argument(
+        "--daily-since",
+        default="",
+        help="Also backfill daytime activity for days since this date (YYYY-MM-DD) that have none yet.",
+    )
+    parser.add_argument(
+        "--daily-limit",
+        type=int,
+        default=30,
+        help="Max days to backfill per run (Garmin answers 429 when asked too much).",
+    )
+    parser.add_argument(
+        "--daily-pause",
+        type=float,
+        default=1.5,
+        help="Seconds to wait between daytime-activity requests.",
+    )
     return parser.parse_args()
+
+
+# 白天資料的四個請求（都是讀取）。名字對到 daily_activity.parse_day 的參數。
+_DAILY_CALLS = (
+    ("stats", "get_stats", 1),
+    ("max_metrics", "get_max_metrics", 1),
+    ("events", "get_all_day_events", 1),
+    ("body_battery", "get_body_battery", 2),
+)
+
+
+def fetch_daily_activity(client: Any, days: List[date], pause: float,
+                         sleep=time.sleep) -> Tuple[Dict[str, Dict[str, Any]], Optional[str]]:
+    """抓每一天的白天資料。回傳（{日期: 一天的欄位}, 被擋下時的日期或 None）。
+
+    - 一個請求失敗（不是 429）→ 那一項當作沒抓到（None），其他照抓。
+    - **429 → 立刻停**，已經抓到的照樣回傳（呼叫端照樣存）。再問只會擋得更久。
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for d in days:
+        ds = d.isoformat()
+        resp: Dict[str, Any] = {}
+        for key, method, nargs in _DAILY_CALLS:
+            fn = getattr(client, method, None)
+            if not callable(fn):
+                resp[key] = None
+                continue
+            sleep(pause)
+            try:
+                resp[key] = fn(*([ds] * nargs))
+            except Exception as exc:  # noqa: BLE001
+                if daily.is_rate_limited(exc):
+                    return out, ds
+                resp[key] = None
+        out[ds] = daily.parse_day(**resp)
+    return out, None
+
+
+def run_daily_activity(client: Any, fetched_days: List[date], args: argparse.Namespace,
+                       path: Path = daily.DATA_FILE, today: Optional[date] = None,
+                       sleep=time.sleep) -> None:
+    """抓白天資料並併進 garmin_daily_activity.json。
+
+    ⚠️ 這裡出任何錯都**不能**讓睡眠那份失敗——呼叫端用 try 包著，只印警告。
+    """
+    today = today or date.today()
+    existing = daily.load(path)
+    days = sorted(set(fetched_days))
+    if args.daily_since:
+        since = date.fromisoformat(args.daily_since)
+        days += daily.days_to_backfill(existing, since, today, already=days,
+                                       limit=args.daily_limit)
+    fetched, stopped_at = fetch_daily_activity(client, days, args.daily_pause, sleep=sleep)
+    merged, report = daily.merge_days(existing, fetched)
+    daily.save(merged, path)
+    print("- daily activity:")
+    print(f"    asked {len(days)} days, got {len(fetched)}; "
+          f"new {len(report['new'])}, updated {len(report['updated'])}, "
+          f"kept (nothing fetched) {len(report['kept'])}")
+    if stopped_at:
+        print(f"    ! Garmin answered 429 (too many requests) at {stopped_at}; stopped. "
+              "Saved what was fetched; the rest will be tried next run.")
+    print(f"    file: {path}")
 
 
 def _gmt_labelled_to_local(records: List[Dict[str, Any]], tz: str) -> List[Dict[str, Any]]:
@@ -868,6 +956,15 @@ def main() -> None:
             json.dump(raw_debug_payload, f, ensure_ascii=False, indent=2)
 
     print("Garmin Connect fetch complete.")
+    # 白天資料：同一次登入。睡眠那份已經寫完，這裡失敗只印警告、不影響。
+    if not args.no_daily:
+        try:
+            # 白天資料的檔放在睡眠那份**同一個資料夾**：測試把 --output 指到暫存資料夾時，
+            # 這份也跟著去，不會寫到真的 garmin/data/（2026-11-13 測試抓到過）
+            daily_path = Path(args.output).with_name(daily.DATA_FILE.name)
+            run_daily_activity(client, sorted(fetched_days), args, path=daily_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"- daily activity: FAILED ({type(exc).__name__}: {exc}); sleep data is unaffected.")
     print(f"- fetched_days: {len(fetched_days)}")
     print(f"- records: {standard_payload['total_records']}")
     if merge_report is None:

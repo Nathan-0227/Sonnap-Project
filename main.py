@@ -39,7 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import json
-from datetime import date as date_cls, datetime
+from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -290,6 +290,64 @@ def _garmin_records():
             return None
         _STANDARD_CACHE.update(mtime=mtime, records=data.get("records", []))
     return _STANDARD_CACHE["records"]
+
+
+# VO2 max 不是每天都有（只有 GPS 走路、跑步的日子會更新），報告顯示最近一次；
+# 太舊就不顯示（2026-11-13 使用者定）。
+VO2MAX_LOOKBACK_DAYS = 90
+
+
+def yesterday_block(user_id, night_date):
+    """
+    早晨報告「Yesterday」那一塊：那一晚（起床日）**前一個日曆日**的 Garmin 白天資料。
+
+    ⚠️ 只呈現、不計分（紅線 4）；不給 Good/Normal、不判斷步數有沒有達標（紅線 2，
+       步數目標只照實給 step_goal）。好友端點不讀這裡。
+    ⚠️ 那一天沒有資料（沒戴錶、只有 Health Connect、還沒匯入）→ 整塊 None，App 整塊不畫；
+       不回 0。單一項沒有值 → 那一項是 null。
+    """
+    if not night_date:
+        return None
+    try:
+        day = date_cls.fromisoformat(night_date) - timedelta(days=1)
+    except ValueError:
+        return None
+    row = db.get_garmin_daily(user_id, day.isoformat())
+    if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
+        return None
+    vo2 = db.latest_vo2max(
+        user_id, on_or_before=day.isoformat(),
+        since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
+
+    def group(**kw):
+        return kw if any(v is not None for v in kw.values()) else None
+
+    return {
+        "date": day.isoformat(),
+        "steps": row.get("steps"),
+        "step_goal": row.get("step_goal"),
+        "distance_m": row.get("distance_m"),
+        "active_kcal": row.get("active_kcal"),
+        "floors_up": row.get("floors_up"),
+        "activity": group(
+            highly_active_sec=row.get("highly_active_sec"),
+            active_sec=row.get("active_sec"),
+            sedentary_sec=row.get("sedentary_sec"),
+        ),
+        "stress": group(
+            rest_sec=row.get("stress_rest_sec"),
+            low_sec=row.get("stress_low_sec"),
+            medium_sec=row.get("stress_medium_sec"),
+            high_sec=row.get("stress_high_sec"),
+        ),
+        "body_battery": group(
+            charged=row.get("body_battery_charged"),
+            drained=row.get("body_battery_drained"),
+        ),
+        "vo2max": None if vo2 is None else {"value": vo2[0], "measured_on": vo2[1]},
+        # 沒有事件是 []（照實），沒抓到是 null
+        "move_iq": row.get("move_iq"),
+    }
 
 
 def night_stages(w_row):
@@ -923,6 +981,8 @@ async def get_home(
             db.get_morning_rating(user_id, target_date) if target_date else None),
         # 「跟上一晚比」的箭頭：給上一個有資料的晚上的原始數字，箭頭方向由 App 比
         # （只代表方向，上升紅、下降綠，與首頁同一條規矩；好壞不在這裡判斷）。
+        # Garmin 白天資料（2026-11-13）：只呈現、不計分；沒有資料就整塊 null
+        "yesterday": yesterday_block(user_id, target_date),
         "previous_night": {
             "time_in_bed_minutes": (_previous(behavior_rows, target_date, "time_in_bed_minutes")
                                     or {}).get("time_in_bed_minutes"),

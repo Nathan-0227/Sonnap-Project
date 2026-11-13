@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/yesterday_activity.dart';
 import '../models/sleep_session.dart';
 import '../models/sleep_stages.dart';
 import '../models/wall_clock.dart';
@@ -114,6 +115,10 @@ class MorningReport {
   /// 夢境日記。只有打包檔最新那一晚有，而且是電腦上生成的，早上通常還沒有。
   final String? dream;
 
+  /// 前一個日曆日的 Garmin 白天資料（`/home` 的 `yesterday`，2026-11-13）。只呈現、不計分；
+  /// 沒有後端或那天沒資料是 null，報告整塊不畫。
+  final YesterdayActivity? yesterday;
+
   final ReportSource source;
 
   // ── 跟上一晚比：後端給上一個有資料的晚上的原始數字 ──
@@ -195,6 +200,7 @@ class MorningReport {
     this.remMeasured = false,
     this.stages,
     this.dream,
+    this.yesterday,
     this.source = ReportSource.phoneOnly,
     this.previousTimeInBed,
     this.previousSleepMinutes,
@@ -279,6 +285,7 @@ class MorningReport {
       remMeasured: remMeasured,
       stages: stages,
       dream: dream,
+      yesterday: yesterday,
       source: source,
       previousTimeInBed: previousTimeInBed,
       previousSleepMinutes: previousSleepMinutes,
@@ -473,6 +480,8 @@ MorningReport buildMorningReport({
           ? (SleepStages.fromJsonOrNull(metrics?['sleep_stages']) ?? bundleStages)
           : null,
       dream: dream,
+      // 白天資料跟睡眠分數無關：那一天有就畫（手錶睡眠還沒到也一樣）
+      yesterday: YesterdayActivity.fromJsonOrNull(home['yesterday']),
       source: ReportSource.backend,
       previousTimeInBed: n(previous, 'time_in_bed_minutes'),
       previousSleepMinutes: n(previous, 'sleep_duration_minutes'),

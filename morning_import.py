@@ -80,6 +80,10 @@ from apply_recovery_modifier import WEARER_SEGMENTS  # noqa: E402
 from behavior import adherence                      # noqa: E402
 from tapo_metric_logger import read_started         # noqa: E402
 
+# 白天資料只補負責人本人戴錶之後的日子：更早是另外三個人戴的，不是同一個人的資料。
+# 取最後一個可信區段的起日，不另外寫死一個日期（換人時兩邊才不會漂移）。
+OWN_DATA_SINCE = [seg for seg in WEARER_SEGMENTS if seg[3]][-1][0]
+
 # 還沒有任何手錶資料時，從第一個戴錶者分段的起日抓起。不另外寫一個日期：
 # 分段表是唯一定義處，哪天往前補資料時兩邊才不會各說各話。
 FETCH_START = WEARER_SEGMENTS[0][0]
@@ -526,8 +530,12 @@ def _run(args, paths, now, runner, db_check, env, analyse):
     # fetch 預設是合併：只換這次抓的日子，更早的原樣保留。
     # ⚠️ 不可以加 --replace，那會把整份歷史換成這幾天。
     start = fetch_start(paths.standard_json, now.date())
+    # 白天資料（步數、壓力時間、VO2 max、Move IQ…）同一次登入一起抓，寫到另一個檔；
+    # 還沒有的日子從負責人本人開始戴的那天補起，一次最多 30 天（Garmin 會回 429）。
+    # 白天資料失敗不會讓這一步失敗（fetch 裡面包著）。
     fetch = ["garmin/garmin_connect_fetch.py",
-             "--start-date", start, "--end-date", now.date().isoformat()]
+             "--start-date", start, "--end-date", now.date().isoformat(),
+             "--daily-since", OWN_DATA_SINCE]
     print(f"● 從 {start} 抓到今天（更早的日子不動），要連 Garmin 伺服器")
     if runner(fetch) != 0:
         raise fail_and_restore("抓手錶資料失敗（上面有錯誤訊息）。")

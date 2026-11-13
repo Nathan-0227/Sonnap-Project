@@ -6,6 +6,7 @@ import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/yesterday_card.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/sleepy_pet.dart';
 
@@ -152,6 +153,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       (r.hasStageSplit || r.deepMinutes != null)) ...[
                     const SizedBox(height: 14),
                     _splitCard(r),
+                  ],
+                  // 前一天的 Garmin 白天資料（2026-11-13）：只呈現、不計分；那天沒資料就整塊不畫
+                  if (r.yesterday != null) ...[
+                    const SizedBox(height: 14),
+                    YesterdayCard(data: r.yesterday!),
                   ],
                   if (r.hasDetails) ...[
                     const SizedBox(height: 14),
