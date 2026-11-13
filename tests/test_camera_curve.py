@@ -136,6 +136,48 @@ check("⚠️ 其他欄位一個都沒動（事件數還是 99）", row["events_
 check("那一晚不存在 → 0 列、不新增", db.set_camera_motion_curve(uid, "2020-01-01", curve), 0)
 check("真的沒新增", any(r["date"] == "2020-01-01" for r in db.get_camera_nightly(uid, days=100)), False)
 
+print("\n【7】首頁的打包檔：直接讀那一晚的錄影 CSV，跟 /home 同一個算法")
+import build_app_payload as payload  # noqa: E402
+import camera_curve  # noqa: E402
+
+rec_dir = Path(tempfile.mkdtemp())
+def write_csv(name, started, minutes, roi=True, moving_minutes=()):
+    t0 = datetime.fromisoformat(started)
+    lines = [f"# tapo_metric_logger  started={started}",
+             "# size=640x360 fps=1.0",
+             "# roi=34,129,288,231 roi_area=66528" if roi else "# roi=full",
+             "t,roi_px,max_px,warmup,illum_skip"]
+    for sec in range(0, minutes * 60, 5):
+        m = sec // 60
+        px = 2000 if m in moving_minutes else 0
+        lines.append(f"{(t0 + timedelta(seconds=sec)).isoformat()},{px},{px},0,0")
+    (rec_dir / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+# 11-12 那晚：11-12 01:00 開始錄 4 小時（第 90 分鐘在動）；另一份太短；還有工具檔
+write_csv("20261112_010000.csv", "2026-11-12T01:00:00", 240, moving_minutes={90})
+write_csv("20261112_060000.csv", "2026-11-12T06:00:00", 30)
+(rec_dir / "clip_truth.csv").write_text("clip,n\n", encoding="utf-8")
+c = payload.camera_curve_for_night("2026-11-12", "2026-11-12T02:00:00+08:00",
+                                   "2026-11-12T04:00:00+08:00", metrics_dir=rec_dir)
+check("找到那一晚的錄影、只留 02:00–04:00", c and len(c["points"]), 25)
+check("時間貼上手錶的時區標記", c and c["points"][0]["t"], "2026-11-12T02:00:00+08:00")
+check("02:30 那格有動（第 90 分鐘）",
+      c and [p["value"] for p in c["points"] if p["t"] == "2026-11-12T02:30:00+08:00"], [0.2])
+check("⚠️ 跟 /home 同一個函式（clip_curve 只有一份）",
+      payload.camera_curve is camera_curve and main.camera_curve is camera_curve, True)
+check("別晚沒有錄影 → None",
+      payload.camera_curve_for_night("2026-10-01", "2026-10-01T02:00:00+08:00",
+                                     "2026-10-01T04:00:00+08:00", metrics_dir=rec_dir), None)
+write_csv("20261110_010000.csv", "2026-11-10T01:00:00", 240, roi=False, moving_minutes={90})
+check("沒有床鋪 ROI 的錄影 → None",
+      payload.camera_curve_for_night("2026-11-10", "2026-11-10T02:00:00+08:00",
+                                     "2026-11-10T04:00:00+08:00", metrics_dir=rec_dir), None)
+check("資料夾不存在 → None（不報錯）",
+      payload.camera_curve_for_night("2026-11-12", "2026-11-12T02:00:00+08:00",
+                                     "2026-11-12T04:00:00+08:00", metrics_dir=rec_dir / "nope"), None)
+check("⚠️ 後端與打包檔不在 import 時載入 OpenCV（只有用到才載入）",
+      "import tapo_sleep_onset" in (ROOT / "main.py").read_text(encoding="utf-8").split("def ")[0], False)
+
 print("\n【6】不進分數")
 for rel in ("garmin/evaluate_sleep_quality.py", "garmin/apply_recovery_modifier.py",
             "behavior/challenges.py", "behavior/pet_state.py"):

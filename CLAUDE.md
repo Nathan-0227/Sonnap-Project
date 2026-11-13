@@ -449,6 +449,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 首頁的曲線來自打包檔：`build_app_payload.py` 已經會帶，要等下一次早晨匯入重新產生 | 動 app/ 的 session 不跑 build_app_payload.py |
 | **Camera**（第三顆）：攝影機在床鋪範圍看到的動作，**每 5 分鐘有幾成時間在動**（同一個校準門檻，`tapo_sleep_onset.motion_curve()`，門檻呼叫時才讀）。早晨匯入時從 CSV 算好存進 `camera_nightly.motion_curve`；`/home` 只留手錶入睡 → 起床那段（**牆鐘比**，攝影機時間沒有時區標記）。只收有床鋪 ROI 的夜晚；下面寫 `Movement seen by the camera` | 攝影機動作率已驗證與任何結果都沒有相關，只呈現。CSV 只在電腦上，後端讀不到 |
 | 舊夜晚回填用 `migrate_camera_to_db.py --curves-only`：**只補 motion_curve，不重算覆寫整列** | 整列重算會用現在的程式悄悄換掉舊夜晚的事件數 |
+| **首頁**的 Camera 線來自打包檔（`/get-sleep-data` 吐的就是 `app_payload.json`，**不是** `/home`）：`build_app_payload.camera_curve_for_night()` 直接讀那一晚的錄影 CSV（打包檔不碰資料庫）。「只留睡著那段＋貼時區」只有一份：`camera_curve.clip_curve()`，`/home` 與打包檔共用 | 2026-11-13 首頁沒有 Camera 那顆就是這個原因 |
+| `camera_curve.py` 只用標準庫；`tapo_sleep_onset` 會連帶載入 OpenCV（錄影器的相依），打包檔**用到才 import**、後端不 import | 不讓後端啟動與打包檔多一個重相依 |
 
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 
