@@ -11,7 +11,7 @@ import '../models/sleep_stages.dart';
 /// - 那一刻附近沒有讀數（離最近的點超過一個取樣間隔）→ 寫 `no reading`，不吸到遠處、不寫 0。
 /// - 只寫事實：不寫 Normal／High、不判斷好壞。
 /// - 手錶動作沒有單位 → 只寫 Moving／Still（0 是真的沒動）。
-/// - 攝影機是那 5 分鐘裡有幾成時間在動 → `moving 40% of 5 min`。
+/// - 攝影機是那 5 分鐘裡有幾成時間在動 → 換成動了多久：`moving 12 sec`。
 enum ProbeKind { heartRate, watchMovement, camera }
 
 const stageNames = {
@@ -57,8 +57,16 @@ String probeValue(ProbeKind kind, NightCurvePoint? p) {
   return switch (kind) {
     ProbeKind.heartRate => '${p.value.round()} bpm',
     ProbeKind.watchMovement => p.value > 0 ? 'Moving' : 'Still',
-    ProbeKind.camera => 'moving ${(p.value * 100).round()}% of 5 min',
+    ProbeKind.camera => 'moving ${_cameraSeconds(p.value)}',
   };
+}
+
+/// 攝影機那 5 分鐘裡在動的比例 → 動了多久（使用者 2026-11-13：「moving 12 sec」比「4% of 5 min」好懂）。
+String _cameraSeconds(double fraction) {
+  final sec = (fraction.clamp(0.0, 1.0) * 300).round();
+  if (sec < 60) return '$sec sec';
+  final m = sec ~/ 60, r = sec % 60;
+  return r == 0 ? '$m min' : '$m min $r sec';
 }
 
 /// 泡泡整句：`02:41 · 58 bpm · Deep`（沒選線時 `02:41 · Deep`）。

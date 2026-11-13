@@ -456,7 +456,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 舊夜晚回填用 `migrate_camera_to_db.py --curves-only`：**只補 motion_curve，不重算覆寫整列** | 整列重算會用現在的程式悄悄換掉舊夜晚的事件數 |
 | **首頁**的 Camera 線來自打包檔（`/get-sleep-data` 吐的就是 `app_payload.json`，**不是** `/home`）：`build_app_payload.camera_curve_for_night()` 直接讀那一晚的錄影 CSV（打包檔不碰資料庫）。「只留睡著那段＋貼時區」只有一份：`camera_curve.clip_curve()`，`/home` 與打包檔共用 | 2026-11-13 首頁沒有 Camera 那顆就是這個原因 |
 | `camera_curve.py` 只用標準庫；`tapo_sleep_onset` 會連帶載入 OpenCV（錄影器的相依），打包檔**用到才 import**、後端不 import | 不讓後端啟動與打包檔多一個重相依 |
-| **點線看那一刻**（2026-11-13 使用者定，照參考圖：白點＋小泡泡）：Sleep Stages 卡（首頁與報告同一個）與整天心率圖，點一下或按住左右滑，放開留著、點圖外面才收（下面那幾顆換線的按鈕不算外面）。泡泡：沒選線 `02:41 · Deep`；心率 `02:41 · 58 bpm · Deep`；手錶動作只寫 `Moving`／`Still`；攝影機 `moving 40% of 5 min`；整天心率 `14:20 · 96 bpm`。規則只在 `widgets/chart_probe.dart` | **吸到最近的真實讀數、不內插**（內插的數字手錶沒量過）；離最近的點超過一個取樣間隔（夜間 5 分、整天 10 分）寫 `no reading`，**不吸到遠處、不寫 0**；不寫 Normal／High。`chart_probe_test.dart` 守著 |
+| **點線看那一刻**（2026-11-13 使用者定，照參考圖：白點＋小泡泡）：Sleep Stages 卡（首頁與報告同一個）與整天心率圖，點一下或按住左右滑，放開留著、點圖外面才收（下面那幾顆換線的按鈕不算外面）。泡泡：沒選線 `02:41 · Deep`；心率 `02:41 · 58 bpm · Deep`；手錶動作只寫 `Moving`／`Still`；攝影機寫那 5 分鐘裡動了多久 `moving 12 sec`（不寫百分比）；整天心率 `14:20 · 96 bpm`。規則只在 `widgets/chart_probe.dart` | **吸到最近的真實讀數、不內插**（內插的數字手錶沒量過）；離最近的點超過一個取樣間隔（夜間 5 分、整天 10 分）寫 `no reading`，**不吸到遠處、不寫 0**；不寫 Normal／High。`chart_probe_test.dart` 守著 |
 
 ### ✅ 早晨報告的「Yesterday」：Garmin 白天資料（2026-11-13，`feature/garmin-daily`）
 

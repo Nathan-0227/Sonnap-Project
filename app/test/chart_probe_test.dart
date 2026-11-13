@@ -70,9 +70,13 @@ void main() {
       expect(probeValue(ProbeKind.watchMovement, NightCurvePoint(p.time, 0)), 'Still');
       expect(probeValue(ProbeKind.watchMovement, NightCurvePoint(p.time, 0.4)), 'Moving');
     });
-    test('攝影機：那 5 分鐘幾成時間在動', () {
-      expect(probeValue(ProbeKind.camera, NightCurvePoint(p.time, 0.4)),
-          'moving 40% of 5 min');
+    test('攝影機：那 5 分鐘裡動了多久', () {
+      String cam(double v) => probeValue(ProbeKind.camera, NightCurvePoint(p.time, v));
+      expect(cam(0.04), 'moving 12 sec');
+      expect(cam(0), 'moving 0 sec', reason: '0 是真的沒動，照寫');
+      expect(cam(0.4), 'moving 2 min');
+      expect(cam(0.25), 'moving 1 min 15 sec');
+      expect(cam(1), 'moving 5 min');
     });
     test('沒有讀數 → no reading，不寫 0', () {
       for (final k in ProbeKind.values) {
