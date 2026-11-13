@@ -1784,6 +1784,9 @@ class _DreamBook extends StatelessWidget {
           kDreamBookAsset,
           key: const Key('report-dream-book'),
           width: 66,
+          // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
+          height: 64,
+          fit: BoxFit.contain,
           errorBuilder: (_, _, _) => DreamBubble(compact: true, onTap: onTap),
         ),
       ),

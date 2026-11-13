@@ -223,7 +223,7 @@ void main() {
       );
     }
 
-    testWidgets('有夢 → 小狗頭上的對話框，不再有 Dream diary 那一列', (tester) async {
+    testWidgets('有夢 → 小狗腳邊的日記本，不再有 Dream diary 那一列', (tester) async {
       var opened = 0;
       await pumpReport(tester, report(dream: true), onDreamOpened: () => opened++);
       expect(find.byKey(const Key('report-dream')), findsOneWidget);
