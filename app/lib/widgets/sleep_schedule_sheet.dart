@@ -193,6 +193,13 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           ),
+          // 一層薄的深藍蓋在圖上（使用者 2026-11-14 選 A）：窗戶與雲在轉盤後面，
+          // 不壓一層的話轉盤上的刻度（00）看不清楚
+          Positioned.fill(
+            child: ColoredBox(
+              color: const Color(0xFF1B2350).withValues(alpha: 0.4),
+            ),
+          ),
           _content(context),
         ],
       ),
