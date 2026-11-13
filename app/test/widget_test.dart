@@ -101,6 +101,8 @@ void main() {
 
     // 分數是 Text.rich（"46" + "/100"），所以要 findRichText
     expect(find.textContaining('46', findRichText: true), findsWidgets);
+    // 2026-11-13 使用者定：首頁頂端不放後端那句 header_message
+    expect(find.text("Let's take it easy tonight."), findsNothing);
     // 2026-11-12：一週心情列改成畫到今天，沒有歷史時也會出現，它的圖例也有一個
     // "Anxious"。寵物旁的心情標籤要在圖例之外另有一個。
     expect(

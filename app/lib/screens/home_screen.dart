@@ -968,11 +968,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  static String _greeting(DateTime now) {
-    if (now.hour < 12) return 'Good morning ☀️';
-    if (now.hour < 18) return 'Good afternoon 🌤';
-    return 'Good evening 🌙';
-  }
 
   static String _tod(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -1049,7 +1044,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               child: Column(
                                 children: [
                                   _buildHeader(session, now, game),
-                                  const SizedBox(height: 14),
+                                  // Hi 上方加了留白，這裡收一點，免得時鐘卡壓到寵物上面的等級
+                                  const SizedBox(height: 8),
                                   _buildClockRow(now),
                                 ],
                               ),
@@ -1129,51 +1125,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
+          // Hi 上面多留一點空間（2026-11-13 使用者定）；右上的圖示不跟著往下
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 2026-11-13 使用者定：小字「Hi, 暱稱!」＋大字「Welcome to Sonnap」，
+              // 不再分早午晚。名字一律來自帳號（不得寫死任何人的名字）。
               Text(
-                _greeting(now),
+                'Hi, ${widget.displayName}!',
                 key: const Key('day-greeting'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                // 名字淺色、細字（2026-11-13 使用者依參考圖定）
                 style: const TextStyle(
-                  color: SonnapColors.accentSoft,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  color: Color(0x99FFFFFF),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      widget.displayName,
-                      key: const Key('day-name'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: SonnapColors.textPrimary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  // 等級照抄後端（GET /game），Dart 不從 XP 反推。點了開獎勵。
-                  if (game != null) ...[
-                    const SizedBox(width: 10),
-                    _levelBadge(game.level),
-                  ],
-                ],
-              ),
-              if (session.display.headerMessage.isNotEmpty)
-                Text(
-                  session.display.headerMessage,
+              const SizedBox(height: 2),
+              // 「Let's get a good night's sleep!」與等級徽章 2026-11-13 拿掉（使用者定）；
+              // 等級改放在寵物上面（_buildPet）。
+              const FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Welcome to Sonnap',
+                  key: Key('day-title'),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: SonnapColors.textSecondary,
-                    fontSize: 14,
+                  style: TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
             ],
+            ),
           ),
         ),
         Column(
@@ -1258,7 +1248,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildPet(String mood, GameState? game) {
     final color = moodColor(mood);
-    return SizedBox(
+    final pet = SizedBox(
       height: kHomePetSize,
       child: Stack(
         alignment: Alignment.center,
@@ -1304,6 +1294,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
+    );
+    // 等級在寵物上面（2026-11-13 使用者定）。照抄後端（GET /game），Dart 不從 XP 反推；
+    // 點了開獎勵。沒有後端就不畫。
+    if (game == null) return pet;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _levelBadge(game.level),
+        const SizedBox(height: 4),
+        pet,
+      ],
     );
   }
 
