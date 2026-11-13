@@ -147,6 +147,11 @@ class Metrics {
   final int? wasoMinutes;
   final double? sleepEfficiency;
 
+  /// 這一晚進分數的效率與它是哪一種（同 HistoryEntry 的同名欄位，照抄後端）。
+  final double? scoredEfficiency;
+  final String? scoredEfficiencyBasis;
+  final String? scoredEfficiencyLabel;
+
   /// 淺睡分鐘數與整晚的睡眠階段時間軸（2026-11-12 加，首頁 Sleep Stages 圖用）。
   /// 舊版後端／API 路徑沒有時是 null，畫面就不畫圖，**不畫假的**。
   final int? lightMinutes;
@@ -174,6 +179,9 @@ class Metrics {
     this.remMinutes,
     this.wasoMinutes,
     this.sleepEfficiency,
+    this.scoredEfficiency,
+    this.scoredEfficiencyBasis,
+    this.scoredEfficiencyLabel,
     this.lightMinutes,
     this.sleepStages,
     this.heartRateCurve,
@@ -207,6 +215,9 @@ class Metrics {
       remMinutes: (json['rem_minutes'] as num?)?.toInt(),
       wasoMinutes: (json['waso_minutes'] as num?)?.toInt(),
       sleepEfficiency: (json['sleep_efficiency'] as num?)?.toDouble(),
+      scoredEfficiency: (json['scored_efficiency'] as num?)?.toDouble(),
+      scoredEfficiencyBasis: json['scored_efficiency_basis'] as String?,
+      scoredEfficiencyLabel: json['scored_efficiency_label'] as String?,
       lightMinutes: (json['light_minutes'] as num?)?.toInt(),
       sleepStages: SleepStages.fromJsonOrNull(json['sleep_stages']),
       heartRateCurve: NightCurve.fromJsonOrNull(json['heart_rate_curve']),

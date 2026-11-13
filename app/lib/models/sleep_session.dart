@@ -289,6 +289,13 @@ class HistoryEntry {
   final double? sleepEfficiency;
   final int? deepMinutes;
 
+  /// 這一晚**進分數的效率**（2026-11-13）：按了按鈕的晚上是臥床版，沒按退回手錶版。
+  /// [scoredEfficiencyBasis] 是哪一種、[scoredEfficiencyLabel] 是首頁小卡下那行字（照抄後端）。
+  /// 舊版打包檔沒有這幾欄時是 null，首頁退回手錶的效率。
+  final double? scoredEfficiency;
+  final String? scoredEfficiencyBasis;
+  final String? scoredEfficiencyLabel;
+
   /// Optional bedtime / wake time from backend.
   final String? bedtime;
   final String? wakeTime;
@@ -322,6 +329,9 @@ class HistoryEntry {
     this.sleepDurationHours,
     this.sleepEfficiency,
     this.deepMinutes,
+    this.scoredEfficiency,
+    this.scoredEfficiencyBasis,
+    this.scoredEfficiencyLabel,
     this.bedtime,
     this.wakeTime,
     this.petMood,
@@ -338,6 +348,9 @@ class HistoryEntry {
           (json['sleep_duration_hours'] as num?)?.toDouble(),
       sleepEfficiency: (json['sleep_efficiency'] as num?)?.toDouble(),
       deepMinutes: (json['deep_minutes'] as num?)?.round(),
+      scoredEfficiency: (json['scored_efficiency'] as num?)?.toDouble(),
+      scoredEfficiencyBasis: json['scored_efficiency_basis'] as String?,
+      scoredEfficiencyLabel: json['scored_efficiency_label'] as String?,
       bedtime: json['sleep_start_time'] as String?,
       wakeTime: json['wake_time'] as String?,
       petMood: json['pet_mood'] as String?,

@@ -375,6 +375,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | **「跟上一晚比」只代表方向：上升紅、下降綠**（台灣股市慣例，使用者定） | 改成「變好綠、變差紅」就是在 Dart 判斷好壞——睡得多不一定好，攝影機動作更已驗證與任何結果無關 |
 | 比的是**上一個有資料的晚上**；那一項沒逐夜資料時**不畫比較** | 編出比較數字。效率、深睡的逐夜資料來自後端 PR（`feat/history-eff-deep`） |
 | **警語畫面上不放**，點效率／深睡卡才跳出，文字照抄 `score_claim.py`；Sleep Stages 卡不放警語（使用者定） | — |
+| **效率小卡顯示進分數的那一個**（2026-11-13 使用者定，同早晨報告）：按了兩個按鈕是臥床版、只按 Start 是到手錶醒來、沒按是手錶版；下面一行小字寫是哪一種（`score_claim.EFFICIENCY_BASIS_LABELS`，App 照抄）。打包檔每晚帶 `scored_efficiency`／`_basis`／`_label`，直讀評分器的 `efficiency_used`／`efficiency_basis` | 手錶版的分母從入睡算起，幾乎每晚 100%（使用者問「為什麼都是 100%」）。⚠️ 「跟上一晚比」與長條圖**只放同一種**：臥床版 88 跟手錶版 100 不是同一個量，混著比會畫出假的下降箭頭 |
 | **Sleep Stages 是圓角階梯，不是平滑波浪** | 平滑曲線會畫過那一刻沒發生的階段 |
 | 沒量到 REM 的晚上不畫 REM 那一層，圖例寫 `not measured` | 畫成 0 會被讀成整晚沒有 REM |
 | **凌晨兩點（過目標 60 分以上）不顯示倒數** | 倒數會算成「距離明天還有 21 小時」 |
@@ -1647,6 +1648,7 @@ python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同�
 python tests/test_garmin_daily.py        # 2026-11-13 新增：白天資料的解析、只增不減、429 就停、只收本人、/home 的 yesterday、不進分數也不給好友
 python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶動作曲線只取睡著那段、平均從原始讀數算（不是 avg_hr）、動作 0 算真的值、資料不夠回 None、Health Connect 沒有
 python tests/test_camera_curve.py        # 2026-11-13 新增：攝影機曲線每 5 分鐘有幾成在動、不可用的幀不算、沒 ROI 不給、門檻呼叫時才讀、/home 只留睡著那段、回填只補曲線不動別的欄位
+python tests/test_scored_efficiency.py   # 2026-11-13 新增：首頁效率顯示進分數的那一個——每種 basis 都有那行字、與 behavior 常數一致、打包檔逐夜直讀評分器
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 ```
