@@ -1,4 +1,6 @@
 // 首頁上方的一週日期列。
+import 'dart:io';
+
 import 'package:app/models/sleep_session.dart';
 import 'package:app/widgets/week_mood_strip.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,22 @@ void main() {
     const moods = ['happy', 'bored', 'tired', 'anxious'];
     expect(moods.map(moodIcon).toSet().length, 4);
     expect(moods.map(moodColor).toSet().length, 4);
+  });
+
+  test('四種心情各有一張狗頭，檔案真的在；不認得的退回 bored，絕不退回 happy', () {
+    const moods = ['happy', 'bored', 'tired', 'anxious'];
+    expect(moods.map(moodFaceAsset).toSet().length, 4);
+    for (final m in moods) {
+      expect(File(moodFaceAsset(m)).existsSync(), isTrue, reason: m);
+    }
+    expect(moodFaceAsset('???'), moodFaceAsset('bored'));
+    expect(moodFaceAsset(''), isNot(moodFaceAsset('happy')));
+  });
+
+  test('⚠️ 寵物心情的臉與起床自評的圓臉是兩套圖（意思不同，不能共用）', () {
+    for (final m in const ['happy', 'bored', 'tired', 'anxious']) {
+      expect(moodFaceAsset(m), isNot(startsWith('assets/rested/')));
+    }
   });
 
   test('以最新一晚為終點往回 7 個日曆天，中間沒資料的那天留空', () {
