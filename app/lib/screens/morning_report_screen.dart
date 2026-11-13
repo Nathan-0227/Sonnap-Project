@@ -155,9 +155,26 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-list'),
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
                 children: [
-                  _header(r),
-                  const SizedBox(height: 14),
-                  _hero(r),
+                  // 頂端日出背景（使用者生成的 dawn.png）：日期與分數區一起，跟著捲動
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Positioned(
+                        left: -16,
+                        right: -16,
+                        top: -18,
+                        bottom: 0,
+                        child: ReportDawnBackdrop(),
+                      ),
+                      Column(
+                        children: [
+                          _header(r),
+                          const SizedBox(height: 14),
+                          _hero(r),
+                        ],
+                      ),
+                    ],
+                  ),
                   if (r.level != null) ...[const SizedBox(height: 14), _xp(r)],
                   if (hasBuddy) ...[const SizedBox(height: 14), _buddy(r)],
                   // 昨晚的數字（2026-11-14 改成圖形格子，參考圖：每一格的圖就是那個數字）
@@ -338,14 +355,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 child: r.hasScore ? _scoreRing(r) : _waitingRing(),
               ),
             ),
-          ),
-          // 山丘：延伸到左右邊（抵掉 ListView 的 16 邊距）
-          const Positioned(
-            left: -16,
-            right: -16,
-            bottom: 0,
-            height: 120,
-            child: CustomPaint(painter: _HillPainter()),
           ),
           // 小狗頭邊一朵小雲，點開看完整夢境；那一晚沒有夢就不出現。
           // 報告用小的（不寫字）：大的那朵會蓋到分數圓環的右半邊，圓環右邊只剩約 70 寬。
@@ -1687,7 +1696,69 @@ class _DashedRingPainter extends CustomPainter {
   bool shouldRepaint(_DashedRingPainter old) => false;
 }
 
-/// 小狗坐的山丘（示意圖的曲線，依寬度縮放）。
+/// 頂端背景：日出山丘的圖（小狗坐在山上），上下兩端淡進報告的深藍。
+/// 讀不到圖時退回程式畫的山丘。
+const String kReportDawnAsset = 'assets/backgrounds/dawn.png';
+
+class ReportDawnBackdrop extends StatelessWidget {
+  const ReportDawnBackdrop({super.key});
+
+  static const _hill = Align(
+    alignment: Alignment.bottomCenter,
+    child: SizedBox(
+      height: 120,
+      width: double.infinity,
+      child: CustomPaint(painter: _HillPainter()),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    // 下緣讓整張圖淡成透明、露出底下報告的漸層：直接淡成某個顏色的話，
+    // 跟背景在那個高度的顏色對不上，會多一條分界線（實機看到過）。
+    return IgnorePointer(
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.white, Colors.transparent],
+          stops: [0, 0.8, 1],
+        ).createShader(rect),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              kReportDawnAsset,
+              key: const Key('report-dawn'),
+              fit: BoxFit.cover,
+              alignment: Alignment.bottomCenter,
+              errorBuilder: (_, _, _) => _hill,
+            ),
+            // 壓一層深藍，白字與圓環才看得清楚；上緣接狀態列、下緣接格子
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    ReportColors.bgTop,
+                    Color(0x990B1636),
+                    Color(0x400B1636),
+                    Color(0x330B1636),
+                  ],
+                  stops: [0, 0.18, 0.5, 1],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 小狗坐的山丘（示意圖的曲線，依寬度縮放）。讀不到日出圖時用。
 class _HillPainter extends CustomPainter {
   const _HillPainter();
 
