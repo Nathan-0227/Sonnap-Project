@@ -140,19 +140,26 @@ void main() {
     expect(act.left, greaterThan(sleep.right), reason: 'Activity 在右邊');
     expect((act.top - sleep.top).abs(), lessThan(1), reason: '上緣對齊');
     expect((act.bottom - sleep.bottom).abs(), lessThan(1), reason: '下緣對齊（兩張一樣高）');
-    // 跟睡眠有關的都在 Sleep 那一張卡裡（不是一張張分開的小卡）
-    for (final k in ['tile-duration', 'tile-efficiency', 'tile-deep', 'tile-night-hr', 'tile-camera']) {
-      expect(find.descendant(of: find.byKey(const Key('home-sleep-section')), matching: find.byKey(Key(k))),
-          findsOneWidget, reason: k);
+    // 跟睡眠有關的都在 Sleep 那一張卡裡；Activity 的在右邊那張
+    bool inside(String k, Rect box) {
+      final r = tester.getRect(find.byKey(Key(k)));
+      return r.left >= box.left && r.right <= box.right && r.top >= box.top && r.bottom <= box.bottom;
     }
-    expect((act.width - sleep.width).abs(), lessThan(1), reason: '一樣寬');
+    for (final k in ['tile-duration', 'tile-efficiency', 'tile-deep', 'tile-camera']) {
+      expect(inside(k, sleep), isTrue, reason: k);
+    }
+    for (final k in ['tile-steps', 'tile-kcal', 'tile-active', 'tile-day-hr', 'home-moveiq']) {
+      expect(inside(k, act), isTrue, reason: k);
+    }
+    // 使用者 2026-11-13 拿掉：左邊的睡著心率（Sleep Stages 疊線還看得到）、右邊的 VO2 max
+    expect(find.byKey(const Key('tile-night-hr')), findsNothing);
+    expect(find.byKey(const Key('tile-vo2')), findsNothing);
     // 左右第 N 項在同一條線上
     for (final (l, r) in [
       ('tile-duration', 'tile-steps'),
       ('tile-efficiency', 'tile-kcal'),
       ('tile-deep', 'tile-active'),
-      ('tile-camera', 'tile-vo2'),
-      ('tile-night-hr', 'tile-day-hr'),
+      ('tile-camera', 'tile-day-hr'),
     ]) {
       expect((tester.getRect(find.byKey(Key(l))).top - tester.getRect(find.byKey(Key(r))).top).abs(),
           lessThan(1), reason: '$l 跟 $r 同一列');
@@ -172,33 +179,38 @@ void main() {
     expect((e.top - d.top).abs(), lessThan(1), reason: '同一列');
   });
 
-  testWidgets('Activity：步數只寫 goal、VO2 max 寫量到的日期、Move IQ 寫幾段；不判斷', (tester) async {
+  testWidgets('Activity：步數只寫 goal、Move IQ 寫幾段；不判斷', (tester) async {
     await pumpHome(tester, session());
-    await scrollTo(tester, find.byKey(const Key('tile-vo2')));
+    await scrollTo(tester, find.byKey(const Key('tile-active')));
     textIn(tester, 'tile-steps', 'goal 9,430');
     textIn(tester, 'tile-kcal', '6.7 km');
     textIn(tester, 'tile-active', '');
-    textIn(tester, 'tile-vo2', 'measured Oct 9');
     await scrollTo(tester, find.byKey(const Key('home-moveiq')));
     expect(tester.widget<Text>(find.byKey(const Key('home-moveiq'))).data,
         'Move IQ · 2 walks · 1 ride');
-    final all = tester
-        .widgetList<Text>(find.descendant(
-            of: find.byKey(const Key('home-activity-section')), matching: find.byType(Text)))
-        .map((t) => (t.data ?? '').toLowerCase())
-        .join(' ');
+    final all = [
+      for (final k in ['tile-steps', 'tile-kcal', 'tile-active', 'tile-day-hr'])
+        ...tester.widgetList<Text>(find.descendant(of: find.byKey(Key(k)), matching: find.byType(Text))),
+      tester.widget<Text>(find.byKey(const Key('home-moveiq'))),
+    ].map((t) => (t.data ?? t.textSpan?.toPlainText() ?? '').toLowerCase()).join(' ');
+    expect(all, contains('9,955'), reason: '反向對照：真的有讀到字');
     for (final w in ['reached', 'achieved', 'normal', 'high', 'good', 'great']) {
       expect(all.contains(w), isFalse, reason: w);
     }
   });
 
-  testWidgets('⚠️ 兩個心率不混：Sleep 卡是睡著期間、Activity 卡是整天', (tester) async {
+  testWidgets('⚠️ 兩個心率不混：首頁兩欄只放整天心率；沒有白天資料時 Sleep 格子才放睡著期間的', (tester) async {
     await pumpHome(tester, session());
-    await scrollTo(tester, find.byKey(const Key('tile-night-hr')));
-    textIn(tester, 'tile-night-hr', 'avg while asleep · resting 53');
     await scrollTo(tester, find.byKey(const Key('tile-day-hr')));
     textIn(tester, 'tile-day-hr', 'Heart rate (all day)');
     textIn(tester, 'tile-day-hr', 'resting 59');
+    expect(find.byKey(const Key('tile-night-hr')), findsNothing);
+  });
+
+  testWidgets('沒有白天資料 → 整寬 Sleep 格子照舊有睡著期間的心率', (tester) async {
+    await pumpHome(tester, session(withActivity: false));
+    await scrollTo(tester, find.byKey(const Key('tile-night-hr')));
+    textIn(tester, 'tile-night-hr', 'avg while asleep · resting 53');
   });
 
   testWidgets('點整天心率 → 那一天的心率線，只寫最低最高靜止', (tester) async {

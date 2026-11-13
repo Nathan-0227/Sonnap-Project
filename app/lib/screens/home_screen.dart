@@ -1098,17 +1098,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // 右邊一張高的 Activity 卡（前一天）。沒有白天資料時退回原本整寬的 Sleep 格子——
                       // 只剩左半欄會空一半。
                       if (session.activity != null)
-                        // 兩張卡一樣高（上下緣都對齊）：IntrinsicHeight 量較高的那一張，另一張撐滿。
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: _buildTiles(session, column: true)),
-                              const SizedBox(width: SonnapColors.gap),
-                              Expanded(child: _buildActivityCard(session.activity!)),
-                            ],
-                          ),
-                        )
+                        _buildMainCards(session)
                       else
                         _section(
                           key: const Key('home-sleep-section'),
@@ -1741,10 +1731,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (pick(e) != null) NightValue(e.date, pick(e)!),
   ];
 
-  /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
-  /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
-  /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。
-  Widget _buildTiles(SleepSession session, {bool column = false}) {
+  /// 睡眠的小卡（整寬 2x2 用 boxed: true；兩欄的 Sleep 大卡裡當一列用 boxed: false）。
+  ({Widget duration, Widget eff, Widget deep, Widget? hr}) _sleepTiles(
+      SleepSession session, {required bool boxed}) {
     final m = session.metrics;
     final minutes = m.sleepDurationMinutes;
     // 效率：顯示**進分數的那一個**（2026-11-13 使用者定，同早晨報告）；舊版打包檔沒有就退回手錶的。
@@ -1772,19 +1761,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return d == null ? null : (deltaText(d, f), deltaColor(d));
     }
 
-    // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
-    Widget pair(Widget a, Widget b) => SizedBox(
-      height: 124,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: a),
-          const SizedBox(width: SonnapColors.gap),
-          Expanded(child: b),
-        ],
-      ),
-    );
-
     Widget tappable(Widget tile, VoidCallback onTap) => GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -1794,10 +1770,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final durationTile = tappable(
             InfoTile(
               key: const Key('tile-duration'),
-              boxed: !column,
+              boxed: boxed,
               icon: Icons.nightlight_round,
               iconColor: const Color(0xFFB9A6FF),
-              title: column ? 'Time asleep' : 'Sleep',
+              title: boxed ? 'Sleep' : 'Time asleep',
               value: minutes == null ? null : _hm(minutes),
               compare: cmp(durationSeries, formatMinutes),
             ),
@@ -1812,7 +1788,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final effTile = tappable(
             InfoTile(
               key: const Key('tile-efficiency'),
-              boxed: !column,
+              boxed: boxed,
               icon: Icons.speed_rounded,
               iconColor: const Color(0xFF7EC8FF),
               title: 'Efficiency',
@@ -1833,7 +1809,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final deepTile = tappable(
             InfoTile(
               key: const Key('tile-deep'),
-              boxed: !column,
+              boxed: boxed,
               icon: Icons.waves_rounded,
               iconColor: const Color(0xFF9AD36A),
               title: 'Deep sleep',
@@ -1855,7 +1831,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ? null
         : InfoTile(
             key: const Key('tile-night-hr'),
-              boxed: !column,
+              boxed: boxed,
             icon: Icons.favorite_rounded,
             iconColor: const Color(0xFFFF8AB8),
             title: 'Heart rate',
@@ -1866,54 +1842,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ].join(' · '),
           );
 
-    // 左右兩欄的左邊（照 Otter Life）：一張大卡，跟右邊 Activity 卡同一種排法——
-    // 標題在卡裡、一列一列往下、中間細線分隔。跟這一晚睡眠有關的都在這張裡。
-    if (column) {
-      final rows = [
-        durationTile,
-        effTile,
-        deepTile,
-        _buildCameraTile(session, boxed: false),
-        // 心率放最後，跟右邊 Activity 的整天心率同一列（兩個心率並排，各寫清楚是哪一段）
-        ?hrTile,
-      ];
-      return Container(
-        key: const Key('home-sleep-section'),
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-        decoration: sonnapCardDecoration(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _cardHeader(Icons.nightlight_round, 'Sleep', _sleepNightLabel(session)),
-            for (final r in rows) ...[
-              const Divider(height: 22, color: SonnapColors.cardBorder),
-              _alignedRow(r),
-            ],
-          ],
-        ),
-      );
-    }
+    return (duration: durationTile, eff: effTile, deep: deepTile, hr: hrTile);
+  }
+
+  /// 四張卡（2026-11-12 定案）：睡眠長度、睡眠效率、深睡、睡眠中的動作。
+  /// 每張底下一行「↑ 1h 12m vs Nov 8」（上升紅、下降綠，只代表方向）；
+  /// 點了開最近 7 晚的長條圖，效率與深睡附上後端的警語。沒有白天資料時用這個整寬 2x2。
+  Widget _buildTiles(SleepSession session) {
+    final t = _sleepTiles(session, boxed: true);
+    // 固定高度：IntrinsicHeight 遇到 FittedBox 會量出過高的值（實機上卡片撐到半個螢幕）。
+    Widget pair(Widget a, Widget b) => SizedBox(
+      height: 124,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: SonnapColors.gap),
+          Expanded(child: b),
+        ],
+      ),
+    );
 
     return Column(
       children: [
-        pair(durationTile, effTile),
+        pair(t.duration, t.eff),
         const SizedBox(height: SonnapColors.gap),
-        pair(deepTile, _buildCameraTile(session)),
-        if (hrTile != null) ...[
+        pair(t.deep, _buildCameraTile(session)),
+        if (t.hr != null) ...[
           const SizedBox(height: SonnapColors.gap),
-          SizedBox(height: 112, child: hrTile),
+          SizedBox(height: 112, child: t.hr!),
         ],
       ],
     );
   }
-
-  /// 兩張主卡的每一列一樣高，左右第 N 項才會在同一條線上（使用者 2026-11-13：「左右 5 個對不齊」）。
-  /// 高度放得下：標題一行＋大字＋兩行小字（效率有「哪一種」＋「跟上一晚比」）。
-  static const double _rowHeight = 102;
-  Widget _alignedRow(Widget r) => SizedBox(
-        height: _rowHeight,
-        child: Align(alignment: Alignment.topLeft, child: r),
-      );
 
   /// 兩張主卡卡裡的標題：圖示＋大字一行、底下一行是哪一晚／哪一天。
   Widget _cardHeader(IconData icon, String title, String subtitle) => Column(
@@ -2020,7 +1981,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
   /// 步數、活動卡路里、活動時間、VO2 max、整天心率一列一列往下、中間細線分隔，最後一行 Move IQ。
   /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
-  Widget _buildActivityCard(YesterdayActivity a) {
+  ({List<Widget> rows, Widget? moveIq}) _activityParts(YesterdayActivity a) {
     List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
       for (final h in a.history)
         if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
@@ -2071,15 +2032,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onTap: bars('active', 'Active time', series((h) => h.activeMinutes),
             formatMinutes),
       ),
-      _activityRow(
-        key: 'tile-vo2',
-        icon: Icons.air_rounded,
-        color: const Color(0xFF7EC8FF),
-        title: 'VO2 max',
-        value: a.vo2max == null ? null : [(a.vo2max!.round().toString(), '')],
-        missing: 'Not measured lately',
-        note: _measuredOn(a.vo2maxMeasuredOn),
-      ),
       if (hr != null)
         _activityRow(
           key: 'tile-day-hr',
@@ -2094,34 +2046,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
     ];
 
-    return Container(
-      key: const Key('home-activity-section'),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: sonnapCardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _cardHeader(Icons.bolt_rounded, 'Activity', _activityDayLabel(a.date)),
-          for (final r in rows) ...[
-            const Divider(height: 22, color: SonnapColors.cardBorder),
-            _alignedRow(r),
+    final moveIq = moves.isEmpty
+        ? null
+        : Text(
+            [
+              'Move IQ',
+              if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
+              if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
+              if (others > 0) '$others other',
+            ].join(' · '),
+            key: const Key('home-moveiq'),
+            style: const TextStyle(
+                color: SonnapColors.textSecondary, fontSize: 12),
+          );
+    return (rows: rows, moveIq: moveIq);
+  }
+
+  /// 兩張主卡（左 Sleep、右 Activity，照 Otter Life）。
+  ///
+  /// 左右第 N 項要在同一條線上（使用者 2026-11-13），而且不留多餘空白，所以不是兩張各排各的：
+  /// 內容一列一列排，每一列左右各一項、高度取兩邊較高的那個（Row 本身就會這樣量）；
+  /// 卡片外框畫在後面一層、撐滿整個高度。
+  /// （不用 IntrinsicHeight：FittedBox 裡的字在量高度時會被當成會折行，量出過高的值。）
+  Widget _buildMainCards(SleepSession session) {
+    final t = _sleepTiles(session, boxed: false);
+    final left = <Widget>[
+      t.duration,
+      t.eff,
+      t.deep,
+      _buildCameraTile(session, boxed: false),
+    ];
+    final act = _activityParts(session.activity!);
+    final right = [...act.rows, ?act.moveIq];
+    const pad = 14.0;
+    const divider = Divider(height: 22, color: SonnapColors.cardBorder);
+
+    Widget pairRow(Widget? l, Widget? r) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: pad),
+                    child: l ?? const SizedBox.shrink())),
+            const SizedBox(width: SonnapColors.gap),
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: pad),
+                    child: r ?? const SizedBox.shrink())),
           ],
-          if (moves.isNotEmpty) ...[
-            const Divider(height: 22, color: SonnapColors.cardBorder),
-            Text(
-              [
-                'Move IQ',
-                if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
-                if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
-                if (others > 0) '$others other',
-              ].join(' · '),
-              key: const Key('home-moveiq'),
-              style: const TextStyle(
-                  color: SonnapColors.textSecondary, fontSize: 12),
+        );
+
+    final n = left.length > right.length ? left.length : right.length;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Row(
+            children: [
+              Expanded(
+                  child: Container(
+                      key: const Key('home-sleep-section'),
+                      decoration: sonnapCardDecoration())),
+              const SizedBox(width: SonnapColors.gap),
+              Expanded(
+                  child: Container(
+                      key: const Key('home-activity-section'),
+                      decoration: sonnapCardDecoration())),
+            ],
+          ),
+        ),
+        Column(
+          children: [
+            const SizedBox(height: pad),
+            pairRow(
+              _cardHeader(Icons.nightlight_round, 'Sleep', _sleepNightLabel(session)),
+              _cardHeader(Icons.bolt_rounded, 'Activity',
+                  _activityDayLabel(session.activity!.date)),
             ),
+            for (var i = 0; i < n; i++) ...[
+              pairRow(i < left.length ? divider : null,
+                  i < right.length ? divider : null),
+              pairRow(i < left.length ? left[i] : null,
+                  i < right.length ? right[i] : null),
+            ],
+            const SizedBox(height: 12),
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2212,11 +2222,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onTap: onTap,
             child: row,
           );
-  }
-
-  static String? _measuredOn(String? iso) {
-    final d = iso == null ? null : DateTime.tryParse(iso);
-    return d == null ? null : 'measured ${DateFormat('MMM d').format(d)}';
   }
 
   /// 點步數／卡路里／活動時間：最近 7 天的長條圖（只畫數字，不判斷、不畫目標線）。
