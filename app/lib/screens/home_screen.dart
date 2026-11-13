@@ -1724,7 +1724,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildTiles(SleepSession session) {
     final m = session.metrics;
     final minutes = m.sleepDurationMinutes;
-    final eff = m.sleepEfficiency;
+    // 效率：顯示**進分數的那一個**（2026-11-13 使用者定，同早晨報告）；舊版打包檔沒有就退回手錶的。
+    final eff = m.scoredEfficiency ?? m.sleepEfficiency;
     final deep = m.deepMinutes;
     final h = session.history;
     final current = h.lastOrNull?.date;
@@ -1733,7 +1734,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       h,
       (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
     );
-    final effSeries = _series(h, (e) => e.sleepEfficiency);
+    // ⚠️ 「跟上一晚比」與長條圖只放**同一種**效率：臥床版 88% 跟手錶版 100% 不是同一個量，
+    //    混在一起比會畫出一個假的下降箭頭。舊版打包檔 basis 全是 null，就照舊全部一起比。
+    final effBasis = h.lastOrNull?.scoredEfficiencyBasis;
+    final effSeries = _series(
+      h.where((e) => e.scoredEfficiencyBasis == effBasis).toList(),
+      (e) => e.scoredEfficiency ?? e.sleepEfficiency,
+    );
     final deepSeries = _series(h, (e) => e.deepMinutes?.toDouble());
 
     (String, Color)? cmp(List<NightValue> series, String Function(double) f) {
@@ -1788,6 +1795,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               iconColor: const Color(0xFF7EC8FF),
               title: 'Efficiency',
               value: eff == null ? null : [(eff.round().toString(), '%')],
+              // 這一晚是哪一種效率（字照抄後端 score_claim）
+              note: eff == null ? null : m.scoredEfficiencyLabel,
               compare: cmp(effSeries, _fmtPts),
             ),
             () => _showMetricSheet(

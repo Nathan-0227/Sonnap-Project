@@ -405,6 +405,16 @@ def load_ai_advice(target_date, fallback_recommendation):
     }
 
 
+def scored_efficiency_fields(base_row):
+    """進分數的效率三個欄位（數值、basis、小卡那行字）。字只在 score_claim 定義。"""
+    value, basis, label = score_claim.scored_efficiency(base_row)
+    return {
+        "scored_efficiency": value,
+        "scored_efficiency_basis": basis,
+        "scored_efficiency_label": label,
+    }
+
+
 def composition_for(base_row):
     """
     這一晚的分數由哪幾項組成。沒有 Tier1/2 那一列時回 None。
@@ -621,6 +631,9 @@ def build_payload(target_date=None):
                 # 首頁「跟上一晚比」要逐夜的效率與深睡（2026-11-12）。
                 # ⚠️ 與 metrics 同一個來源（features），所以 history[-1] 與首頁卡片逐字相同。
                 "sleep_efficiency": feat.get("sleep_efficiency"),
+                # 進分數的效率（2026-11-13）：按了按鈕的晚上是臥床版，沒按退回手錶版。
+                # 首頁小卡顯示這個；「跟上一晚比」只比同一種（App 端用 basis 篩）。
+                **scored_efficiency_fields(base_by_date.get(row["date"])),
                 "deep_minutes": feat.get("deep_minutes"),
                 "sleep_start_time": feat.get("sleep_start_time"),
                 "wake_time": feat.get("wake_time"),
@@ -686,6 +699,7 @@ def build_payload(target_date=None):
             "rem_minutes": features.get("rem_minutes"),
             "waso_minutes": features.get("waso_minutes"),
             "sleep_efficiency": features.get("sleep_efficiency"),
+            **scored_efficiency_fields(base_by_date.get(night_iso)),
             "light_minutes": features.get("light_minutes"),
             "sleep_stages": sleep_stages_block(
                 features, composition_for(base_by_date.get(night_iso))

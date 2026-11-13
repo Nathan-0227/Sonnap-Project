@@ -85,6 +85,28 @@ EFFICIENCY_CAVEATS = {
     ),
 }
 
+# 首頁效率小卡下面那一行小字：這一晚**進分數的效率**是哪一種（2026-11-13 使用者定）。
+# ⚠️ 只在這裡定義；打包檔與 API 照抄、App 一個字都不自己產生（同 EFFICIENCY_CAVEATS）。
+#    短到放得進小卡；完整說明是上面的 EFFICIENCY_CAVEATS（點小卡才看得到）。
+EFFICIENCY_BASIS_LABELS = {
+    "watch_tst__phone_tats": "From your sleep buttons",
+    "phone_bed_start__watch_wake": "Start sleep to watch wake",
+    "watch_tst__watch_onset_to_wake": "Watch only",
+}
+
+
+def scored_efficiency(base_row):
+    """一晚**進分數的效率**：(數值, basis, 小卡那行字)。評分器沒給就是 (None, None, None)。
+
+    數值與 basis 直讀評分器（garmin_sleep_quality.json 的 efficiency_used／efficiency_basis），
+    不推論。跟手錶自己的效率（features.sleep_efficiency）不是同一個量——沒按按鈕時才相同。
+    """
+    if not base_row:
+        return None, None, None
+    basis = base_row.get("efficiency_basis")
+    return (base_row.get("efficiency_used"), basis, EFFICIENCY_BASIS_LABELS.get(basis))
+
+
 # 有計分、但門檻效度存疑的分項。
 #
 # ⚠️ 這**不是**「沒測到」（那個走 unscored），是「測到了、也照門檻算了，
