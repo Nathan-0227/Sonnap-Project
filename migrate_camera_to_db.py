@@ -115,6 +115,8 @@ def main():
     ap.add_argument("--metrics-dir", default=str(ROOT / "tapo_metrics"))
     ap.add_argument("--csv", action="append", help="只處理這些檔（可重複）")
     ap.add_argument("--dry-run", action="store_true", help="只看不寫")
+    ap.add_argument("--curves-only", action="store_true",
+                    help="只補已存在那幾晚的動作曲線（motion_curve），其他欄位一個都不動")
     ap.add_argument("--user-id", help="⚠️ 指定帳號。**會進 shell 歷史**，"
                                      "只在自動判準分不出來時才用")
     ap.add_argument("--db-path", help="覆寫資料庫位置（預設看 SONNAP_DB）")
@@ -179,7 +181,12 @@ def main():
         print(f"{date:<12}{tib:>9.0f}{sol:>12}{rate if rate is not None else 0:>9.1f}"
               f"  {path.name}")
 
-        if not args.dry_run:
+        if args.curves_only:
+            # 回填：只補曲線，不重算覆寫整列（見 db.set_camera_motion_curve）
+            if not args.dry_run:
+                written += db.set_camera_motion_curve(
+                    user_id, date, r.get("motion_curve"), db_path=args.db_path)
+        elif not args.dry_run:
             db.upsert_camera_nightly(user_id, date, r, db_path=args.db_path)
             written += 1
 

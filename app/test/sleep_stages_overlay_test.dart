@@ -50,7 +50,7 @@ Map<String, dynamic> curveJson({required bool hr}) => {
     };
 
 Future<void> pumpCard(WidgetTester tester,
-    {bool hr = true, bool move = true, double? resting = 53}) async {
+    {bool hr = true, bool move = true, bool camera = false, double? resting = 53}) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 2.625;
   addTearDown(tester.view.reset);
@@ -63,6 +63,7 @@ Future<void> pumpCard(WidgetTester tester,
           totalSleepMinutes: 235,
           heartRate: hr ? NightCurve.fromJsonOrNull(curveJson(hr: true)) : null,
           movement: move ? NightCurve.fromJsonOrNull(curveJson(hr: false)) : null,
+          camera: camera ? NightCurve.fromJsonOrNull(curveJson(hr: false)) : null,
           restingHeartRate: resting,
         ),
       ),
@@ -82,6 +83,19 @@ void main() {
     expect(
         NightCurve.fromJsonOrNull({'points': [], 'avg': 1, 'min': 1, 'max': 1}),
         isNull);
+  });
+
+  test('⚠️ 沒有時區標記的時間（攝影機）跟有標記的（手錶、階段）在同一個基準——不能差 8 小時', () {
+    final stages = SleepStages.fromJsonOrNull(stagesJson())!; // 02:48+08:00 起
+    final naive = NightCurve.fromJsonOrNull({
+      'points': [
+        {'t': '2026-11-08T02:48:00', 'value': 0.1},
+        {'t': '2026-11-08T02:53:00', 'value': 0.2},
+      ],
+      'avg': 0.15, 'min': 0.1, 'max': 0.2,
+    })!;
+    expect(naive.points.first.time.difference(stages.start), Duration.zero,
+        reason: '2026-11-13 實機：選了 Camera 整條線被濾光');
   });
 
   test('⚠️ 曲線不衝出實際最高最低（平滑曲線最容易在急轉處畫出沒發生的值）', () {
@@ -146,9 +160,34 @@ void main() {
     expect(tester.widgetList<Text>(axis).map((t) => t.data), ['More', 'Less']);
   });
 
-  testWidgets('⚠️ 不寫 Normal／High 之類的判斷', (tester) async {
+  testWidgets('Camera：攝影機的動作，跟手錶的 Movement 分開；軸 More／Less', (tester) async {
+    await pumpCard(tester, camera: true);
+    expect(find.byKey(const Key('stages-chip-camera')), findsOneWidget);
+    expect(find.byKey(const Key('stages-chip-move')), findsOneWidget,
+        reason: '兩個是不同的量，各一顆');
+    await tester.tap(find.byKey(const Key('stages-chip-camera')));
+    await tester.pump();
+    expect(find.byKey(const Key('stages-overlay-camera')), findsOneWidget);
+    expect(textOf(tester, 'stages-overlay-info'), 'Movement seen by the camera');
+    final axis = find.descendant(
+        of: find.byKey(const Key('stages-overlay-axis')),
+        matching: find.byType(Text));
+    expect(tester.widgetList<Text>(axis).map((t) => t.data), ['More', 'Less']);
+    // 一次只選一個：換到心率，攝影機那條收掉
+    await tester.tap(find.byKey(const Key('stages-chip-hr')));
+    await tester.pump();
+    expect(find.byKey(const Key('stages-overlay-camera')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('沒有錄影的晚上 → 沒有 Camera 那顆', (tester) async {
     await pumpCard(tester);
-    for (final chip in ['stages-chip-hr', 'stages-chip-move']) {
+    expect(find.byKey(const Key('stages-chip-camera')), findsNothing);
+  });
+
+  testWidgets('⚠️ 不寫 Normal／High 之類的判斷', (tester) async {
+    await pumpCard(tester, camera: true);
+    for (final chip in ['stages-chip-hr', 'stages-chip-move', 'stages-chip-camera']) {
       await tester.tap(find.byKey(Key(chip)));
       await tester.pump();
       final texts = tester

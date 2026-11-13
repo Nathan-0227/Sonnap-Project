@@ -178,6 +178,46 @@ def detect_onset(samples, starts):
     return None
 
 
+CURVE_BUCKET_MINUTES = 5
+
+
+def motion_curve(samples, roi, t0, bucket_minutes=CURVE_BUCKET_MINUTES):
+    """整段錄影每 5 分鐘一點：那 5 分鐘裡**可用的幀有幾成在動**（0–1）。
+
+    Sleep Stages 卡點 Camera 疊上去的線（2026-11-13 使用者定）。**只呈現、不計分**——
+    攝影機動作率已驗證與任何結果都沒有相關（CLAUDE.md 第 3 關）。
+    - 「在動」用同一個校準過的門檻 [MOTION_THRESHOLD]，**呼叫時才讀**（不抄一份）。
+    - 不可用的幀（照明突變等）不算進分母；一格裡一幀可用的都沒有 → 那一格不出點。
+    - **只收有床鋪 ROI 的夜晚**：沒有 ROI 的分母是整個畫面，同一個門檻差一個數量級。
+    - 時間是 CSV 的牆鐘時間（沒有時區標記），App 照牆鐘讀。
+    """
+    if not roi or not samples:
+        return None
+    step = timedelta(minutes=bucket_minutes)
+    buckets = {}
+    for t, frac, usable in samples:
+        if not usable or t < t0:
+            continue
+        i = int((t - t0) / step)
+        moving, total = buckets.get(i, (0, 0))
+        buckets[i] = (moving + (1 if frac >= MOTION_THRESHOLD else 0), total + 1)
+    points = [
+        {"t": (t0 + step * i).isoformat(timespec="seconds"),
+         "value": round(m / n, 3)}
+        for i, (m, n) in sorted(buckets.items()) if n
+    ]
+    if len(points) < 6:
+        return None
+    values = [p["value"] for p in points]
+    return {
+        "points": points,
+        "avg": round(sum(values) / len(values), 3),
+        "min": min(values),
+        "max": max(values),
+        "bucket_minutes": bucket_minutes,
+    }
+
+
 def analyse(path):
     """回傳一個 dict —— 每個量都帶 provenance。"""
     samples, roi = load(path)
@@ -227,6 +267,8 @@ def analyse(path):
         ),
         "events_total": len(starts),
         "events_per_hour": round(len(starts) / (tib_min / 60), 1) if tib_min else None,
+        # 每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線，2026-11-13）
+        "motion_curve": motion_curve(samples, roi, t0),
     }
     if onset and not below_floor:
         pre = (onset - t0).total_seconds() / 60

@@ -1103,6 +1103,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           // 點 Heart rate／Movement 疊線（2026-11-13）
                           heartRate: session.metrics.heartRateCurve,
                           movement: session.metrics.movementCurve,
+                          camera: session.metrics.cameraCurve,
                           restingHeartRate:
                               session.metrics.restingHeartRate?.toDouble(),
                         )

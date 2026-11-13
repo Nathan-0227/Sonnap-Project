@@ -18,7 +18,9 @@ import 'curve_path.dart';
 /// 點了就把那條線疊在階梯上（階梯變淡），再點一次回到只有階梯；一次只能選一個。
 /// - 心率：右邊寫 bpm 數字，虛線是睡著期間的平均，下面一行照抄平均、最低、靜止心率；**不寫 Normal**。
 /// - 動作是**手錶的**（不是攝影機），沒有單位，右邊只寫 More／Less，下面註明 from your watch。
-/// - 那一晚沒有那條線 → 那顆不出現；兩條都沒有 → 一顆都不出現，就是原本的卡。
+/// - **Camera**（2026-11-13）：攝影機在床鋪範圍看到的動作，每 5 分鐘有幾成時間在動；
+///   跟手錶的 Movement 是不同的量，名字分開。同樣只寫 More／Less、不判斷。
+/// - 那一晚沒有那條線 → 那顆不出現；都沒有 → 一顆都不出現，就是原本的卡。
 /// - 線用單調三次插值（[monotonePath]），不會畫出比實際最低還低的值。
 class SleepStagesCard extends StatefulWidget {
   final SleepStages stages;
@@ -30,6 +32,9 @@ class SleepStagesCard extends StatefulWidget {
   /// 睡著期間的手錶動作曲線（後端 metrics.movement_curve）。
   final NightCurve? movement;
 
+  /// 睡著期間**攝影機**看到的動作（後端 metrics.camera_curve）：每 5 分鐘有幾成時間在動。
+  final NightCurve? camera;
+
   /// 靜止心率（後端 metrics.resting_heart_rate）。只在選了心率時寫在下面那一行。
   final double? restingHeartRate;
 
@@ -39,6 +44,7 @@ class SleepStagesCard extends StatefulWidget {
     this.totalSleepMinutes,
     this.heartRate,
     this.movement,
+    this.camera,
     this.restingHeartRate,
   });
 
@@ -51,7 +57,7 @@ class SleepStagesCard extends StatefulWidget {
   State<SleepStagesCard> createState() => _SleepStagesCardState();
 }
 
-enum _Overlay { heartRate, movement }
+enum _Overlay { heartRate, movement, camera }
 
 class _SleepStagesCardState extends State<SleepStagesCard> {
   _Overlay? _overlay;
@@ -66,6 +72,7 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
   NightCurve? get _curve => switch (_overlay) {
         _Overlay.heartRate => widget.heartRate,
         _Overlay.movement => widget.movement,
+        _Overlay.camera => widget.camera,
         null => null,
       };
 
@@ -82,7 +89,9 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
       for (var i = 0; i < 4; i++)
         stages.start.add(Duration(seconds: (span.inSeconds * i / 3).round())),
     ];
-    final hasChips = widget.heartRate != null || widget.movement != null;
+    final hasChips = widget.heartRate != null ||
+        widget.movement != null ||
+        widget.camera != null;
     final curve = _curve;
     // 右邊留給疊線的刻度（有任何一條線可以選的晚上才留，同一晚不會忽寬忽窄）
     final gutter = hasChips ? 34.0 : 0.0;
@@ -208,6 +217,9 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
                   _chip('Heart rate', _Overlay.heartRate, 'stages-chip-hr'),
                 if (widget.movement != null)
                   _chip('Movement', _Overlay.movement, 'stages-chip-move'),
+                // 攝影機（2026-11-13）：跟手錶的 Movement 是兩個量，名字分開
+                if (widget.camera != null)
+                  _chip('Camera', _Overlay.camera, 'stages-chip-camera'),
               ],
             ),
             if (curve != null) ...[
@@ -244,6 +256,7 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
   /// 選了那條線之後下面那一行：只寫事實。
   String _info(NightCurve c) {
     if (_overlay == _Overlay.movement) return 'Movement from your watch';
+    if (_overlay == _Overlay.camera) return 'Movement seen by the camera';
     return [
       '${c.avg.round()} bpm avg while asleep',
       'lowest ${c.min.round()}',
