@@ -107,9 +107,10 @@ metrics = {"duration_min": 120, "efficiency": 95, "waso_min": 0, "deep_min": 10,
 db.upsert_wearable_nightly(uid, "2026-11-12", source="garmin", metrics=metrics)
 cam = client.get("/home", params={"user_id": uid, "date": "2026-11-12"}).json()["metrics"]["camera_curve"]
 check("只留 02:00–04:00（25 點）", len(cam["points"]), 25)
-check("第一點是入睡那一刻（牆鐘比，不換 UTC）", cam["points"][0]["t"], "2026-11-12T02:00:00")
+check("第一點是入睡那一刻，貼上手錶的時區標記（App 才不會差 8 小時）",
+      cam["points"][0]["t"], "2026-11-12T02:00:00+08:00")
 check("03:00 那格有動（第 120 分鐘）",
-      [p["value"] for p in cam["points"] if p["t"] == "2026-11-12T03:00:00"], [0.2])
+      [p["value"] for p in cam["points"] if p["t"] == "2026-11-12T03:00:00+08:00"], [0.2])
 
 print("\n【5】frame 基準、沒有手錶 → null")
 db.upsert_camera_nightly(uid, "2026-11-11", {**result, "roi": None, "motion_threshold_pct_of_frame": 0.75})

@@ -85,6 +85,19 @@ void main() {
         isNull);
   });
 
+  test('⚠️ 沒有時區標記的時間（攝影機）跟有標記的（手錶、階段）在同一個基準——不能差 8 小時', () {
+    final stages = SleepStages.fromJsonOrNull(stagesJson())!; // 02:48+08:00 起
+    final naive = NightCurve.fromJsonOrNull({
+      'points': [
+        {'t': '2026-11-08T02:48:00', 'value': 0.1},
+        {'t': '2026-11-08T02:53:00', 'value': 0.2},
+      ],
+      'avg': 0.15, 'min': 0.1, 'max': 0.2,
+    })!;
+    expect(naive.points.first.time.difference(stages.start), Duration.zero,
+        reason: '2026-11-13 實機：選了 Camera 整條線被濾光');
+  });
+
   test('⚠️ 曲線不衝出實際最高最低（平滑曲線最容易在急轉處畫出沒發生的值）', () {
     final ys = <double>[60, 52, 48, 70, 50, 49, 66, 54, 60, 52, 48, 70];
     final xs = [for (var i = 0; i < ys.length; i++) i * 20.0];

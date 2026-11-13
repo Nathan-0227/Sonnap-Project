@@ -437,10 +437,18 @@ def night_camera_curve(user_id, night_date, w_row):
         return None
     try:
         curve = json.loads(rows[0]["motion_curve"])
-        lo = datetime.fromisoformat(start).replace(tzinfo=None)
+        start_dt = datetime.fromisoformat(start)
+        lo = start_dt.replace(tzinfo=None)
         hi = datetime.fromisoformat(wake).replace(tzinfo=None)
-        pts = [p for p in curve.get("points", [])
-               if lo <= datetime.fromisoformat(p["t"]).replace(tzinfo=None) <= hi]
+        # ⚠️ 輸出時把手錶的時區標記貼上去：攝影機的牆鐘時間沒有標記，App 解析時
+        #    「有標記」與「沒標記」會被當成不同時區，比較時差 8 小時、整條線被濾光
+        #    （2026-11-13 實機抓到：選了 Camera 什麼線都沒有）。
+        pts = []
+        for p in curve.get("points", []):
+            t = datetime.fromisoformat(p["t"]).replace(tzinfo=None)
+            if lo <= t <= hi:
+                pts.append({"t": t.replace(tzinfo=start_dt.tzinfo).isoformat(),
+                            "value": p["value"]})
     except (TypeError, ValueError, KeyError):
         return None
     if len(pts) < 6:
