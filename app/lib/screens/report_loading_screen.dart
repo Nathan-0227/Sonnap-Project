@@ -18,7 +18,9 @@ import '../widgets/home_pet.dart';
 /// - ⚠️ AI 那段讀起床自評，所以 [loadSummary] 一定要在自評送出**之後**才呼叫——
 ///   這個畫面一打開才叫它，而它是蓋在自評卡上面打開的。
 ///
-/// 要換成會動的等待 GIF：改 [_pet]，其他不用動。
+/// 畫面是**小狗在早晨的臥室翻夢境日記**的循環 GIF（[kReportWaitGif]，2026-11-13，
+/// 接著起床動畫最後那個房間）；系統開「減少動態效果」時換成同一場景的靜止圖。
+/// 圖讀不到時退回星空＋首頁那隻小狗（不會報錯）。怎麼做的見 docs/REPORT_WAIT_GIF.md。
 class ReportLoadingScreen extends StatefulWidget {
   /// 分數那份（起床動畫一開始就在背景抓了）。
   final Future<MorningReport> report;
@@ -40,6 +42,10 @@ class ReportLoadingScreen extends StatefulWidget {
 
   final Duration summaryWait;
 
+  /// 場景圖（測試換成不存在的路徑，驗退回）。
+  final String sceneGif;
+  final String sceneStill;
+
   const ReportLoadingScreen({
     super.key,
     required this.report,
@@ -49,11 +55,19 @@ class ReportLoadingScreen extends StatefulWidget {
     this.loadSummary,
     this.mood,
     this.summaryWait = kReportSummaryWait,
+    this.sceneGif = kReportWaitGif,
+    this.sceneStill = kReportWaitStill,
   });
 
   @override
   State<ReportLoadingScreen> createState() => _ReportLoadingScreenState();
 }
+
+/// 等待畫面的場景：小狗翻夢境日記（Kling 生成，首尾同一格所以循環接得上）。
+const String kReportWaitGif = 'assets/pets/dog01/report_wait.gif';
+
+/// 減少動態效果時用的同一場景靜止圖（GIF 的第一格）。
+const String kReportWaitStill = 'assets/pets/dog01/report_wait_still.jpg';
 
 /// AI 那段最多多等多久（使用者定：先等分數，AI 再多等約 10 秒）。
 const Duration kReportSummaryWait = Duration(seconds: 10);
@@ -71,6 +85,9 @@ class PreparedReport {
 
 class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
   PreparedReport? _ready;
+
+  /// 場景圖讀不到 → 退回星空＋小狗。
+  bool _sceneFailed = false;
 
   @override
   void initState() {
@@ -124,15 +141,19 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            const ReportBackground(),
+            if (_sceneFailed) const ReportBackground() else _scene(context),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                 child: Column(
                   children: [
-                    const Spacer(flex: 3),
-                    _pet(),
-                    const SizedBox(height: 28),
+                    // 有場景時小狗在圖裡（畫面中段），字與按鈕全部壓到下面的地板上
+                    if (_sceneFailed) ...[
+                      const Spacer(flex: 3),
+                      _pet(),
+                      const SizedBox(height: 28),
+                    ] else
+                      const Spacer(),
                     Text(
                       ready == null
                           ? 'Preparing your sleep report…'
@@ -143,15 +164,23 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: Color(0x99000000), blurRadius: 8)],
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Last night',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: ReportColors.muted, fontSize: 14),
+                      style: TextStyle(
+                        color: _sceneFailed
+                            ? ReportColors.muted
+                            : Colors.white.withValues(alpha: 0.75),
+                        fontSize: 14,
+                      ),
                     ),
-                    const Spacer(flex: 2),
+                    _sceneFailed
+                        ? const Spacer(flex: 2)
+                        : const SizedBox(height: 36),
                     SizedBox(
                       height: 56,
                       child: ready == null
@@ -188,7 +217,9 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
                       key: const Key('report-loading-close'),
                       onPressed: widget.onClose,
                       style: TextButton.styleFrom(
-                        foregroundColor: ReportColors.muted,
+                        foregroundColor: _sceneFailed
+                            ? ReportColors.muted
+                            : Colors.white.withValues(alpha: 0.8),
                         minimumSize: const Size.fromHeight(44),
                       ),
                       child: const Text('Back to home'),
@@ -200,6 +231,38 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 場景鋪滿畫面；下半部加一層由透明到深的漸層，白字壓在地板上才看得清楚。
+  Widget _scene(BuildContext context) {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          still ? widget.sceneStill : widget.sceneGif,
+          key: Key(still ? 'report-wait-still' : 'report-wait-gif'),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_sceneFailed) setState(() => _sceneFailed = true);
+            });
+            return const ColoredBox(color: ReportColors.bgTop);
+          },
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.55, 1.0],
+              colors: [Color(0x00000000), Color(0x99000000)],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
