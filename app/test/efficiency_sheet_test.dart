@@ -96,11 +96,11 @@ void main() {
           const EfficiencyNight(
             93.2,
             EfficiencyKind.buttons,
-            'From your sleep buttons',
+            'Sleep button',
           ),
           const EfficiencyNight(100, EfficiencyKind.watchOnly, 'Watch only'),
         ]),
-        ['1 night · From your sleep buttons', '2 nights · Watch only'],
+        ['1 night · Sleep button', '2 nights · Watch only'],
       );
     });
 
@@ -111,10 +111,10 @@ void main() {
           const EfficiencyNight(
             93.2,
             EfficiencyKind.buttons,
-            'From your sleep buttons',
+            'Sleep button',
           ),
         ]),
-        ['1 night · From your sleep buttons'],
+        ['1 night · Sleep button'],
       );
     });
   });
@@ -125,7 +125,7 @@ void main() {
         host(
           EfficiencyView(
             value: 94.5,
-            label: 'From your sleep buttons',
+            label: 'Sleep button',
             kind: EfficiencyKind.buttons,
             caveat: 'SENTINEL-caveat',
             asleepMinutes: 359,
@@ -138,7 +138,7 @@ void main() {
         ),
       );
       expect(textOf(tester, 'eff-value'), '94.5%');
-      expect(textOf(tester, 'eff-label'), 'From your sleep buttons');
+      expect(textOf(tester, 'eff-label'), 'Sleep button');
       expect(textOf(tester, 'eff-minutes'), '5h 59m asleep of 6h 20m counted');
       expect(
         textOf(tester, 'eff-span'),
@@ -154,17 +154,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('② ③ 的晚上多一行去按按鈕的提示', (tester) async {
-      for (final k in [
-        EfficiencyKind.startToWatchWake,
-        EfficiencyKind.watchOnly,
-      ]) {
-        await tester.pumpWidget(host(EfficiencyView(value: 99, kind: k)));
-        expect(textOf(tester, 'eff-hint'), kEffButtonsHint, reason: '$k');
-      }
+    testWidgets('只有沒按按鈕（③）的晚上多一行去按按鈕的提示；② 已經算 Sleep button，不提示', (tester) async {
+      await tester.pumpWidget(
+        host(const EfficiencyView(value: 99, kind: EfficiencyKind.watchOnly)),
+      );
+      expect(textOf(tester, 'eff-hint'), kEffButtonsHint);
+      await tester.pumpWidget(
+        host(
+          const EfficiencyView(value: 96, kind: EfficiencyKind.startToWatchWake),
+        ),
+      );
+      expect(find.byKey(const Key('eff-hint')), findsNothing);
     });
 
-    testWidgets('一週：依種類畫實心／半實心／空心；照抄數字；沒資料寫 —；不算平均', (tester) async {
+    testWidgets('一週：有按按鈕實心、沒按空心；照抄數字；沒資料寫 —；不算平均', (tester) async {
       await tester.pumpWidget(
         host(
           EfficiencyView(
@@ -179,17 +182,17 @@ void main() {
               '2026-11-13': const EfficiencyNight(
                 100,
                 EfficiencyKind.buttons,
-                'From your sleep buttons',
+                'Sleep button',
               ),
               '2026-11-10': const EfficiencyNight(
                 95.9,
                 EfficiencyKind.buttons,
-                'From your sleep buttons',
+                'Sleep button',
               ),
               '2026-11-09': const EfficiencyNight(
                 90.7,
                 EfficiencyKind.startToWatchWake,
-                'Start sleep to watch wake',
+                'Sleep button',
               ),
             }, '2026-11-14'),
           ),
@@ -210,9 +213,10 @@ void main() {
       expect(textOf(tester, 'eff-week-value-2026-11-13'), '100');
       expect(textOf(tester, 'eff-week-value-2026-11-10'), '95.9');
       expect(textOf(tester, 'eff-week-value-2026-11-12'), '—');
-      expect(find.text('2 nights · From your sleep buttons'), findsOneWidget);
-      expect(find.text('1 night · Start sleep to watch wake'), findsOneWidget);
+      // ① ② 後端給同一個名字 → 合成一行；畫面上只有兩種
+      expect(find.text('3 nights · Sleep button'), findsOneWidget);
       expect(find.text('1 night · Watch only'), findsOneWidget);
+      expect(find.textContaining('night · Sleep button'), findsNothing);
       expect(find.textContaining('Average'), findsNothing);
       expect(find.textContaining('week before'), findsNothing);
       expect(find.byKey(const Key('eff-legend')), findsOneWidget);
@@ -229,6 +233,11 @@ void main() {
               as BoxDecoration;
       expect(deco('eff-week-fill-2026-11-14-watchOnly').color, isNull);
       expect(deco('eff-week-fill-2026-11-13-buttons').color, isNotNull);
+      // ② 跟 ① 一樣實心（只分兩種）
+      expect(
+        deco('eff-week-fill-2026-11-09-startToWatchWake').color,
+        deco('eff-week-fill-2026-11-13-buttons').color,
+      );
       // 0–100%：100 那根比 95.9 那根高
       final h100 = tester
           .getSize(find.byKey(const Key('eff-week-fill-2026-11-13-buttons')))
@@ -264,7 +273,7 @@ void main() {
                   'sleep_efficiency': 100.0,
                   'composition': {
                     'efficiency_basis': 'SENT-measured',
-                    'efficiency_label': 'From your sleep buttons',
+                    'efficiency_label': 'Sleep button',
                   },
                 },
                 {
@@ -301,7 +310,7 @@ void main() {
       final n13 = r.efficiencyNights['2026-11-13']!;
       expect(
         (n13.value, n13.kind, n13.label),
-        (93.2, EfficiencyKind.buttons, 'From your sleep buttons'),
+        (93.2, EfficiencyKind.buttons, 'Sleep button'),
       );
       final n14 = r.efficiencyNights['2026-11-14']!;
       expect((n14.value, n14.kind), (99.47, EfficiencyKind.watchOnly));

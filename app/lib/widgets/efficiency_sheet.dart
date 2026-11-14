@@ -60,21 +60,27 @@ String _clock(DateTime t) =>
 DateTime _wall(DateTime t) =>
     DateTime(t.year, t.month, t.day, t.hour, t.minute, t.second, t.millisecond);
 
-/// 「3 nights · From your sleep buttons」這種，一種一行；照 ①②③ 排，沒有的那種不寫。
+/// 「4 nights · Sleep button」這種，**一個名字一行**；照 ①②③ 第一次出現的順序排。
+/// 2026-11-15 使用者定畫面只分兩種：後端給 ① ② 同一個名字，這裡就合成一行
+/// （Dart 不寫死哪幾種算一組，同名就同一行）。
 /// ⚠️ 名字只照抄後端（score_claim.py）；舊版後端沒給名字的那一種**不寫**，Dart 不自己取名。
 List<String> effWeekCountLines(List<EfficiencyNight?> nights) => [
-  for (final k in EfficiencyKind.values)
-    if (_labelOf(nights, k) case final label?)
-      '${nights.where((n) => n?.kind == k).length} '
-          'night${nights.where((n) => n?.kind == k).length == 1 ? '' : 's'} · $label',
+  for (final (label, _) in _groups(nights))
+    () {
+      final n = nights.where((x) => x?.label == label).length;
+      return '$n night${n == 1 ? '' : 's'} · $label';
+    }(),
 ];
 
-/// 那一種在這一週裡的名字（後端給的）；這一週沒有那一種、或後端沒給名字 → null。
-String? _labelOf(List<EfficiencyNight?> nights, EfficiencyKind k) {
-  for (final n in nights) {
-    if (n?.kind == k && n?.label != null) return n!.label;
-  }
-  return null;
+/// 這一週出現的名字（後端給的），各配它第一個出現的種類（畫圖例色塊用）；照 ①②③ 排。
+List<(String, EfficiencyKind)> _groups(List<EfficiencyNight?> nights) {
+  final seen = <String>{};
+  return [
+    for (final k in EfficiencyKind.values)
+      for (final n in nights)
+        if (n?.kind == k && n?.label != null && seen.add(n!.label!))
+          (n.label!, k),
+  ];
 }
 
 const kEffButtonsHint =
@@ -276,8 +282,8 @@ class EfficiencyView extends StatelessWidget {
                   style: const TextStyle(color: _soft, fontSize: 12),
                 ),
               ],
-              if (kind == EfficiencyKind.startToWatchWake ||
-                  kind == EfficiencyKind.watchOnly) ...[
+              // 只在沒按按鈕的晚上提醒（有按 Start sleep 的已經算 Sleep button）
+              if (kind == EfficiencyKind.watchOnly) ...[
                 const SizedBox(height: 10),
                 const Text(
                   kEffButtonsHint,
@@ -310,9 +316,7 @@ class EfficiencyView extends StatelessWidget {
                   spacing: 12,
                   runSpacing: 4,
                   children: [
-                    for (final k in EfficiencyKind.values)
-                      if (_labelOf([for (final n in w) n.$2], k)
-                          case final label?)
+                    for (final (label, k) in _groups([for (final n in w) n.$2]))
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -351,16 +355,11 @@ class EfficiencyView extends StatelessWidget {
   }
 }
 
-/// 一根長條的填色：① 實心、② 半實心（淡填色＋邊）、③ 空心（只有邊）。
+/// 一根長條的填色：有按按鈕（① ②）實心、沒按（③）空心（只有邊）。2026-11-15 使用者定只分兩種。
 BoxDecoration _fill(EfficiencyKind k, Color c, double strong) => switch (k) {
-  EfficiencyKind.buttons => BoxDecoration(
+  EfficiencyKind.buttons || EfficiencyKind.startToWatchWake => BoxDecoration(
     borderRadius: BorderRadius.circular(40),
     color: c.withValues(alpha: strong),
-  ),
-  EfficiencyKind.startToWatchWake => BoxDecoration(
-    borderRadius: BorderRadius.circular(40),
-    color: c.withValues(alpha: 0.4 * strong),
-    border: Border.all(color: c.withValues(alpha: strong), width: 2),
   ),
   EfficiencyKind.watchOnly => BoxDecoration(
     borderRadius: BorderRadius.circular(40),

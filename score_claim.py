@@ -89,8 +89,10 @@ EFFICIENCY_CAVEATS = {
 # ⚠️ 只在這裡定義；打包檔與 API 照抄、App 一個字都不自己產生（同 EFFICIENCY_CAVEATS）。
 #    短到放得進小卡；完整說明是上面的 EFFICIENCY_CAVEATS（點小卡才看得到）。
 EFFICIENCY_BASIS_LABELS = {
-    "watch_tst__phone_tats": "From your sleep buttons",
-    "phone_bed_start__watch_wake": "Start sleep to watch wake",
+    # 2026-11-15 使用者定：畫面上只分兩種。只按 Start sleep（②）也有按按鈕，跟 ① 同名；
+    # 計分照舊三段式，分母差在哪由點開後那一行「Start sleep → watch wake」交代。
+    "watch_tst__phone_tats": "Sleep button",
+    "phone_bed_start__watch_wake": "Sleep button",
     "watch_tst__watch_onset_to_wake": "Watch only",
 }
 
