@@ -11,10 +11,11 @@ import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
-import '../services/night_compare.dart' show shortDate;
+import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
@@ -55,6 +56,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 這一晚的夢看過了沒（首頁的 DreamReadStore）。沒給＝當作沒看過，日記本會抖。
   final Future<bool> Function()? isDreamRead;
 
+  /// 每晚睡了幾分鐘（首頁那一份打包檔的 history）。Time asleep 點開的一週長條圖用；沒給就不能點。
+  final Future<List<NightValue>> Function()? loadSleepSeries;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -64,6 +68,7 @@ class MorningReportScreen extends StatefulWidget {
     this.canOpenInsights = false,
     this.onDreamOpened,
     this.isDreamRead,
+    this.loadSleepSeries,
   });
 
   @override
@@ -989,6 +994,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
             )
           : null,
       graphicHeight: 30,
+      onTap: widget.loadSleepSeries == null ? null : () => _showSleepWeek(r),
       lines: [
         if (asleep == null)
           const Text('From your watch')
@@ -1567,6 +1573,32 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Time asleep 點開：這一晚往回 7 晚＋平均。這一晚的數字以報告上的為準（後端剛算好的可能比打包檔新）。
+  Future<void> _showSleepWeek(MorningReport r) async {
+    List<NightValue> series;
+    try {
+      series = await widget.loadSleepSeries!();
+    } catch (_) {
+      series = const [];
+    }
+    final mine = r.hasScore ? r.sleepMinutes : null;
+    if (mine != null) {
+      series = [
+        for (final n in series)
+          if (n.date != r.date) n,
+        NightValue(r.date, mine.toDouble()),
+      ];
+    }
+    if (!mounted) return;
+    await showSleepWeekSheet(
+      context,
+      title: 'Time asleep',
+      series: series,
+      endDate: r.date,
+      goalMinutes: r.goalMinutes,
     );
   }
 

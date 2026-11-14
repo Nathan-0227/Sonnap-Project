@@ -17,6 +17,7 @@ import '../services/night_compare.dart';
 import '../services/sleep_repository.dart';
 import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
+import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
 import '../widgets/day_heart_rate_chart.dart';
@@ -632,6 +633,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (mounted) setState(() => _dreamReadDate = date);
           },
           isDreamRead: () => _dreamReads.isRead(date),
+          loadSleepSeries: () async => _sleepMinutesSeries((await _sessionFuture).history),
           initial: initial,
           load: load,
           loadSummary: loadSummary,
@@ -1747,6 +1749,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static String _fmtPts(double v) => '${v.round()}%';
   static String _fmtRate(double v) => '${v.toStringAsFixed(0)} /hr';
 
+  /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Time asleep 的一週圖共用）。
+  static List<NightValue> _sleepMinutesSeries(List<HistoryEntry> history) =>
+      _series(
+        history,
+        (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
+      );
+
+  Future<void> _showSleepWeek(
+      SleepSession session, List<NightValue> series) async {
+    final end = session.history.lastOrNull?.date;
+    if (end == null) return;
+    int? goal;
+    try {
+      final wake = await _alarm.settings.wakeTime(_bedtime);
+      goal = sleepSpan(_bedtime, wake).inMinutes;
+    } catch (_) {
+      goal = null;
+    }
+    if (!mounted) return;
+    await showSleepWeekSheet(
+      context,
+      title: 'Sleep',
+      series: series,
+      endDate: end,
+      goalMinutes: goal,
+    );
+  }
+
   /// 每一項的逐夜數值（給「跟上一晚比」與長條圖）。沒值的晚上不放進來。
   static List<NightValue> _series(
     List<HistoryEntry> history,
@@ -1767,10 +1797,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final h = session.history;
     final current = h.lastOrNull?.date;
 
-    final durationSeries = _series(
-      h,
-      (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
-    );
+    final durationSeries = _sleepMinutesSeries(h);
     // ⚠️ 「跟上一晚比」與長條圖只放**同一種**效率：臥床版 88% 跟手錶版 100% 不是同一個量，
     //    混在一起比會畫出一個假的下降箭頭。舊版打包檔 basis 全是 null，就照舊全部一起比。
     final effBasis = h.lastOrNull?.scoredEfficiencyBasis;
@@ -1802,13 +1829,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               value: minutes == null ? null : _hm(minutes),
               compare: cmp(durationSeries, formatMinutes),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'duration',
-              title: 'Sleep',
-              series: durationSeries,
-              format: formatMinutes,
-            ),
+            // 2026-11-14 使用者定：跟報告的 Time asleep 同一張（這一晚往回 7 晚＋平均＋目標虛線）
+            () => _showSleepWeek(session, durationSeries),
           );
     final effTile = tappable(
             InfoTile(

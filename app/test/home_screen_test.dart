@@ -230,7 +230,7 @@ void main() {
       );
     });
 
-    testWidgets('睡眠長度卡底下有「跟上一晚比」，點了開最近 7 晚的長條圖', (tester) async {
+    testWidgets('睡眠長度卡底下有「跟上一晚比」，點了開一週圖（同報告的 Time asleep）', (tester) async {
       await pumpHome(tester, () => at(12, 9));
       final line = find.descendant(
         of: find.byKey(const Key('tile-duration')),
@@ -240,7 +240,13 @@ void main() {
       expect(tester.widget<Text>(line).data, contains(' vs '));
       await tester.tap(find.byKey(const Key('tile-duration')));
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byKey(const Key('metric-sheet-duration')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-average')), findsOneWidget);
+      // 終點是首頁那一晚
+      expect(
+        find.byKey(Key('sleep-week-bar-${sample.history.last.date}')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('點分數卡 → 最近 7 晚的分數長條圖', (tester) async {

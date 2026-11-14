@@ -9,6 +9,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:app/services/night_compare.dart' show NightValue;
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/morning_report_screen.dart';
@@ -412,7 +413,8 @@ void main() {
     Future<NavigatorObserver> pumpReport(WidgetTester tester, MorningReport r,
         {Size size = const Size(1200, 5000),
         bool pending = true,
-        bool canOpenInsights = false}) async {
+        bool canOpenInsights = false,
+        Future<List<NightValue>> Function()? loadSleepSeries}) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = size.width > 1100 ? 3.0 : 2.625;
       addTearDown(tester.view.reset);
@@ -426,12 +428,48 @@ void main() {
             initial: r,
             pending: pending,
             canOpenInsights: canOpenInsights,
+            loadSleepSeries: loadSleepSeries,
           ),
         ),
       );
       await settle(tester);
       return observer;
     }
+
+    testWidgets('Time asleep 點開 → 這一晚往回 7 晚＋平均；這一晚以報告的數字為準', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(
+          date: '2026-11-12',
+          home: homeWithScore('2026-11-12'),
+        ).withExtras(goalMinutes: 480),
+        loadSleepSeries: () async => const [
+          NightValue('2026-11-10', 385),
+          NightValue('2026-11-12', 100), // 打包檔舊的，報告是 7h 25m
+        ],
+      );
+      await tester.ensureVisible(find.byKey(const Key('report-asleep')));
+      await tester.tap(find.byKey(const Key('report-asleep')));
+      await settle(tester);
+      expect(find.byKey(const Key('sleep-week-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-bar-2026-11-06')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-bar-2026-11-12')), findsOneWidget);
+      // (385 + 445) / 2 = 415 → 6h 55m
+      expect(textOf(tester, 'sleep-week-average'), '6h 55m');
+      expect(find.text('2 of 7 nights with data'), findsOneWidget);
+      expect(find.text('8h goal'), findsOneWidget);
+    });
+
+    testWidgets('沒有給一週資料 → Time asleep 不能點', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12')),
+      );
+      await tester.ensureVisible(find.byKey(const Key('report-asleep')));
+      await tester.tap(find.byKey(const Key('report-asleep')));
+      await settle(tester);
+      expect(find.byKey(const Key('sleep-week-sheet')), findsNothing);
+    });
 
     testWidgets('⚠️ 等資料：寫 Waiting…，沒有任何分數或睡眠長度，畫睡姿小狗',
         (tester) async {
