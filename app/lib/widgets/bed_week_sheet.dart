@@ -363,7 +363,7 @@ class _ClockChart extends StatelessWidget {
                 if (v != null) ...[
                   Positioned(
                     key: Key('bed-week-median-$key'),
-                    left: _axisW + 50, // 從小膠囊右緣開始，線不穿過字
+                    left: _axisW + 50, // 從字的右邊開始，線不穿過字
                     right: 0,
                     top: y(v),
                     child: IgnorePointer(
@@ -382,12 +382,7 @@ class _ClockChart extends StatelessWidget {
                         key: Key('bed-week-median-$key-label'),
                         alignment: Alignment.center,
                         height: 20,
-                        // 半透明（使用者定）：蓋在最左邊那根長條上時，底下的長條還看得到
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.32),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: color, width: 1.2),
-                        ),
+                        // 只有字、不要框（使用者定：框會擋住最左邊那根長條）；加一點陰影讓字在長條上也讀得到
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
@@ -397,6 +392,9 @@ class _ClockChart extends StatelessWidget {
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(color: Color(0xCC0B1030), blurRadius: 4),
+                              ],
                             ),
                           ),
                         ),
