@@ -1,11 +1,11 @@
 // 早晨報告 Movement (camera) 點開（2026-11-15 使用者定，grill Q1–Q7）：
 //
 // 上半：**這一晚**——後端那句「About the same as usual」＋「not part of your score」，
-//       **不寫動作次數或每小時幾次**（11-09 定：跨夜差到 3.1 倍，只講跟自己平常比）。
-//       片段：動作最大的那段**大的、循環播放**，另外兩段是下面的小縮圖，點了換；
+//       這一晚的動作次數（11-15 使用者改，原本 11-09 定不寫）；**不寫每小時幾次、不跟常模並列**（跨夜差到 3.1 倍）。
+//       片段：照參考圖一段一列（縮圖＋大的時刻＋「moved for 5 s · Light」＋播放鍵），點了跳出大的循環播放，再點影片全螢幕、兩指放大；
 //       每段標籤照抄後端，後面接那一刻**手錶的睡眠階段**（「03:42 · moved for 5 s · Light」）。
 //       沒錄影的晚上照抄後端那句原因。下面是那一晚的動作線（每 5 分鐘有幾成在動），
-//       三個片段的時刻標成點，點了播那一段（在線的範圍外的片段不標）。
+//       三個片段的時刻標成點，點了一樣跳出播放（在線的範圍外的片段不標）。
 // 下半：**這一週**——7 欄，每晚跟它自己的「平常」比多幾 %（後端 delta_pct，照抄），
 //       中間灰帶＝「差不多」的範圍（寬度照抄後端 same_as_usual_pct）；沒錄影或基線不夠寫「—」。
 //       **不分好壞**：動得多不代表睡不好（攝影機動作率跟手錶的清醒量測沒有相關），所以只用一個顏色。
@@ -124,9 +124,19 @@ class MovementView extends StatefulWidget {
 }
 
 class _MovementViewState extends State<MovementView> {
-  int _selected = 0;
-
   static const _soft = Color(0xB3FFFFFF);
+
+  /// 點一列（或線上的點）→ 大的播放（2026-11-15 使用者定，照參考圖：列表＋點進去看）。
+  void _play(CameraClip c) {
+    showDialog<void>(
+      context: context,
+      barrierColor: const Color(0xE6080A1C),
+      builder: (context) => _ClipViewer(
+        clip: c,
+        label: clipLabel(c, widget.stages),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +145,6 @@ class _MovementViewState extends State<MovementView> {
     final color = widget.color;
     final w = widget.week;
     final showWeek = w != null && w.any((e) => e.$2?.usualDeltaPct != null);
-    final sel = clips.isEmpty ? null : clips[_selected.clamp(0, clips.length - 1)];
 
     return Container(
       key: const Key('mv-sheet'),
@@ -193,101 +202,36 @@ class _MovementViewState extends State<MovementView> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+              // 2026-11-15 使用者改（原本 11-09 定不寫次數）：只寫這一晚的次數，照抄後端 events_total；
+              // **不寫每小時幾次、不跟文獻常模並列**（跨夜差到 3.1 倍，比常模沒有意義）
+              if (n.eventsTotal != null)
+                Text(
+                  '${n.eventsTotal} ${n.eventsTotal == 1 ? 'movement' : 'movements'} seen by the camera',
+                  key: const Key('mv-count'),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
               const Text(
                 'Camera data is not part of your score.',
                 style: TextStyle(color: _soft, fontSize: 12),
               ),
               const SizedBox(height: 16),
-              if (sel != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: ColoredBox(
-                      color: const Color(0xFF0E1230),
-                      child: Image.network(
-                        sel.url,
-                        key: Key('mv-clip-player-$_selected'),
-                        fit: BoxFit.contain,
-                        gaplessPlayback: true,
-                        errorBuilder: (_, _, _) => const Center(
-                          child: Text(
-                            'Clip could not be loaded',
-                            style: TextStyle(color: _soft, fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+              if (clips.isNotEmpty) ...[
+                const Text(
+                  'Biggest movements',
+                  style: TextStyle(color: _soft, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  clipLabel(sel, widget.stages),
-                  key: const Key('mv-clip-label'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                for (var i = 0; i < clips.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ClipRow(
+                      key: Key('mv-clip-row-$i'),
+                      clip: clips[i],
+                      stages: widget.stages,
+                      color: color,
+                      onTap: () => _play(clips[i]),
+                    ),
                   ),
-                ),
-                if (clips.length > 1) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      for (var i = 0; i < clips.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 8),
-                        Expanded(
-                          child: GestureDetector(
-                            key: Key('mv-clip-thumb-$i'),
-                            onTap: () => setState(() => _selected = i),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: i == _selected
-                                          ? color
-                                          : const Color(0x33FFFFFF),
-                                      width: i == _selected ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(9),
-                                    child: AspectRatio(
-                                      aspectRatio: 16 / 9,
-                                      child: ColoredBox(
-                                        color: const Color(0xFF0E1230),
-                                        child: Image.network(
-                                          clips[i].url,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  clips[i].label.split(' · ').first,
-                                  style: TextStyle(
-                                    color: i == _selected
-                                        ? Colors.white
-                                        : const Color(0x99FFFFFF),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
               ] else if (n.clipsNote != null)
                 Text(
                   n.clipsNote!,
@@ -306,9 +250,8 @@ class _MovementViewState extends State<MovementView> {
                   child: _NightLine(
                     curve: widget.curve!,
                     clips: clips,
-                    selected: _selected,
                     color: color,
-                    onSelect: (i) => setState(() => _selected = i),
+                    onSelect: (i) => _play(clips[i]),
                   ),
                 ),
               ],
@@ -348,13 +291,11 @@ class _MovementViewState extends State<MovementView> {
 class _NightLine extends StatelessWidget {
   final NightCurve curve;
   final List<CameraClip> clips;
-  final int selected;
   final Color color;
   final ValueChanged<int> onSelect;
   const _NightLine({
     required this.curve,
     required this.clips,
-    required this.selected,
     required this.color,
     required this.onSelect,
   });
@@ -398,11 +339,11 @@ class _NightLine extends StatelessWidget {
                     onTap: () => onSelect(i),
                     child: Center(
                       child: Container(
-                        width: i == selected ? 14 : 10,
-                        height: i == selected ? 14 : 10,
+                        width: 12,
+                        height: 12,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: i == selected ? Colors.white : color,
+                          color: color,
                           border: Border.all(
                             color: const Color(0xFF1B1F48),
                             width: 2,
@@ -636,6 +577,250 @@ class _WeekBars extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// 參考圖的一列：左邊縮圖、中間大的時刻＋「moved for 5 s · Awake」、右邊播放鍵。
+/// 時刻用片段的 start_at；後半照抄後端那句、去掉開頭的「03:42 · 」，再接手錶階段。
+/// 舊版後端沒有 start_at → 整句照抄、不放大時刻。
+class _ClipRow extends StatelessWidget {
+  final CameraClip clip;
+  final SleepStages? stages;
+  final Color color;
+  final VoidCallback onTap;
+  const _ClipRow({
+    super.key,
+    required this.clip,
+    required this.stages,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final full = clipLabel(clip, stages);
+    final at = clip.startAt;
+    final time = at == null
+        ? null
+        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final hasTime = time != null && full.startsWith('$time · ');
+    final rest = hasTime ? full.substring(time.length + 3) : full;
+    return Material(
+      color: const Color(0x14FFFFFF),
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 104,
+                  height: 64,
+                  child: ColoredBox(
+                    color: const Color(0xFF0E1230),
+                    child: Image.network(
+                      clip.url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.videocam_off_rounded,
+                        color: Color(0x66FFFFFF),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasTime)
+                      Text(
+                        time,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    Text(
+                      rest,
+                      key: const Key('mv-clip-row-text'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xB3FFFFFF),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.play_circle_fill_rounded, color: color, size: 28),
+              const SizedBox(width: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 點進去：大的、循環播放，下面一行標籤，右上角關掉。
+class _ClipViewer extends StatelessWidget {
+  final CameraClip clip;
+  final String label;
+  const _ClipViewer({required this.clip, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      key: const Key('mv-clip-viewer'),
+      backgroundColor: const Color(0xFF1B1F48),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                key: const Key('mv-clip-close'),
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: ColoredBox(
+                  color: const Color(0xFF0E1230),
+                  // 點影片 → 全螢幕、可以兩指放大（2026-11-15 使用者定）
+                  child: GestureDetector(
+                    key: const Key('mv-clip-enlarge'),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        fullscreenDialog: true,
+                        builder: (_) => _FullScreenClip(clip: clip, label: label),
+                      ),
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          clip.url,
+                          key: const Key('mv-clip-player'),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Center(
+                            child: Text(
+                              'Clip could not be loaded',
+                              style: TextStyle(
+                                color: Color(0xB3FFFFFF),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Icon(
+                            Icons.open_in_full_rounded,
+                            color: Color(0xCCFFFFFF),
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                label,
+                key: const Key('mv-clip-label'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 全螢幕：黑底、影片置中，兩指放大／拖動；左上關掉、底下一行標籤。
+class _FullScreenClip extends StatelessWidget {
+  final CameraClip clip;
+  final String label;
+  const _FullScreenClip({required this.clip, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: const Key('mv-clip-fullscreen'),
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Center(
+                  child: Image.network(
+                    clip.url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Text(
+                      'Clip could not be loaded',
+                      style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 4,
+              top: 4,
+              child: IconButton(
+                key: const Key('mv-clip-fullscreen-close'),
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

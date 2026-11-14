@@ -33,6 +33,7 @@ CameraNight night({List<CameraClip>? clips, String? note, double? pct, String da
       clips: clips ?? const [],
       clipsNote: note,
       clipsSupported: true,
+      eventsTotal: 105,
       usualLabel: 'SENT-usual',
       usualDeltaPct: pct,
       usualSamePct: 25,
@@ -77,29 +78,49 @@ void main() {
   });
 
   group('畫面', () {
-    testWidgets('有片段：照抄那句話、不寫次數；大的播第一段、點縮圖換、點線上的點也換；範圍外的片段不標點',
+    testWidgets('有片段：照抄那句話、不寫次數；一段一列（大的時刻＋後半＋手錶階段）；點列或線上的點跳出大的播放；範圍外不標點',
         (tester) async {
       await tester.pumpWidget(
         host(MovementView(night: night(clips: clips), curve: curve(), stages: stages())),
       );
       expect(textOf(tester, 'mv-usual'), 'SENT-usual');
       expect(find.textContaining('per hour'), findsNothing);
-      expect(find.textContaining('movements'), findsNothing);
-      expect(find.byKey(const Key('mv-clip-player-0')), findsOneWidget);
-      expect(textOf(tester, 'mv-clip-label'), '03:42 · moved for 5 s · Light');
+      // 11-15 使用者改：寫這一晚的次數（照抄 events_total），但不寫每小時幾次
+      expect(textOf(tester, 'mv-count'), '105 movements seen by the camera');
+      for (var i = 0; i < 3; i++) {
+        expect(find.byKey(Key('mv-clip-row-$i')), findsOneWidget);
+      }
+      expect(find.descendant(of: find.byKey(const Key('mv-clip-row-0')), matching: find.text('03:42')),
+          findsOneWidget);
+      expect(
+          tester.widget<Text>(find.descendant(
+              of: find.byKey(const Key('mv-clip-row-1')),
+              matching: find.byKey(const Key('mv-clip-row-text')))).data,
+          'moved for 9 s · Deep');
 
-      await tester.tap(find.byKey(const Key('mv-clip-thumb-1')));
-      await tester.pump();
-      expect(find.byKey(const Key('mv-clip-player-1')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('mv-clip-row-1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('mv-clip-viewer')), findsOneWidget);
       expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep');
+      // 點影片 → 全螢幕（可以兩指放大）
+      await tester.tap(find.byKey(const Key('mv-clip-enlarge')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('mv-clip-fullscreen')), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      await tester.tap(find.byKey(const Key('mv-clip-fullscreen-close')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('mv-clip-fullscreen')), findsNothing);
+      await tester.tap(find.byKey(const Key('mv-clip-close')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('mv-clip-viewer')), findsNothing);
 
       expect(find.byKey(const Key('mv-marker-0')), findsOneWidget);
       expect(find.byKey(const Key('mv-marker-2')), findsNothing, reason: '07:52 在起床之後');
       await tester.ensureVisible(find.byKey(const Key('mv-marker-0')));
-      await tester.pump();
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('mv-marker-0')));
-      await tester.pump();
-      expect(find.byKey(const Key('mv-clip-player-0')), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(textOf(tester, 'mv-clip-label'), '03:42 · moved for 5 s · Light');
       expect(tester.takeException(), isNull);
     });
 
@@ -109,7 +130,7 @@ void main() {
       );
       expect(textOf(tester, 'mv-clips-note'), 'SENT-no-video');
       expect(find.byKey(const Key('mv-line')), findsOneWidget);
-      expect(find.byKey(const Key('mv-clip-player-0')), findsNothing);
+      expect(find.byKey(const Key('mv-clip-row-0')), findsNothing);
     });
 
     testWidgets('一週：灰帶寬度照抄後端、長條往上（多）往下（少）、單一顏色', (tester) async {
