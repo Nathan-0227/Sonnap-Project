@@ -146,7 +146,7 @@ void main() {
     for (final k in ['tile-duration', 'tile-efficiency', 'tile-deep', 'tile-camera']) {
       expect(inside(k, sleep), isTrue, reason: k);
     }
-    for (final k in ['tile-steps', 'tile-kcal', 'tile-active', 'tile-day-hr', 'home-moveiq']) {
+    for (final k in ['tile-steps', 'tile-kcal', 'tile-active', 'tile-day-hr']) {
       expect(inside(k, act), isTrue, reason: k);
     }
     // 使用者 2026-11-13 拿掉：左邊的睡著心率（Sleep Stages 疊線還看得到）、右邊的 VO2 max
@@ -157,7 +157,7 @@ void main() {
     final steps = tester.getRect(find.byKey(const Key('tile-steps')));
     final kcal = tester.getRect(find.byKey(const Key('tile-kcal')));
     final pitch = kcal.center.dy - steps.center.dy;
-    expect(act.bottom - tester.getRect(find.byKey(const Key('home-moveiq'))).bottom,
+    expect(act.bottom - tester.getRect(find.byKey(const Key('tile-day-hr'))).bottom,
         lessThan(pitch / 2 + 12), reason: '底下不留整段空白');
     expect(hrRow.top, greaterThan(kcal.bottom));
     // 分隔線在兩項正中間：每一項在自己那一段上下置中，上下留白差不多
@@ -165,7 +165,7 @@ void main() {
         .widgetList<Divider>(find.descendant(
             of: find.byKey(const Key('home-activity-section')), matching: find.byType(Divider)))
         .length;
-    expect(dividers, 5, reason: '標題下一條＋四項之間三條＋Move IQ 前一條');
+    expect(dividers, 4, reason: '標題下一條＋四項之間三條（Move IQ 不放首頁）');
     final lines = tester
         .getRect(find.byKey(const Key('home-activity-section')))
         .top; // 只為了讀起來清楚：以下都是螢幕座標
@@ -195,19 +195,18 @@ void main() {
     expect(find.textContaining('Last night · '), findsOneWidget);
   });
 
-  testWidgets('Activity：步數只寫 goal、Move IQ 寫幾段；不判斷', (tester) async {
+  testWidgets('Activity：步數只寫 goal、不放 Move IQ；不判斷', (tester) async {
     await pumpHome(tester, session());
     await scrollTo(tester, find.byKey(const Key('tile-active')));
     textIn(tester, 'tile-steps', 'goal 9,430');
     textIn(tester, 'tile-kcal', '6.7 km');
     textIn(tester, 'tile-active', '');
-    await scrollTo(tester, find.byKey(const Key('home-moveiq')));
-    expect(tester.widget<Text>(find.byKey(const Key('home-moveiq'))).data,
-        'Move IQ · 2 walks · 1 ride');
+    // 2026-11-14 使用者定：首頁不放 Move IQ（資料裡明明有兩段走路一段騎車）
+    expect(find.byKey(const Key('home-moveiq')), findsNothing);
+    expect(find.textContaining('Move IQ'), findsNothing);
     final all = [
       for (final k in ['tile-steps', 'tile-kcal', 'tile-active', 'tile-day-hr'])
         ...tester.widgetList<Text>(find.descendant(of: find.byKey(Key(k)), matching: find.byType(Text))),
-      tester.widget<Text>(find.byKey(const Key('home-moveiq'))),
     ].map((t) => (t.data ?? t.textSpan?.toPlainText() ?? '').toLowerCase()).join(' ');
     expect(all, contains('9,955'), reason: '反向對照：真的有讀到字');
     for (final w in ['reached', 'achieved', 'normal', 'high', 'good', 'great']) {

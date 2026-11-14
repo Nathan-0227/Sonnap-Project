@@ -2004,9 +2004,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static String _comma(int v) => NumberFormat('#,##0').format(v);
 
   /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
-  /// 步數、活動卡路里、活動時間、VO2 max、整天心率一列一列往下、中間細線分隔，最後一行 Move IQ。
+  /// 步數、活動卡路里、活動時間、整天心率一列一列往下、中間細線分隔。
+  /// Move IQ 不放首頁（2026-11-14 使用者定）；早晨報告的 Yesterday 格子還有。
   /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
-  ({List<Widget> rows, Widget? moveIq}) _activityParts(YesterdayActivity a) {
+  List<Widget> _activityParts(YesterdayActivity a) {
     List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
       for (final h in a.history)
         if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
@@ -2020,11 +2021,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final active = a.activeMinutes;
     final hr = a.dayHeartRate;
-    final moves = a.moveIq ?? const <MoveIqEvent>[];
-    final walks = moves.where((m) => m.type == 'walking').length;
-    final rides = moves.where((m) => m.type == 'cycling').length;
-    final others = moves.length - walks - rides;
-
     final rows = <Widget>[
       _activityRow(
         key: 'tile-steps',
@@ -2073,20 +2069,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
     ];
 
-    final moveIq = moves.isEmpty
-        ? null
-        : Text(
-            [
-              'Move IQ',
-              if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
-              if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
-              if (others > 0) '$others other',
-            ].join(' · '),
-            key: const Key('home-moveiq'),
-            style: const TextStyle(
-                color: SonnapColors.textSecondary, fontSize: 12),
-          );
-    return (rows: rows, moveIq: moveIq);
+    return rows;
   }
 
   /// 兩欄（左 Sleep、右 Activity，照 Otter Life，2026-11-13 使用者定）：
@@ -2133,7 +2116,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   // （使用者 2026-11-13：「不要下面留那麼多空間」「線條也平衡一下」）
                   const SizedBox(height: 10),
                   const Divider(height: 1, color: SonnapColors.cardBorder),
-                  for (final (i, r) in [...act.rows, ?act.moveIq].indexed) ...[
+                  for (final (i, r) in act.indexed) ...[
                     if (i > 0) const Divider(height: 1, color: SonnapColors.cardBorder),
                     Expanded(
                       child: Align(alignment: Alignment.centerLeft, child: r),
