@@ -23,6 +23,7 @@ import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
 import '../widgets/day_heart_rate_chart.dart';
 import '../models/yesterday_activity.dart';
+import '../widgets/dream_book.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
@@ -1379,11 +1380,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
-    // 小狗說「I had a dream…」，點開才看完整夢境（2026-11-13 使用者定）。
-    // 只有真的有夢才出現；看過就縮成一朵小雲。
-    // ⚠️ 位置照整個畫面寬度算，不是照小狗那個 230 的框：小狗的頭在框的左半邊、
-    //    右緣大約就在中線，雲朵要從中線右邊開始才不會蓋到臉（實機截圖抓到過蓋住半張臉）。
-    //    放在框裡面的話推不出去，推到框外又點不到。
+    // 夢境入口：草地上一本攤開的日記，跟早晨報告同一個（2026-11-15 使用者定，取代原本的雲朵）。
+    // 沒看過就抖＋紅點，點開看完整夢境；只有真的有夢才出現。
+    // ⚠️ 位置照整個畫面寬度算（小狗那個框只有 230 寬）：放在小狗右下的草地上、心情標籤的右邊。
     final petWithDream = dreamDate == null
         ? pet
         : LayoutBuilder(
@@ -1397,11 +1396,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Center(child: pet),
                     Positioned(
-                      key: const Key('dream-bubble'),
-                      top: 4,
-                      left: math.min(w / 2 + 14, w - kDreamBubbleWidth - 4),
-                      child: DreamBubble(
-                        read: _dreamReadDate == dreamDate,
+                      key: const Key('home-dream'),
+                      right: 6,
+                      bottom: 28,
+                      child: DreamBook(
+                        unread: _dreamReadDate != dreamDate,
                         onTap: () => _showDream(session),
                       ),
                     ),

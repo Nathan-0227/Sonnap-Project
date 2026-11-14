@@ -11,6 +11,7 @@ import 'package:app/services/bed_marks.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/services/sleep_repository.dart';
+import 'package:app/widgets/dream_book.dart';
 import 'package:app/widgets/dream_diary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -79,58 +80,53 @@ void main() {
       await frames(tester);
     }
 
-    testWidgets('有夢 → 小狗旁只說一句短話，不把夢境內容放在對話框裡', (tester) async {
+    testWidgets('有夢 → 小狗旁草地上一本日記（同報告），不放夢境內容、不再是雲朵', (tester) async {
       expect(withDream.aiContent.hasDream, isTrue, reason: '打包檔要有夢境才測得到');
       await pumpHome(tester, withDream);
-      expect(find.text(kDreamBubbleText), findsOneWidget);
+      expect(find.byKey(const Key('home-dream')), findsOneWidget);
+      expect(find.byType(DreamBook), findsOneWidget);
+      expect(find.byType(DreamBubble), findsNothing, reason: '2026-11-15 使用者定：首頁不用雲朵了');
       expect(find.text(withDream.aiContent.dreamSummary!), findsNothing,
-          reason: '使用者定：對話框不要那麼多字，點開才看');
+          reason: '點開才看');
     });
 
-    testWidgets('點對話框 → 夢境日記：全文、那一晚的日期、AI 小字；看過字換成 Dream diary、大小不變並記住',
-        (tester) async {
+    testWidgets('沒看過 → 紅點；點開 → 夢境日記（全文、那一晚的日期）；看過紅點消失並記住', (tester) async {
       await pumpHome(tester, withDream);
-      await tester.tap(find.byKey(const Key('dream-bubble-text')));
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('home-dream')));
       await frames(tester);
       expect(find.byKey(const Key('dream-diary')), findsOneWidget);
       expect(textOf(tester, 'dream-diary-text'), withDream.aiContent.dreamSummary);
       final night = DateTime.parse(withDream.history.last.date);
       expect(textOf(tester, 'dream-diary-date'), reportDateTitle(night),
           reason: '舊的夢也要看得出是哪一晚，不被當成昨晚的');
-      expect(find.byKey(const Key('dream-diary-disclaimer')), findsOneWidget);
-
-      final before = tester.getSize(find.byKey(const Key('dream-bubble')));
       Navigator.of(tester.element(find.byKey(const Key('dream-diary')))).pop();
       await frames(tester);
-      expect(find.text(kDreamBubbleReadText), findsOneWidget);
-      expect(find.text(kDreamBubbleText), findsNothing);
-      expect(tester.getSize(find.byKey(const Key('dream-bubble'))), before,
-          reason: '使用者定：看過只換字，雲朵不縮');
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsNothing);
       expect(
           await DreamReadStore(kv).isRead(withDream.history.last.date), isTrue);
     });
 
-    testWidgets('這個夢已經看過 → 一打開就寫 Dream diary', (tester) async {
+    testWidgets('這個夢已經看過 → 一打開就沒有紅點', (tester) async {
       await DreamReadStore(kv).markRead(withDream.history.last.date);
       await pumpHome(tester, withDream);
-      expect(find.text(kDreamBubbleReadText), findsOneWidget);
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsNothing);
     });
 
-    testWidgets('看過的是別晚的夢 → 新的夢照樣大聲說', (tester) async {
+    testWidgets('看過的是別晚的夢 → 新的夢照樣有紅點', (tester) async {
       await DreamReadStore(kv).markRead('2026-01-01');
       await pumpHome(tester, withDream);
-      expect(find.byKey(const Key('dream-bubble-text')), findsOneWidget);
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsOneWidget);
     });
 
-    testWidgets('⚠️ 沒有夢 → 不出現對話框，也不說「沒做夢」', (tester) async {
+    testWidgets('⚠️ 沒有夢 → 不出現日記本，也不說「沒做夢」', (tester) async {
       await pumpHome(tester, noDream);
-      expect(find.byKey(const Key('dream-bubble')), findsNothing);
+      expect(find.byKey(const Key('home-dream')), findsNothing);
       expect(find.textContaining("didn't dream"), findsNothing);
       expect(find.textContaining('no dream', findRichText: true), findsNothing);
     });
 
-    testWidgets('⚠️ 雲朵不蓋到小狗的臉（實機截圖抓到過：雲朵左邊蓋住半張臉）', (tester) async {
-      // 實機的大小（三星，1080×2340）
+    testWidgets('⚠️ 日記本不蓋到小狗、心情標籤、等級徽章（實機大小）', (tester) async {
       tester.view.physicalSize = const Size(1080, 2340);
       tester.view.devicePixelRatio = 2.625;
       addTearDown(tester.view.reset);
@@ -145,22 +141,14 @@ void main() {
         ),
       ));
       await frames(tester);
-      final cloud = tester.getRect(find.byKey(const Key('dream-bubble')));
+      final book = tester.getRect(find.byKey(const Key('dream-book')));
       final pet = tester.getRect(find.byKey(const Key('home-pet')));
-      // 小狗的頭在圖的左半邊，右緣大約就在中線（2026-11-13 實機截圖量的）
-      expect(cloud.left, greaterThan(pet.center.dx + 8));
-      // 使用者定：雲朵要比小狗的頭小（頭約佔小狗圖寬的一半）
-      expect(cloud.width, lessThan(pet.width / 2));
-      expect(cloud.right, lessThanOrEqualTo(tester.view.physicalSize.width / 2.625));
-    });
-
-    testWidgets('對話框不擋到等級徽章', (tester) async {
-      await pumpHome(tester, withDream);
-      final bubble = tester.getRect(find.byKey(const Key('dream-bubble-text')));
+      expect(book.left, greaterThan(pet.center.dx), reason: '在小狗右邊');
+      expect(book.right, lessThanOrEqualTo(1080 / 2.625));
       for (final k in ['level-badge', 'mood-chip']) {
         final f = find.byKey(Key(k));
         if (f.evaluate().isEmpty) continue;
-        expect(bubble.overlaps(tester.getRect(f)), isFalse, reason: k);
+        expect(book.overlaps(tester.getRect(f)), isFalse, reason: k);
       }
     });
   });
@@ -227,7 +215,7 @@ void main() {
       for (var i = 0; i < 40; i++) {
         await tester.pump(const Duration(milliseconds: 100));
         final t = tester.widget<Transform>(
-            find.byKey(const Key('report-dream-shake')));
+            find.byKey(const Key('dream-book-shake')));
         final m = t.transform.storage;
         most = math.max(most, math.atan2(m[1], m[0]).abs());
       }
@@ -261,21 +249,21 @@ void main() {
     testWidgets('夢還沒看過 → 日記本會抖；點開之後就不抖', (tester) async {
       await pumpReport(tester, report(dream: true),
           isDreamRead: () async => false);
-      expect(find.byKey(const Key('report-dream-unread-dot')), findsOneWidget);
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsOneWidget);
       expect(await maxTilt(tester), greaterThan(0.03));
       await tester.tap(find.byKey(const Key('report-dream')));
       await frames(tester);
       await tester.tapAt(const Offset(10, 10)); // 關掉夢境
       await frames(tester);
       expect(await maxTilt(tester), 0);
-      expect(find.byKey(const Key('report-dream-unread-dot')), findsNothing);
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsNothing);
     });
 
     testWidgets('夢已經看過 → 日記本不抖', (tester) async {
       await pumpReport(tester, report(dream: true),
           isDreamRead: () async => true);
       expect(await maxTilt(tester), 0);
-      expect(find.byKey(const Key('report-dream-unread-dot')), findsNothing);
+      expect(find.byKey(const Key('dream-book-unread-dot')), findsNothing);
     });
 
     testWidgets('沒有夢 → 沒有對話框', (tester) async {
