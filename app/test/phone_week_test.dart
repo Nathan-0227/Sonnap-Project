@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:app/services/camera_insights.dart';
+import 'package:app/services/night_compare.dart' show kDeltaUp;
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/bed_week_sheet.dart' show clockOf;
 import 'package:app/widgets/phone_week_sheet.dart';
@@ -85,6 +86,54 @@ void main() {
       expect(w.nightsWithData, 3);
       expect(w.lateNights, 2);
       expect(w.judgedNights, 3);
+    });
+
+    test('C：這週中間值 vs 前 7 晚中間值，只代表方向；前一週沒資料就沒有', () {
+      final w = phoneWeek(
+        endDate: '2026-11-14',
+        downs: {
+          '2026-11-14': PhoneDown(t('2026-11-14 03:30'), null),
+          '2026-11-13': PhoneDown(t('2026-11-13 03:00'), null),
+          '2026-11-12': PhoneDown(t('2026-11-12 04:00'), null),
+          // 前一週（11-01 ~ 11-07）
+          '2026-11-07': PhoneDown(t('2026-11-07 02:00'), null),
+          '2026-11-06': PhoneDown(t('2026-11-06 03:07'), null),
+          '2026-11-05': PhoneDown(t('2026-11-04 23:50'), null),
+          // 前一週的白天時刻一樣不算
+          '2026-11-04': PhoneDown(t('2026-11-04 14:00'), null),
+          // 再更早一天不算進前一週
+          '2026-10-31': PhoneDown(t('2026-10-31 09:00'), null),
+        },
+      );
+      expect(clockOf(w.median!), '03:30');
+      expect(clockOf(w.previousMedian!), '02:00');
+      expect(w.change, 90);
+      expect(phoneWeekChangeLine(w), '↑ 1h 30m later than the week before');
+
+      final earlier = phoneWeek(
+        endDate: '2026-11-14',
+        downs: {
+          '2026-11-14': PhoneDown(t('2026-11-14 01:00'), null),
+          '2026-11-07': PhoneDown(t('2026-11-07 01:20'), null),
+        },
+      );
+      expect(
+        phoneWeekChangeLine(earlier),
+        '↓ 20m earlier than the week before',
+      );
+
+      final none = phoneWeek(
+        endDate: '2026-11-14',
+        downs: {'2026-11-14': PhoneDown(t('2026-11-14 01:00'), null)},
+      );
+      expect(phoneWeekChangeLine(none), isNull);
+    });
+
+    test('A：+Nm in bed 照抄後端；沒有就不寫（不寫 0）', () {
+      expect(inBedLabel(null), isNull);
+      expect(inBedLabel(6.7), '+7m in bed');
+      expect(inBedLabel(0.1), '+<1m in bed');
+      expect(inBedLabel(158.1), '+2h 38m in bed');
     });
 
     test('targetFromEvening：格式不對 → null', () {
@@ -174,6 +223,49 @@ void main() {
       expect(colorOf('2026-11-12'), colorOf('2026-11-13'));
     });
 
+    testWidgets('A＋C 畫在畫面上：有按上床的晚上才有小字；晚了是紅色', (tester) async {
+      final w = phoneWeek(
+        endDate: '2026-11-14',
+        downs: {
+          '2026-11-14': PhoneDown(t('2026-11-14 03:26'), false, 6.7),
+          '2026-11-13': PhoneDown(t('2026-11-13 03:03'), false),
+          '2026-11-07': PhoneDown(t('2026-11-07 02:00'), null),
+        },
+      );
+      await tester.pumpWidget(
+        host(PhoneWeekView(title: 'Phone down', week: w, target: '03:00')),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('phone-week-inbed-2026-11-14')))
+            .data,
+        '+7m in bed',
+      );
+      expect(
+        find.byKey(const Key('phone-week-inbed-2026-11-13')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('phone-week-inbed-note')), findsOneWidget);
+      final change = tester.widget<Text>(
+        find.byKey(const Key('phone-week-change')),
+      );
+      expect(change.data, startsWith('↑'));
+      expect(change.style!.color, kDeltaUp);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('沒有任何一晚按了上床 → 不出現說明那行', (tester) async {
+      final w = phoneWeek(
+        endDate: '2026-11-14',
+        downs: {'2026-11-14': PhoneDown(t('2026-11-14 03:26'), false)},
+      );
+      await tester.pumpWidget(
+        host(PhoneWeekView(title: 'Phone down', week: w)),
+      );
+      expect(find.byKey(const Key('phone-week-inbed-note')), findsNothing);
+      expect(find.byKey(const Key('phone-week-change')), findsNothing);
+    });
+
     testWidgets('一晚都沒有 → 寫沒有資料，不畫圖', (tester) async {
       await tester.pumpWidget(
         host(
@@ -217,6 +309,7 @@ void main() {
                   'date': '2026-11-14',
                   'lights_out_at': '2026-11-14T03:41:00',
                   'is_late': true,
+                  'phone_in_bed_minutes': 6.7,
                 },
                 {
                   'date': '2026-11-13',
@@ -246,6 +339,8 @@ void main() {
       expect(r.phoneDowns['2026-11-14']!.isLate, isTrue);
       expect(r.phoneDowns['2026-11-13']!.isLate, isNull);
       expect(r.phoneDowns['2026-11-14']!.at.hour, 3);
+      expect(r.phoneDowns['2026-11-14']!.inBedMinutes, 6.7);
+      expect(r.phoneDowns['2026-11-13']!.inBedMinutes, isNull);
     });
   });
 }

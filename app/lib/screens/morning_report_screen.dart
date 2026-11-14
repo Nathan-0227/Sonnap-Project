@@ -1629,7 +1629,13 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       downs = {...await widget.loadPhoneDowns!()};
     } catch (_) {}
     final mine = r.lightsOutAt;
-    if (mine != null) downs[r.date] = PhoneDown(mine, downs[r.date]?.isLate);
+    if (mine != null) {
+      downs[r.date] = PhoneDown(
+        mine,
+        downs[r.date]?.isLate,
+        downs[r.date]?.inBedMinutes,
+      );
+    }
     if (!mounted) return;
     await showPhoneWeekSheet(
       context,

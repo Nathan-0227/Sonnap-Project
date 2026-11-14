@@ -13,17 +13,26 @@
 // - 右邊只寫時刻（Q8）
 // - **12:00–18:00 的放下手機不算那一晚的就寢**（11-15 使用者定）：報告格子的時間軸本來就是
 //   18:00→12:00。實例 10-05 偵測成 14:07（晚 607 分鐘），一晚就把整週拉歪。畫成 no data、不進中間值與晚幾晚
+// - 11-15 使用者選 A＋C：
+//   A. 每一列時刻下面小字「+7m in bed」＝按了 Start Sleep 之後手機還在用多久（後端的
+//      phone_in_bed_minutes，照抄不重算）。只有按了上床按鈕的晚上才有，沒有就不寫（不寫 0）
+//   C. 標題下面「↑ 23m later than the week before」：這週中間值 vs 前 7 晚中間值，
+//      同 Total sleep 那張：**只代表方向**，晚了紅、早了綠，不說好壞；前一週沒資料就不寫
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../services/night_compare.dart'
+    show formatMinutes, kDeltaUp, kDeltaDown, kDeltaFlat;
 import 'bed_week_sheet.dart' show minutesFromEvening, clockOf;
 
-/// 一晚放下手機：時刻（牆鐘）＋後端判的晚不晚（沒給 → null）。
+/// 一晚放下手機：時刻（牆鐘）＋後端判的晚不晚（沒給 → null）＋
+/// 按了 Start Sleep 之後手機還用了幾分鐘（後端的 phone_in_bed_minutes；沒按上床 → null）。
 class PhoneDown {
   final DateTime at;
   final bool? isLate;
-  const PhoneDown(this.at, this.isLate);
+  final double? inBedMinutes;
+  const PhoneDown(this.at, this.isLate, [this.inBedMinutes]);
 }
 
 class PhoneWeekNight {
@@ -34,7 +43,24 @@ class PhoneWeekNight {
 
 class PhoneWeek {
   final List<PhoneWeekNight> nights; // 舊 → 新，固定 7 格
-  const PhoneWeek(this.nights);
+
+  /// 前 7 晚的中間值（從 18:00 起算）；前一週沒資料 → null。
+  final int? previousMedian;
+  const PhoneWeek(this.nights, [this.previousMedian]);
+
+  /// 這週比前一週晚了幾分鐘（負＝早了）；任一週沒資料 → null。
+  int? get change {
+    final m = median;
+    final p = previousMedian;
+    return m == null || p == null ? null : m - p;
+  }
+
+  static int? medianOf(Iterable<PhoneDown> downs) {
+    final xs = downs.map((d) => minutesFromEvening(d.at)).toList()..sort();
+    if (xs.isEmpty) return null;
+    final mid = xs.length ~/ 2;
+    return xs.length.isOdd ? xs[mid] : ((xs[mid - 1] + xs[mid]) / 2).round();
+  }
 
   List<PhoneDown> get _downs => [
     for (final n in nights)
@@ -44,12 +70,7 @@ class PhoneWeek {
   int get nightsWithData => _downs.length;
 
   /// 中間值（從 18:00 起算的分鐘）；沒有任何一晚 → null。
-  int? get median {
-    final xs = _downs.map((d) => minutesFromEvening(d.at)).toList()..sort();
-    if (xs.isEmpty) return null;
-    final mid = xs.length ~/ 2;
-    return xs.length.isOdd ? xs[mid] : ((xs[mid - 1] + xs[mid]) / 2).round();
-  }
+  int? get median => medianOf(_downs);
 
   /// 後端說晚了的晚數／後端有判的晚數（照抄 is_late，不重算）。
   int get lateNights => _downs.where((d) => d.isLate == true).length;
@@ -69,14 +90,37 @@ PhoneWeek phoneWeek({
   int days = 7,
 }) {
   final end = DateTime.parse(endDate);
+  PhoneDown? on(int daysBack) {
+    final d =
+        downs[_iso(DateTime.utc(end.year, end.month, end.day - daysBack))];
+    return d == null || isDaytime(d.at) ? null : d;
+  }
+
   return PhoneWeek([
     for (var i = days - 1; i >= 0; i--)
-      () {
-        final key = _iso(DateTime.utc(end.year, end.month, end.day - i));
-        final d = downs[key];
-        return PhoneWeekNight(key, d == null || isDaytime(d.at) ? null : d);
-      }(),
-  ]);
+      PhoneWeekNight(
+        _iso(DateTime.utc(end.year, end.month, end.day - i)),
+        on(i),
+      ),
+  ], PhoneWeek.medianOf([for (var i = days; i < 2 * days; i++) ?on(i)]));
+}
+
+/// 「↑ 23m later than the week before」；算不出來 → null。只代表方向。
+String? phoneWeekChangeLine(PhoneWeek w) {
+  final c = w.change;
+  if (c == null) return null;
+  if (c == 0) return '= same as the week before';
+  final m = formatMinutes(c.abs().toDouble());
+  return c > 0
+      ? '↑ $m later than the week before'
+      : '↓ $m earlier than the week before';
+}
+
+/// 「+7m in bed」：按了 Start Sleep 之後手機還在用多久；沒有 → null。
+String? inBedLabel(double? minutes) {
+  if (minutes == null || minutes < 0) return null;
+  if (minutes < 1) return '+<1m in bed';
+  return '+${formatMinutes(minutes.roundToDouble())} in bed';
 }
 
 /// 「HH:MM」→ 從 18:00 起算的分鐘；格式不對 → null。
@@ -151,6 +195,11 @@ class PhoneWeekView extends StatelessWidget {
   Widget build(BuildContext context) {
     final med = week.median;
     final late = phoneLateLine(week, target);
+    final change = phoneWeekChangeLine(week);
+    final c = week.change;
+    final hasInBed = week.nights.any(
+      (n) => inBedLabel(n.down?.inBedMinutes) != null,
+    );
     return Container(
       key: const Key('phone-week-sheet'),
       decoration: const BoxDecoration(
@@ -217,6 +266,18 @@ class PhoneWeekView extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                if (change != null)
+                  Text(
+                    change,
+                    key: const Key('phone-week-change'),
+                    style: TextStyle(
+                      color: c! > 0
+                          ? kDeltaUp
+                          : (c < 0 ? kDeltaDown : kDeltaFlat),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 if (late != null)
                   Text(
                     late,
@@ -229,6 +290,14 @@ class PhoneWeekView extends StatelessWidget {
                   color: color,
                   target: targetFromEvening(target),
                 ),
+                if (hasInBed) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    '+7m in bed = phone use after Start Sleep',
+                    key: Key('phone-week-inbed-note'),
+                    style: TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                  ),
+                ],
               ],
             ],
           ),
@@ -246,8 +315,8 @@ class _RowsChart extends StatelessWidget {
   const _RowsChart({required this.week, required this.color, this.target});
 
   static const double _dayW = 40;
-  static const double _timeW = 48;
-  static const double _rowH = 30;
+  static const double _timeW = 64;
+  static const double _rowH = 38;
   static const double _axisH = 20;
 
   @override
@@ -369,7 +438,7 @@ class _Row extends StatelessWidget {
           Positioned(
             left: dayW,
             right: timeW,
-            top: 14,
+            top: 18,
             height: 2,
             child: const DecoratedBox(
               decoration: BoxDecoration(color: Color(0x14FFFFFF)),
@@ -396,7 +465,7 @@ class _Row extends StatelessWidget {
             Positioned(
               key: Key('phone-week-dot-${night.date}'),
               left: dotX! - 6,
-              top: 9,
+              top: 13,
               width: 12,
               height: 12,
               child: DecoratedBox(
@@ -419,22 +488,35 @@ class _Row extends StatelessWidget {
             width: down == null ? null : timeW,
             top: 0,
             bottom: 0,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                down == null
-                    ? '— no data'
-                    : clockOf(minutesFromEvening(down.at)),
-                key: Key('phone-week-time-${night.date}'),
-                softWrap: false,
-                style: TextStyle(
-                  color: down == null
-                      ? const Color(0x66FFFFFF)
-                      : (isLast ? Colors.white : const Color(0xCCFFFFFF)),
-                  fontSize: down == null ? 11 : 12,
-                  fontWeight: down == null ? null : FontWeight.w800,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  down == null
+                      ? '— no data'
+                      : clockOf(minutesFromEvening(down.at)),
+                  key: Key('phone-week-time-${night.date}'),
+                  softWrap: false,
+                  style: TextStyle(
+                    color: down == null
+                        ? const Color(0x66FFFFFF)
+                        : (isLast ? Colors.white : const Color(0xCCFFFFFF)),
+                    fontSize: down == null ? 11 : 12,
+                    fontWeight: down == null ? null : FontWeight.w800,
+                  ),
                 ),
-              ),
+                if (inBedLabel(down?.inBedMinutes) case final l?)
+                  Text(
+                    l,
+                    key: Key('phone-week-inbed-${night.date}'),
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: Color(0x99FFFFFF),
+                      fontSize: 9.5,
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

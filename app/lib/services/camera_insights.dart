@@ -301,7 +301,12 @@ class CameraInsightsService implements CameraInsightsSource {
           final out = parseWallClock(j['lights_out_at']);
           final late = j['is_late'];
           if (out != null) {
-            phoneDowns[date] = PhoneDown(out, late is bool ? late : null);
+            final inBed = j['phone_in_bed_minutes'];
+            phoneDowns[date] = PhoneDown(
+              out,
+              late is bool ? late : null,
+              inBed is num ? inBed.toDouble() : null,
+            );
           }
         }
       }
