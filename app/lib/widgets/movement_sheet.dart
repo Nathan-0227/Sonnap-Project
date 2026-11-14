@@ -324,54 +324,7 @@ class _MovementViewState extends State<MovementView> {
                 'Camera data is not part of your score.',
                 style: TextStyle(color: _soft, fontSize: 12),
               ),
-              if (widget.curve != null) ...[
-                _divider(),
-                const Text(
-                  'Movement through the night',
-                  style: TextStyle(color: _soft, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 120,
-                  child: _MotionLine(
-                    curve: widget.curve!,
-                    episodes: eps ?? const [],
-                    clips: _clips,
-                    selected: _sel,
-                    color: color,
-                    onSelect: (at) => _select(at),
-                  ),
-                ),
-              ] else if (hasTimeline) ...[
-                _divider(),
-                SizedBox(
-                  height: 54,
-                  child: _Timeline(
-                    episodes: eps,
-                    from: from,
-                    to: to,
-                    clipStarts: {for (final c in _clips) c.startAt!},
-                    selected: _sel,
-                    color: color,
-                    onSelect: (at) => _select(at),
-                  ),
-                ),
-              ],
-              if (hasTimeline) ...[
-                _divider(),
-                const Text(
-                  'Movements each hour',
-                  style: TextStyle(color: _soft, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 92,
-                  child: _HourBars(
-                    hours: hourlyCounts(eps, from, to),
-                    color: color,
-                  ),
-                ),
-              ],
+              // 11-15 使用者定的順序：摘要 → 播放器 → 動作線 → 每小時 → 一週 → 片段列表
               _divider(),
               // ── 播放器 ──
               if (_clips.isEmpty && n.clipsNote != null)
@@ -463,26 +416,53 @@ class _MovementViewState extends State<MovementView> {
                   ),
                 ],
               ],
-              // ── 片段列表 ──
-              if (_clips.isNotEmpty) ...[
+              if ((n.motionCurve ?? widget.curve) != null) ...[
                 _divider(),
-                Text(
-                  'Clips · ${_clips.length} biggest movements',
-                  style: const TextStyle(color: _soft, fontSize: 13),
+                const Text(
+                  'Movement through the night',
+                  style: TextStyle(color: _soft, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
-                for (var i = 0; i < _clips.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _ClipRow(
-                      key: Key('mv-clip-row-$i'),
-                      clip: _clips[i],
-                      stages: widget.stages,
-                      color: color,
-                      selected: _clips[i].startAt == _sel,
-                      onTap: () => _select(_clips[i].startAt, reveal: true),
-                    ),
+                SizedBox(
+                  height: 120,
+                  child: _MotionLine(
+                    curve: (n.motionCurve ?? widget.curve)!,
+                    episodes: eps ?? const [],
+                    clips: _clips,
+                    selected: _sel,
+                    color: color,
+                    onSelect: (at) => _select(at),
                   ),
+                ),
+              ] else if (hasTimeline) ...[
+                _divider(),
+                SizedBox(
+                  height: 54,
+                  child: _Timeline(
+                    episodes: eps,
+                    from: from,
+                    to: to,
+                    clipStarts: {for (final c in _clips) c.startAt!},
+                    selected: _sel,
+                    color: color,
+                    onSelect: (at) => _select(at),
+                  ),
+                ),
+              ],
+              if (hasTimeline) ...[
+                _divider(),
+                const Text(
+                  'Movements each hour',
+                  style: TextStyle(color: _soft, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: 92,
+                  child: _HourBars(
+                    hours: hourlyCounts(eps, from, to),
+                    color: color,
+                  ),
+                ),
               ],
               // ── 這一週 ──
               if (showWeek) ...[
@@ -505,6 +485,27 @@ class _MovementViewState extends State<MovementView> {
                   height: 150,
                   child: _WeekBars(week: w, color: color),
                 ),
+              ],
+              // ── 片段列表 ──
+              if (_clips.isNotEmpty) ...[
+                _divider(),
+                Text(
+                  'Clips · ${_clips.length} biggest movements',
+                  style: const TextStyle(color: _soft, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                for (var i = 0; i < _clips.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ClipRow(
+                      key: Key('mv-clip-row-$i'),
+                      clip: _clips[i],
+                      stages: widget.stages,
+                      color: color,
+                      selected: _clips[i].startAt == _sel,
+                      onTap: () => _select(_clips[i].startAt, reveal: true),
+                    ),
+                  ),
               ],
             ],
           ),

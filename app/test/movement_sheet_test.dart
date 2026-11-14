@@ -190,6 +190,48 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('順序（11-15 使用者定）：摘要 → 播放器 → 動作線 → 每小時 → 一週 → 片段列表；線用整段錄影那條', (tester) async {
+      await big(tester);
+      NightCurve mk(int h, int m, int n) => NightCurve(
+            points: [
+              for (var i = 0; i < n; i++)
+                NightCurvePoint(DateTime.utc(2026, 11, 14, h, m).add(Duration(minutes: 5 * i)), 0.05),
+            ],
+            avg: 0.05,
+            min: 0.05,
+            max: 0.05,
+          );
+      final full = CameraNight(
+        date: '2026-11-14',
+        bedStartAt: '2026-11-14T03:20:00',
+        bedEndAt: '2026-11-14T05:10:00',
+        eventsTotal: 4,
+        motionCurve: mk(3, 20, 23), // 整段錄影 03:20 →
+        episodes: episodes,
+        clips: clips,
+        clipsSupported: true,
+        usualLabel: 'SENT-usual',
+        usualDeltaPct: 5,
+        usualSamePct: 25,
+        usualSupported: true,
+      );
+      await tester.pumpWidget(host(MovementView(
+        night: full,
+        curve: mk(3, 40, 10), // 報告傳進來的是睡著那段 03:40 →
+        stages: stages(),
+        week: movementWeek([full], '2026-11-14'),
+      )));
+      expect(find.text('03:20'), findsWidgets, reason: '線的起點是開始錄影，不是入睡');
+      expect(find.text('03:40'), findsNothing);
+      double y(String k) => tester.getTopLeft(find.byKey(Key(k))).dy;
+      expect(y('mv-usual') < y('mv-clip-player'), isTrue);
+      expect(y('mv-clip-player') < y('mv-line'), isTrue);
+      expect(y('mv-line') < y('mv-hour-3'), isTrue);
+      expect(y('mv-hour-3') < y('mv-week-title'), isTrue);
+      expect(y('mv-week-title') < y('mv-clip-row-0'), isTrue);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('每個鐘頭：數字照數、頭尾不滿一小時的寫幾分鐘', (tester) async {
       await big(tester);
       await tester.pumpWidget(host(MovementView(night: night(clipList: clips, eps: episodes))));

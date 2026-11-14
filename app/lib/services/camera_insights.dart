@@ -24,6 +24,7 @@
 /// 而 WASO 量不到。後端刻意回 null，Dart 端補一個就是憑空生出一個數字。
 library;
 
+import '../models/night_curve.dart';
 import 'morning_report.dart' show EfficiencyKind, efficiencyKindOf, scoredEfficiency;
 import '../widgets/phone_week_sheet.dart' show PhoneDown;
 import 'dart:convert';
@@ -128,6 +129,10 @@ class CameraNight {
   final String? bedTimesProvenance;
   final String? sleepOnsetProvenance;
 
+  /// 整段錄影的動作線（開始 → 結束錄影，每 5 分鐘有幾成在動）。Movement 點開最上面那條，
+  /// 跟每小時次數涵蓋同一段時間（2026-11-15 使用者定）。沒有 → null。
+  final NightCurve? motionCurve;
+
   /// 每一段動作，照時間排（時間軸與每小時次數用）。舊夜晚還沒回填 → null（不是空的）。
   final List<CameraEpisode>? episodes;
 
@@ -168,6 +173,7 @@ class CameraNight {
     this.eventsPerHour,
     this.bedTimesProvenance,
     this.sleepOnsetProvenance,
+    this.motionCurve,
     this.episodes,
     this.clips = const [],
     this.clipsNote,
@@ -198,6 +204,7 @@ class CameraNight {
       eventsPerHour: num_(json['events_per_hour']),
       bedTimesProvenance: json['bed_times_provenance'] as String?,
       sleepOnsetProvenance: json['sleep_onset_provenance'] as String?,
+      motionCurve: NightCurve.fromJsonOrNull(json['motion_curve']),
       episodes: json['episodes'] is List
           ? [
               for (final e in json['episodes'] as List)

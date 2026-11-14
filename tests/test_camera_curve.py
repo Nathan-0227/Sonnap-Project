@@ -155,6 +155,8 @@ e9 = hist["2026-11-09"]["episodes"]
 check("/insights 帶每段動作，label 跟片段同一支 label_for", e9[0],
       {**eps[0], "label": __import__("camera_clips").label_for(datetime.fromisoformat(eps[0]["start_at"]), eps[0]["seconds"])})
 check("還沒回填的晚上是 null（不是空陣列）", hist["2026-11-11"]["episodes"], None)
+check("/insights 帶整段錄影的動作線（不剪成睡著那段：第一點是開始錄影 01:00）",
+      hist["2026-11-09"]["motion_curve"]["points"][0]["t"], "2026-11-12T01:00:00")
 
 print("\n【7】首頁的打包檔：直接讀那一晚的錄影 CSV，跟 /home 同一個算法")
 import build_app_payload as payload  # noqa: E402

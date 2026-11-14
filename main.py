@@ -1339,6 +1339,9 @@ async def get_insights(
                     # 每一段動作（早晨報告 Movement 點開的時間軸與每小時次數，2026-11-15）。
                     # label 跟片段**同一支** camera_clips.label_for；舊夜晚還沒回填 → null（不是空陣列）
                     "episodes": _camera_episodes(r.get("motion_episodes")),
+                    # 整段錄影的動作線（開始 → 結束錄影，不剪成睡著那段；2026-11-15 使用者定：
+                    # Movement 點開的線要跟每小時次數涵蓋同一段時間）。沒有 → null
+                    "motion_curve": json.loads(r["motion_curve"]) if r.get("motion_curve") else None,
                     "roi": r["roi"],
                     "csv_name": r["csv_name"],
                     **_camera_clips_for(clip_nights.get(r["date"])),
