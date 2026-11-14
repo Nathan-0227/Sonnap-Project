@@ -357,8 +357,8 @@ class _ClockChart extends StatelessWidget {
             // 兩條中間值虛線（≥3 晚才畫）；字在圖外面的右邊，對齊那條線
             if (week.nightsWithData >= 3) ...[
               for (final (key, label, v) in [
-                ('bed', 'usual bed', week.medianStart),
-                ('wake', 'usual wake', week.medianEnd),
+                ('bed', 'bed', week.medianStart),
+                ('wake', 'wake', week.medianEnd),
               ])
                 if (v != null) ...[
                   Positioned(
@@ -373,37 +373,55 @@ class _ClockChart extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // 字在圖外面右邊一欄、跟刻度一樣對齊那條線；做成實心小膠囊比較顯眼（使用者定）
                   Positioned(
                     right: 0,
-                    width: _tagW - 6,
-                    top: y(v) - 13,
+                    width: _tagW - 4,
+                    top: y(v) - 21,
                     child: IgnorePointer(
-                      child: FittedBox(
-                        alignment: Alignment.centerLeft,
-                        fit: BoxFit.scaleDown,
-                        child: Column(
-                          key: Key('bed-week-median-$key-label'),
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              label,
-                              style: const TextStyle(
-                                color: Color(0xB3FFFFFF),
-                                fontSize: 9,
-                                height: 1.1,
+                      child: Column(
+                        key: Key('bed-week-median-$key-label'),
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.5),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                clockOf(v),
+                                style: const TextStyle(
+                                  color: Color(0xFF151A3C),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.1,
+                                ),
                               ),
                             ),
-                            Text(
-                              clockOf(v),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                height: 1.1,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

@@ -136,8 +136,8 @@ void main() {
           )
           .map((x) => x.data)
           .join(' ');
-      expect(tag('bed'), 'usual bed 02:50');
-      expect(tag('wake'), 'usual wake 09:00');
+      expect(tag('bed'), 'bed 02:50');
+      expect(tag('wake'), 'wake 09:00');
       // 字在圖外面：在最後一根長條的右邊
       final lastBar = tester.getRect(
         find.byKey(const Key('bed-week-bar-2026-11-14')),
