@@ -60,6 +60,10 @@ c = hr.heart_rate_curve(recs(START, values), START, WAKE)
 check("最低是原始讀數的 50，不是 5 分鐘平均", c["min"], 50)
 check("最高是原始讀數的 70", c["max"], 70)
 check("平均", c["avg"], 60)
+check("最低那一刻是第一筆 50 的原始時刻", c["min_at"], START)
+values = [60] * 10 + [47] + [60] * 10 + [47] + [60] * 8
+c = hr.heart_rate_curve(recs(START, values), START, WAKE)
+check("最低出現兩次 → 取最早那一筆（01:20）", c["min_at"], "2026-11-12T01:20:00+08:00")
 
 print("\n【3】資料不夠 → None")
 check("只有 10 分鐘的讀數", hr.heart_rate_curve(recs(START, [60] * 5), START, WAKE), None)

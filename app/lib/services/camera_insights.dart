@@ -221,6 +221,10 @@ class CameraInsightsResult {
   /// 數字用 [scoredEfficiency] 挑——跟早晨報告的格子同一支。
   final Map<String, EfficiencyNight> efficiencyNights;
 
+  /// 每晚睡著那一段的心率平均＋最低（`wearable.history.sleep_heart_rate`，2026-11-15）。
+  /// 早晨報告 Sleeping heart rate 點開的一週用；只有 Garmin 來源的晚上有。
+  final Map<String, SleepHeartRate> sleepHeartRates;
+
 
   const CameraInsightsResult(
     this.status, {
@@ -228,6 +232,7 @@ class CameraInsightsResult {
         this.phoneDowns = const {},
     this.awakeMinutes = const {},
     this.efficiencyNights = const {},
+    this.sleepHeartRates = const {},
     this.nights = const [],
     this.note,
     this.floorNote,
@@ -324,6 +329,7 @@ class CameraInsightsService implements CameraInsightsSource {
       }
             final awakeMinutes = <String, double>{};
       final efficiencyNights = <String, EfficiencyNight>{};
+      final sleepHeartRates = <String, SleepHeartRate>{};
       final behaviorByDate = <String, Map<String, dynamic>>{
         if (behavior is Map<String, dynamic>)
           for (final j in (behavior['history'] as List<dynamic>? ?? const [])
@@ -338,6 +344,13 @@ class CameraInsightsService implements CameraInsightsSource {
           if (date is! String) continue;
           final v = j['waso_minutes'];
           if (v is num) awakeMinutes[date] = v.toDouble();
+          final hr = j['sleep_heart_rate'];
+          if (hr is Map && hr['avg'] is num && hr['min'] is num) {
+            sleepHeartRates[date] = SleepHeartRate(
+              (hr['avg'] as num).toDouble(),
+              (hr['min'] as num).toDouble(),
+            );
+          }
           final comp = (j['composition'] as Map?)?.cast<String, dynamic>();
           final basis = comp?['efficiency_basis'] as String?;
           final b = behaviorByDate[date];
@@ -360,6 +373,7 @@ class CameraInsightsService implements CameraInsightsSource {
           phoneDowns: phoneDowns,
           awakeMinutes: awakeMinutes,
           efficiencyNights: efficiencyNights,
+          sleepHeartRates: sleepHeartRates,
         );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
@@ -373,6 +387,7 @@ class CameraInsightsService implements CameraInsightsSource {
         phoneDowns: phoneDowns,
           awakeMinutes: awakeMinutes,
           efficiencyNights: efficiencyNights,
+          sleepHeartRates: sleepHeartRates,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,
@@ -413,4 +428,11 @@ class EfficiencyNight {
   /// 那一種的名字（後端照抄）；舊版後端沒有 → null。
   final String? label;
   const EfficiencyNight(this.value, this.kind, this.label);
+}
+
+/// 一晚睡著那一段的心率（後端從原始讀數算的，Dart 不重算）。
+class SleepHeartRate {
+  final double avg;
+  final double min;
+  const SleepHeartRate(this.avg, this.min);
 }

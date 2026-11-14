@@ -17,7 +17,8 @@ import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
-import '../services/camera_insights.dart' show EfficiencyNight;
+import '../services/camera_insights.dart' show EfficiencyNight, SleepHeartRate;
+import '../widgets/heart_rate_sheet.dart';
 import '../widgets/efficiency_sheet.dart';
 import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
@@ -85,6 +86,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚進分數的效率＋種類＋名字（後端 /insights）。Efficiency 點開的一週用；沒給或連不到就只看這一晚。
   final Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights;
 
+  /// 每晚睡著那一段的心率平均＋最低（後端 /insights）。Sleeping heart rate 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<Map<String, SleepHeartRate>?> Function()? loadSleepHeartRates;
+
 
   const MorningReportScreen({
     super.key,
@@ -100,6 +104,7 @@ class MorningReportScreen extends StatefulWidget {
         this.loadPhoneDowns,
     this.loadAwakeMinutes,
     this.loadEfficiencyNights,
+    this.loadSleepHeartRates,
   });
 
   @override
@@ -1168,7 +1173,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         key: const Key('report-hr-tile'),
         icon: Icons.favorite_rounded,
         color: _cHr,
-        title: 'Heart rate',
+        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）
+        title: 'Sleeping heart rate',
         value: hrAvg == null ? null : '${hrAvg.round()} bpm',
         graphic: hrCurve == null
             ? null
@@ -1176,9 +1182,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 SparklinePainter(_curvePoints(hrCurve), _cHr),
                 key: const Key('report-hr-line'),
               ),
-        onTap: hrCurve == null || r.stages == null
-            ? null
-            : () => _openCurve(r, 'heartRate'),
+        // 點開：這一晚依階段上色的線＋各階段平均＋一週（2026-11-15）
+        onTap: hrCurve == null ? null : () => _showHeartRate(r),
         lines: [
           Text(
             [
@@ -1627,6 +1632,30 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         asleepAt: r.asleepAt,
         wokeAt: r.wokeAt,
       ),
+      week: week,
+    );
+  }
+
+  /// Sleeping heart rate 點開。這一晚的曲線、平均、最低以報告上的為準；
+  /// 一週只有後端有，這一晚那一欄用報告的數字蓋過去，保證跟格子一樣。
+  Future<void> _showHeartRate(MorningReport r) async {
+    final curve = r.heartRate!;
+    Map<String, SleepHeartRate>? week;
+    try {
+      final m = await widget.loadSleepHeartRates?.call();
+      if (m != null && m.isNotEmpty) {
+        week = {...m, r.date: SleepHeartRate(curve.avg, curve.min)};
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showHeartRateSheet(
+      context,
+      color: _cHr,
+      fontFamily: kReportFont,
+      curve: curve,
+      date: r.date,
+      stages: r.stages,
+      restingHeartRate: r.restingHeartRate,
       week: week,
     );
   }

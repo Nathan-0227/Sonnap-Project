@@ -405,6 +405,12 @@ def night_stages(w_row):
     }
 
 
+def _sleep_hr_summary(w_row):
+    """一週圖用：那一晚睡著期間心率的平均與最低（整條曲線太大，一週只帶兩個數）。沒有 → None。"""
+    c = night_heart_rate(w_row)
+    return None if c is None else {"avg": c["avg"], "min": c["min"]}
+
+
 def night_heart_rate(w_row):
     """
     那一晚睡著期間的心率曲線（早晨報告的 Heart rate 卡，2026-11-13）。
@@ -1242,6 +1248,9 @@ async def get_insights(
                     #    deep_min），欄名與 asset 路徑的 history 相同。
                     "sleep_efficiency": r["efficiency"],
                     "deep_minutes": r["deep_min"],
+                    # 早晨報告 Sleeping heart rate 點開的一週圖（2026-11-15）：睡著那一段的
+                    # 平均與最低，跟報告格子**同一支** night_heart_rate（只有 Garmin 來源有）。
+                    "sleep_heart_rate": _sleep_hr_summary(r),
                     # 早晨報告 Awake 點開的一週圖（2026-11-15）：入睡後清醒的分鐘數，
                     # 與 /home 的 metrics.waso_minutes 同一個欄位。0 是真的值（整晚沒醒），null 才是沒資料
                     "waso_minutes": r["waso_min"],

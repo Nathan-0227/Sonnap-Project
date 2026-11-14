@@ -95,6 +95,7 @@ def _curve(
     回傳：
         {"points": [{"t": ISO 牆鐘時間, "value": 數字}, …],
          "avg": 睡著期間平均, "min": 最低, "max": 最高,
+         "min_at": 最低那一筆原始讀數的時刻（同一個值出現好幾次取最早的）,
          "bucket_minutes": 5}
     數字四捨五入到 digits 位（心率 0 位＝整數）。
     t 是每一格的起點，與 sleep_start 同一個時區標記（App 用 parseWallClock 讀）。
@@ -137,10 +138,14 @@ def _curve(
         return None
 
     values = [v for _, v in readings]
+    # 最低那一刻用**原始讀數**（2026-11-15 早晨報告心率點開「Lowest 46 at 03:48」）：
+    # 5 分鐘平均的最低點會跟 min 對不上
+    low_t, _ = min(sorted(readings), key=lambda tv: tv[1])
     return {
         "points": points,
         "avg": rnd(sum(values) / len(values)),
         "min": rnd(min(values)),
         "max": rnd(max(values)),
+        "min_at": low_t.isoformat(),
         "bucket_minutes": bucket_minutes,
     }
