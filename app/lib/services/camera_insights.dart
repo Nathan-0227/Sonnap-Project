@@ -83,6 +83,24 @@ class CameraClip {
   }
 }
 
+/// 一段動作（後端 `camera.history[].episodes[]`，2026-11-15）。
+/// [start] 是牆鐘、沒有時區標記（同片段的 start_at，兩個可以直接比）；[label] 照抄後端。
+@immutable
+class CameraEpisode {
+  final DateTime start;
+  final double seconds;
+  final String label;
+  const CameraEpisode(this.start, this.seconds, this.label);
+
+  static CameraEpisode? fromJsonOrNull(Object? raw) {
+    if (raw is! Map) return null;
+    final t = DateTime.tryParse((raw['start_at'] as String?) ?? '');
+    final s = raw['seconds'];
+    if (t == null || s is! num) return null;
+    return CameraEpisode(t, s.toDouble(), (raw['label'] as String?) ?? '');
+  }
+}
+
 /// 一晚的攝影機資料。欄名與後端 `/insights` 的 `camera.history` 一致。
 @immutable
 class CameraNight {
@@ -109,6 +127,9 @@ class CameraNight {
   /// 哪個量來自哪裡。畫面上的「Self-reported／Detected」就是照這個標的。
   final String? bedTimesProvenance;
   final String? sleepOnsetProvenance;
+
+  /// 每一段動作，照時間排（時間軸與每小時次數用）。舊夜晚還沒回填 → null（不是空的）。
+  final List<CameraEpisode>? episodes;
 
   /// 那晚動作最大的幾段，依大小排序。沒有時是空的，原因在 [clipsNote]。
   final List<CameraClip> clips;
@@ -147,6 +168,7 @@ class CameraNight {
     this.eventsPerHour,
     this.bedTimesProvenance,
     this.sleepOnsetProvenance,
+    this.episodes,
     this.clips = const [],
     this.clipsNote,
     this.clipsSupported = false,
@@ -176,6 +198,12 @@ class CameraNight {
       eventsPerHour: num_(json['events_per_hour']),
       bedTimesProvenance: json['bed_times_provenance'] as String?,
       sleepOnsetProvenance: json['sleep_onset_provenance'] as String?,
+      episodes: json['episodes'] is List
+          ? [
+              for (final e in json['episodes'] as List)
+                ?CameraEpisode.fromJsonOrNull(e),
+            ]
+          : null,
       clips: [
         for (final c in (json['clips'] as List?) ?? const [])
           CameraClip.fromJson(Map<String, dynamic>.from(c as Map), baseUrl: baseUrl),

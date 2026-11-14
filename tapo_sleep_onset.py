@@ -129,6 +129,14 @@ def load(path):
     return out, roi
 
 
+def motion_episodes(samples):
+    """[{start_at: 牆鐘 ISO（秒）, seconds: 持續秒數}]，照時間排。與 event_starts() 同一個定義。"""
+    return [
+        {"start_at": start.isoformat(timespec="seconds"), "seconds": round(dur, 1)}
+        for start, dur, _peak in episodes(samples, MOTION_THRESHOLD)
+    ]
+
+
 def event_starts(samples):
     """整夜的動作事件起點（datetime 列表）。"""
     return [e[0] for e in episodes(samples, MOTION_THRESHOLD)]
@@ -269,6 +277,9 @@ def analyse(path):
         "events_per_hour": round(len(starts) / (tib_min / 60), 1) if tib_min else None,
         # 每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線，2026-11-13）
         "motion_curve": motion_curve(samples, roi, t0),
+        # 每一段動作的開始與長度（早晨報告 Movement 點開的時間軸與每小時次數，2026-11-15）。
+        # ⚠️ 與 events_total 同一個定義（同一支 episodes、同一個門檻），所以個數一定一樣。
+        "motion_episodes": motion_episodes(samples),
     }
     if onset and not below_floor:
         pre = (onset - t0).total_seconds() / 60

@@ -136,6 +136,26 @@ check("⚠️ 其他欄位一個都沒動（事件數還是 99）", row["events_
 check("那一晚不存在 → 0 列、不新增", db.set_camera_motion_curve(uid, "2020-01-01", curve), 0)
 check("真的沒新增", any(r["date"] == "2020-01-01" for r in db.get_camera_nightly(uid, days=100)), False)
 
+print("\n【8】每一段動作（早晨報告 Movement 點開的時間軸，2026-11-15）")
+smp = samples(240, moving_at={30, 31, 120})
+eps = onset.motion_episodes(smp)
+check("段數跟 events_total 同一個定義（event_starts）", len(eps), len(onset.event_starts(smp)))
+_e0 = onset.episodes(smp, onset.MOTION_THRESHOLD)[0]
+check("第一段的開始與秒數照抄 episodes()（牆鐘、沒時區、到秒）", (eps[0]["start_at"], eps[0]["seconds"]),
+      (_e0[0].isoformat(timespec="seconds"), round(_e0[1], 1)))
+check("大約 01:30 開始、動了快 2 分鐘", (eps[0]["start_at"][:16], 110 < eps[0]["seconds"] <= 120), ("2026-11-12T01:30", True))
+db.upsert_camera_nightly(uid, "2026-11-09", {**result, "motion_episodes": eps})
+db.upsert_camera_nightly(uid, "2026-11-08", {**result, "events_total": 77})
+n = db.set_camera_motion_episodes(uid, "2026-11-08", eps)
+row8 = [r for r in db.get_camera_nightly(uid, days=10) if r["date"] == "2026-11-08"][0]
+check("回填只補每段動作、不動事件數", (n, json.loads(row8["motion_episodes"])[1]["start_at"], row8["events_total"]),
+      (1, eps[1]["start_at"], 77))
+hist = {h["date"]: h for h in client.get("/insights", params={"user_id": uid, "days": 30}).json()["camera"]["history"]}
+e9 = hist["2026-11-09"]["episodes"]
+check("/insights 帶每段動作，label 跟片段同一支 label_for", e9[0],
+      {**eps[0], "label": __import__("camera_clips").label_for(datetime.fromisoformat(eps[0]["start_at"]), eps[0]["seconds"])})
+check("還沒回填的晚上是 null（不是空陣列）", hist["2026-11-11"]["episodes"], None)
+
 print("\n【7】首頁的打包檔：直接讀那一晚的錄影 CSV，跟 /home 同一個算法")
 import build_app_payload as payload  # noqa: E402
 import camera_curve  # noqa: E402

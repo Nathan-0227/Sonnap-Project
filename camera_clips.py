@@ -60,7 +60,9 @@ ROOT = Path(__file__).parent
 CLIPS_DIR = Path(os.environ.get("SONNAP_CLIPS_DIR")
                  or ROOT.parent / "sonnap-data" / "camera_clips")
 
-CLIPS_PER_NIGHT = 3
+# 2026-11-15 使用者定 3 → 10：時間軸上的 ⏮ ⏭ 有東西可跳，又不會多到難管
+# （一段約 1.8 MB，一晚約 18 MB，留 14 晚約 250 MB）
+CLIPS_PER_NIGHT = 10
 LEAD_SECONDS = 2           # 動作開始前先播幾秒，看得出「本來是靜的」
 CLIP_SECONDS = 10          # 一段的總長（含 LEAD）
 KEEP_NIGHTS = 14

@@ -116,7 +116,7 @@ def main():
     ap.add_argument("--csv", action="append", help="只處理這些檔（可重複）")
     ap.add_argument("--dry-run", action="store_true", help="只看不寫")
     ap.add_argument("--curves-only", action="store_true",
-                    help="只補已存在那幾晚的動作曲線（motion_curve），其他欄位一個都不動")
+                    help="只補已存在那幾晚的動作曲線與每段動作（motion_curve、motion_episodes），其他欄位一個都不動")
     ap.add_argument("--user-id", help="⚠️ 指定帳號。**會進 shell 歷史**，"
                                      "只在自動判準分不出來時才用")
     ap.add_argument("--db-path", help="覆寫資料庫位置（預設看 SONNAP_DB）")
@@ -186,6 +186,8 @@ def main():
             if not args.dry_run:
                 written += db.set_camera_motion_curve(
                     user_id, date, r.get("motion_curve"), db_path=args.db_path)
+                db.set_camera_motion_episodes(
+                    user_id, date, r.get("motion_episodes"), db_path=args.db_path)
         elif not args.dry_run:
             db.upsert_camera_nightly(user_id, date, r, db_path=args.db_path)
             written += 1

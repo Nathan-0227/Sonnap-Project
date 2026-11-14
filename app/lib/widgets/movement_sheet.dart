@@ -1,26 +1,30 @@
-// 早晨報告 Movement (camera) 點開（2026-11-15 使用者定，grill Q1–Q7）：
+// 早晨報告 Movement (camera) 點開（2026-11-15 使用者定，grill Q1–Q7，照參考圖的監視器 App 版面）：
 //
-// 上半：**這一晚**——後端那句「About the same as usual」＋「not part of your score」，
-//       這一晚的動作次數（11-15 使用者改，原本 11-09 定不寫）；**不寫每小時幾次、不跟常模並列**（跨夜差到 3.1 倍）。
-//       片段：照參考圖一段一列（縮圖＋大的時刻＋「moved for 5 s · Light」＋播放鍵），點了跳出大的循環播放，再點影片全螢幕、兩指放大；
-//       每段標籤照抄後端，後面接那一刻**手錶的睡眠階段**（「03:42 · moved for 5 s · Light」）。
-//       沒錄影的晚上照抄後端那句原因。下面是那一晚的動作線（每 5 分鐘有幾成在動），
-//       三個片段的時刻標成點，點了一樣跳出播放（在線的範圍外的片段不標）。
-// 下半：**這一週**——7 欄，每晚跟它自己的「平常」比多幾 %（後端 delta_pct，照抄），
-//       中間灰帶＝「差不多」的範圍（寬度照抄後端 same_as_usual_pct）；沒錄影或基線不夠寫「—」。
-//       **不分好壞**：動得多不代表睡不好（攝影機動作率跟手錶的清醒量測沒有相關），所以只用一個顏色。
-// - 不做「最長靜止多久」（Q7：又要訂一個「多久算靜止」，而攝影機動作本身跨夜就很不穩）。
-// - 整夜錄影（一晚約 460 MB、只在電腦上）不放。
+// 由上到下：
+// - 後端那句「About the same as usual」＋「105 movements · 25m moving in total」＋not part of your score。
+//   次數照抄 events_total（11-15 使用者改：原本 11-09 定不寫）；總共動多久是每段秒數加起來。
+//   **不寫每小時平均、不跟文獻常模並列**（跨夜差到 3.1 倍）。
+// - **時間軸**：開始 → 結束錄影，每一段動作一顆膠囊（越寬＝動越久），有片段的亮、沒有的暗；
+//   白色直線＝正在看的那一段。點膠囊選那一段。
+// - **每個鐘頭動幾次**：一個鐘頭一根，數字在上面；頭尾不滿一小時的那兩根畫淡、寫涵蓋幾分鐘
+//   （不然「6 次」會被讀成「那時幾乎沒動」）。
+// - **播放器**：選到的那段循環播放，點畫面全螢幕、兩指放大；⏮ ⏭ 跳上一段／下一段片段。
+//   選到沒有片段的動作 → 「No clip for this movement」＋那段的時間與長度（**不跳去播別段**，那是別的時刻）。
+// - **片段列表**（一晚最多 10 段，照時間排）：縮圖＋大的時刻＋「moved for 21 s · Light」，點了換播放器。
+//   標籤照抄後端，後面接那一刻**手錶的睡眠階段**。
+// - **這一週**：7 欄，每晚跟它自己的「平常」比多幾 %，灰帶＝「差不多」（寬度照抄後端）；只用一個顏色。
+// - 不放整夜錄影（一晚約 460 MB、只在電腦上）。
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/night_curve.dart';
 import '../models/sleep_stages.dart';
-import '../services/camera_insights.dart' show CameraClip, CameraNight;
+import '../services/camera_insights.dart'
+    show CameraClip, CameraEpisode, CameraNight;
+import '../services/night_compare.dart' show formatMinutes;
 import 'chart_probe.dart' show stageNames;
 
-/// 換成 isUtc 的牆鐘（曲線、Sleep Stages、片段時刻三種基準不同，混著比會差 8 小時）。
+/// 換成 isUtc 的牆鐘（Sleep Stages、片段、動作三種時間基準不同，混著比會差 8 小時）。
 DateTime _wall(DateTime t) => t.isUtc
     ? t
     : DateTime.utc(t.year, t.month, t.day, t.hour, t.minute, t.second);
@@ -36,16 +40,53 @@ String? _stageAt(SleepStages? s, DateTime? t) {
   return null;
 }
 
-/// 片段標籤：後端那句照抄，後面接手錶那一刻的睡眠階段（不在睡著範圍內就不接）。
-String clipLabel(CameraClip c, SleepStages? stages) {
-  final st = _stageAt(stages, c.startAt);
-  if (st == null) return c.label;
-  if (st == 'rem' && stages?.remMeasured == false) return c.label;
-  return '${c.label} · ${stageNames[st] ?? st}';
+/// 後端那句照抄，後面接手錶那一刻的睡眠階段（不在睡著範圍內、或那晚沒量到 REM 就不接）。
+String withStage(String label, DateTime? at, SleepStages? stages) {
+  final st = _stageAt(stages, at);
+  if (st == null) return label;
+  if (st == 'rem' && stages?.remMeasured == false) return label;
+  return '$label · ${stageNames[st] ?? st}';
+}
+
+String clipLabel(CameraClip c, SleepStages? stages) =>
+    withStage(c.label, c.startAt, stages);
+
+/// 「105 movements · 25m moving in total」；沒有每段資料（舊夜晚）就只寫次數。
+String movementCountLine(int? total, List<CameraEpisode>? episodes) {
+  if (total == null) return '';
+  final head = '$total ${total == 1 ? 'movement' : 'movements'}';
+  if (episodes == null || episodes.isEmpty) return '$head seen by the camera';
+  final sec = episodes.fold<double>(0, (s, e) => s + e.seconds);
+  final moving = sec < 60 ? '${sec.round()} s' : formatMinutes(sec / 60);
+  return '$head · $moving moving in total';
+}
+
+/// 一個鐘頭一格：(那個鐘頭的開始, 次數, 這一格涵蓋幾分鐘)。[from]–[to] 是錄影的開始與結束。純函式。
+List<(DateTime, int, int)> hourlyCounts(
+  List<CameraEpisode> episodes,
+  DateTime from,
+  DateTime to,
+) {
+  final out = <(DateTime, int, int)>[];
+  var h = DateTime(from.year, from.month, from.day, from.hour);
+  while (h.isBefore(to)) {
+    final next = h.add(const Duration(hours: 1));
+    final a = from.isAfter(h) ? from : h;
+    final b = to.isBefore(next) ? to : next;
+    final n = episodes
+        .where((e) => !e.start.isBefore(h) && e.start.isBefore(next))
+        .length;
+    out.add((h, n, b.difference(a).inMinutes));
+    h = next;
+  }
+  return out;
 }
 
 String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+String _clock(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 /// [endDate] 往回 7 晚（舊 → 新）；沒錄影的晚上是 null。純函式。
 List<(String, CameraNight?)> movementWeek(
@@ -79,7 +120,6 @@ Future<void> showMovementSheet(
   required Color color,
   required CameraNight night,
   required String date,
-  NightCurve? curve,
   SleepStages? stages,
   List<CameraNight>? week,
   String? fontFamily,
@@ -93,7 +133,6 @@ Future<void> showMovementSheet(
       child: MovementView(
         color: color,
         night: night,
-        curve: curve,
         stages: stages,
         week: week == null ? null : movementWeek(week, date),
       ),
@@ -104,7 +143,6 @@ Future<void> showMovementSheet(
 class MovementView extends StatefulWidget {
   final Color color;
   final CameraNight night;
-  final NightCurve? curve;
   final SleepStages? stages;
 
   /// null＝沒有一週資料（連不到後端），下半整段不出現。
@@ -113,7 +151,6 @@ class MovementView extends StatefulWidget {
   const MovementView({
     super.key,
     required this.night,
-    this.curve,
     this.stages,
     this.week,
     this.color = const Color(0xFFFFD96A),
@@ -125,15 +162,72 @@ class MovementView extends StatefulWidget {
 
 class _MovementViewState extends State<MovementView> {
   static const _soft = Color(0xB3FFFFFF);
+  final _playerKey = GlobalKey();
 
-  /// 點一列（或線上的點）→ 大的播放（2026-11-15 使用者定，照參考圖：列表＋點進去看）。
-  void _play(CameraClip c) {
-    showDialog<void>(
-      context: context,
-      barrierColor: const Color(0xE6080A1C),
-      builder: (context) => _ClipViewer(
-        clip: c,
-        label: clipLabel(c, widget.stages),
+  /// 正在看的那一段動作的開始時刻（片段的 start_at 跟動作的開始是同一個時刻）。
+  DateTime? _sel;
+
+  /// 片段照時間排（⏮ ⏭ 與列表用）。
+  late final List<CameraClip> _clips = [
+    ...widget.night.clips.where((c) => c.startAt != null),
+  ]..sort((a, b) => a.startAt!.compareTo(b.startAt!));
+
+  @override
+  void initState() {
+    super.initState();
+    // 一打開先播動作最大的那段（後端的第一段）
+    _sel = widget.night.clips.isEmpty ? null : widget.night.clips.first.startAt;
+  }
+
+  CameraClip? get _selClip {
+    for (final c in _clips) {
+      if (c.startAt == _sel) return c;
+    }
+    return null;
+  }
+
+  CameraEpisode? get _selEpisode {
+    for (final e in widget.night.episodes ?? const <CameraEpisode>[]) {
+      if (e.start == _sel) return e;
+    }
+    return null;
+  }
+
+  void _select(DateTime? at, {bool reveal = false}) {
+    setState(() => _sel = at);
+    if (reveal && _playerKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        _playerKey.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        alignment: 0.1,
+      );
+    }
+  }
+
+  void _step(int dir) {
+    if (_clips.isEmpty) return;
+    final at = _sel;
+    CameraClip? target;
+    if (dir > 0) {
+      target = _clips.firstWhere(
+        (c) => at == null || c.startAt!.isAfter(at),
+        orElse: () => _clips.first,
+      );
+    } else {
+      target = _clips.lastWhere(
+        (c) => at == null || c.startAt!.isBefore(at),
+        orElse: () => _clips.last,
+      );
+    }
+    _select(target.startAt);
+  }
+
+  void _fullScreen(CameraClip c) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) =>
+            _FullScreenClip(clip: c, label: clipLabel(c, widget.stages)),
       ),
     );
   }
@@ -141,10 +235,19 @@ class _MovementViewState extends State<MovementView> {
   @override
   Widget build(BuildContext context) {
     final n = widget.night;
-    final clips = n.clips;
     final color = widget.color;
+    final eps = n.episodes;
+    final from = n.bedStartAt == null ? null : DateTime.tryParse(n.bedStartAt!);
+    final to = n.bedEndAt == null ? null : DateTime.tryParse(n.bedEndAt!);
+    final hasTimeline =
+        eps != null && eps.isNotEmpty && from != null && to != null && to.isAfter(from);
     final w = widget.week;
     final showWeek = w != null && w.any((e) => e.$2?.usualDeltaPct != null);
+    final clip = _selClip;
+    final ep = _selEpisode;
+    final selLabel = clip != null
+        ? clipLabel(clip, widget.stages)
+        : (ep == null ? null : withStage(ep.label, ep.start, widget.stages));
 
     return Container(
       key: const Key('mv-sheet'),
@@ -202,11 +305,9 @@ class _MovementViewState extends State<MovementView> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-              // 2026-11-15 使用者改（原本 11-09 定不寫次數）：只寫這一晚的次數，照抄後端 events_total；
-              // **不寫每小時幾次、不跟文獻常模並列**（跨夜差到 3.1 倍，比常模沒有意義）
               if (n.eventsTotal != null)
                 Text(
-                  '${n.eventsTotal} ${n.eventsTotal == 1 ? 'movement' : 'movements'} seen by the camera',
+                  movementCountLine(n.eventsTotal, eps),
                   key: const Key('mv-count'),
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
@@ -214,46 +315,145 @@ class _MovementViewState extends State<MovementView> {
                 'Camera data is not part of your score.',
                 style: TextStyle(color: _soft, fontSize: 12),
               ),
-              const SizedBox(height: 16),
-              if (clips.isNotEmpty) ...[
+              if (hasTimeline) ...[
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 54,
+                  child: _Timeline(
+                    episodes: eps,
+                    from: from,
+                    to: to,
+                    clipStarts: {for (final c in _clips) c.startAt!},
+                    selected: _sel,
+                    color: color,
+                    onSelect: (at) => _select(at),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 const Text(
-                  'Biggest movements',
+                  'Movements each hour',
                   style: TextStyle(color: _soft, fontSize: 13),
                 ),
-                const SizedBox(height: 8),
-                for (var i = 0; i < clips.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _ClipRow(
-                      key: Key('mv-clip-row-$i'),
-                      clip: clips[i],
-                      stages: widget.stages,
-                      color: color,
-                      onTap: () => _play(clips[i]),
-                    ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: 92,
+                  child: _HourBars(
+                    hours: hourlyCounts(eps, from, to),
+                    color: color,
                   ),
-              ] else if (n.clipsNote != null)
+                ),
+              ],
+              const SizedBox(height: 18),
+              // ── 播放器 ──
+              if (_clips.isEmpty && n.clipsNote != null)
                 Text(
                   n.clipsNote!,
                   key: const Key('mv-clips-note'),
                   style: const TextStyle(color: _soft, fontSize: 13, height: 1.4),
-                ),
-              if (widget.curve != null) ...[
-                const SizedBox(height: 18),
-                const Text(
-                  'Movement through the night',
-                  style: TextStyle(color: _soft, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 110,
-                  child: _NightLine(
-                    curve: widget.curve!,
-                    clips: clips,
-                    color: color,
-                    onSelect: (i) => _play(clips[i]),
+                )
+              else if (_sel != null) ...[
+                ClipRRect(
+                  key: _playerKey,
+                  borderRadius: BorderRadius.circular(18),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: ColoredBox(
+                      color: const Color(0xFF0E1230),
+                      child: clip == null
+                          ? Center(
+                              child: Column(
+                                key: const Key('mv-no-clip'),
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(
+                                    Icons.videocam_off_rounded,
+                                    color: Color(0x80FFFFFF),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'No clip for this movement',
+                                    style: TextStyle(color: _soft, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : GestureDetector(
+                              key: const Key('mv-clip-enlarge'),
+                              onTap: () => _fullScreen(clip),
+                              child: Image.network(
+                                clip.url,
+                                key: const Key('mv-clip-player'),
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: Text(
+                                    'Clip could not be loaded',
+                                    style: TextStyle(color: _soft, fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
                   ),
                 ),
+                const SizedBox(height: 8),
+                if (selLabel != null)
+                  Text(
+                    selLabel,
+                    key: const Key('mv-clip-label'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                if (_clips.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _RoundButton(
+                        key: const Key('mv-prev'),
+                        icon: Icons.skip_previous_rounded,
+                        onTap: () => _step(-1),
+                      ),
+                      const SizedBox(width: 22),
+                      _RoundButton(
+                        key: const Key('mv-full'),
+                        icon: Icons.open_in_full_rounded,
+                        big: true,
+                        onTap: clip == null ? null : () => _fullScreen(clip),
+                      ),
+                      const SizedBox(width: 22),
+                      _RoundButton(
+                        key: const Key('mv-next'),
+                        icon: Icons.skip_next_rounded,
+                        onTap: () => _step(1),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+              // ── 片段列表 ──
+              if (_clips.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Text(
+                  'Clips · ${_clips.length} biggest movements',
+                  style: const TextStyle(color: _soft, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                for (var i = 0; i < _clips.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ClipRow(
+                      key: Key('mv-clip-row-$i'),
+                      clip: _clips[i],
+                      stages: widget.stages,
+                      color: color,
+                      selected: _clips[i].startAt == _sel,
+                      onTap: () => _select(_clips[i].startAt, reveal: true),
+                    ),
+                  ),
               ],
               // ── 這一週 ──
               if (showWeek) ...[
@@ -287,15 +487,55 @@ class _MovementViewState extends State<MovementView> {
   }
 }
 
-/// 那一晚的動作線＋片段時刻的點（點了播那一段）。
-class _NightLine extends StatelessWidget {
-  final NightCurve curve;
-  final List<CameraClip> clips;
+class _RoundButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool big;
+  const _RoundButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.big = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = big ? 58.0 : 44.0;
+    return Material(
+      color: big ? const Color(0x26FFFFFF) : const Color(0x14FFFFFF),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(
+            icon,
+            color: onTap == null ? const Color(0x55FFFFFF) : Colors.white,
+            size: big ? 26 : 24,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 參考圖那條：開始 → 結束錄影，每段動作一顆膠囊（寬＝動多久，最窄 4 px），
+/// 有片段的亮、沒有的暗，白色直線＝正在看的那段。點一下選最近的那段。
+class _Timeline extends StatelessWidget {
+  final List<CameraEpisode> episodes;
+  final DateTime from, to;
+  final Set<DateTime> clipStarts;
+  final DateTime? selected;
   final Color color;
-  final ValueChanged<int> onSelect;
-  const _NightLine({
-    required this.curve,
-    required this.clips,
+  final ValueChanged<DateTime> onSelect;
+  const _Timeline({
+    required this.episodes,
+    required this.from,
+    required this.to,
+    required this.clipStarts,
+    required this.selected,
     required this.color,
     required this.onSelect,
   });
@@ -304,60 +544,92 @@ class _NightLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t0 = _wall(curve.points.first.time);
-    final t1 = _wall(curve.points.last.time);
-    final span = math.max(1, t1.difference(t0).inSeconds);
-    final hi = math.max(0.05, curve.points.map((p) => p.value).reduce(math.max));
+    final span = math.max(1, to.difference(from).inSeconds);
     return LayoutBuilder(
       builder: (context, box) {
         final w = box.maxWidth, h = box.maxHeight - _timeH;
-        double xOf(DateTime t) => w * _wall(t).difference(t0).inSeconds / span;
-        double yOf(double v) => h * (1 - (v / hi).clamp(0.0, 1.0)) ;
-        String clock(DateTime t) =>
-            '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+        double xOf(DateTime t) =>
+            (w * t.difference(from).inSeconds / span).clamp(0.0, w);
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            Positioned.fill(
-              bottom: _timeH,
-              child: CustomPaint(
-                key: const Key('mv-line'),
-                painter: _LinePainter(curve, color, xOf, yOf, h),
-              ),
-            ),
-            for (var i = 0; i < clips.length; i++)
-              if (clips[i].startAt case final at?
-                  when !_wall(at).isBefore(t0) && !_wall(at).isAfter(t1))
-                Positioned(
-                  left: xOf(at) - 14,
-                  top: h - 14,
-                  width: 28,
-                  height: 28,
-                  child: GestureDetector(
-                    key: Key('mv-marker-$i'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelect(i),
-                    child: Center(
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color,
-                          border: Border.all(
-                            color: const Color(0xFF1B1F48),
-                            width: 2,
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: h,
+              child: GestureDetector(
+                key: const Key('mv-timeline'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (d) {
+                  CameraEpisode? best;
+                  var bestD = double.infinity;
+                  for (final e in episodes) {
+                    final x0 = xOf(e.start);
+                    final x1 = math.max(x0 + 4, xOf(e.start.add(
+                        Duration(milliseconds: (e.seconds * 1000).round()))));
+                    final dx = d.localPosition.dx < x0
+                        ? x0 - d.localPosition.dx
+                        : (d.localPosition.dx > x1 ? d.localPosition.dx - x1 : 0.0);
+                    if (dx < bestD) {
+                      bestD = dx;
+                      best = e;
+                    }
+                  }
+                  if (best != null && bestD <= 14) onSelect(best.start);
+                },
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x14FFFFFF),
+                    borderRadius: BorderRadius.circular(h / 2),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (final e in episodes)
+                        Positioned(
+                          left: xOf(e.start),
+                          top: 7,
+                          bottom: 7,
+                          width: math.max(
+                            4,
+                            xOf(e.start.add(Duration(
+                                milliseconds: (e.seconds * 1000).round()))) -
+                                xOf(e.start),
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: clipStarts.contains(e.start)
+                                  ? color
+                                  : color.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      if (selected != null)
+                        Positioned(
+                          key: const Key('mv-playhead'),
+                          left: xOf(selected!) - 1.5,
+                          top: -4,
+                          bottom: -4,
+                          width: 3,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+              ),
+            ),
             Positioned(
               left: 0,
               bottom: 0,
               child: Text(
-                clock(t0),
+                _clock(from),
                 style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
               ),
             ),
@@ -365,7 +637,7 @@ class _NightLine extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: Text(
-                clock(t1),
+                _clock(to),
                 style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
               ),
             ),
@@ -376,55 +648,87 @@ class _NightLine extends StatelessWidget {
   }
 }
 
-class _LinePainter extends CustomPainter {
-  final NightCurve curve;
+/// 每個鐘頭一根：數字在上、鐘點在下；頭尾不滿一小時的畫淡、寫涵蓋幾分鐘。
+class _HourBars extends StatelessWidget {
+  final List<(DateTime, int, int)> hours;
   final Color color;
-  final double Function(DateTime) xOf;
-  final double Function(double) yOf;
-  final double h;
-  _LinePainter(this.curve, this.color, this.xOf, this.yOf, this.h);
+  const _HourBars({required this.hours, required this.color});
+
+  static const double _valueH = 16;
+  static const double _labelH = 32;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final pts = [
-      for (final p in curve.points) Offset(xOf(p.time), yOf(p.value)),
-    ];
-    final line = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (final p in pts.skip(1)) {
-      line.lineTo(p.dx, p.dy);
-    }
-    final area = Path.from(line)
-      ..lineTo(pts.last.dx, h)
-      ..lineTo(pts.first.dx, h)
-      ..close();
-    canvas.drawPath(
-      area,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: 0.35), color.withValues(alpha: 0)],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, h)),
-    );
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round,
-    );
-    canvas.drawLine(
-      Offset(0, h),
-      Offset(size.width, h),
-      Paint()
-        ..color = const Color(0x1FFFFFFF)
-        ..strokeWidth = 1,
+  Widget build(BuildContext context) {
+    final maxN = math.max(1, hours.map((h) => h.$2).fold(0, math.max));
+    return LayoutBuilder(
+      builder: (context, box) {
+        final barH = box.maxHeight - _valueH - _labelH - 2;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final (start, n, minutes) in hours)
+              Expanded(
+                child: Padding(
+                  key: Key('mv-hour-${start.hour}'),
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: _valueH,
+                        child: Text(
+                        '$n',
+                        key: Key('mv-hour-count-${start.hour}'),
+                        style: TextStyle(
+                          color: minutes < 60
+                              ? const Color(0x99FFFFFF)
+                              : Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        height: math.max(3, barH * n / maxN),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: minutes < 60 ? 0.35 : 0.85),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                      SizedBox(
+                        height: _labelH,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              start.hour.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                color: Color(0x99FFFFFF),
+                                fontSize: 11,
+                              ),
+                            ),
+                            if (minutes < 60)
+                              Text(
+                                '${minutes}m',
+                                key: Key('mv-hour-partial-${start.hour}'),
+                                style: const TextStyle(
+                                  color: Color(0x66FFFFFF),
+                                  fontSize: 9,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
-
-  @override
-  bool shouldRepaint(_LinePainter old) => old.curve != curve || old.h != h;
 }
 
 /// 7 欄：從中線往上（比平常多）或往下（比平常少），中間灰帶＝「差不多」；單一顏色、不分好壞。
@@ -583,17 +887,20 @@ class _WeekBars extends StatelessWidget {
 
 /// 參考圖的一列：左邊縮圖、中間大的時刻＋「moved for 5 s · Awake」、右邊播放鍵。
 /// 時刻用片段的 start_at；後半照抄後端那句、去掉開頭的「03:42 · 」，再接手錶階段。
-/// 舊版後端沒有 start_at → 整句照抄、不放大時刻。
+/// 列表的一列（參考圖）：左邊縮圖、中間大的時刻＋「moved for 21 s · Light」、右邊播放鍵。
+/// 時刻用片段的 start_at；後半照抄後端那句、去掉開頭的「03:42 · 」，再接手錶階段。
 class _ClipRow extends StatelessWidget {
   final CameraClip clip;
   final SleepStages? stages;
   final Color color;
+  final bool selected;
   final VoidCallback onTap;
   const _ClipRow({
     super.key,
     required this.clip,
     required this.stages,
     required this.color,
+    required this.selected,
     required this.onTap,
   });
 
@@ -601,26 +908,30 @@ class _ClipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final full = clipLabel(clip, stages);
     final at = clip.startAt;
-    final time = at == null
-        ? null
-        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final time = at == null ? null : _clock(at);
     final hasTime = time != null && full.startsWith('$time · ');
     final rest = hasTime ? full.substring(time.length + 3) : full;
     return Material(
-      color: const Color(0x14FFFFFF),
-      borderRadius: BorderRadius.circular(18),
+      color: selected ? color.withValues(alpha: 0.16) : const Color(0x14FFFFFF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: selected ? color : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(7),
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(11),
                 child: SizedBox(
-                  width: 104,
-                  height: 64,
+                  width: 96,
+                  height: 56,
                   child: ColoredBox(
                     color: const Color(0xFF0E1230),
                     child: Image.network(
@@ -645,7 +956,7 @@ class _ClipRow extends StatelessWidget {
                         time,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -654,112 +965,19 @@ class _ClipRow extends StatelessWidget {
                       key: const Key('mv-clip-row-text'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xB3FFFFFF),
-                        fontSize: 13,
-                      ),
+                      style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.play_circle_fill_rounded, color: color, size: 28),
+              Icon(
+                selected ? Icons.graphic_eq_rounded : Icons.play_circle_fill_rounded,
+                color: color,
+                size: 26,
+              ),
               const SizedBox(width: 4),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 點進去：大的、循環播放，下面一行標籤，右上角關掉。
-class _ClipViewer extends StatelessWidget {
-  final CameraClip clip;
-  final String label;
-  const _ClipViewer({required this.clip, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      key: const Key('mv-clip-viewer'),
-      backgroundColor: const Color(0xFF1B1F48),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                key: const Key('mv-clip-close'),
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: ColoredBox(
-                  color: const Color(0xFF0E1230),
-                  // 點影片 → 全螢幕、可以兩指放大（2026-11-15 使用者定）
-                  child: GestureDetector(
-                    key: const Key('mv-clip-enlarge'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        fullscreenDialog: true,
-                        builder: (_) => _FullScreenClip(clip: clip, label: label),
-                      ),
-                    ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          clip.url,
-                          key: const Key('mv-clip-player'),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Center(
-                            child: Text(
-                              'Clip could not be loaded',
-                              style: TextStyle(
-                                color: Color(0xB3FFFFFF),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Icon(
-                            Icons.open_in_full_rounded,
-                            color: Color(0xCCFFFFFF),
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                label,
-                key: const Key('mv-clip-label'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

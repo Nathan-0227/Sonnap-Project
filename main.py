@@ -1336,6 +1336,9 @@ async def get_insights(
                     "motion_threshold_basis": r["motion_threshold_basis"],
                     # 「跟你平常比」。⚠️ label 是給人讀的那句話，Dart 照抄不重寫。
                     "usual": r.get("usual"),
+                    # 每一段動作（早晨報告 Movement 點開的時間軸與每小時次數，2026-11-15）。
+                    # label 跟片段**同一支** camera_clips.label_for；舊夜晚還沒回填 → null（不是空陣列）
+                    "episodes": _camera_episodes(r.get("motion_episodes")),
                     "roi": r["roi"],
                     "csv_name": r["csv_name"],
                     **_camera_clips_for(clip_nights.get(r["date"])),
@@ -1350,6 +1353,25 @@ async def get_insights(
             ),
         },
     }
+
+
+def _camera_episodes(raw):
+    """camera_nightly.motion_episodes（JSON）→ [{start_at, seconds, label}]；沒有 → None。"""
+    if not raw:
+        return None
+    try:
+        eps = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    out = []
+    for e in eps:
+        try:
+            t = datetime.fromisoformat(e["start_at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        out.append({"start_at": e["start_at"], "seconds": e.get("seconds"),
+                    "label": camera_clips.label_for(t, e.get("seconds") or 0)})
+    return out
 
 
 def _camera_clips_for(night):
