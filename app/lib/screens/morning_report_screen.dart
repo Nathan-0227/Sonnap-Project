@@ -17,8 +17,10 @@ import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
-import '../services/camera_insights.dart' show EfficiencyNight, SleepHeartRate;
+import '../services/camera_insights.dart'
+    show CameraNight, EfficiencyNight, SleepHeartRate;
 import '../widgets/heart_rate_sheet.dart';
+import '../widgets/movement_sheet.dart';
 import '../widgets/efficiency_sheet.dart';
 import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
@@ -89,6 +91,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚睡著那一段的心率平均＋最低（後端 /insights）。Sleeping heart rate 點開的一週用；沒給或連不到就只看這一晚。
   final Future<Map<String, SleepHeartRate>?> Function()? loadSleepHeartRates;
 
+  /// 每晚的攝影機資料（後端 /insights 的 camera.history）。Movement 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<List<CameraNight>?> Function()? loadCameraNights;
+
 
   const MorningReportScreen({
     super.key,
@@ -105,6 +110,7 @@ class MorningReportScreen extends StatefulWidget {
     this.loadAwakeMinutes,
     this.loadEfficiencyNights,
     this.loadSleepHeartRates,
+    this.loadCameraNights,
   });
 
   @override
@@ -980,29 +986,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     ];
   }
 
-  void _openCurve(MorningReport r, String overlay) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: ReportColors.sheet,
-      builder: (_) => SafeArea(
-        child: Padding(
-          key: Key('report-curve-$overlay'),
-          padding: const EdgeInsets.all(16),
-          child: SleepStagesCard(
-            stages: r.stages!,
-            totalSleepMinutes: r.sleepMinutes?.round(),
-            heartRate: r.heartRate,
-            movement: r.movement,
-            camera: r.cameraMotion,
-            restingHeartRate: r.restingHeartRate,
-            initialOverlay: overlay,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _lastNightTiles(MorningReport r) {
     final asleep = r.hasScore ? r.sleepMinutes : null;
     final goal = r.goalMinutes;
@@ -1211,9 +1194,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 SparklinePainter(_curvePoints(cam), _cCam, lo: 0),
                 key: const Key('report-camera-line'),
               ),
-        onTap: cam == null || r.stages == null
-            ? null
-            : () => _openCurve(r, 'camera'),
+        // 點開：片段（影片）＋動作線＋一週跟平常比（2026-11-15）
+        onTap: () => _showMovement(r),
         lines: [
           // 後端寫好的那句「跟你平常比」，照抄
           Text(
@@ -1632,6 +1614,32 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         asleepAt: r.asleepAt,
         wokeAt: r.wokeAt,
       ),
+      week: week,
+    );
+  }
+
+  /// Movement (camera) 點開。這一晚以報告上的那一晚為準；一週只有後端有。
+  Future<void> _showMovement(MorningReport r) async {
+    List<CameraNight>? week;
+    try {
+      final m = await widget.loadCameraNights?.call();
+      if (m != null && m.isNotEmpty) {
+        week = [
+          for (final n in m)
+            if (n.date != r.date) n,
+          r.camera!,
+        ];
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showMovementSheet(
+      context,
+      color: _cCam,
+      fontFamily: kReportFont,
+      night: r.camera!,
+      date: r.date,
+      curve: r.cameraMotion,
+      stages: r.stages,
       week: week,
     );
   }

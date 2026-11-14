@@ -64,7 +64,11 @@ class CameraClip {
   final String url;
   final String label;
 
-  const CameraClip({required this.url, required this.label});
+  /// 那一段從幾點開始（後端 `start_at`，牆鐘、沒時區標記）。早晨報告 Movement 點開
+  /// 用來標在線上、配手錶的睡眠階段（2026-11-15）。舊版後端沒有 → null。
+  final DateTime? startAt;
+
+  const CameraClip({required this.url, required this.label, this.startAt});
 
   /// 後端給的是相對網址（`/camera/clips/<id>.gif`），這裡接上 baseUrl。
   factory CameraClip.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
@@ -74,6 +78,7 @@ class CameraClip {
     return CameraClip(
       url: '$base${json['url'] as String? ?? ''}',
       label: (json['label'] as String?) ?? '',
+      startAt: DateTime.tryParse((json['start_at'] as String?) ?? ''),
     );
   }
 }
@@ -123,6 +128,9 @@ class CameraNight {
   final double? usualDeltaPct;
   final int? usualBaselineNights;
 
+  /// 「差不多」的範圍（±%），後端 camera_usual.SAME_AS_USUAL_PCT 照抄；舊版後端沒有 → null（不畫灰帶）。
+  final double? usualSamePct;
+
   /// 後端有沒有給 usual 欄位。舊版後端沒有 → 整段不顯示。
   final bool usualSupported;
 
@@ -146,6 +154,7 @@ class CameraNight {
     this.usualEventsPerHour,
     this.usualDeltaPct,
     this.usualBaselineNights,
+    this.usualSamePct,
     this.usualSupported = false,
   });
 
@@ -177,6 +186,7 @@ class CameraNight {
       usualEventsPerHour: num_(usual?['usual_events_per_hour']),
       usualDeltaPct: num_(usual?['delta_pct']),
       usualBaselineNights: (usual?['baseline_nights'] as num?)?.toInt(),
+      usualSamePct: num_(usual?['same_as_usual_pct']),
       usualSupported: usual != null,
     );
   }
