@@ -992,7 +992,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       key: const Key('report-asleep'),
       icon: Icons.nightlight_round,
       color: _cAsleep,
-      title: 'Time asleep',
+      title: 'Total sleep',
       value: asleep == null ? '—' : reportHm(asleep),
       valueKey: const Key('report-duration'),
       valueTrailing: _badge(
@@ -1634,7 +1634,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     if (!mounted) return;
     await showSleepWeekSheet(
       context,
-      title: 'Time asleep',
+      title: 'Total sleep',
       // 標題跟這張格子同一個圖示、同一個顏色（使用者定）
       icon: Icons.nightlight_round,
       color: _cAsleep,

@@ -1252,12 +1252,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _iconAction(
-                  const Key('open-diary'),
-                  Icons.menu_book_rounded,
-                  'Dream diary',
-                  () => _showDream(session),
-                ),
+                // 夢境日記的圖示拿掉了（2026-11-15 使用者定）：草地上那本日記就是入口
                 _iconAction(
                   const Key('open-closet'),
                   Icons.checkroom_rounded,

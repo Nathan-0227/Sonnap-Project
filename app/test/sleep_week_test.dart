@@ -69,7 +69,7 @@ void main() {
           home: Scaffold(
             backgroundColor: const Color(0xFF1B2350),
             body: SleepWeekView(
-              title: 'Time asleep',
+              title: 'Total sleep',
               week: w,
               goalMinutes: goal,
             ),

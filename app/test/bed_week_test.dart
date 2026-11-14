@@ -138,17 +138,15 @@ void main() {
           .join(' ');
       expect(tag('bed'), '02:50');
       expect(tag('wake'), '09:00');
-      // 時刻在左邊刻度裡：在第一根長條的左邊
+      // 時刻在圖裡、線的左端；刻度照常全部顯示
       final firstBar = tester.getRect(
         find.byKey(const Key('bed-week-bar-2026-11-08')),
       );
-      for (final k in ['bed', 'wake']) {
-        expect(
-          tester.getRect(find.byKey(Key('bed-week-median-$k-label'))).right,
-          lessThanOrEqualTo(firstBar.left),
-          reason: k,
-        );
-      }
+      expect(
+        tester.getRect(find.byKey(const Key('bed-week-median-bed-label'))).left,
+        greaterThanOrEqualTo(firstBar.left - 8),
+      );
+      expect(find.text('08:00'), findsWidgets, reason: '刻度不讓位');
       // 起床那條在上床那條下面（上早下晚）
       final bedLine = tester.getRect(
         find.byKey(const Key('bed-week-median-bed')),

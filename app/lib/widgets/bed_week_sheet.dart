@@ -285,7 +285,7 @@ class _ClockChart extends StatelessWidget {
   final Color color;
   const _ClockChart({required this.week, required this.color});
 
-  static const double _axisW = 46;
+  static const double _axisW = 40;
   static const double _labelH = 26;
 
   @override
@@ -304,11 +304,6 @@ class _ClockChart extends StatelessWidget {
     hi = ((hi + 119) ~/ 120) * 120;
     if (hi - lo < 8 * 60) hi = math.min(24 * 60, lo + 8 * 60);
     final span = (hi - lo).toDouble();
-    // 中間值要畫的話，它們就放在左邊刻度裡（使用者定：放右邊上下空空的），
-    // 離它們太近的刻度數字讓位，免得疊在一起
-    final marks = week.nightsWithData >= 3
-        ? [?week.medianStart, ?week.medianEnd]
-        : const <int>[];
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -318,20 +313,19 @@ class _ClockChart extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             for (var t = lo; t <= hi; t += 120)
-              if (marks.every((m) => (y(m) - y(t)).abs() >= 22))
-                Positioned(
-                  left: 0,
-                  width: _axisW - 8,
-                  top: y(t) - 7,
-                  child: Text(
-                    clockOf(t),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0x99FFFFFF),
-                      fontSize: 10,
-                    ),
+              Positioned(
+                left: 0,
+                width: _axisW - 6,
+                top: y(t) - 7,
+                child: Text(
+                  clockOf(t),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Color(0x99FFFFFF),
+                    fontSize: 10,
                   ),
                 ),
+              ),
             Positioned(
               left: _axisW,
               right: 0,
@@ -359,7 +353,8 @@ class _ClockChart extends StatelessWidget {
                 ],
               ),
             ),
-            // 兩條中間值虛線（≥3 晚才畫）；時刻寫在左邊刻度裡，做成實心小膠囊比較顯眼
+            // 兩條中間值虛線（≥3 晚才畫）；時刻寫在圖裡、線的左端，做成實心小膠囊比較顯眼。
+            // 刻度照常全部顯示（使用者定：兩個都要）
             if (week.nightsWithData >= 3) ...[
               for (final (key, label, v) in [
                 ('bed', 'bed', week.medianStart),
@@ -379,8 +374,8 @@ class _ClockChart extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: 0,
-                    width: _axisW - 2,
+                    left: _axisW + 2,
+                    width: 46,
                     top: y(v) - 10,
                     child: IgnorePointer(
                       child: Container(
