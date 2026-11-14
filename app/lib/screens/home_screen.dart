@@ -1350,10 +1350,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
           ),
+          // 心情標籤在小狗正下方中間（2026-11-15 使用者定）
           Positioned(
-            right: 30,
+            left: 0,
+            right: 0,
             bottom: 0,
-            child: Container(
+            child: Center(
+              child: Container(
               key: const Key('mood-chip'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
@@ -1377,6 +1380,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
+          ),
         ],
       ),
     );
@@ -1398,7 +1402,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Positioned(
                       key: const Key('home-dream'),
                       right: 6,
-                      bottom: 28,
+                      // 貼在草地上（使用者定：再往下靠近草地）
+                      bottom: 2,
                       child: DreamBook(
                         unread: _dreamReadDate != dreamDate,
                         onTap: () => _showDream(session),
