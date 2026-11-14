@@ -38,6 +38,7 @@ main.py — Sonnap 後端 API
     先跑一次：python db.py --init && python db.py --seed
 """
 
+import bisect
 import json
 from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
@@ -294,6 +295,39 @@ def _garmin_records():
     return _STANDARD_CACHE["records"]
 
 
+# 心率讀數依時刻排好的索引（2026-11-15）：/insights 每晚都要算一次睡著心率，
+# 每晚掃一次整份原始檔讓 /insights 從 1 秒內變成 3 秒，剛好撞上 App 的 3 秒逾時（一週那段時有時無）。
+_HR_INDEX = {"key": None, "times": [], "recs": []}
+
+
+def _hr_records_near(start, wake):
+    """
+    只拿入睡 → 起床之間的心率讀數，交給 sleep_heart_rate.heart_rate_curve（結果與傳整份相同）。
+
+    ⚠️ 沒時區標記的讀數或時刻：退回整份，讓 heart_rate_curve 自己照原本的規則處理。
+    """
+    records = _garmin_records()
+    if not records:
+        return None
+    key = (id(records), len(records))
+    if _HR_INDEX["key"] != key:
+        pairs = []
+        for r in records:
+            if r.get("metric") != "heart_rate":
+                continue
+            t = sleep_heart_rate._parse(r.get("timestamp"))
+            if t is not None and t.tzinfo is not None:
+                pairs.append((t, r))
+        pairs.sort(key=lambda p: p[0])
+        _HR_INDEX.update(key=key, times=[p[0] for p in pairs], recs=[p[1] for p in pairs])
+    s, w = sleep_heart_rate._parse(start), sleep_heart_rate._parse(wake)
+    if s is None or w is None or s.tzinfo is None or w.tzinfo is None:
+        return records
+    lo = bisect.bisect_left(_HR_INDEX["times"], s)
+    hi = bisect.bisect_right(_HR_INDEX["times"], w)
+    return _HR_INDEX["recs"][lo:hi]
+
+
 # VO2 max 不是每天都有（只有 GPS 走路、跑步的日子會更新），報告顯示最近一次；
 # 太舊就不顯示（2026-11-13 使用者定）。
 VO2MAX_LOOKBACK_DAYS = 90
@@ -424,7 +458,7 @@ def night_heart_rate(w_row):
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
     if not start or not wake:
         return None
-    records = _garmin_records()
+    records = _hr_records_near(start, wake)
     if not records:
         return None
     return sleep_heart_rate.heart_rate_curve(records, start, wake)
