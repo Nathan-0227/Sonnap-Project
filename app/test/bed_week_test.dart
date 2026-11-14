@@ -136,16 +136,19 @@ void main() {
           )
           .map((x) => x.data)
           .join(' ');
-      expect(tag('bed'), 'bed 02:50');
-      expect(tag('wake'), 'wake 09:00');
-      // 字在圖外面：在最後一根長條的右邊
-      final lastBar = tester.getRect(
-        find.byKey(const Key('bed-week-bar-2026-11-14')),
+      expect(tag('bed'), '02:50');
+      expect(tag('wake'), '09:00');
+      // 時刻在左邊刻度裡：在第一根長條的左邊
+      final firstBar = tester.getRect(
+        find.byKey(const Key('bed-week-bar-2026-11-08')),
       );
-      expect(
-        tester.getRect(find.byKey(const Key('bed-week-median-bed-label'))).left,
-        greaterThanOrEqualTo(lastBar.right),
-      );
+      for (final k in ['bed', 'wake']) {
+        expect(
+          tester.getRect(find.byKey(Key('bed-week-median-$k-label'))).right,
+          lessThanOrEqualTo(firstBar.left),
+          reason: k,
+        );
+      }
       // 起床那條在上床那條下面（上早下晚）
       final bedLine = tester.getRect(
         find.byKey(const Key('bed-week-median-bed')),

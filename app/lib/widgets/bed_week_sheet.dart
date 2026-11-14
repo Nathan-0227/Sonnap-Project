@@ -285,8 +285,7 @@ class _ClockChart extends StatelessWidget {
   final Color color;
   const _ClockChart({required this.week, required this.color});
 
-  static const double _axisW = 40;
-  static const double _tagW = 52; // 右邊留給虛線標籤（使用者定：字放在圖外面）
+  static const double _axisW = 46;
   static const double _labelH = 26;
 
   @override
@@ -305,6 +304,11 @@ class _ClockChart extends StatelessWidget {
     hi = ((hi + 119) ~/ 120) * 120;
     if (hi - lo < 8 * 60) hi = math.min(24 * 60, lo + 8 * 60);
     final span = (hi - lo).toDouble();
+    // 中間值要畫的話，它們就放在左邊刻度裡（使用者定：放右邊上下空空的），
+    // 離它們太近的刻度數字讓位，免得疊在一起
+    final marks = week.nightsWithData >= 3
+        ? [?week.medianStart, ?week.medianEnd]
+        : const <int>[];
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -314,22 +318,23 @@ class _ClockChart extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             for (var t = lo; t <= hi; t += 120)
-              Positioned(
-                left: 0,
-                width: _axisW - 6,
-                top: y(t) - 7,
-                child: Text(
-                  clockOf(t),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Color(0x99FFFFFF),
-                    fontSize: 10,
+              if (marks.every((m) => (y(m) - y(t)).abs() >= 22))
+                Positioned(
+                  left: 0,
+                  width: _axisW - 8,
+                  top: y(t) - 7,
+                  child: Text(
+                    clockOf(t),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Color(0x99FFFFFF),
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-              ),
             Positioned(
               left: _axisW,
-              right: _tagW,
+              right: 0,
               top: 0,
               bottom: 0,
               child: Row(
@@ -354,7 +359,7 @@ class _ClockChart extends StatelessWidget {
                 ],
               ),
             ),
-            // 兩條中間值虛線（≥3 晚才畫）；字在圖外面的右邊，對齊那條線
+            // 兩條中間值虛線（≥3 晚才畫）；時刻寫在左邊刻度裡，做成實心小膠囊比較顯眼
             if (week.nightsWithData >= 3) ...[
               for (final (key, label, v) in [
                 ('bed', 'bed', week.medianStart),
@@ -364,64 +369,46 @@ class _ClockChart extends StatelessWidget {
                   Positioned(
                     key: Key('bed-week-median-$key'),
                     left: _axisW,
-                    right: _tagW - 4,
+                    right: 0,
                     top: y(v),
                     child: IgnorePointer(
                       child: CustomPaint(
-                        size: Size(box.maxWidth - _axisW - _tagW + 4, 1),
+                        size: Size(box.maxWidth - _axisW, 1),
                         painter: _DashPainter(color: Colors.white),
                       ),
                     ),
                   ),
-                  // 字在圖外面右邊一欄、跟刻度一樣對齊那條線；做成實心小膠囊比較顯眼（使用者定）
                   Positioned(
-                    right: 0,
-                    width: _tagW - 4,
-                    top: y(v) - 21,
+                    left: 0,
+                    width: _axisW - 2,
+                    top: y(v) - 10,
                     child: IgnorePointer(
-                      child: Column(
+                      child: Container(
                         key: Key('bed-week-median-$key-label'),
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Text(
-                            label,
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              height: 1.1,
+                        alignment: Alignment.center,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            clockOf(v),
+                            semanticsLabel: 'usual $label ${clockOf(v)}',
+                            style: const TextStyle(
+                              color: Color(0xFF151A3C),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: color.withValues(alpha: 0.5),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                clockOf(v),
-                                style: const TextStyle(
-                                  color: Color(0xFF151A3C),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
