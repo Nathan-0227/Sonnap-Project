@@ -660,8 +660,8 @@ void main() {
       await tester.tap(find.byKey(const Key('report-efficiency-tile')));
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byKey(const Key('eff-sheet')), findsOneWidget);
-      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsOneWidget,
-          reason: '警語原文照抄（2026-11-15 起放在 Efficiency 點開的底下）');
+      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsNothing,
+          reason: '2026-11-15 使用者定：Efficiency 點開不放警語（警語仍在 Insights 分數卡）');
       expect(find.textContaining('Basis:'), findsNothing,
           reason: '2026-11-15 使用者定：機器標籤看不懂，改寫那一種的名字（後端照抄）');
       expect(tester.takeException(), isNull);

@@ -1621,7 +1621,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       value: r.efficiency!,
       label: r.efficiencyLabel,
       kind: r.efficiencyKind,
-      caveat: r.efficiencyCaveat,
+      // 11-15 使用者定：點開不放警語（上面「asleep of counted」已經說明怎麼算的）。警語仍在 Insights 分數卡
       asleepMinutes: r.sleepMinutes,
       span: countedSpan(
         r.efficiencyKind,
