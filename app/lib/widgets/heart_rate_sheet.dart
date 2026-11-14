@@ -328,7 +328,8 @@ class HeartRateView extends StatelessWidget {
                   ),
                 const SizedBox(height: 14),
                 SizedBox(
-                  height: 170,
+                  // 11-15 使用者：原本 170 太空，壓矮並加一條 Usually 的虛線
+                  height: 130,
                   child: _WeekDots(week: w, color: color),
                 ),
                 const SizedBox(height: 6),
@@ -666,7 +667,19 @@ class _WeekDots extends StatelessWidget {
       builder: (context, box) {
         final plotH = box.maxHeight - _labelH - _valueH;
         double yOf(double v) => _valueH + plotH * (1 - (v - lo) / (hi - lo));
-        return Row(
+        return Stack(
+          children: [
+            // Usually（中間值）的虛線，穿過七欄
+            if (week.usual != null)
+              Positioned(
+                key: const Key('hr-week-usual-line'),
+                left: 0,
+                right: 0,
+                top: yOf(week.usual!) - 1,
+                height: 2,
+                child: CustomPaint(painter: _DashPainter(color)),
+              ),
+            Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var i = 0; i < week.nights.length; i++)
@@ -790,8 +803,28 @@ class _WeekDots extends StatelessWidget {
                 }(),
               ),
           ],
+        ),
+          ],
         );
       },
     );
   }
+}
+
+class _DashPainter extends CustomPainter {
+  final Color color;
+  _DashPainter(this.color);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color.withValues(alpha: 0.45)
+      ..strokeWidth = 1.2;
+    final y = size.height / 2;
+    for (var x = 0.0; x < size.width; x += 8) {
+      canvas.drawLine(Offset(x, y), Offset(math.min(x + 4, size.width), y), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter old) => old.color != color;
 }

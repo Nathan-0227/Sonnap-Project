@@ -158,6 +158,7 @@ void main() {
       expect(find.byKey(const Key('hr-week-avg-2026-11-14')), findsOneWidget);
       expect(find.byKey(const Key('hr-week-min-2026-11-14')), findsOneWidget);
       expect(find.byKey(const Key('hr-week-legend')), findsOneWidget);
+      expect(find.byKey(const Key('hr-week-usual-line')), findsOneWidget);
       // 最低的點在平均下面
       final a = tester.getCenter(find.byKey(const Key('hr-week-avg-2026-11-14')));
       final m = tester.getCenter(find.byKey(const Key('hr-week-min-2026-11-14')));
