@@ -261,18 +261,21 @@ void main() {
     testWidgets('夢還沒看過 → 日記本會抖；點開之後就不抖', (tester) async {
       await pumpReport(tester, report(dream: true),
           isDreamRead: () async => false);
+      expect(find.byKey(const Key('report-dream-unread-dot')), findsOneWidget);
       expect(await maxTilt(tester), greaterThan(0.03));
       await tester.tap(find.byKey(const Key('report-dream')));
       await frames(tester);
       await tester.tapAt(const Offset(10, 10)); // 關掉夢境
       await frames(tester);
       expect(await maxTilt(tester), 0);
+      expect(find.byKey(const Key('report-dream-unread-dot')), findsNothing);
     });
 
     testWidgets('夢已經看過 → 日記本不抖', (tester) async {
       await pumpReport(tester, report(dream: true),
           isDreamRead: () async => true);
       expect(await maxTilt(tester), 0);
+      expect(find.byKey(const Key('report-dream-unread-dot')), findsNothing);
     });
 
     testWidgets('沒有夢 → 沒有對話框', (tester) async {

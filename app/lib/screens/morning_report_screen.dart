@@ -1933,15 +1933,40 @@ class _DreamBookState extends State<_DreamBook>
               child: child,
             );
           },
-          child: Image.asset(
-            kDreamBookAsset,
-            key: const Key('report-dream-book'),
-            width: 66,
-            // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
-            height: 64,
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) =>
-                DreamBubble(compact: true, onTap: widget.onTap),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Image.asset(
+                kDreamBookAsset,
+                key: const Key('report-dream-book'),
+                width: 66,
+                // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
+                height: 64,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) =>
+                    DreamBubble(compact: true, onTap: widget.onTap),
+              ),
+              // 沒看過 → 右上角一個紅點（2026-11-14 使用者定）。減少動態效果時不抖，紅點照樣在。
+              if (widget.unread)
+                Positioned(
+                  key: const Key('report-dream-unread-dot'),
+                  // 圖的上半是透明的，書落在下半——紅點貼在書的右上角
+                  right: 6,
+                  top: 16,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF4D5E),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x66000000), blurRadius: 3),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
