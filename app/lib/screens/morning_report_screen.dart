@@ -1173,8 +1173,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         key: const Key('report-hr-tile'),
         icon: Icons.favorite_rounded,
         color: _cHr,
-        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）
-        title: 'Sleeping heart rate',
+        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）；格子窄，寫縮寫，點開才寫全名
+        title: 'Sleeping HR',
         value: hrAvg == null ? null : '${hrAvg.round()} bpm',
         graphic: hrCurve == null
             ? null

@@ -267,7 +267,7 @@ void main() {
     expect(find.byKey(const Key('stages-chip-hr')), findsNothing);
   });
 
-  testWidgets('報告：點心率格（標題 Sleeping heart rate）→ 打開心率點開（2026-11-15 起，不再開 Sleep Stages）',
+  testWidgets('報告：點心率格（標題 Sleeping HR）→ 打開心率點開（2026-11-15 起，不再開 Sleep Stages）',
       (tester) async {
     final r = buildMorningReport(date: '2026-11-08', home: home());
     await pumpReport(tester, r, 'tap');
@@ -275,7 +275,7 @@ void main() {
     expect(
         find.descendant(
             of: find.byKey(const Key('report-hr-tile')),
-            matching: find.text('Sleeping heart rate')),
+            matching: find.text('Sleeping HR')),
         findsOneWidget);
     await tester.tap(find.byKey(const Key('report-hr-tile')));
     await tester.pump(const Duration(milliseconds: 400));
