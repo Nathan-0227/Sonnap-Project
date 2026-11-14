@@ -71,6 +71,22 @@ void main() {
       expect(int.parse(m!.group(1)!), kLateThresholdMinutes);
     });
 
+    test('12:00–18:00 的放下手機不算（10-05 偵測成 14:07）：當作沒資料、不算晚', () {
+      final w = phoneWeek(
+        endDate: '2026-10-05',
+        downs: {
+          '2026-10-05': PhoneDown(t('2026-10-05 14:07'), true),
+          '2026-10-04': PhoneDown(t('2026-10-04 04:42'), true),
+          '2026-10-03': PhoneDown(t('2026-10-03 11:59'), true), // 中午前還算
+          '2026-10-02': PhoneDown(t('2026-10-02 18:00'), false), // 18:00 起算
+        },
+      );
+      expect(w.nights.last.down, isNull);
+      expect(w.nightsWithData, 3);
+      expect(w.lateNights, 2);
+      expect(w.judgedNights, 3);
+    });
+
     test('targetFromEvening：格式不對 → null', () {
       expect(clockOf(targetFromEvening('03:00')!), '03:00');
       expect(targetFromEvening('3'), isNull);

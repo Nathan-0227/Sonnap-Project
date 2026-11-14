@@ -11,6 +11,8 @@
 //   這一晚亮一點（Q3）——好壞只有後端判斷
 // - 沒資料的晚上寫「— no data」、不算（Q5），**不畫成 0**
 // - 右邊只寫時刻（Q8）
+// - **12:00–18:00 的放下手機不算那一晚的就寢**（11-15 使用者定）：報告格子的時間軸本來就是
+//   18:00→12:00。實例 10-05 偵測成 14:07（晚 607 分鐘），一晚就把整週拉歪。畫成 no data、不進中間值與晚幾晚
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -57,6 +59,9 @@ class PhoneWeek {
 String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+/// 12:00–18:00：不是就寢的時段（見檔頭）。
+bool isDaytime(DateTime t) => t.hour >= 12 && t.hour < 18;
+
 /// [endDate] 那一晚往回 7 晚。純函式。
 PhoneWeek phoneWeek({
   required String endDate,
@@ -68,7 +73,8 @@ PhoneWeek phoneWeek({
     for (var i = days - 1; i >= 0; i--)
       () {
         final key = _iso(DateTime.utc(end.year, end.month, end.day - i));
-        return PhoneWeekNight(key, downs[key]);
+        final d = downs[key];
+        return PhoneWeekNight(key, d == null || isDaytime(d.at) ? null : d);
       }(),
   ]);
 }
