@@ -48,9 +48,17 @@ String _clock(DateTime t) =>
     ),
     null => (null, null, '', ''),
   };
-  if (f == null || t == null || !t.isAfter(f)) return null;
-  return (from: f, to: t, fromName: fn, toName: tn);
+  if (f == null || t == null) return null;
+  // ⚠️ 兩個時刻一律換成「牆鐘」再相減：按鈕的時刻沒有時區（本地 DateTime），手錶的帶 +08:00
+  //    （parseWallClock 回的是 isUtc 但數字是牆鐘）。直接相減會差 8 小時（11-15 實機抓到：
+  //    03:20 → 09:51 算成 14h 31m）。
+  final from = _wall(f), to = _wall(t);
+  if (!to.isAfter(from)) return null;
+  return (from: from, to: to, fromName: fn, toName: tn);
 }
+
+DateTime _wall(DateTime t) =>
+    DateTime(t.year, t.month, t.day, t.hour, t.minute, t.second, t.millisecond);
 
 /// 「3 nights · From your sleep buttons」這種，一種一行；照 ①②③ 排，沒有的那種不寫。
 /// ⚠️ 名字只照抄後端（score_claim.py）；舊版後端沒給名字的那一種**不寫**，Dart 不自己取名。

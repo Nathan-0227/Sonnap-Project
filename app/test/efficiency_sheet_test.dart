@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:app/models/wall_clock.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/services/user_identity.dart';
@@ -69,6 +70,16 @@ void main() {
       final o = countedSpan(EfficiencyKind.watchOnly, asleepAt: a, wokeAt: w)!;
       expect((o.from, o.to, o.fromName), (a, w, 'watch asleep'));
       expect(countedSpan(EfficiencyKind.buttons, bedStart: bs), isNull);
+    });
+
+    test('⚠️ 按鈕（沒時區）配手錶（帶 +08:00）不會差 8 小時（11-15 實機抓到）', () {
+      final s = countedSpan(
+        EfficiencyKind.startToWatchWake,
+        bedStart: DateTime.parse('2026-11-14T03:20:14.931402'),
+        wokeAt: parseWallClock('2026-11-14T09:51:00+08:00'),
+      )!;
+      expect(s.to.difference(s.from).inMinutes, 390); // 6h 30m，不是 14h 30m
+      expect((s.from.hour, s.to.hour), (3, 9));
     });
 
     test('照抄數字：不四捨五入，只把 100.0 寫成 100', () {
