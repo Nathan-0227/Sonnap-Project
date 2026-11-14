@@ -372,8 +372,9 @@ class _ClockChart extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // 字放在線的左端（使用者定：右邊會蓋到最近幾晚）
                   Positioned(
-                    right: 0,
+                    left: _axisW + 2,
                     top: y(v) - 17,
                     child: IgnorePointer(
                       child: Container(
