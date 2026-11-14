@@ -360,7 +360,8 @@ class UsageStatsService {
       debugPrint(
         'LightsOut[${result.mode.name}] ${result.status.name} '
         'raw=${events.length} used=${result.eventCount} '
-        'quiet=${result.quietMinutes}m at=${result.at} $histogram',
+        'quiet=${result.quietMinutes}m at=${result.at} '
+        'bridged=${result.bridgedUnlocks} $histogram',
       );
 
       return result;

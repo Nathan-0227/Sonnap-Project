@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     -- NULL = 舊資料，一律當作 'tap'。⚠️ 攝影機上床偵測只拿 'tap' 當標準答案。
     bed_start_kind    TEXT,
     bed_end_kind      TEXT,
+    bridged_unlocks   INTEGER,                -- 偵測時跨過幾次半夜的短解鎖（<30 秒）；0＝正常偵測，NULL＝舊資料／舊版 App
     time_in_bed_minutes   REAL,             -- bed_end − bed_start
     phone_in_bed_minutes  REAL,             -- lights_out − bed_start（下界，見下）
     assumed_sleep_minutes REAL,             -- 臥床 − 滑手機 − WASO(=0)
@@ -642,6 +643,9 @@ COLUMN_MIGRATIONS = [
     # 2026-11-12：上床／下床是當下按的還是事後補的（'tap' / 'recalled'）。
     ("nightly_behavior", "bed_start_kind", "TEXT"),
     ("nightly_behavior", "bed_end_kind", "TEXT"),
+    # 2026-11-15：就寢偵測第 4 條規則（半夜看一下時間的短解鎖可以跨過去）。
+    #             記這一晚跨過了幾次；0＝正常偵測，NULL＝舊資料／舊版 App 沒送。只供分析、不顯示
+    ("nightly_behavior", "bridged_unlocks", "INTEGER"),
     # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
@@ -985,7 +989,8 @@ def delete_user(user_id, db_path=None):
 def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
                             db_path=None, efficiency=None,
-                            bed_start_kind=None, bed_end_kind=None):
+                            bed_start_kind=None, bed_end_kind=None,
+                            bridged_unlocks=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -1012,8 +1017,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                  bed_start_at, bed_end_at, time_in_bed_minutes,
                  phone_in_bed_minutes, assumed_sleep_minutes,
                  sleep_efficiency, efficiency_basis,
-                 bed_start_kind, bed_end_kind)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 bed_start_kind, bed_end_kind, bridged_unlocks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 target_bedtime    = excluded.target_bedtime,
                 lights_out_at     = excluded.lights_out_at,
@@ -1028,7 +1033,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                 sleep_efficiency      = excluded.sleep_efficiency,
                 efficiency_basis      = excluded.efficiency_basis,
                 bed_start_kind        = excluded.bed_start_kind,
-                bed_end_kind          = excluded.bed_end_kind
+                bed_end_kind          = excluded.bed_end_kind,
+                bridged_unlocks       = excluded.bridged_unlocks
             """,
             (user_id, date, target_bedtime, lights_out_at,
              adherence_minutes, None if is_late is None else (1 if is_late else 0),
@@ -1038,7 +1044,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
              eff.get("assumed_sleep_minutes"), eff.get("sleep_efficiency"),
              eff.get("efficiency_basis"),
              bed_start_kind if eff.get("bed_start_at") else None,
-             bed_end_kind if eff.get("bed_end_at") else None),
+             bed_end_kind if eff.get("bed_end_at") else None,
+             bridged_unlocks),
         )
         conn.commit()
     finally:

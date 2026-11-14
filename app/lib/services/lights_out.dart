@@ -144,6 +144,10 @@ class LightsOutResult {
 
   final String? error;
 
+  /// 跨過了幾次半夜的短解鎖（第 4 條規則，見 [kBriefUnlockSeconds]）。
+  /// 0＝照原本的規則就偵測到了。會跟著上傳（`bridged_unlocks`），只供分析、不顯示。
+  final int bridgedUnlocks;
+
   const LightsOutResult(
     this.status, {
     this.at,
@@ -152,6 +156,7 @@ class LightsOutResult {
     this.eventCount = 0,
     this.mode = LightsOutMode.unlock,
     this.error,
+    this.bridgedUnlocks = 0,
   });
 
   /// 後端 `POST /nightly` 要的 ISO8601 字串（含 +08:00 之類的位移）。
@@ -175,6 +180,30 @@ class LightsOutResult {
 /// 誤觸發，又要短到抓得住只睡 4 小時的夜晚（那正是本專案最在意的夜晚，
 /// 門檻訂太長會把睡最少的人整晚判成「沒有資料」）。
 const int kMinQuietMinutes = 180;
+
+/// 第 4 條規則：半夜「看一下時間」的短解鎖可以跨過去（2026-11-15 使用者定）。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// ⚠️ 只在原本的規則找不到 ≥ [kMinQuietMinutes] 的安靜期時才用（fallback）
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 實例 11-12：05:43 放下手機（手錶 05:54 入睡），07:20 解鎖 4 秒看時間，09:28 起床。
+/// 那 4 秒把 3 小時 45 分的安靜期切成 97＋128 分鐘，兩段都不到 3 小時 → 整晚偵測不到。
+///
+/// - 一次「短解鎖」＝一段使用 < 30 秒。⚠️ **這是設計決策，沒有文獻依據**（同 3 小時那個門檻，
+///   屬偵測層、不進任何分數）。30 秒涵蓋看時間、看一則通知，不涵蓋回訊息。
+/// - 比對之前先把相隔 < [kUnlockCoalesceSeconds] 秒的紀錄併成一次使用：一次解鎖在事件流上
+///   常是「screen_off」接著 0.7 秒後的「keyguard_shown」，不併的話一次會被算成兩次。
+/// - 可以跨**任意次**，每一次都要 < 30 秒，跨完的整段仍要 ≥ 3 小時。
+/// - 有好幾段都過 3 小時時，挑**跨最少次**的那段，同樣次數再挑最長的。理由：睡前 5 秒看一下
+///   鬧鐘也是短解鎖，挑最長的會把它也跨過去、就寢時刻往前移；挑最少次就停在睡前最後一次使用。
+/// - 就寢時刻＝整段的起點＝睡前最後一次使用結束，同原本的規則。
+/// - **只用在 unlock 模式**：activity 模式本來就會被通知切碎，跨過去會跨到不該跨的。
+/// - 原本的三條規則照舊：短解鎖本身仍是「使用」，只是允許跨過；頭尾空隙仍不算。
+const int kBriefUnlockSeconds = 30;
+
+/// 相隔幾秒以內的使用紀錄併成同一次解鎖（見 [kBriefUnlockSeconds]）。
+const int kUnlockCoalesceSeconds = 10;
 
 /// 往回看多久。一天，這樣不管在早上還是深夜查，上一段睡眠都在視窗裡。
 const Duration kLightsOutWindow = Duration(hours: 24);
@@ -336,6 +365,21 @@ LightsOutResult detectLightsOut(
   }
 
   if (best == null || bestMinutes < minQuietMinutes) {
+    // 第 4 條規則（fallback）：跨過半夜的短解鎖再找一次。
+    final bridged = mode == LightsOutMode.unlock
+        ? _bridgeBriefUnlocks(merged, minQuietMinutes)
+        : null;
+    if (bridged != null) {
+      return LightsOutResult(
+        LightsOutStatus.ok,
+        at: bridged.at,
+        quietMinutes: bridged.minutes,
+        sourceType: bridged.endType,
+        eventCount: relevant.length,
+        mode: mode,
+        bridgedUnlocks: bridged.count,
+      );
+    }
     return LightsOutResult(
       LightsOutStatus.noQuietGap,
       eventCount: relevant.length,
@@ -352,4 +396,54 @@ LightsOutResult detectLightsOut(
     eventCount: relevant.length,
     mode: mode,
   );
+}
+
+/// 第 4 條規則的實作（見 [kBriefUnlockSeconds]）。找不到 ≥ [minQuietMinutes] 的段落 → null。
+({DateTime at, int minutes, String endType, int count})? _bridgeBriefUnlocks(
+  List<_Interval> merged,
+  int minQuietMinutes,
+) {
+  // 相隔幾秒的紀錄併成一次使用
+  final uses = <_Interval>[];
+  for (final it in merged) {
+    if (uses.isNotEmpty &&
+        it.start.difference(uses.last.end).inSeconds < kUnlockCoalesceSeconds) {
+      if (it.end.isAfter(uses.last.end)) {
+        uses.last.end = it.end;
+        uses.last.endType = it.endType;
+      }
+    } else {
+      uses.add(_Interval(it.start, it.end, it.endType));
+    }
+  }
+  bool brief(_Interval u) =>
+      u.endType != 'open' &&
+      u.end.difference(u.start).inSeconds < kBriefUnlockSeconds;
+
+  ({DateTime at, int minutes, String endType, int count})? best;
+  // uses[i] 是睡前最後一次使用；往後跨過連續的短解鎖，停在下一次真正的使用（或最後一筆）。
+  // ⚠️ 頭尾空隙仍不算：起點一定是某一段使用的結束，終點一定是某一段使用的開始。
+  for (var i = 0; i + 1 < uses.length; i++) {
+    var k = i + 1;
+    var count = 0;
+    while (k < uses.length - 1 && brief(uses[k])) {
+      count++;
+      k++;
+    }
+    if (count == 0) continue; // 沒跨，原本的規則已經看過這一段
+    final minutes = uses[k].start.difference(uses[i].end).inMinutes;
+    if (minutes < minQuietMinutes) continue;
+    final b = best;
+    if (b == null ||
+        count < b.count ||
+        (count == b.count && minutes > b.minutes)) {
+      best = (
+        at: uses[i].end,
+        minutes: minutes,
+        endType: uses[i].endType,
+        count: count,
+      );
+    }
+  }
+  return best;
 }
