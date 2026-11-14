@@ -158,6 +158,12 @@ class MorningReport {
   final double? efficiency;
   final String? efficiencyBasis;
 
+  /// 那一種給人看的名字（後端 composition.efficiency_label，字只在 score_claim.py）。
+  final String? efficiencyLabel;
+
+  /// 三種裡的哪一種（決定分母畫哪兩個時刻、長條實心或空心）。
+  final EfficiencyKind? efficiencyKind;
+
   /// 效率那條警語（composition.caveats），照抄。
   final String? efficiencyCaveat;
 
@@ -229,6 +235,8 @@ class MorningReport {
     this.restingHeartRate,
     this.efficiency,
     this.efficiencyBasis,
+    this.efficiencyLabel,
+    this.efficiencyKind,
     this.efficiencyCaveat,
     this.camera,
     this.summaryText,
@@ -319,6 +327,8 @@ class MorningReport {
       restingHeartRate: restingHeartRate,
       efficiency: efficiency,
       efficiencyBasis: efficiencyBasis,
+      efficiencyLabel: efficiencyLabel,
+      efficiencyKind: efficiencyKind,
       efficiencyCaveat: efficiencyCaveat,
       camera: camera ?? this.camera,
       summaryText: clearSummary ? summaryText : (summaryText ?? this.summaryText),
@@ -407,7 +417,34 @@ double? _minutesBetween(DateTime? a, DateTime? b) {
 
 /// 進分數的那個效率：依 basis 去 behavior 找同一個 basis 的那一個；
 /// 都對不上就是手錶自己的（三段式的 ③）。**basis 字串不寫死在 Dart**。
-double? _scoredEfficiency(String? basis, Map<String, dynamic>? behavior,
+/// 進分數的效率是三種裡的哪一種。**不寫死 basis 字串**：拿那一晚 behavior 自己帶的
+/// `measured_efficiency_basis`／`watch_wake_efficiency_basis` 去對（同 [scoredEfficiency]）。
+enum EfficiencyKind {
+  /// ① 兩個按鈕都按：手錶睡眠 ÷（Start sleep → Out of bed）
+  buttons,
+
+  /// ② 只按 Start sleep：手錶睡眠 ÷（Start sleep → 手錶醒來）
+  startToWatchWake,
+
+  /// ③ 沒按：手錶自己的效率（入睡 → 醒來）
+  watchOnly,
+}
+
+/// [basis] 是哪一種；效率沒算（basis 是 null）→ null。純函式。
+EfficiencyKind? efficiencyKindOf(String? basis, Map<String, dynamic>? behavior) {
+  if (basis == null) return null;
+  if (behavior?['measured_efficiency_basis'] == basis) {
+    return EfficiencyKind.buttons;
+  }
+  if (behavior?['watch_wake_efficiency_basis'] == basis) {
+    return EfficiencyKind.startToWatchWake;
+  }
+  return EfficiencyKind.watchOnly;
+}
+
+/// 一晚**進分數的效率**：依 basis 去 behavior 找同一個 basis 的那個數字，都對不上才用手錶的。
+/// 早晨報告的 Efficiency 格子與點開後的一週長條**共用這一支**（這一晚的長條一定等於格子上的數字）。
+double? scoredEfficiency(String? basis, Map<String, dynamic>? behavior,
     Map<String, dynamic>? metrics) {
   if (basis == null) return null;
   for (final key in const ['measured_efficiency', 'watch_wake_efficiency']) {
@@ -522,8 +559,10 @@ MorningReport buildMorningReport({
       wasoMinutes: has ? n(metrics, 'waso_minutes') : null,
       avgHeartRate: has ? n(metrics, 'avg_heart_rate') : null,
       restingHeartRate: has ? n(metrics, 'resting_heart_rate') : null,
-      efficiency: has ? _scoredEfficiency(basis, behavior, metrics) : null,
+      efficiency: has ? scoredEfficiency(basis, behavior, metrics) : null,
       efficiencyBasis: has ? basis : null,
+      efficiencyLabel: has ? (composition?['efficiency_label'] as String?) : null,
+      efficiencyKind: has ? efficiencyKindOf(basis, behavior) : null,
       efficiencyCaveat: has ? caveat : null,
     );
   }

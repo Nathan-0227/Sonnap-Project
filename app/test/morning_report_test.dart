@@ -414,7 +414,8 @@ void main() {
         {Size size = const Size(1200, 5000),
         bool pending = true,
         bool canOpenInsights = false,
-        Future<List<NightValue>> Function()? loadSleepSeries}) async {
+        Future<List<NightValue>> Function()? loadSleepSeries,
+        Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights}) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = size.width > 1100 ? 3.0 : 2.625;
       addTearDown(tester.view.reset);
@@ -429,6 +430,7 @@ void main() {
             pending: pending,
             canOpenInsights: canOpenInsights,
             loadSleepSeries: loadSleepSeries,
+            loadEfficiencyNights: loadEfficiencyNights,
           ),
         ),
       );
@@ -458,6 +460,28 @@ void main() {
       expect(textOf(tester, 'sleep-week-average'), '6h 55m');
       expect(find.text('2 of 7 nights with data'), findsOneWidget);
       expect(find.text('8h goal'), findsOneWidget);
+    });
+
+    testWidgets('Efficiency 點開：這一晚那根長條＝格子上的數字（一週資料舊的被蓋過去）', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12')),
+        loadEfficiencyNights: () async => {
+          '2026-11-11': const EfficiencyNight(95.9, EfficiencyKind.buttons, 'B'),
+          // 後端那一份這一晚是舊的／別種；報告上是 98.9（按鈕那一種）
+          '2026-11-12': const EfficiencyNight(99.5, EfficiencyKind.watchOnly, 'W'),
+        },
+      );
+      expect(textOf(tester, 'report-efficiency'), '98.9%');
+      await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
+      await tester.tap(find.byKey(const Key('report-efficiency-tile')));
+      await settle(tester);
+      expect(textOf(tester, 'eff-value'), '98.9%');
+      expect(textOf(tester, 'eff-week-value-2026-11-12'), '98.9');
+      expect(find.byKey(const Key('eff-week-fill-2026-11-12-buttons')), findsOneWidget);
+      expect(textOf(tester, 'eff-week-value-2026-11-11'), '95.9');
+      // 分母是兩個按鈕（homeWithScore 是按鈕那一種）
+      expect(textOf(tester, 'eff-span'), startsWith('Start sleep 23:40 → Out of bed'));
     });
 
     testWidgets('沒有給一週資料 → Time asleep 不能點', (tester) async {
@@ -635,10 +659,11 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
       await tester.tap(find.byKey(const Key('report-efficiency-tile')));
       await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(const Key('eff-sheet')), findsOneWidget);
       expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsOneWidget,
-          reason: '原文照抄，前面接項目名稱（與 Insights 頁同一個寫法）');
-      expect(find.text('Basis: SENTINEL-basis-measured'), findsOneWidget,
-          reason: 'App 裡有好幾個「效率」，只有 basis 分得開');
+          reason: '警語原文照抄（2026-11-15 起放在 Efficiency 點開的底下）');
+      expect(find.textContaining('Basis:'), findsNothing,
+          reason: '2026-11-15 使用者定：機器標籤看不懂，改寫那一種的名字（後端照抄）');
       expect(tester.takeException(), isNull);
     });
 

@@ -17,6 +17,8 @@ import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
+import '../services/camera_insights.dart' show EfficiencyNight;
+import '../widgets/efficiency_sheet.dart';
 import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
@@ -80,6 +82,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚清醒幾分鐘（後端 /insights）。Awake 點開的一週圖用；沒給、或連不到（null）就只看這一晚。
   final Future<Map<String, double>?> Function()? loadAwakeMinutes;
 
+  /// 每晚進分數的效率＋種類＋名字（後端 /insights）。Efficiency 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights;
+
 
   const MorningReportScreen({
     super.key,
@@ -94,6 +99,7 @@ class MorningReportScreen extends StatefulWidget {
     this.loadBedTimes,
         this.loadPhoneDowns,
     this.loadAwakeMinutes,
+    this.loadEfficiencyNights,
   });
 
   @override
@@ -1224,64 +1230,24 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     // 效率：圓環＝百分比。警語與 basis 很長，點格子才跳出來（以前也是收在 More details 裡）
     Widget? effTile;
     if (r.hasScore && r.efficiency != null) {
-      final notes = [
-        // 與 Insights 頁同一個寫法（「Efficiency - 原文」）：後端那段字照抄
-        if (r.efficiencyCaveat != null) 'Efficiency - ${r.efficiencyCaveat!}',
-        // App 裡有好幾個「效率」，只有 basis 分得開
-        if (r.efficiencyBasis != null) 'Basis: ${r.efficiencyBasis}',
-      ];
       effTile = ReportTile(
         key: const Key('report-efficiency-tile'),
         icon: Icons.speed_rounded,
         color: _cEff,
         title: 'Efficiency',
-        // 照抄，不四捨五入掉小數
-        value: '${r.efficiency}%',
+        // 照抄，不四捨五入掉小數（只把 100.0 寫成 100）
+        value: '${effNumber(r.efficiency!)}%',
         valueKey: const Key('report-efficiency'),
         graphic: paintBox(
           RingPainter(r.efficiency!, _cEff),
           key: const Key('report-efficiency-ring'),
         ),
         graphicHeight: 56,
-        onTap: notes.isEmpty
-            ? null
-            : () => showModalBottomSheet<void>(
-                context: context,
-                backgroundColor: ReportColors.sheet,
-                builder: (_) => SafeArea(
-                  child: Padding(
-                    key: const Key('report-efficiency-sheet'),
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sleep efficiency · ${r.efficiency}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        for (final n in notes)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Text(
-                              n,
-                              style: const TextStyle(
-                                color: ReportColors.soft,
-                                fontSize: 13,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-        lines: [if (notes.isNotEmpty) const Text('How it is measured')],
+        // 點開：這一晚怎麼算的（分子分母、哪一種、警語）＋一週（依種類畫實心／空心）
+        onTap: () => _showEfficiency(r),
+        lines: [
+          Text(r.efficiencyLabel ?? 'How it is measured'),
+        ],
       );
     }
 
@@ -1628,7 +1594,47 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-    /// Awake 點開：這一晚什麼時候醒、醒多久＋一週。一週只有後端有；連不到就只看這一晚。
+    /// Efficiency 點開。這一晚的數字、種類、名字、警語都以報告上的為準（同一支 scoredEfficiency 挑的）；
+  /// 一週只有後端有，這一晚那根長條用報告上的數字蓋過去，保證跟格子一樣。
+  Future<void> _showEfficiency(MorningReport r) async {
+    Map<String, EfficiencyNight>? week;
+    try {
+      final m = await widget.loadEfficiencyNights?.call();
+      if (m != null && m.isNotEmpty) {
+        week = {
+          ...m,
+          if (r.efficiencyKind != null)
+            r.date: EfficiencyNight(
+              r.efficiency!,
+              r.efficiencyKind!,
+              r.efficiencyLabel,
+            ),
+        };
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showEfficiencySheet(
+      context,
+      color: _cEff,
+      fontFamily: kReportFont,
+      date: r.date,
+      value: r.efficiency!,
+      label: r.efficiencyLabel,
+      kind: r.efficiencyKind,
+      caveat: r.efficiencyCaveat,
+      asleepMinutes: r.sleepMinutes,
+      span: countedSpan(
+        r.efficiencyKind,
+        bedStart: r.bedStart,
+        bedEnd: r.bedEnd,
+        asleepAt: r.asleepAt,
+        wokeAt: r.wokeAt,
+      ),
+      week: week,
+    );
+  }
+
+  /// Awake 點開：這一晚什麼時候醒、醒多久＋一週。一週只有後端有；連不到就只看這一晚。
   /// 這一晚的總數以報告上的為準。
   Future<void> _showAwake(MorningReport r) async {
     List<NightValue>? series;

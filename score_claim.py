@@ -201,6 +201,9 @@ def compose(scored, efficiency_basis=None, efficiency_recalled=False):
         "scored_weight": sum(SCORE_COMPONENT_WEIGHTS[k] for k in ordered),
         "primary_component": PRIMARY_SCORE_COMPONENT,
         "efficiency_basis": efficiency_basis if "efficiency" in scored_set else None,
+        # 2026-11-15：給人看的那一種的名字（早晨報告 Efficiency 點開）。App 照抄，不在 Dart 寫第二份
+        "efficiency_label": (EFFICIENCY_BASIS_LABELS.get(efficiency_basis)
+                             if "efficiency" in scored_set else None),
         "efficiency_recalled": recalled,
         "caveats": [
             {"component": k, "caveat": caveat_text[k]}

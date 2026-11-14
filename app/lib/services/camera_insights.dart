@@ -24,6 +24,7 @@
 /// 而 WASO 量不到。後端刻意回 null，Dart 端補一個就是憑空生出一個數字。
 library;
 
+import 'morning_report.dart' show EfficiencyKind, efficiencyKindOf, scoredEfficiency;
 import '../widgets/phone_week_sheet.dart' show PhoneDown;
 import 'dart:convert';
 import 'dart:io';
@@ -216,12 +217,17 @@ class CameraInsightsResult {
   /// 早晨報告 Awake 點開的一週圖用。
   final Map<String, double> awakeMinutes;
 
+  /// 每晚**進分數的效率**＋是哪一種＋名字（`wearable.history` 配 `behavior.history`）。
+  /// 數字用 [scoredEfficiency] 挑——跟早晨報告的格子同一支。
+  final Map<String, EfficiencyNight> efficiencyNights;
+
 
   const CameraInsightsResult(
     this.status, {
     this.bedButtons = const {},
         this.phoneDowns = const {},
     this.awakeMinutes = const {},
+    this.efficiencyNights = const {},
     this.nights = const [],
     this.note,
     this.floorNote,
@@ -317,13 +323,32 @@ class CameraInsightsService implements CameraInsightsSource {
         }
       }
             final awakeMinutes = <String, double>{};
+      final efficiencyNights = <String, EfficiencyNight>{};
+      final behaviorByDate = <String, Map<String, dynamic>>{
+        if (behavior is Map<String, dynamic>)
+          for (final j in (behavior['history'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>())
+            if (j['date'] is String) j['date'] as String: j,
+      };
       final wearable = decoded['wearable'];
       if (wearable is Map<String, dynamic>) {
         for (final j in (wearable['history'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()) {
           final date = j['date'];
+          if (date is! String) continue;
           final v = j['waso_minutes'];
-          if (date is String && v is num) awakeMinutes[date] = v.toDouble();
+          if (v is num) awakeMinutes[date] = v.toDouble();
+          final comp = (j['composition'] as Map?)?.cast<String, dynamic>();
+          final basis = comp?['efficiency_basis'] as String?;
+          final b = behaviorByDate[date];
+          final value = scoredEfficiency(basis, b, j);
+          if (basis != null && value != null) {
+            efficiencyNights[date] = EfficiencyNight(
+              value,
+              efficiencyKindOf(basis, b)!,
+              comp?['efficiency_label'] as String?,
+            );
+          }
         }
       }
       // camera 是 null = 這個使用者沒有攝影機資料。那是正常狀態，不是錯誤。
@@ -334,6 +359,7 @@ class CameraInsightsService implements CameraInsightsSource {
           bedButtons: bedButtons,
           phoneDowns: phoneDowns,
           awakeMinutes: awakeMinutes,
+          efficiencyNights: efficiencyNights,
         );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
@@ -346,6 +372,7 @@ class CameraInsightsService implements CameraInsightsSource {
         bedButtons: bedButtons,
         phoneDowns: phoneDowns,
           awakeMinutes: awakeMinutes,
+          efficiencyNights: efficiencyNights,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,
@@ -376,4 +403,14 @@ CameraInsightsService? buildCameraInsights({
     baseUrl: baseUrl,
     identity: buildUserIdentity(userIdOverride: userIdOverride),
   );
+}
+
+/// 一晚進分數的效率（早晨報告 Efficiency 點開的一週長條用）。
+class EfficiencyNight {
+  final double value;
+  final EfficiencyKind kind;
+
+  /// 那一種的名字（後端照抄）；舊版後端沒有 → null。
+  final String? label;
+  const EfficiencyNight(this.value, this.kind, this.label);
 }
