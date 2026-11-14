@@ -1230,24 +1230,21 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     // 效率：圓環＝百分比。警語與 basis 很長，點格子才跳出來（以前也是收在 More details 裡）
     Widget? effTile;
     if (r.hasScore && r.efficiency != null) {
-      effTile = ReportTile(
+      // 2026-11-15 使用者定：照參考圖（Battery 卡）從底下往上填滿，填多高就是效率；
+      // 數字在左下、% 小一號，下面一行是那一種的名字（後端照抄）
+      effTile = ReportFillTile(
         key: const Key('report-efficiency-tile'),
         icon: Icons.speed_rounded,
         color: _cEff,
         title: 'Efficiency',
         // 照抄，不四捨五入掉小數（只把 100.0 寫成 100）
-        value: '${effNumber(r.efficiency!)}%',
+        value: effNumber(r.efficiency!),
+        unit: '%',
         valueKey: const Key('report-efficiency'),
-        graphic: paintBox(
-          RingPainter(r.efficiency!, _cEff),
-          key: const Key('report-efficiency-ring'),
-        ),
-        graphicHeight: 56,
-        // 點開：這一晚怎麼算的（分子分母、哪一種、警語）＋一週（依種類畫實心／空心）
+        fraction: r.efficiency! / 100,
+        caption: r.efficiencyLabel,
+        // 點開：這一晚怎麼算的（分子分母、哪一種）＋一週（依種類畫實心／空心）
         onTap: () => _showEfficiency(r),
-        lines: [
-          Text(r.efficiencyLabel ?? 'How it is measured'),
-        ],
       );
     }
 

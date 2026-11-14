@@ -142,6 +142,154 @@ class ReportTile extends StatelessWidget {
   }
 }
 
+/// 一格「從底下往上填滿」的卡（2026-11-15 使用者定，照參考圖的 Battery 卡）：
+/// 填滿的高度＝[fraction]（0–1），大數字在左下、單位小一號，下面一行小字。
+/// 早晨報告的 Efficiency 用：填多高就是那一晚的效率。
+class ReportFillTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String unit;
+  final Key? valueKey;
+  final double fraction;
+  final String? caption;
+  final VoidCallback? onTap;
+
+  const ReportFillTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.fraction,
+    this.unit = '',
+    this.valueKey,
+    this.caption,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = 22.0;
+    final deep = Color.lerp(color, const Color(0xFF3D52C9), 0.55)!;
+    final body = Container(
+      constraints: const BoxConstraints(minHeight: 150),
+      decoration: reportCard(radius: radius),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          children: [
+            // 填滿的部分：不用 LayoutBuilder（格子放在 IntrinsicHeight 裡，量不到）
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: FractionallySizedBox(
+                  key: const Key('report-fill'),
+                  heightFactor: fraction.clamp(0.0, 1.0),
+                  widthFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [color.withValues(alpha: 0.85), deep],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 16, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (onTap != null)
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: Color(0xCCFFFFFF),
+                        ),
+                    ],
+                  ),
+                  const Spacer(),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          value,
+                          key: valueKey,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (unit.isNotEmpty)
+                          Text(
+                            unit,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (caption != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      caption!,
+                      key: const Key('report-fill-caption'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xE6FFFFFF),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return onTap == null
+        ? body
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: body,
+          );
+  }
+}
+
 /// 兩欄排：有的才放，兩個一列、一樣高；單數的最後一個佔整列。
 Widget reportTileGrid(List<Widget?> tiles, {double gap = 12}) {
   final present = [for (final t in tiles) ?t];

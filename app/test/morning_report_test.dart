@@ -472,7 +472,7 @@ void main() {
           '2026-11-12': const EfficiencyNight(99.5, EfficiencyKind.watchOnly, 'W'),
         },
       );
-      expect(textOf(tester, 'report-efficiency'), '98.9%');
+      expect(textOf(tester, 'report-efficiency'), '98.9');
       await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
       await tester.tap(find.byKey(const Key('report-efficiency-tile')));
       await settle(tester);
@@ -649,11 +649,12 @@ void main() {
           scrollable: find.byType(Scrollable).first);
       expect(textOf(tester, 'report-waso'), '14m');
       expect(textOf(tester, 'report-hr'), '56 bpm avg · 51 resting');
-      expect(textOf(tester, 'report-efficiency'), '98.9%',
+      expect(textOf(tester, 'report-efficiency'), '98.9',
           reason: '照抄，不四捨五入掉小數');
       expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
       expect(find.text('Camera data is not part of your score.'), findsOneWidget);
-      expect(find.byKey(const Key('report-efficiency-ring')), findsOneWidget);
+      // 2026-11-15 起照參考圖從底下往上填滿（取代圓環）
+      expect(find.descendant(of: find.byKey(const Key('report-efficiency-tile')), matching: find.byKey(const Key('report-fill'))), findsOneWidget);
       // 效率的警語與 basis 很長：點格子才跳出來（以前也是收在 More details 裡）
       expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsNothing);
       await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
