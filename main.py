@@ -1242,6 +1242,9 @@ async def get_insights(
                     #    deep_min），欄名與 asset 路徑的 history 相同。
                     "sleep_efficiency": r["efficiency"],
                     "deep_minutes": r["deep_min"],
+                    # 早晨報告 Awake 點開的一週圖（2026-11-15）：入睡後清醒的分鐘數，
+                    # 與 /home 的 metrics.waso_minutes 同一個欄位。0 是真的值（整晚沒醒），null 才是沒資料
+                    "waso_minutes": r["waso_min"],
                     # Insights 頁要畫「幾點睡→幾點醒」。與 asset 路徑
                     # （build_app_payload.py 的 history）同一個來源，欄名也相同。
                     "sleep_start_time": r["sleep_start_time"],

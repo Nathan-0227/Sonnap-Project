@@ -9,6 +9,7 @@ history 每晚的睡眠效率與深睡（2026-11-12，首頁「跟上一晚比�
   【1】asset：history[-1] 的效率與深睡，與首頁 metrics 逐字相同（同一個來源）
   【2】asset：每晚都有這兩個欄位（值可以是 null，但鍵要在）
   【3】/insights：wearable.history 也帶這兩個欄位，值與寫進資料庫的相同
+  【4】/insights：wearable.history 帶 waso_minutes（Awake 一週圖用）；0 照實回 0，不是 null
 
 ⚠️ 【3】用暫存資料庫，不會碰到真的資料庫。
 
@@ -77,12 +78,14 @@ user_id = client.post(
 ).json()["user_id"]
 db.upsert_wearable_nightly(
     user_id, "2026-11-08", "garmin",
-    {"final_score": 70.0, "final_quality": "Normal", "efficiency": 93.4, "deep_min": 41},
+    {"final_score": 70.0, "final_quality": "Normal", "efficiency": 93.4, "deep_min": 41,
+     "waso_min": 0},
     db_path=TMP,
 )
 db.upsert_wearable_nightly(
     user_id, "2026-11-09", "garmin",
-    {"final_score": 82.0, "final_quality": "Good", "efficiency": 97.1, "deep_min": 76},
+    {"final_score": 82.0, "final_quality": "Good", "efficiency": 97.1, "deep_min": 76,
+     "waso_min": 14},
     db_path=TMP,
 )
 api = client.get(f"/insights?user_id={user_id}&days=365").json()
@@ -91,6 +94,10 @@ ok("11-08 效率 93.4", by_date["2026-11-08"].get("sleep_efficiency") == 93.4,
    repr(by_date["2026-11-08"].get("sleep_efficiency")))
 ok("11-09 深睡 76", by_date["2026-11-09"].get("deep_minutes") == 76,
    repr(by_date["2026-11-09"].get("deep_minutes")))
+ok("【4】11-09 清醒 14 分", by_date["2026-11-09"].get("waso_minutes") == 14,
+   repr(by_date["2026-11-09"].get("waso_minutes")))
+ok("【4】11-08 清醒 0 分照實回 0（不是 null）", by_date["2026-11-08"].get("waso_minutes") == 0,
+   repr(by_date["2026-11-08"].get("waso_minutes")))
 
 print()
 if fails:

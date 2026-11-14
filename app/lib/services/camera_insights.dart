@@ -210,12 +210,18 @@ class CameraInsightsResult {
 
   /// 同一個 `behavior.history` 的放下手機時刻與後端判的晚不晚（日期 → 那一晚）。
   /// 早晨報告 Phone down 點開的一週圖用；is_late 照抄後端，Dart 不重算。
-  final Map<String, PhoneDown> phoneDowns;
+    final Map<String, PhoneDown> phoneDowns;
+
+  /// 同一個回應裡 `wearable.history` 的每晚清醒分鐘（日期 → 分鐘；0 是真的值）。
+  /// 早晨報告 Awake 點開的一週圖用。
+  final Map<String, double> awakeMinutes;
+
 
   const CameraInsightsResult(
     this.status, {
     this.bedButtons = const {},
-    this.phoneDowns = const {},
+        this.phoneDowns = const {},
+    this.awakeMinutes = const {},
     this.nights = const [],
     this.note,
     this.floorNote,
@@ -310,6 +316,16 @@ class CameraInsightsService implements CameraInsightsSource {
           }
         }
       }
+            final awakeMinutes = <String, double>{};
+      final wearable = decoded['wearable'];
+      if (wearable is Map<String, dynamic>) {
+        for (final j in (wearable['history'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()) {
+          final date = j['date'];
+          final v = j['waso_minutes'];
+          if (date is String && v is num) awakeMinutes[date] = v.toDouble();
+        }
+      }
       // camera 是 null = 這個使用者沒有攝影機資料。那是正常狀態，不是錯誤。
       final camera = decoded['camera'];
       if (camera is! Map<String, dynamic>) {
@@ -317,6 +333,7 @@ class CameraInsightsService implements CameraInsightsSource {
           CameraInsightsStatus.ok,
           bedButtons: bedButtons,
           phoneDowns: phoneDowns,
+          awakeMinutes: awakeMinutes,
         );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
@@ -328,6 +345,7 @@ class CameraInsightsService implements CameraInsightsSource {
         CameraInsightsStatus.ok,
         bedButtons: bedButtons,
         phoneDowns: phoneDowns,
+          awakeMinutes: awakeMinutes,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,

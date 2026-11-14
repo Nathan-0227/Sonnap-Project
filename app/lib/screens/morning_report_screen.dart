@@ -17,6 +17,7 @@ import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
+import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
@@ -74,7 +75,11 @@ class MorningReportScreen extends StatefulWidget {
   loadBedTimes;
 
   /// 每晚放下手機的時刻＋後端判的晚不晚（後端 /insights）。Phone down 點開的一週圖用；沒給就不能點。
-  final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
+    final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
+
+  /// 每晚清醒幾分鐘（後端 /insights）。Awake 點開的一週圖用；沒給、或連不到（null）就只看這一晚。
+  final Future<Map<String, double>?> Function()? loadAwakeMinutes;
+
 
   const MorningReportScreen({
     super.key,
@@ -87,7 +92,8 @@ class MorningReportScreen extends StatefulWidget {
     this.isDreamRead,
     this.loadSleepSeries,
     this.loadBedTimes,
-    this.loadPhoneDowns,
+        this.loadPhoneDowns,
+    this.loadAwakeMinutes,
   });
 
   @override
@@ -1133,7 +1139,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         color: _cAwake,
         title: 'Awake',
         value: reportHm(r.wasoMinutes!),
-        valueKey: const Key('report-waso'),
+                valueKey: const Key('report-waso'),
+        onTap: () => _showAwake(r),
         graphic: segs == null
             ? null
             : paintBox(
@@ -1618,6 +1625,34 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       color: _cBed,
       fontFamily: kReportFont,
       week: bedWeek(endDate: r.date, buttons: buttons, watch: watch),
+    );
+  }
+
+    /// Awake 點開：這一晚什麼時候醒、醒多久＋一週。一週只有後端有；連不到就只看這一晚。
+  /// 這一晚的總數以報告上的為準。
+  Future<void> _showAwake(MorningReport r) async {
+    List<NightValue>? series;
+    try {
+      final m = await widget.loadAwakeMinutes?.call();
+      if (m != null && m.isNotEmpty) {
+        series = [
+          for (final e in m.entries)
+            if (e.key != r.date) NightValue(e.key, e.value),
+          NightValue(r.date, r.wasoMinutes!.toDouble()),
+        ];
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showAwakeSheet(
+      context,
+      title: 'Awake',
+      icon: Icons.visibility_rounded,
+      color: _cAwake,
+      fontFamily: kReportFont,
+      date: r.date,
+      totalMinutes: r.wasoMinutes!.toDouble(),
+      stages: r.stages,
+      series: series,
     );
   }
 

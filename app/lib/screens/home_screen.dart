@@ -636,6 +636,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           },
           isDreamRead: () => _dreamReads.isRead(date),
           loadBedTimes: _bedTimes,
+                    loadAwakeMinutes: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.awakeMinutes
+                : null;
+          },
           loadPhoneDowns: () async {
             var camera = _camera;
             if (camera == null && widget.cameraInsights != null) {
