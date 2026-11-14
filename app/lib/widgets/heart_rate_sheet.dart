@@ -223,7 +223,8 @@ class HeartRateView extends StatelessWidget {
                 children: [
                   Icon(Icons.favorite_rounded, size: 20, color: color),
                   const SizedBox(width: 8),
-                  Flexible(
+                  // Expanded（不是 Flexible＋Spacer）：兩者會平分剩下的寬度，標題被切成「Sleeping he…」（11-15 實機）
+                  Expanded(
                     child: Text(
                       'Sleeping heart rate',
                       key: const Key('hr-title'),
@@ -236,7 +237,6 @@ class HeartRateView extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Spacer(),
                   if (showWeek)
                     const Text(
                       'Last 7 nights',
