@@ -127,8 +127,25 @@ void main() {
       );
       expect(usual.bottom, lessThan(bar.top));
       // 兩條線的字跟上面的數字一樣
-      expect(find.text('usual bed 02:50'), findsOneWidget);
-      expect(find.text('usual wake 09:00'), findsOneWidget);
+      String tag(String k) => tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byKey(Key('bed-week-median-$k-label')),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((x) => x.data)
+          .join(' ');
+      expect(tag('bed'), 'usual bed 02:50');
+      expect(tag('wake'), 'usual wake 09:00');
+      // 字在圖外面：在最後一根長條的右邊
+      final lastBar = tester.getRect(
+        find.byKey(const Key('bed-week-bar-2026-11-14')),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('bed-week-median-bed-label'))).left,
+        greaterThanOrEqualTo(lastBar.right),
+      );
       // 起床那條在上床那條下面（上早下晚）
       final bedLine = tester.getRect(
         find.byKey(const Key('bed-week-median-bed')),

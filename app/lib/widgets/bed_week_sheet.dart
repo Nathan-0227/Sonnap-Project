@@ -286,6 +286,7 @@ class _ClockChart extends StatelessWidget {
   const _ClockChart({required this.week, required this.color});
 
   static const double _axisW = 40;
+  static const double _tagW = 52; // 右邊留給虛線標籤（使用者定：字放在圖外面）
   static const double _labelH = 26;
 
   @override
@@ -328,7 +329,7 @@ class _ClockChart extends StatelessWidget {
               ),
             Positioned(
               left: _axisW,
-              right: 0,
+              right: _tagW,
               top: 0,
               bottom: 0,
               child: Row(
@@ -353,7 +354,7 @@ class _ClockChart extends StatelessWidget {
                 ],
               ),
             ),
-            // 兩條中間值虛線（≥3 晚才畫），字寫在線上
+            // 兩條中間值虛線（≥3 晚才畫）；字在圖外面的右邊，對齊那條線
             if (week.nightsWithData >= 3) ...[
               for (final (key, label, v) in [
                 ('bed', 'usual bed', week.medianStart),
@@ -363,37 +364,45 @@ class _ClockChart extends StatelessWidget {
                   Positioned(
                     key: Key('bed-week-median-$key'),
                     left: _axisW,
-                    right: 0,
+                    right: _tagW - 4,
                     top: y(v),
                     child: IgnorePointer(
                       child: CustomPaint(
-                        size: Size(box.maxWidth - _axisW, 1),
+                        size: Size(box.maxWidth - _axisW - _tagW + 4, 1),
                         painter: _DashPainter(color: Colors.white),
                       ),
                     ),
                   ),
-                  // 字放在線的左端（使用者定：右邊會蓋到最近幾晚）
                   Positioned(
-                    left: _axisW + 2,
-                    top: y(v) - 17,
+                    right: 0,
+                    width: _tagW - 6,
+                    top: y(v) - 13,
                     child: IgnorePointer(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xCC151A3C),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '$label ${clockOf(v)}',
+                      child: FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: Column(
                           key: Key('bed-week-median-$key-label'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                color: Color(0xB3FFFFFF),
+                                fontSize: 9,
+                                height: 1.1,
+                              ),
+                            ),
+                            Text(
+                              clockOf(v),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
