@@ -490,7 +490,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 按 View sleep report）→ 報告；首頁一週心情列點任一天、補填自評之後則直接開報告（不經等待畫面）。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
-版面（11-13 依示意圖定案，11-14 依參考圖改）：日期 → **一條半圓線**的分數（只有線、不墊深色底盤；數字在弧裡、小狗頭上）＋小狗置中坐在弧下的草坡（腳下淡影子）＋左下「You felt」＋右下夢境日記本 → 那句話置中（背景是使用者生成的日出 `assets/backgrounds/report_dawn.jpg`，壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘）→ 大字 Lv.6、「Your experience」＋右邊這一晚的 +N XP、經驗條（**沒有卡片框，直接在草坡上**；「215 / 400 XP」寫在條裡；條只有**一種顏色**（白），最近 7 晚之間細線分開、`xpBarSegments()` 只排版不算 XP，這一晚那格金色；+0 的晚上沒有格子、+0 XP 照寫）→ 那句話置中（背景圖要蓋到經驗條，所以是 2:3、下半是一整片平整草地）
+版面（11-13 依示意圖定案，11-14 依參考圖改）：日期 → **一條半圓線**的分數（只有線、不墊深色底盤；數字在弧裡、小狗頭上）＋小狗置中坐在弧下的草坡（腳下淡影子）＋左下起床自評（只有臉＋字、不寫 You felt、不加框，11-14 使用者定）＋右下夢境日記本（**那一晚的夢還沒看過就每隔幾秒抖一下**，看過或減少動態效果時靜止；看過沒看過用首頁同一份 `DreamReadStore`） → 那句話置中（背景是使用者生成的日出 `assets/backgrounds/report_dawn.jpg`，壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘）→ 大字 Lv.6、「Your experience」＋右邊這一晚的 +N XP、經驗條（**沒有卡片框，直接在草坡上**；「215 / 400 XP」寫在條裡；條只有**白與金兩種顏色、不畫分隔線**（11-14 使用者定）：之前累積的是白，這一晚那段金色（`xpBarSegments()` 只排版不算 XP）；+0 的晚上沒有格子、+0 XP 照寫）→ 那句話置中（背景圖要蓋到經驗條，所以是 2:3、下半是一整片平整草地）
 → From your buddy（AI 那段＋小建議）→ **Last night 圖形格子** → Sleep phases → **Yesterday 圖形格子**
 → View sleep insights → Back to home。
 

@@ -631,6 +631,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _dreamReads.markRead(date);
             if (mounted) setState(() => _dreamReadDate = date);
           },
+          isDreamRead: () => _dreamReads.isRead(date),
           initial: initial,
           load: load,
           loadSummary: loadSummary,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -51,6 +52,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 點開夢境之後（首頁用來記「這個夢看過了」）。
   final VoidCallback? onDreamOpened;
 
+  /// 這一晚的夢看過了沒（首頁的 DreamReadStore）。沒給＝當作沒看過，日記本會抖。
+  final Future<bool> Function()? isDreamRead;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -59,6 +63,7 @@ class MorningReportScreen extends StatefulWidget {
     this.pending = true,
     this.canOpenInsights = false,
     this.onDreamOpened,
+    this.isDreamRead,
   });
 
   @override
@@ -108,9 +113,22 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   late MorningReport _report = widget.initial;
   bool _loading = false;
 
+  /// 先當作看過（不抖），問到「還沒看過」才開始抖——免得看過的人一打開先抖一下。
+  bool _dreamRead = true;
+
   @override
   void initState() {
     super.initState();
+    final isRead = widget.isDreamRead;
+    if (isRead == null) {
+      _dreamRead = false;
+    } else {
+      isRead()
+          .then((read) {
+            if (mounted && !read) setState(() => _dreamRead = false);
+          })
+          .catchError((_) {});
+    }
     final load = widget.load;
     if (load != null) {
       _loading = true;
@@ -409,7 +427,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     size: 130,
                   ),
                 ),
-              // 左下：You felt
+              // 左下：起床自評（臉＋字）
               if (r.rating != null)
                 Positioned(
                   left: 0,
@@ -425,7 +443,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                   // 草坡往右邊斜下去，書要放低一點才在草地上
                   right: 6,
                   bottom: -30,
-                  child: _DreamBook(onTap: () => _showDream(r)),
+                  child: _DreamBook(
+                    unread: !_dreamRead,
+                    onTap: () => _showDream(r),
+                  ),
                 ),
             ],
           );
@@ -536,49 +557,33 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
+  /// 起床自評：只放臉＋那個字（2026-11-14 使用者定：拿掉「You felt」、不要框，不突兀）。
   Widget _ratingChip(MorningReport r) {
     final rating = r.rating!;
-    return Container(
+    return Row(
       key: const Key('report-rating'),
-      padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-      decoration: BoxDecoration(
-        color: const Color(0x66141C46),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ReportColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            restedFaceAsset(rating.rested),
-            width: 26,
-            height: 26,
-            errorBuilder: (_, _, _) => const SizedBox(width: 26, height: 26),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'You felt',
-                  style: TextStyle(color: ReportColors.muted, fontSize: 11),
-                ),
-                Text(
-                  r.ratingLabel ?? rating.label,
-                  key: const Key('report-rating-label'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(
+          restedFaceAsset(rating.rested),
+          width: 22,
+          height: 22,
+          errorBuilder: (_, _, _) => const SizedBox(width: 22, height: 22),
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            r.ratingLabel ?? rating.label,
+            key: const Key('report-rating-label'),
+            style: const TextStyle(
+              color: ReportColors.soft,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              shadows: _onSky,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1566,6 +1571,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   }
 
   void _showDream(MorningReport r) {
+    setState(() => _dreamRead = true);
     showDreamDiary(context, text: r.dream!, date: r.date, mood: r.mood);
     widget.onDreamOpened?.call();
   }
@@ -1611,9 +1617,6 @@ class _XpBar extends StatelessWidget {
   static const _mine = ReportColors.gold;
   static const _ink = Color(0xFF1D2860);
 
-  /// 條內文字大約佔的寬度（左邊距 12 ＋「1,219 / 1,500 XP」）。
-  static const double _textRoom = 128;
-
   @override
   Widget build(BuildContext context) {
     final total = size;
@@ -1656,15 +1659,6 @@ class _XpBar extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: g.date == date ? _mine : _fill,
-                        // 字底下那段不畫分隔線（線會穿過字）
-                        border: g.end < into && x(g.end) > _textRoom
-                            ? const Border(
-                                right: BorderSide(
-                                  color: Color(0x591D2860),
-                                  width: 1,
-                                ),
-                              )
-                            : null,
                       ),
                     ),
                   ),
@@ -1852,9 +1846,71 @@ class ReportDawnBackdrop extends StatelessWidget {
 /// 報告裡的夢境入口：草地上一本攤開的日記。讀不到圖時退回小雲。
 const String kDreamBookAsset = 'assets/moods/dream_book.png';
 
-class _DreamBook extends StatelessWidget {
+class _DreamBook extends StatefulWidget {
   final VoidCallback onTap;
-  const _DreamBook({required this.onTap});
+
+  /// 還沒看過這一晚的夢 → 每隔一下抖一抖（2026-11-14 使用者定）。看過就靜止。
+  final bool unread;
+  const _DreamBook({required this.onTap, required this.unread});
+
+  @override
+  State<_DreamBook> createState() => _DreamBookState();
+}
+
+class _DreamBookState extends State<_DreamBook>
+    with SingleTickerProviderStateMixin {
+  /// 抖一次多久、兩次之間停多久。停的時候不排畫面，測試的 pumpAndSettle 才停得下來。
+  static const _shake = Duration(milliseconds: 700);
+  static const _pause = Duration(milliseconds: 2600);
+
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: _shake)
+        ..addStatusListener((st) {
+          if (st == AnimationStatus.completed) _schedule();
+        });
+  Timer? _next;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DreamBook old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  bool get _animate =>
+      widget.unread &&
+      !(MediaQuery.maybeOf(context)?.disableAnimations ?? false);
+
+  void _sync() {
+    if (_animate) {
+      if (_next == null && !_c.isAnimating) _schedule(first: true);
+    } else {
+      _next?.cancel();
+      _next = null;
+      _c.stop();
+      _c.value = 0;
+    }
+  }
+
+  void _schedule({bool first = false}) {
+    _next?.cancel();
+    _next = Timer(first ? const Duration(milliseconds: 600) : _pause, () {
+      _next = null;
+      if (mounted && _animate) _c.forward(from: 0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _next?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1862,16 +1918,31 @@ class _DreamBook extends StatelessWidget {
       button: true,
       label: 'Open dream diary',
       child: GestureDetector(
-        onTap: onTap,
+        onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
-        child: Image.asset(
-          kDreamBookAsset,
-          key: const Key('report-dream-book'),
-          width: 66,
-          // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
-          height: 64,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => DreamBubble(compact: true, onTap: onTap),
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, child) {
+            final t = _c.value;
+            // 左右搖三下、越搖越小
+            final angle = math.sin(t * math.pi * 6) * 0.14 * (1 - t);
+            return Transform.rotate(
+              key: const Key('report-dream-shake'),
+              angle: angle,
+              alignment: Alignment.bottomCenter,
+              child: child,
+            );
+          },
+          child: Image.asset(
+            kDreamBookAsset,
+            key: const Key('report-dream-book'),
+            width: 66,
+            // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
+            height: 64,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) =>
+                DreamBubble(compact: true, onTap: widget.onTap),
+          ),
         ),
       ),
     );

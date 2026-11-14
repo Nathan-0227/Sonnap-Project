@@ -1,6 +1,7 @@
 // 小狗說「I had a dream…」的對話框（2026-11-13 使用者定）：
 // 對話框只放一句短話，點開才看完整夢境；沒有夢境就不出現；首頁看過就縮成 💭。
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
@@ -205,14 +206,32 @@ void main() {
 
   group('早晨報告', () {
     Future<void> pumpReport(WidgetTester tester, MorningReport r,
-        {VoidCallback? onDreamOpened}) async {
+        {VoidCallback? onDreamOpened,
+        Future<bool> Function()? isDreamRead}) async {
       tester.view.physicalSize = const Size(1080, 2340);
       tester.view.devicePixelRatio = 2.625;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(
-        home: MorningReportScreen(initial: r, onDreamOpened: onDreamOpened),
+        home: MorningReportScreen(
+          initial: r,
+          onDreamOpened: onDreamOpened,
+          isDreamRead: isDreamRead,
+        ),
       ));
       await frames(tester);
+    }
+
+    /// 日記本在一段時間裡最大歪幾度
+    Future<double> maxTilt(WidgetTester tester) async {
+      var most = 0.0;
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        final t = tester.widget<Transform>(
+            find.byKey(const Key('report-dream-shake')));
+        final m = t.transform.storage;
+        most = math.max(most, math.atan2(m[1], m[0]).abs());
+      }
+      return most;
     }
 
     MorningReport report({required bool dream}) {
@@ -237,6 +256,23 @@ void main() {
       expect(textOf(tester, 'dream-diary-text'), withDream.aiContent.dreamSummary);
       expect(opened, 1, reason: '首頁要知道看過了');
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('夢還沒看過 → 日記本會抖；點開之後就不抖', (tester) async {
+      await pumpReport(tester, report(dream: true),
+          isDreamRead: () async => false);
+      expect(await maxTilt(tester), greaterThan(0.03));
+      await tester.tap(find.byKey(const Key('report-dream')));
+      await frames(tester);
+      await tester.tapAt(const Offset(10, 10)); // 關掉夢境
+      await frames(tester);
+      expect(await maxTilt(tester), 0);
+    });
+
+    testWidgets('夢已經看過 → 日記本不抖', (tester) async {
+      await pumpReport(tester, report(dream: true),
+          isDreamRead: () async => true);
+      expect(await maxTilt(tester), 0);
     });
 
     testWidgets('沒有夢 → 沒有對話框', (tester) async {
