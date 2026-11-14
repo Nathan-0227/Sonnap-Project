@@ -363,12 +363,12 @@ class _ClockChart extends StatelessWidget {
                 if (v != null) ...[
                   Positioned(
                     key: Key('bed-week-median-$key'),
-                    left: _axisW,
+                    left: _axisW + 50, // 從小膠囊右緣開始，線不穿過字
                     right: 0,
                     top: y(v),
                     child: IgnorePointer(
                       child: CustomPaint(
-                        size: Size(box.maxWidth - _axisW, 1),
+                        size: Size(box.maxWidth - _axisW - 50, 1),
                         painter: _DashPainter(color: Colors.white),
                       ),
                     ),
@@ -382,15 +382,11 @@ class _ClockChart extends StatelessWidget {
                         key: Key('bed-week-median-$key-label'),
                         alignment: Alignment.center,
                         height: 20,
+                        // 半透明（使用者定）：蓋在最左邊那根長條上時，底下的長條還看得到
                         decoration: BoxDecoration(
-                          color: color,
+                          color: color.withValues(alpha: 0.32),
                           borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withValues(alpha: 0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
+                          border: Border.all(color: color, width: 1.2),
                         ),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -398,7 +394,7 @@ class _ClockChart extends StatelessWidget {
                             clockOf(v),
                             semanticsLabel: 'usual $label ${clockOf(v)}',
                             style: const TextStyle(
-                              color: Color(0xFF151A3C),
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
                             ),
