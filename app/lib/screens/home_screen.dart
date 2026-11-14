@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
+import '../models/wall_clock.dart';
 import '../services/account_service.dart';
 import '../services/sleep_sounds.dart';
 import '../services/alarm.dart';
@@ -633,6 +634,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (mounted) setState(() => _dreamReadDate = date);
           },
           isDreamRead: () => _dreamReads.isRead(date),
+          loadBedTimes: _bedTimes,
           loadSleepSeries: () async => _sleepMinutesSeries((await _sessionFuture).history),
           initial: initial,
           load: load,
@@ -1748,6 +1750,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   static String _fmtPts(double v) => '${v.round()}%';
   static String _fmtRate(double v) => '${v.toStringAsFixed(0)} /hr';
+
+  /// 報告 Time in bed 一週圖的資料：按鈕（後端 /insights，連不到就沒有）＋手錶入睡→醒來（打包檔）。
+  Future<
+    ({
+      Map<String, (DateTime?, DateTime?)> buttons,
+      Map<String, (DateTime?, DateTime?)> watch,
+    })
+  >
+  _bedTimes() async {
+    final watch = <String, (DateTime?, DateTime?)>{};
+    try {
+      for (final e in (await _sessionFuture).history) {
+        watch[e.date] = (parseWallClock(e.bedtime), parseWallClock(e.wakeTime));
+      }
+    } catch (_) {}
+    var camera = _camera;
+    if (camera == null && widget.cameraInsights != null) {
+      try {
+        camera = await widget.cameraInsights!.load();
+      } catch (_) {}
+    }
+    return (buttons: camera?.bedButtons ?? const {}, watch: watch);
+  }
 
   /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Time asleep 的一週圖共用）。
   static List<NightValue> _sleepMinutesSeries(List<HistoryEntry> history) =>

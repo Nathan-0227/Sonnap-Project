@@ -1,0 +1,570 @@
+// 一週上床／起床時刻（2026-11-14 使用者定）：早晨報告的 Time in bed 點開。
+// 樣子跟 Time asleep 那張一樣（膠囊、標題同外面那張卡），差別是**左邊是時鐘**：
+// 每晚一根膠囊從上床畫到起床，看得出每晚幾點睡的高低落差（規律性）。
+//
+// - 一週＝這一晚往回 7 個日曆晚上；沒資料的晚上空著
+// - **按鈕優先、沒按退回手錶**（使用者定）。但兩個不是同一個量：按鈕是上床→下床，
+//   手錶是入睡→醒來。所以手錶的晚上畫成**空心**，圖例講清楚，平均也分開數晚數
+// - 底下只寫事實：平均上床→起床時刻、平均臥床時間、最早到最晚的上床時刻。
+//   **不說規律好不好**（好壞只有後端能判斷）
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../services/night_compare.dart' show formatMinutes;
+
+enum BedSource { button, watch }
+
+/// 一晚的上床→起床。
+class BedSpan {
+  final DateTime start;
+  final DateTime end;
+  final BedSource source;
+  const BedSpan(this.start, this.end, this.source);
+
+  int get minutes => end.difference(start).inMinutes;
+}
+
+class BedWeekNight {
+  final String date; // yyyy-MM-dd（起床那天）
+  final BedSpan? span;
+  const BedWeekNight(this.date, this.span);
+}
+
+/// 時刻換成「從傍晚 18:00 起算第幾分鐘」（0–1439）——跨午夜的晚上才排得在同一條軸上。
+int minutesFromEvening(DateTime t) =>
+    ((t.hour * 60 + t.minute) - 18 * 60 + 24 * 60) % (24 * 60);
+
+/// 「03:12」。
+String clockOf(int fromEvening) {
+  final m = (fromEvening + 18 * 60) % (24 * 60);
+  return '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+}
+
+String _iso(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// 一個晚上的時間要合理才收：起床晚於上床、14 小時以內（同睡覺畫面的上限）。
+bool _plausible(DateTime? s, DateTime? e) =>
+    s != null &&
+    e != null &&
+    e.isAfter(s) &&
+    e.difference(s) <= const Duration(hours: 14);
+
+class BedWeek {
+  final List<BedWeekNight> nights; // 舊 → 新，固定 7 格
+  const BedWeek(this.nights);
+
+  List<BedSpan> get _spans => [
+    for (final n in nights)
+      if (n.span != null) n.span!,
+  ];
+
+  int get nightsWithData => _spans.length;
+  int get watchNights =>
+      _spans.where((s) => s.source == BedSource.watch).length;
+
+  /// 平均上床／起床（從 18:00 起算的分鐘）；沒有任何一晚 → null。
+  int? get averageStart => _avg(_spans.map((s) => minutesFromEvening(s.start)));
+  int? get averageEnd => _avg(_spans.map((s) => minutesFromEvening(s.end)));
+  int? get averageMinutes => _avg(_spans.map((s) => s.minutes));
+
+  /// 最早、最晚的上床時刻（從 18:00 起算）。
+  (int, int)? get startRange {
+    final xs = _spans.map((s) => minutesFromEvening(s.start)).toList();
+    if (xs.isEmpty) return null;
+    return (xs.reduce(math.min), xs.reduce(math.max));
+  }
+
+  static int? _avg(Iterable<int> xs) {
+    final l = xs.toList();
+    if (l.isEmpty) return null;
+    return (l.reduce((a, b) => a + b) / l.length).round();
+  }
+}
+
+/// [endDate] 那一晚往回 7 晚。每一晚：按鈕的上床、下床**兩個都有**才用按鈕，
+/// 不然用手錶的入睡→醒來；都沒有就空著。純函式。
+BedWeek bedWeek({
+  required String endDate,
+  Map<String, (DateTime?, DateTime?)> buttons = const {},
+  Map<String, (DateTime?, DateTime?)> watch = const {},
+  int days = 7,
+}) {
+  final end = DateTime.parse(endDate);
+  return BedWeek([
+    for (var i = days - 1; i >= 0; i--)
+      () {
+        final key = _iso(DateTime.utc(end.year, end.month, end.day - i));
+        final b = buttons[key];
+        if (b != null && _plausible(b.$1, b.$2)) {
+          return BedWeekNight(key, BedSpan(b.$1!, b.$2!, BedSource.button));
+        }
+        final w = watch[key];
+        if (w != null && _plausible(w.$1, w.$2)) {
+          return BedWeekNight(key, BedSpan(w.$1!, w.$2!, BedSource.watch));
+        }
+        return BedWeekNight(key, null);
+      }(),
+  ]);
+}
+
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+Future<void> showBedWeekSheet(
+  BuildContext context, {
+  required String title,
+  required IconData icon,
+  required Color color,
+  required BedWeek week,
+  String? targetBedtime,
+  String? fontFamily,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) => DefaultTextStyle.merge(
+      style: TextStyle(fontFamily: fontFamily),
+      child: BedWeekView(
+        title: title,
+        icon: icon,
+        color: color,
+        week: week,
+        targetBedtime: targetBedtime,
+      ),
+    ),
+  );
+}
+
+/// 「03:00」→ 從 18:00 起算的分鐘；格式不對 → null。
+int? _targetOffset(String? hhmm) {
+  if (hhmm == null) return null;
+  final p = hhmm.split(':');
+  if (p.length < 2) return null;
+  final h = int.tryParse(p[0]);
+  final m = int.tryParse(p[1]);
+  if (h == null || m == null) return null;
+  return ((h * 60 + m) - 18 * 60 + 24 * 60) % (24 * 60);
+}
+
+class BedWeekView extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final BedWeek week;
+  final String? targetBedtime;
+
+  const BedWeekView({
+    super.key,
+    required this.title,
+    required this.week,
+    this.icon = Icons.bed_rounded,
+    this.color = const Color(0xFF8FA8FF),
+    this.targetBedtime,
+  });
+
+  static const _soft = Color(0xB3FFFFFF);
+
+  @override
+  Widget build(BuildContext context) {
+    final avgStart = week.averageStart;
+    final avgEnd = week.averageEnd;
+    final avgMin = week.averageMinutes;
+    final range = week.startRange;
+    final target = _targetOffset(targetBedtime);
+    final n = week.nightsWithData;
+
+    return Container(
+      key: const Key('bed-week-sheet'),
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF151A3C), Color(0xFF1B1F48), Color(0xFF2B3470)],
+          stops: [0, 0.6, 1],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: color),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      title,
+                      key: const Key('bed-week-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Spacer(),
+                  const Text(
+                    'Last 7 nights',
+                    softWrap: false,
+                    style: TextStyle(color: _soft, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 250,
+                child: _ClockChart(week: week, color: color, target: target),
+              ),
+              const SizedBox(height: 8),
+              // 圖例：實心＝按鈕（上床→下床）、空心＝手錶（入睡→醒來）、虛線＝目標
+              Wrap(
+                spacing: 14,
+                runSpacing: 4,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (week.nights.any(
+                    (x) => x.span?.source == BedSource.button,
+                  ))
+                    _legend(
+                      _swatch(color, hollow: false),
+                      'In bed → out of bed',
+                    ),
+                  if (week.watchNights > 0)
+                    _legend(
+                      _swatch(color, hollow: true),
+                      'Watch: asleep → woke',
+                      key: const Key('bed-week-watch-legend'),
+                    ),
+                  if (target != null)
+                    _legend(
+                      CustomPaint(
+                        size: const Size(18, 1),
+                        painter: _DashPainter(),
+                      ),
+                      '${clockOf(target)} target',
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (avgStart == null || avgEnd == null || avgMin == null)
+                const Text(
+                  'No bedtimes this week',
+                  key: Key('bed-week-empty'),
+                  style: TextStyle(color: _soft, fontSize: 14),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Usually',
+                      style: TextStyle(color: _soft, fontSize: 13),
+                    ),
+                    Text(
+                      '${clockOf(avgStart)} → ${clockOf(avgEnd)}',
+                      key: const Key('bed-week-usual'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Average ${formatMinutes(avgMin.toDouble())} in bed · '
+                      '${n == week.nights.length ? 'all ${week.nights.length} nights' : '$n of ${week.nights.length} nights'}',
+                      key: const Key('bed-week-average'),
+                      style: const TextStyle(color: _soft, fontSize: 13),
+                    ),
+                    if (range != null && n >= 2) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Bedtime ranged ${clockOf(range.$1)}–${clockOf(range.$2)}',
+                        key: const Key('bed-week-range'),
+                        style: const TextStyle(color: _soft, fontSize: 13),
+                      ),
+                    ],
+                    if (week.watchNights > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '${week.watchNights} of these ${week.watchNights == 1 ? 'is' : 'are'} '
+                        'from your watch (no buttons tapped)',
+                        key: const Key('bed-week-watch-note'),
+                        style: const TextStyle(
+                          color: Color(0x80FFFFFF),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _swatch(Color c, {required bool hollow}) => Container(
+    width: 10,
+    height: 14,
+    decoration: BoxDecoration(
+      color: hollow ? Colors.transparent : c,
+      borderRadius: BorderRadius.circular(5),
+      border: Border.all(color: c, width: 1.5),
+    ),
+  );
+
+  static Widget _legend(Widget mark, String text, {Key? key}) => Row(
+    key: key,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      mark,
+      const SizedBox(width: 6),
+      Text(text, style: const TextStyle(color: _soft, fontSize: 11)),
+    ],
+  );
+}
+
+/// 左邊時鐘刻度（上早下晚）＋每晚一根從上床到起床的膠囊。
+class _ClockChart extends StatelessWidget {
+  final BedWeek week;
+  final Color color;
+  final int? target;
+  const _ClockChart({required this.week, required this.color, this.target});
+
+  static const double _axisW = 40;
+  static const double _labelH = 26;
+
+  @override
+  Widget build(BuildContext context) {
+    // 範圍：涵蓋每一晚與目標，對齊到 2 小時，至少 8 小時高
+    final xs = <int>[
+      for (final n in week.nights)
+        if (n.span != null) ...[
+          minutesFromEvening(n.span!.start),
+          minutesFromEvening(n.span!.end),
+        ],
+      ?target,
+    ];
+    var lo = xs.isEmpty ? 4 * 60 : xs.reduce(math.min);
+    var hi = xs.isEmpty ? 14 * 60 : xs.reduce(math.max);
+    lo = (lo ~/ 120) * 120;
+    hi = ((hi + 119) ~/ 120) * 120;
+    if (hi - lo < 8 * 60) hi = math.min(24 * 60, lo + 8 * 60);
+    final span = (hi - lo).toDouble();
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final h = box.maxHeight - _labelH;
+        double y(int fromEvening) => h * (fromEvening - lo) / span;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (var t = lo; t <= hi; t += 120)
+              Positioned(
+                left: 0,
+                width: _axisW - 6,
+                top: y(t) - 7,
+                child: Text(
+                  clockOf(t),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Color(0x99FFFFFF),
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            Positioned(
+              left: _axisW,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final n in week.nights)
+                    Expanded(
+                      child: _Night(
+                        night: n,
+                        isLast: identical(n, week.nights.last),
+                        chartH: h,
+                        labelH: _labelH,
+                        top: n.span == null
+                            ? 0
+                            : y(minutesFromEvening(n.span!.start)),
+                        bottom: n.span == null
+                            ? 0
+                            : y(minutesFromEvening(n.span!.end)),
+                        color: color,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (target != null)
+              Positioned(
+                key: const Key('bed-week-target'),
+                left: _axisW,
+                right: 0,
+                top: y(target!),
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    size: Size(box.maxWidth - _axisW, 1),
+                    painter: _DashPainter(),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Night extends StatelessWidget {
+  final BedWeekNight night;
+  final bool isLast;
+  final double chartH;
+  final double labelH;
+  final double top;
+  final double bottom;
+  final Color color;
+
+  const _Night({
+    required this.night,
+    required this.isLast,
+    required this.chartH,
+    required this.labelH,
+    required this.top,
+    required this.bottom,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d = DateTime.parse(night.date);
+    final s = night.span;
+    final watch = s?.source == BedSource.watch;
+    final strong = isLast ? 1.0 : 0.75;
+    return Semantics(
+      label: s == null
+          ? '${_weekdays[d.weekday - 1]} ${d.day}: no data'
+          : '${_weekdays[d.weekday - 1]} ${d.day}: '
+                '${clockOf(minutesFromEvening(s.start))} to '
+                '${clockOf(minutesFromEvening(s.end))}'
+                '${watch ? ' (watch)' : ''}',
+      child: Padding(
+        key: Key('bed-week-bar-${night.date}'),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          children: [
+            SizedBox(
+              height: chartH,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0x14FFFFFF),
+                        borderRadius: BorderRadius.circular(40),
+                      ),
+                    ),
+                  ),
+                  if (s != null)
+                    Positioned(
+                      key: Key(
+                        'bed-week-span-${night.date}-${watch ? 'watch' : 'button'}',
+                      ),
+                      left: 0,
+                      right: 0,
+                      top: top,
+                      height: math.max(8, bottom - top),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(40),
+                          // 手錶的晚上空心：入睡→醒來，不是上床→下床
+                          gradient: watch
+                              ? null
+                              : LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color.lerp(
+                                      color,
+                                      Colors.white,
+                                      0.45,
+                                    )!.withValues(alpha: strong),
+                                    color.withValues(alpha: strong),
+                                  ],
+                                ),
+                          border: watch
+                              ? Border.all(
+                                  color: color.withValues(alpha: strong),
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                      ),
+                    )
+                  else
+                    const Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        '—',
+                        style: TextStyle(
+                          color: Color(0x66FFFFFF),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: labelH,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: FittedBox(
+                  child: Text(
+                    _weekdays[d.weekday - 1],
+                    style: TextStyle(
+                      color: isLast ? Colors.white : const Color(0xB3FFFFFF),
+                      fontSize: 11,
+                      fontWeight: isLast ? FontWeight.w800 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = const Color(0x99FFFFFF)
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 8) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 4, 0), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

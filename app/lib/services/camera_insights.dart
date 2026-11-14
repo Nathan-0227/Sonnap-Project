@@ -29,6 +29,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/wall_clock.dart';
 import 'sleep_repository.dart';
 import 'user_identity.dart';
 
@@ -202,8 +203,13 @@ class CameraInsightsResult {
 
   final String? error;
 
+  /// 同一個回應裡 `behavior.history` 的按鈕上床／下床（日期 → 兩個時刻，牆鐘時間）。
+  /// 早晨報告 Time in bed 點開的一週圖用；跟攝影機無關，只是同一支 `/insights` 順便帶回來。
+  final Map<String, (DateTime?, DateTime?)> bedButtons;
+
   const CameraInsightsResult(
     this.status, {
+    this.bedButtons = const {},
     this.nights = const [],
     this.note,
     this.floorNote,
@@ -275,10 +281,25 @@ class CameraInsightsService implements CameraInsightsSource {
           error: '/insights 回傳的根節點不是物件',
         );
       }
+      final bedButtons = <String, (DateTime?, DateTime?)>{};
+      final behavior = decoded['behavior'];
+      if (behavior is Map<String, dynamic>) {
+        final rows = behavior['history'] as List<dynamic>? ?? const [];
+        for (final j in rows.whereType<Map<String, dynamic>>()) {
+          final date = j['date'];
+          if (date is! String) continue;
+          final start = parseWallClock(j['bed_start_at']);
+          final end = parseWallClock(j['bed_end_at']);
+          if (start != null || end != null) bedButtons[date] = (start, end);
+        }
+      }
       // camera 是 null = 這個使用者沒有攝影機資料。那是正常狀態，不是錯誤。
       final camera = decoded['camera'];
       if (camera is! Map<String, dynamic>) {
-        return const CameraInsightsResult(CameraInsightsStatus.ok);
+        return CameraInsightsResult(
+          CameraInsightsStatus.ok,
+          bedButtons: bedButtons,
+        );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
@@ -287,6 +308,7 @@ class CameraInsightsService implements CameraInsightsSource {
       debugPrint('CameraInsights: ok ${history.length} nights');
       return CameraInsightsResult(
         CameraInsightsStatus.ok,
+        bedButtons: bedButtons,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,

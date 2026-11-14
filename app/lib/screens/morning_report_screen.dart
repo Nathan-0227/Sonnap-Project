@@ -15,6 +15,7 @@ import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 
@@ -59,6 +60,17 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚睡了幾分鐘（首頁那一份打包檔的 history）。Time asleep 點開的一週長條圖用；沒給就不能點。
   final Future<List<NightValue>> Function()? loadSleepSeries;
 
+  /// 每晚的上床／起床：按鈕（後端）與手錶（打包檔）各一份，日期 → (開始, 結束)。
+  /// Time in bed 點開的一週圖用；沒給就不能點。
+  final Future<
+    ({
+      Map<String, (DateTime?, DateTime?)> buttons,
+      Map<String, (DateTime?, DateTime?)> watch,
+    })
+  >
+  Function()?
+  loadBedTimes;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -69,6 +81,7 @@ class MorningReportScreen extends StatefulWidget {
     this.onDreamOpened,
     this.isDreamRead,
     this.loadSleepSeries,
+    this.loadBedTimes,
   });
 
   @override
@@ -1011,6 +1024,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       icon: Icons.bed_rounded,
       color: _cBed,
       title: 'Time in bed',
+      onTap: widget.loadBedTimes == null ? null : () => _showBedWeek(r),
       value: inBed == null ? '—' : reportHm(inBed),
       valueKey: const Key('report-in-bed-value'),
       valueTrailing: _badge(
@@ -1573,6 +1587,31 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Time in bed 點開：這一晚往回 7 晚幾點上床、幾點起床。按鈕優先、沒按退回手錶。
+  /// 這一晚的按鈕以報告上的為準（剛按的可能還沒上傳）。
+  Future<void> _showBedWeek(MorningReport r) async {
+    var buttons = <String, (DateTime?, DateTime?)>{};
+    var watch = <String, (DateTime?, DateTime?)>{};
+    try {
+      final t = await widget.loadBedTimes!();
+      buttons = {...t.buttons};
+      watch = {...t.watch};
+    } catch (_) {}
+    if (r.bedStart != null && r.bedEnd != null) {
+      buttons[r.date] = (r.bedStart, r.bedEnd);
+    }
+    if (!mounted) return;
+    await showBedWeekSheet(
+      context,
+      title: 'Time in bed',
+      icon: Icons.bed_rounded,
+      color: _cBed,
+      fontFamily: kReportFont,
+      targetBedtime: r.targetBedtime,
+      week: bedWeek(endDate: r.date, buttons: buttons, watch: watch),
     );
   }
 
