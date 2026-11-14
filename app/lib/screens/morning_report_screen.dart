@@ -1596,6 +1596,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     await showSleepWeekSheet(
       context,
       title: 'Time asleep',
+      // 標題跟這張格子同一個圖示、同一個顏色（使用者定）
+      icon: Icons.nightlight_round,
+      color: _cAsleep,
+      fontFamily: kReportFont,
       series: series,
       endDate: r.date,
       goalMinutes: r.goalMinutes,

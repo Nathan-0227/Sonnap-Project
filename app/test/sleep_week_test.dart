@@ -48,6 +48,20 @@ void main() {
     });
   });
 
+  test('跟前一週比：只算有資料的晚上；前一週沒有 → 不比', () {
+    final w = sleepWeek(const [
+      NightValue('2026-11-03', 300), // 前一週（11-01～11-07）
+      NightValue('2026-11-05', 360),
+      NightValue('2026-11-10', 360), // 這一週（11-08～11-14）
+      NightValue('2026-11-14', 400),
+    ], '2026-11-14');
+    expect(w.previousAverageMinutes, 330);
+    expect(w.change, 50);
+    expect(sleepWeekChangeLine(w), '↑ 50m vs the week before');
+    final none = sleepWeek(const [NightValue('2026-11-14', 400)], '2026-11-14');
+    expect(sleepWeekChangeLine(none), isNull);
+  });
+
   group('畫面', () {
     Future<void> pump(WidgetTester tester, SleepWeek w, {int? goal}) async {
       await tester.pumpWidget(
@@ -78,6 +92,13 @@ void main() {
       expect(find.byKey(const Key('sleep-week-goal')), findsOneWidget);
       expect(find.text('8h goal'), findsOneWidget);
       expect(find.text('—'), findsNWidgets(5));
+      // 圓環＝平均÷目標（360 / 480）
+      expect(find.text('75%'), findsOneWidget);
+      // 標題跟外面那張卡一樣：圖示＋同一個顏色
+      expect(find.byIcon(Icons.nightlight_round), findsOneWidget);
+      // 刻度至少到 12 h
+      expect(find.text('12 h'), findsOneWidget);
+      expect(find.text('0 h'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -88,22 +109,23 @@ void main() {
         NightValue('2026-11-14', 420),
       ], '2026-11-14');
       await pump(tester, w, goal: 480);
-      Color colorOf(String date) {
+      List<Color> colorOf(String date) {
         final box = tester.widget<Container>(
-          find
-              .descendant(
-                of: find.byKey(Key('sleep-week-bar-$date')),
-                matching: find.byWidgetPredicate(
-                  (wd) => wd is Container && wd.decoration is BoxDecoration,
-                ),
-              )
-              .first,
+          find.byKey(Key('sleep-week-fill-$date')),
         );
-        return (box.decoration as BoxDecoration).color!;
+        return (box.decoration as BoxDecoration).gradient!.colors;
       }
 
       expect(colorOf('2026-11-12'), colorOf('2026-11-13'));
-      for (final word in ['reached', 'Great', 'short', 'below']) {
+      for (final word in [
+        'reached',
+        'Great',
+        'short',
+        'below',
+        'improved',
+        'worse',
+        'better',
+      ]) {
         expect(find.textContaining(word), findsNothing, reason: word);
       }
     });

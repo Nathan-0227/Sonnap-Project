@@ -1771,6 +1771,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await showSleepWeekSheet(
       context,
       title: 'Sleep',
+      // 標題跟 Sleep 小卡同一個圖示、同一個顏色
+      icon: Icons.nightlight_round,
+      color: const Color(0xFFB9A6FF),
       series: series,
       endDate: end,
       goalMinutes: goal,

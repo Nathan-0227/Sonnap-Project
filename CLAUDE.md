@@ -495,7 +495,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 → View sleep insights → Back to home。
 
 **圖形格子**（2026-11-14 使用者定，參考圖：每一格的圖就是那個數字，`widgets/report_tiles.dart`）：
-Last night＝睡多久（波浪光帶＝睡了多久÷目標；**點開是一週圖**，同首頁 Sleep 小卡，`widgets/sleep_week_sheet.dart`：這一晚往回 7 個日曆晚上、沒資料的晚上寫「—」且**不算進平均**（寫「5 of 7 nights with data」）、目標畫虛線、長條**不依達標變色**；這一晚的數字以報告為準，11-14 使用者定）、臥床（18:00→12:00 時間軸上的上床／下床）、Phone down（半圓弧上目標與實際兩點）、
+Last night＝睡多久（波浪光帶＝睡了多久÷目標；**點開是一週圖**，同首頁 Sleep 小卡，`widgets/sleep_week_sheet.dart`：這一晚往回 7 個日曆晚上、沒資料的晚上寫「—」且**不算進平均**（寫「5 of 7 nights with data」）、目標畫虛線、長條**不依達標變色**；這一晚的數字以報告為準，11-14 使用者定。樣子照參考圖：膠囊長條＋底槽到頂、左邊 0–12 h 刻度、底下圓環＝平均÷目標；**參考圖的「Your sleep improved by 6%」不照做**（improved 是判斷），改寫「↓ 3m vs the week before」，只代表方向、上升紅下降綠；標題跟外面那張卡同圖示同顏色同字型）、臥床（18:00→12:00 時間軸上的上床／下床）、Phone down（半圓弧上目標與實際兩點）、
 Awake（整晚一條、只亮清醒段）、Efficiency（圓環；警語與 basis **點了才跳出**）、心率（睡著那段的小折線）、攝影機（小折線＋後端那句）；
 Yesterday＝步數（最近 7 天連成的山，昨天亮點）、活動時間（高強度／活動／久坐三段橫條）、壓力（半圓四段，**同色系不用紅黃**）、
 Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %）、整天心率、Move IQ（一天的時間軸）。
