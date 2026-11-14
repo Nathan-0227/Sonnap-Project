@@ -24,6 +24,7 @@
 /// 而 WASO 量不到。後端刻意回 null，Dart 端補一個就是憑空生出一個數字。
 library;
 
+import '../widgets/phone_week_sheet.dart' show PhoneDown;
 import 'dart:convert';
 import 'dart:io';
 
@@ -207,9 +208,14 @@ class CameraInsightsResult {
   /// 早晨報告 Time in bed 點開的一週圖用；跟攝影機無關，只是同一支 `/insights` 順便帶回來。
   final Map<String, (DateTime?, DateTime?)> bedButtons;
 
+  /// 同一個 `behavior.history` 的放下手機時刻與後端判的晚不晚（日期 → 那一晚）。
+  /// 早晨報告 Phone down 點開的一週圖用；is_late 照抄後端，Dart 不重算。
+  final Map<String, PhoneDown> phoneDowns;
+
   const CameraInsightsResult(
     this.status, {
     this.bedButtons = const {},
+    this.phoneDowns = const {},
     this.nights = const [],
     this.note,
     this.floorNote,
@@ -282,6 +288,7 @@ class CameraInsightsService implements CameraInsightsSource {
         );
       }
       final bedButtons = <String, (DateTime?, DateTime?)>{};
+      final phoneDowns = <String, PhoneDown>{};
       final behavior = decoded['behavior'];
       if (behavior is Map<String, dynamic>) {
         final rows = behavior['history'] as List<dynamic>? ?? const [];
@@ -291,6 +298,11 @@ class CameraInsightsService implements CameraInsightsSource {
           final start = parseWallClock(j['bed_start_at']);
           final end = parseWallClock(j['bed_end_at']);
           if (start != null || end != null) bedButtons[date] = (start, end);
+          final out = parseWallClock(j['lights_out_at']);
+          final late = j['is_late'];
+          if (out != null) {
+            phoneDowns[date] = PhoneDown(out, late is bool ? late : null);
+          }
         }
       }
       // camera 是 null = 這個使用者沒有攝影機資料。那是正常狀態，不是錯誤。
@@ -299,6 +311,7 @@ class CameraInsightsService implements CameraInsightsSource {
         return CameraInsightsResult(
           CameraInsightsStatus.ok,
           bedButtons: bedButtons,
+          phoneDowns: phoneDowns,
         );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
@@ -309,6 +322,7 @@ class CameraInsightsService implements CameraInsightsSource {
       return CameraInsightsResult(
         CameraInsightsStatus.ok,
         bedButtons: bedButtons,
+        phoneDowns: phoneDowns,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,

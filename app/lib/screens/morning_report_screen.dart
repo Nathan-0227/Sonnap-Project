@@ -16,6 +16,7 @@ import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../widgets/phone_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
@@ -72,6 +73,9 @@ class MorningReportScreen extends StatefulWidget {
   Function()?
   loadBedTimes;
 
+  /// 每晚放下手機的時刻＋後端判的晚不晚（後端 /insights）。Phone down 點開的一週圖用；沒給就不能點。
+  final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -83,6 +87,7 @@ class MorningReportScreen extends StatefulWidget {
     this.isDreamRead,
     this.loadSleepSeries,
     this.loadBedTimes,
+    this.loadPhoneDowns,
   });
 
   @override
@@ -1071,6 +1076,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         title: 'Phone down',
         value: reportClock(lightsOut),
         valueKey: const Key('report-phone-down-at'),
+        onTap: widget.loadPhoneDowns == null ? null : () => _showPhoneWeek(r),
         graphic: th == null || tm == null
             ? null
             : paintBox(
@@ -1612,6 +1618,27 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       color: _cBed,
       fontFamily: kReportFont,
       week: bedWeek(endDate: r.date, buttons: buttons, watch: watch),
+    );
+  }
+
+  /// Phone down 點開：這一晚往回 7 晚幾點放下手機。這一晚的時刻以報告上的為準；
+  /// 晚不晚只照抄後端（history 裡那一晚的 is_late），這一晚 history 沒有就不算進「N of M」。
+  Future<void> _showPhoneWeek(MorningReport r) async {
+    var downs = <String, PhoneDown>{};
+    try {
+      downs = {...await widget.loadPhoneDowns!()};
+    } catch (_) {}
+    final mine = r.lightsOutAt;
+    if (mine != null) downs[r.date] = PhoneDown(mine, downs[r.date]?.isLate);
+    if (!mounted) return;
+    await showPhoneWeekSheet(
+      context,
+      title: 'Phone down',
+      icon: Icons.phone_android_rounded,
+      color: _cPhone,
+      fontFamily: kReportFont,
+      target: r.targetBedtime,
+      week: phoneWeek(endDate: r.date, downs: downs),
     );
   }
 

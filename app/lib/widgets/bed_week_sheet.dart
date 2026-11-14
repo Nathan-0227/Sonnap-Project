@@ -251,7 +251,7 @@ class BedWeekView extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'Hollow = from your watch (no buttons tapped)',
+                        'Hollow = watch',
                         style: const TextStyle(
                           color: Color(0x99FFFFFF),
                           fontSize: 11,
@@ -388,10 +388,11 @@ class _ClockChart extends StatelessWidget {
                           child: Text(
                             clockOf(v),
                             semanticsLabel: 'usual $label ${clockOf(v)}',
+                            // 11-15 使用者定：再淡一點（不搶膠囊）
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0x99FFFFFF),
                               fontSize: 12,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               shadows: [
                                 Shadow(color: Color(0xCC0B1030), blurRadius: 4),
                               ],
