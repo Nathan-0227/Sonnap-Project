@@ -3,7 +3,8 @@
 //
 // - 一週＝這一晚往回 7 個日曆晚上，**舊的在上、這一晚在最下面**（Q7）
 // - 最上面：「Usually phone down 03:26」（中間值，跨午夜也對）＋
-//   「N of M nights later than your HH:MM target」（Q2）
+//   「N of M nights over 30m past your HH:MM target」（Q2；11-15 使用者定寫出 30m：
+//   只寫 later 的話 03:26 明明晚於 03:00 卻沒被算，看起來像算錯）
 // - ⚠️ 晚不晚**只照抄後端每一晚的 `is_late`**（Q4）：跨午夜只在 behavior/adherence.py 算，
 //   Dart 不拿時刻跟目標比。後端沒給 is_late 的晚上不算進 M
 // - 虛線＝現在的目標（Q4、Q6：圖上只有這一條線）。點**全部同一個顏色**、不分紅綠，
@@ -82,11 +83,17 @@ int? targetFromEvening(String? hhmm) {
   return minutesFromEvening(DateTime(2000, 1, 1, h, m));
 }
 
-/// 「4 of 6 nights later than your 03:00 target」；後端一晚都沒判、或沒有目標 → null。
+/// 後端算「熬夜」的門檻（behavior/adherence.py 的 LATE_THRESHOLD_MINUTES）。
+/// ⚠️ **只用來寫那句話，Dart 不拿它判斷任何一晚**——晚不晚照抄後端的 is_late。
+/// 後端沒回傳這個數字，所以這裡抄一份；phone_week_test.dart 直接讀那支 Python 比對，改一邊另一邊會紅。
+const int kLateThresholdMinutes = 30;
+
+/// 「4 of 6 nights over 30m past your 03:00 target」；後端一晚都沒判、或沒有目標 → null。
 String? phoneLateLine(PhoneWeek w, String? target) {
   if (target == null || w.judgedNights == 0) return null;
   final m = w.judgedNights;
-  return '${w.lateNights} of $m night${m == 1 ? '' : 's'} later than your $target target';
+  return '${w.lateNights} of $m night${m == 1 ? '' : 's'} '
+      'over ${kLateThresholdMinutes}m past your $target target';
 }
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];

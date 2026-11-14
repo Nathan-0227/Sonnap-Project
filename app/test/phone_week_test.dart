@@ -56,9 +56,19 @@ void main() {
       expect(w.judgedNights, 2);
       expect(
         phoneLateLine(w, '03:00'),
-        '1 of 2 nights later than your 03:00 target',
+        '1 of 2 nights over 30m past your 03:00 target',
       );
       expect(phoneLateLine(w, null), isNull);
+    });
+
+    test('⚠️ 那句話裡的 30m 跟後端的熬夜門檻是同一個數字', () {
+      final py = File('../behavior/adherence.py').readAsStringSync();
+      final m = RegExp(
+        r'^LATE_THRESHOLD_MINUTES\s*=\s*(\d+)',
+        multiLine: true,
+      ).firstMatch(py);
+      expect(m, isNotNull, reason: 'adherence.py 找不到 LATE_THRESHOLD_MINUTES');
+      expect(int.parse(m!.group(1)!), kLateThresholdMinutes);
     });
 
     test('targetFromEvening：格式不對 → null', () {
@@ -88,7 +98,7 @@ void main() {
       );
       expect(
         tester.widget<Text>(find.byKey(const Key('phone-week-late'))).data,
-        '2 of 3 nights later than your 03:00 target',
+        '2 of 3 nights over 30m past your 03:00 target',
       );
       expect(
         tester
