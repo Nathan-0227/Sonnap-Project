@@ -1,5 +1,6 @@
 // 早晨報告 Movement (camera) 點開（2026-11-15 使用者定，照參考圖）：
 // 時間軸（每段動作一顆膠囊）→ 每個鐘頭動幾次 → 播放器（⏮ ⏭、全螢幕）→ 片段列表 → 一週跟平常比。
+import 'package:app/models/night_curve.dart';
 import 'package:app/models/sleep_stages.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/widgets/movement_sheet.dart';
@@ -152,6 +153,41 @@ void main() {
       expect(find.byKey(const Key('mv-no-clip')), findsOneWidget);
       expect(find.byKey(const Key('mv-clip-player')), findsNothing);
       expect(textOf(tester, 'mv-clip-label'), '05:01 · moved for 30 s');
+    });
+
+    testWidgets('有動作線時最上面畫線（不畫膠囊）；點片段的點播那段、點線上沒有片段的動作寫 No clip；段落之間有細線',
+        (tester) async {
+      await big(tester);
+      // 線：03:30 → 05:10 每 5 分鐘（isUtc 的牆鐘，同 NightCurve.fromJsonOrNull）
+      final curve = NightCurve(
+        points: [
+          for (var i = 0; i <= 20; i++)
+            NightCurvePoint(DateTime.utc(2026, 11, 14, 3, 30).add(Duration(minutes: 5 * i)), i.isEven ? 0.02 : 0.1),
+        ],
+        avg: 0.06,
+        min: 0.02,
+        max: 0.1,
+      );
+      await tester.pumpWidget(host(MovementView(
+          night: night(clipList: clips, eps: episodes), curve: curve, stages: stages())));
+      expect(find.byKey(const Key('mv-line')), findsOneWidget);
+      expect(find.byKey(const Key('mv-timeline')), findsNothing);
+      expect(find.byKey(const Key('mv-playhead')), findsOneWidget);
+      // 片段照時間排：marker-0 是 03:42
+      await tester.tap(find.byKey(const Key('mv-marker-0')));
+      await tester.pump();
+      expect(textOf(tester, 'mv-clip-label'), '03:42 · moved for 5 s · Light');
+      // 05:01 那段沒有片段：線上 03:30 → 05:10（100 分）的第 91 分
+      final r = tester.getRect(find.byKey(const Key('mv-line')));
+      await tester.tapAt(Offset(r.left + r.width * 91 / 100, r.top + 10));
+      await tester.pump();
+      expect(find.byKey(const Key('mv-no-clip')), findsOneWidget);
+      expect(textOf(tester, 'mv-clip-label'), '05:01 · moved for 30 s');
+      // 段落之間的細線（摘要／線／每小時／播放器／列表）
+      final dividers = find.byWidgetPredicate((w) =>
+          w is Container && w.constraints?.maxHeight == 1 && w.color == const Color(0x1FFFFFFF));
+      expect(dividers.evaluate().length, greaterThanOrEqualTo(4));
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('每個鐘頭：數字照數、頭尾不滿一小時的寫幾分鐘', (tester) async {

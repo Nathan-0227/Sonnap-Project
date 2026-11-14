@@ -1638,6 +1638,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       fontFamily: kReportFont,
       night: r.camera!,
       date: r.date,
+      curve: r.cameraMotion,
       stages: r.stages,
       week: week,
     );

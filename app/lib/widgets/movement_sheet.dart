@@ -4,8 +4,9 @@
 // - 後端那句「About the same as usual」＋「105 movements · 25m moving in total」＋not part of your score。
 //   次數照抄 events_total（11-15 使用者改：原本 11-09 定不寫）；總共動多久是每段秒數加起來。
 //   **不寫每小時平均、不跟文獻常模並列**（跨夜差到 3.1 倍）。
-// - **時間軸**：開始 → 結束錄影，每一段動作一顆膠囊（越寬＝動越久），有片段的亮、沒有的暗；
-//   白色直線＝正在看的那一段。點膠囊選那一段。
+// - **動作線**（11-15 使用者改回：線比膠囊好看）：每 5 分鐘有幾成在動，片段的時刻標成點，
+//   白色直線＝正在看的那一段；點線上任一處選最近的那段動作。沒有線（舊版後端）才退回膠囊時間軸。
+// - 段落之間有細線分隔（11-15 使用者定）。
 // - **每個鐘頭動幾次**：一個鐘頭一根，數字在上面；頭尾不滿一小時的那兩根畫淡、寫涵蓋幾分鐘
 //   （不然「6 次」會被讀成「那時幾乎沒動」）。
 // - **播放器**：選到的那段循環播放，點畫面全螢幕、兩指放大；⏮ ⏭ 跳上一段／下一段片段。
@@ -18,6 +19,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../models/night_curve.dart';
 import '../models/sleep_stages.dart';
 import '../services/camera_insights.dart'
     show CameraClip, CameraEpisode, CameraNight;
@@ -120,6 +122,7 @@ Future<void> showMovementSheet(
   required Color color,
   required CameraNight night,
   required String date,
+  NightCurve? curve,
   SleepStages? stages,
   List<CameraNight>? week,
   String? fontFamily,
@@ -133,6 +136,7 @@ Future<void> showMovementSheet(
       child: MovementView(
         color: color,
         night: night,
+        curve: curve,
         stages: stages,
         week: week == null ? null : movementWeek(week, date),
       ),
@@ -143,6 +147,10 @@ Future<void> showMovementSheet(
 class MovementView extends StatefulWidget {
   final Color color;
   final CameraNight night;
+
+  /// 那一晚的動作線（每 5 分鐘有幾成在動，手錶入睡 → 起床那段）。最上面畫它（11-15 使用者：
+  /// 線比膠囊時間軸好看）；沒有才退回膠囊時間軸。
+  final NightCurve? curve;
   final SleepStages? stages;
 
   /// null＝沒有一週資料（連不到後端），下半整段不出現。
@@ -151,6 +159,7 @@ class MovementView extends StatefulWidget {
   const MovementView({
     super.key,
     required this.night,
+    this.curve,
     this.stages,
     this.week,
     this.color = const Color(0xFFFFD96A),
@@ -315,8 +324,26 @@ class _MovementViewState extends State<MovementView> {
                 'Camera data is not part of your score.',
                 style: TextStyle(color: _soft, fontSize: 12),
               ),
-              if (hasTimeline) ...[
-                const SizedBox(height: 18),
+              if (widget.curve != null) ...[
+                _divider(),
+                const Text(
+                  'Movement through the night',
+                  style: TextStyle(color: _soft, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 120,
+                  child: _MotionLine(
+                    curve: widget.curve!,
+                    episodes: eps ?? const [],
+                    clips: _clips,
+                    selected: _sel,
+                    color: color,
+                    onSelect: (at) => _select(at),
+                  ),
+                ),
+              ] else if (hasTimeline) ...[
+                _divider(),
                 SizedBox(
                   height: 54,
                   child: _Timeline(
@@ -329,7 +356,9 @@ class _MovementViewState extends State<MovementView> {
                     onSelect: (at) => _select(at),
                   ),
                 ),
-                const SizedBox(height: 16),
+              ],
+              if (hasTimeline) ...[
+                _divider(),
                 const Text(
                   'Movements each hour',
                   style: TextStyle(color: _soft, fontSize: 13),
@@ -343,7 +372,7 @@ class _MovementViewState extends State<MovementView> {
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
+              _divider(),
               // ── 播放器 ──
               if (_clips.isEmpty && n.clipsNote != null)
                 Text(
@@ -436,7 +465,7 @@ class _MovementViewState extends State<MovementView> {
               ],
               // ── 片段列表 ──
               if (_clips.isNotEmpty) ...[
-                const SizedBox(height: 18),
+                _divider(),
                 Text(
                   'Clips · ${_clips.length} biggest movements',
                   style: const TextStyle(color: _soft, fontSize: 13),
@@ -457,9 +486,7 @@ class _MovementViewState extends State<MovementView> {
               ],
               // ── 這一週 ──
               if (showWeek) ...[
-                const SizedBox(height: 24),
-                Container(height: 1, color: const Color(0x1FFFFFFF)),
-                const SizedBox(height: 16),
+                _divider(),
                 const Text(
                   'Compared with your usual',
                   key: Key('mv-week-title'),
@@ -485,6 +512,198 @@ class _MovementViewState extends State<MovementView> {
       ),
     );
   }
+}
+
+/// 段落之間的細線（11-15 使用者：數據之間要有線區分）。
+Widget _divider() => Padding(
+  padding: const EdgeInsets.symmetric(vertical: 16),
+  child: Container(height: 1, color: const Color(0x1FFFFFFF)),
+);
+
+/// 最上面那條動作線（每 5 分鐘有幾成在動）＋片段時刻的點＋白色直線＝正在看的那段。
+/// 點線上任一處 → 選離那一刻最近的動作（3 分鐘內；沒有每段資料就只找片段）。
+class _MotionLine extends StatelessWidget {
+  final NightCurve curve;
+  final List<CameraEpisode> episodes;
+  final List<CameraClip> clips;
+  final DateTime? selected;
+  final Color color;
+  final ValueChanged<DateTime> onSelect;
+  const _MotionLine({
+    required this.curve,
+    required this.episodes,
+    required this.clips,
+    required this.selected,
+    required this.color,
+    required this.onSelect,
+  });
+
+  static const double _timeH = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final t0 = _wall(curve.points.first.time);
+    final t1 = _wall(curve.points.last.time);
+    final span = math.max(1, t1.difference(t0).inSeconds);
+    final hi = math.max(0.05, curve.points.map((p) => p.value).reduce(math.max));
+    bool inRange(DateTime t) => !_wall(t).isBefore(t0) && !_wall(t).isAfter(t1);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final w = box.maxWidth, h = box.maxHeight - _timeH;
+        double xOf(DateTime t) => w * _wall(t).difference(t0).inSeconds / span;
+        double yOf(double v) => h * (1 - (v / hi).clamp(0.0, 1.0));
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: h,
+              child: GestureDetector(
+                key: const Key('mv-line'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (d) {
+                  final t = t0.add(Duration(
+                      seconds: (span * (d.localPosition.dx / w).clamp(0.0, 1.0)).round()));
+                  final starts = [
+                    for (final e in episodes) e.start,
+                    if (episodes.isEmpty)
+                      for (final c in clips) c.startAt!,
+                  ];
+                  DateTime? best;
+                  Duration? bestD;
+                  for (final s in starts) {
+                    final dd = _wall(s).difference(t).abs();
+                    if (bestD == null || dd < bestD) {
+                      best = s;
+                      bestD = dd;
+                    }
+                  }
+                  if (best != null && bestD! <= const Duration(minutes: 3)) {
+                    onSelect(best);
+                  }
+                },
+                child: CustomPaint(
+                  painter: _LinePainter(curve, color, xOf, yOf, h),
+                ),
+              ),
+            ),
+            if (selected != null && inRange(selected!))
+              Positioned(
+                key: const Key('mv-playhead'),
+                left: xOf(selected!) - 1.5,
+                top: 0,
+                height: h,
+                width: 3,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            for (var i = 0; i < clips.length; i++)
+              if (inRange(clips[i].startAt!))
+                Positioned(
+                  left: xOf(clips[i].startAt!) - 12,
+                  top: h - 12,
+                  width: 24,
+                  height: 24,
+                  child: GestureDetector(
+                    key: Key('mv-marker-$i'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onSelect(clips[i].startAt!),
+                    child: Center(
+                      child: Container(
+                        width: clips[i].startAt == selected ? 13 : 9,
+                        height: clips[i].startAt == selected ? 13 : 9,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: clips[i].startAt == selected ? Colors.white : color,
+                          border: Border.all(color: const Color(0xFF1B1F48), width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            // 時刻字不接手勢：不然會擋住剛好在頭尾的片段點（11-15 測試抓到）
+            Positioned(
+              left: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Text(
+                  _clock(t0),
+                  style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Text(
+                  _clock(t1),
+                  style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LinePainter extends CustomPainter {
+  final NightCurve curve;
+  final Color color;
+  final double Function(DateTime) xOf;
+  final double Function(double) yOf;
+  final double h;
+  _LinePainter(this.curve, this.color, this.xOf, this.yOf, this.h);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pts = [for (final p in curve.points) Offset(xOf(p.time), yOf(p.value))];
+    final line = Path()..moveTo(pts.first.dx, pts.first.dy);
+    for (final p in pts.skip(1)) {
+      line.lineTo(p.dx, p.dy);
+    }
+    final area = Path.from(line)
+      ..lineTo(pts.last.dx, h)
+      ..lineTo(pts.first.dx, h)
+      ..close();
+    canvas.drawPath(
+      area,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withValues(alpha: 0.35), color.withValues(alpha: 0)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, h)),
+    );
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawLine(
+      Offset(0, h),
+      Offset(size.width, h),
+      Paint()
+        ..color = const Color(0x1FFFFFFF)
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LinePainter old) => old.curve != curve || old.h != h;
 }
 
 class _RoundButton extends StatelessWidget {
