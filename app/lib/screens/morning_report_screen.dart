@@ -1610,7 +1610,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       icon: Icons.bed_rounded,
       color: _cBed,
       fontFamily: kReportFont,
-      targetBedtime: r.targetBedtime,
       week: bedWeek(endDate: r.date, buttons: buttons, watch: watch),
     );
   }
