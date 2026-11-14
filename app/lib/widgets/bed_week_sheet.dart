@@ -5,7 +5,12 @@
 // - 一週＝這一晚往回 7 個日曆晚上；沒資料的晚上空著
 // - **按鈕優先、沒按退回手錶**（使用者定）。但兩個不是同一個量：按鈕是上床→下床，
 //   手錶是入睡→醒來。所以手錶的晚上畫成**空心**，圖例講清楚，平均也分開數晚數
-// - 底下只寫事實：平均上床→起床時刻、平均臥床時間、最早到最晚的上床時刻。
+// - 規律性（11-15 使用者定，B 案）：一條虛線＝這幾晚上床時刻的**中間值**（≥3 晚才畫），
+//   後面一條淡色帶＝去掉最早、最晚各四分之一（無條件捨去）之後剩下那幾晚的上床範圍
+//   （≥4 晚才畫），旁邊照實寫幾晚落在裡面——晚數是單數，不寫 half
+// - 按鈕與手錶的晚上**一起算**（同長條，線跟長條講同一批晚上）
+// - 目標不畫線，改成刻度旁的黃色小月亮（圖上只留中間值一條線）
+// - 底下只寫事實：上床／起床的中間值、平均臥床時間、淡色帶那句。
 //   **不說規律好不好**（好壞只有後端能判斷）
 import 'dart:math' as math;
 
@@ -64,16 +69,34 @@ class BedWeek {
   int get watchNights =>
       _spans.where((s) => s.source == BedSource.watch).length;
 
-  /// 平均上床／起床（從 18:00 起算的分鐘）；沒有任何一晚 → null。
-  int? get averageStart => _avg(_spans.map((s) => minutesFromEvening(s.start)));
-  int? get averageEnd => _avg(_spans.map((s) => minutesFromEvening(s.end)));
+  List<int> get _starts =>
+      _spans.map((s) => minutesFromEvening(s.start)).toList()..sort();
+  List<int> get _ends =>
+      _spans.map((s) => minutesFromEvening(s.end)).toList()..sort();
+
+  /// 上床／起床的中間值（從 18:00 起算的分鐘，跨午夜也對）；沒有任何一晚 → null。
+  int? get medianStart => _median(_starts);
+  int? get medianEnd => _median(_ends);
+
+  /// 平均臥床分鐘數（不跨午夜，平均不會失真）。
   int? get averageMinutes => _avg(_spans.map((s) => s.minutes));
 
-  /// 最早、最晚的上床時刻（從 18:00 起算）。
-  (int, int)? get startRange {
-    final xs = _spans.map((s) => minutesFromEvening(s.start)).toList();
-    if (xs.isEmpty) return null;
-    return (xs.reduce(math.min), xs.reduce(math.max));
+  /// 淡色帶：上床時刻去掉最早、最晚各四分之一（無條件捨去）之後的範圍，與裡面有幾晚。
+  /// 不到 4 晚 → null。
+  ({int from, int to, int count})? get middleBand {
+    final xs = _starts;
+    if (xs.length < 4) return null;
+    final k = xs.length ~/ 4;
+    final kept = xs.sublist(k, xs.length - k);
+    return (from: kept.first, to: kept.last, count: kept.length);
+  }
+
+  static int? _median(List<int> sorted) {
+    if (sorted.isEmpty) return null;
+    final mid = sorted.length ~/ 2;
+    return sorted.length.isOdd
+        ? sorted[mid]
+        : ((sorted[mid - 1] + sorted[mid]) / 2).round();
   }
 
   static int? _avg(Iterable<int> xs) {
@@ -165,13 +188,14 @@ class BedWeekView extends StatelessWidget {
   });
 
   static const _soft = Color(0xB3FFFFFF);
+  static const _moon = Color(0xFFFFD96A);
 
   @override
   Widget build(BuildContext context) {
-    final avgStart = week.averageStart;
-    final avgEnd = week.averageEnd;
+    final medStart = week.medianStart;
+    final medEnd = week.medianEnd;
     final avgMin = week.averageMinutes;
-    final range = week.startRange;
+    final band = week.middleBand;
     final target = _targetOffset(targetBedtime);
     final n = week.nightsWithData;
 
@@ -245,18 +269,28 @@ class BedWeekView extends StatelessWidget {
                       'Watch: asleep → woke',
                       key: const Key('bed-week-watch-legend'),
                     ),
-                  if (target != null)
+                  if (n >= 3)
                     _legend(
                       CustomPaint(
                         size: const Size(18, 1),
                         painter: _DashPainter(),
                       ),
+                      'Usual bedtime',
+                    ),
+                  if (target != null)
+                    _legend(
+                      const Icon(
+                        Icons.nightlight_round,
+                        size: 13,
+                        color: _moon,
+                      ),
                       '${clockOf(target)} target',
+                      key: const Key('bed-week-target-legend'),
                     ),
                 ],
               ),
               const SizedBox(height: 16),
-              if (avgStart == null || avgEnd == null || avgMin == null)
+              if (medStart == null || medEnd == null || avgMin == null)
                 const Text(
                   'No bedtimes this week',
                   key: Key('bed-week-empty'),
@@ -271,7 +305,7 @@ class BedWeekView extends StatelessWidget {
                       style: TextStyle(color: _soft, fontSize: 13),
                     ),
                     Text(
-                      '${clockOf(avgStart)} → ${clockOf(avgEnd)}',
+                      '${clockOf(medStart)} → ${clockOf(medEnd)}',
                       key: const Key('bed-week-usual'),
                       style: const TextStyle(
                         color: Colors.white,
@@ -286,11 +320,12 @@ class BedWeekView extends StatelessWidget {
                       key: const Key('bed-week-average'),
                       style: const TextStyle(color: _soft, fontSize: 13),
                     ),
-                    if (range != null && n >= 2) ...[
+                    if (band != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        'Bedtime ranged ${clockOf(range.$1)}–${clockOf(range.$2)}',
-                        key: const Key('bed-week-range'),
+                        '${band.count} of $n bedtimes fell in '
+                        '${clockOf(band.from)}–${clockOf(band.to)}',
+                        key: const Key('bed-week-band-text'),
                         style: const TextStyle(color: _soft, fontSize: 13),
                       ),
                     ],
@@ -343,7 +378,7 @@ class _ClockChart extends StatelessWidget {
   final int? target;
   const _ClockChart({required this.week, required this.color, this.target});
 
-  static const double _axisW = 40;
+  static const double _axisW = 52; // 左邊多留一格給目標的小月亮
   static const double _labelH = 26;
 
   @override
@@ -371,10 +406,22 @@ class _ClockChart extends StatelessWidget {
         return Stack(
           clipBehavior: Clip.none,
           children: [
+            // 淡色帶（畫在長條後面）：中間那幾晚的上床範圍
+            if (week.middleBand case final b?)
+              Positioned(
+                key: const Key('bed-week-band'),
+                left: _axisW,
+                right: 0,
+                top: y(b.from),
+                height: math.max(2, y(b.to) - y(b.from)),
+                child: const IgnorePointer(
+                  child: ColoredBox(color: Color(0x1FFFFFFF)),
+                ),
+              ),
             for (var t = lo; t <= hi; t += 120)
               Positioned(
-                left: 0,
-                width: _axisW - 6,
+                left: 14,
+                width: _axisW - 20,
                 top: y(t) - 7,
                 child: Text(
                   clockOf(t),
@@ -412,17 +459,44 @@ class _ClockChart extends StatelessWidget {
                 ],
               ),
             ),
-            if (target != null)
+            // 中間值虛線（≥3 晚才畫）
+            if (week.nightsWithData >= 3 && week.medianStart != null) ...[
               Positioned(
-                key: const Key('bed-week-target'),
+                key: const Key('bed-week-median'),
                 left: _axisW,
                 right: 0,
-                top: y(target!),
+                top: y(week.medianStart!),
                 child: IgnorePointer(
                   child: CustomPaint(
                     size: Size(box.maxWidth - _axisW, 1),
-                    painter: _DashPainter(),
+                    painter: _DashPainter(color: Colors.white),
                   ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                top: y(week.medianStart!) - 16,
+                child: Text(
+                  'usual ${clockOf(week.medianStart!)}',
+                  key: const Key('bed-week-median-label'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+            // 目標：刻度旁的黃色小月亮（不畫線）
+            if (target != null)
+              Positioned(
+                key: const Key('bed-week-target'),
+                left: 0,
+                top: y(target!) - 7,
+                child: const Icon(
+                  Icons.nightlight_round,
+                  size: 14,
+                  color: BedWeekView._moon,
                 ),
               ),
           ],
@@ -555,16 +629,19 @@ class _Night extends StatelessWidget {
 }
 
 class _DashPainter extends CustomPainter {
+  final Color color;
+  _DashPainter({this.color = const Color(0x99FFFFFF)});
+
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = const Color(0x99FFFFFF)
-      ..strokeWidth = 1;
+      ..color = color
+      ..strokeWidth = 1.2;
     for (double x = 0; x < size.width; x += 8) {
       canvas.drawLine(Offset(x, 0), Offset(x + 4, 0), p);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DashPainter old) => old.color != color;
 }
