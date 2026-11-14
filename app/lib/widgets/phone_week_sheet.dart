@@ -1,7 +1,9 @@
 // 一週放下手機的時刻（2026-11-15 使用者定）：早晨報告的 Phone down 點開。
-// 跟上面兩張（Total sleep、Time in bed）不一樣：**一晚一列、橫的時間軸**，每晚一個點、右邊寫時刻。
+// 11-15 第一版是一晚一列、橫的時間軸；使用者覺得不好看，改成 **B：跟上面兩張（Total sleep、
+// Time in bed）同一套**——7 欄、左邊時鐘刻度（上早下晚）、每欄一條底槽。每晚一個點，
+// 點到目標虛線之間一根細棒（離目標多遠），點的時刻寫在點旁邊（遠離目標那一側）。
 //
-// - 一週＝這一晚往回 7 個日曆晚上，**舊的在上、這一晚在最下面**（Q7）
+// - 一週＝這一晚往回 7 個日曆晚上，**舊的在左、這一晚在最右邊**（Q7）
 // - 最上面：「Usually phone down 03:26」（中間值，跨午夜也對）＋
 //   「N of M nights over 30m past your HH:MM target」（Q2；11-15 使用者定寫出 30m：
 //   只寫 later 的話 03:26 明明晚於 03:00 卻沒被算，看起來像算錯）
@@ -10,12 +12,13 @@
 // - 虛線＝現在的目標（Q4、Q6：圖上只有這一條線）。點**全部同一個顏色**、不分紅綠，
 //   這一晚亮一點（Q3）——好壞只有後端判斷
 // - 沒資料的晚上寫「— no data」、不算（Q5），**不畫成 0**
-// - 右邊只寫時刻（Q8）
+// - 點旁邊只寫時刻（Q8）
 // - **12:00–18:00 的放下手機不算那一晚的就寢**（11-15 使用者定）：報告格子的時間軸本來就是
 //   18:00→12:00。實例 10-05 偵測成 14:07（晚 607 分鐘），一晚就把整週拉歪。畫成 no data、不進中間值與晚幾晚
 // - 11-15 使用者選 A＋C：
-//   A. 每一列時刻下面小字「+7m in bed」＝按了 Start Sleep 之後手機還在用多久（後端的
-//      phone_in_bed_minutes，照抄不重算）。只有按了上床按鈕的晚上才有，沒有就不寫（不寫 0）
+//   A. 星期底下小字「+7m」＝按了 Start Sleep 之後手機還在用多久（後端的
+//      phone_in_bed_minutes，照抄不重算）。只有按了上床按鈕的晚上才有，沒有就不寫（不寫 0）。
+//      ⚠️ 不畫成點上方的一段線：實際多半只有幾分鐘，在圖上是 2–3 px，整段藏在點後面
 //   C. 標題下面「↑ 23m later than the week before」：這週中間值 vs 前 7 晚中間值，
 //      同 Total sleep 那張：**只代表方向**，晚了紅、早了綠，不說好壞；前一週沒資料就不寫
 import 'dart:math' as math;
@@ -285,7 +288,7 @@ class PhoneWeekView extends StatelessWidget {
                     style: const TextStyle(color: _soft, fontSize: 13),
                   ),
                 const SizedBox(height: 18),
-                _RowsChart(
+                _ColumnsChart(
                   week: week,
                   color: color,
                   target: targetFromEvening(target),
@@ -293,7 +296,7 @@ class PhoneWeekView extends StatelessWidget {
                 if (hasInBed) ...[
                   const SizedBox(height: 10),
                   const Text(
-                    '+7m in bed = phone use after Start Sleep',
+                    '+7m = phone use after Start Sleep',
                     key: Key('phone-week-inbed-note'),
                     style: TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
                   ),
@@ -307,93 +310,105 @@ class PhoneWeekView extends StatelessWidget {
   }
 }
 
-/// 一晚一列：左邊星期、中間橫軸上一個點、右邊時刻；底下時刻刻度；目標一條直虛線。
-class _RowsChart extends StatelessWidget {
+/// 7 欄（舊 → 新、左 → 右），左邊時鐘刻度（上早下晚），同 Total sleep／Time in bed 那兩張。
+class _ColumnsChart extends StatelessWidget {
   final PhoneWeek week;
   final Color color;
   final int? target;
-  const _RowsChart({required this.week, required this.color, this.target});
+  const _ColumnsChart({required this.week, required this.color, this.target});
 
-  static const double _dayW = 40;
-  static const double _timeW = 64;
-  static const double _rowH = 38;
-  static const double _axisH = 20;
+  static const double _axisW = 40;
+  static const double _labelH = 40;
 
   @override
   Widget build(BuildContext context) {
-    // 範圍：涵蓋每一晚與目標，對齊到整點，至少 4 小時寬
+    // 範圍：涵蓋每一晚與目標，上下各留 30 分鐘給時刻字，對齊到 2 小時，至少 6 小時高
     final xs = <int>[
       for (final n in week.nights)
-        if (n.down != null) minutesFromEvening(n.down!.at),
+        if (n.down != null) ...[minutesFromEvening(n.down!.at)],
       ?target,
     ];
-    var lo = xs.reduce(math.min);
-    var hi = xs.reduce(math.max);
-    lo = (lo ~/ 60) * 60;
-    hi = ((hi + 59) ~/ 60) * 60;
-    if (hi - lo < 4 * 60) {
-      final pad = (4 * 60 - (hi - lo)) ~/ 2;
-      lo = math.max(0, ((lo - pad) ~/ 60) * 60);
-      hi = math.min(24 * 60, lo + 4 * 60);
-    }
+    var lo = math.max(0, (xs.reduce(math.min) - 30) ~/ 120 * 120);
+    var hi = math.min(24 * 60, ((xs.reduce(math.max) + 30 + 119) ~/ 120) * 120);
+    if (hi - lo < 6 * 60) hi = math.min(24 * 60, lo + 6 * 60);
     final span = (hi - lo).toDouble();
-    final step = span > 6 * 60 ? 120 : 60;
-    final rowsH = _rowH * week.nights.length;
 
     return SizedBox(
-      height: rowsH + _axisH,
+      height: 250,
       child: LayoutBuilder(
         builder: (context, box) {
-          final w = box.maxWidth - _dayW - _timeW;
-          // 點的半徑留邊，最早／最晚的點不貼出軸外
-          double x(int v) => _dayW + 6 + (w - 12) * (v - lo) / span;
+          final h = box.maxHeight - _labelH;
+          double y(num v) => h * (v - lo) / span;
           return Stack(
             clipBehavior: Clip.none,
             children: [
-              for (var i = 0; i < week.nights.length; i++)
+              // 刻度；離目標 40 分鐘以內的刻度讓位給目標的時刻（不然兩個字疊在一起）
+              for (var t = lo; t <= hi; t += 120)
+                if (target == null || (t - target!).abs() >= 40)
+                  Positioned(
+                    left: 0,
+                    width: _axisW - 6,
+                    top: y(t) - 7,
+                    child: Text(
+                      clockOf(t),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0x99FFFFFF),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+              if (target != null) ...[
                 Positioned(
                   left: 0,
-                  right: 0,
-                  top: i * _rowH,
-                  height: _rowH,
-                  child: _Row(
-                    night: week.nights[i],
-                    isLast: i == week.nights.length - 1,
-                    color: color,
-                    dayW: _dayW,
-                    timeW: _timeW,
-                    dotX: week.nights[i].down == null
-                        ? null
-                        : x(minutesFromEvening(week.nights[i].down!.at)),
-                  ),
-                ),
-              if (target != null)
-                Positioned(
-                  key: const Key('phone-week-target'),
-                  left: x(target!) - 0.6,
-                  top: 0,
-                  height: rowsH,
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      size: Size(1.2, rowsH),
-                      painter: _VDashPainter(),
+                  width: _axisW - 6,
+                  top: y(target!) - 7,
+                  child: Text(
+                    clockOf(target!),
+                    key: const Key('phone-week-target-label'),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-              for (var t = lo; t <= hi; t += step)
+              ],
+              Positioned(
+                left: _axisW,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < week.nights.length; i++)
+                      Expanded(
+                        child: _Column(
+                          night: week.nights[i],
+                          isLast: i == week.nights.length - 1,
+                          color: color,
+                          chartH: h,
+                          labelH: _labelH,
+                          y: y,
+                          targetY: target == null ? null : y(target!),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // 目標虛線畫在欄的上面（底槽不會蓋住它）
+              if (target != null)
                 Positioned(
-                  left: x(t) - 20,
-                  width: 40,
-                  top: rowsH + 4,
-                  child: Text(
-                    clockOf(t),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: t == target
-                          ? Colors.white
-                          : const Color(0x99FFFFFF),
-                      fontSize: 10,
-                      fontWeight: t == target ? FontWeight.w800 : null,
+                  key: const Key('phone-week-target'),
+                  left: _axisW,
+                  right: 0,
+                  top: y(target!),
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      size: Size(box.maxWidth - _axisW, 1),
+                      painter: _HDashPainter(),
                     ),
                   ),
                 ),
@@ -405,137 +420,203 @@ class _RowsChart extends StatelessWidget {
   }
 }
 
-class _Row extends StatelessWidget {
+class _Column extends StatelessWidget {
   final PhoneWeekNight night;
   final bool isLast;
   final Color color;
-  final double dayW;
-  final double timeW;
-  final double? dotX;
-  const _Row({
+  final double chartH;
+  final double labelH;
+  final double Function(num) y;
+  final double? targetY;
+
+  const _Column({
     required this.night,
     required this.isLast,
     required this.color,
-    required this.dayW,
-    required this.timeW,
-    required this.dotX,
+    required this.chartH,
+    required this.labelH,
+    required this.y,
+    required this.targetY,
   });
+
+  static const double _dot = 14;
 
   @override
   Widget build(BuildContext context) {
     final d = DateTime.parse(night.date);
     final day = _weekdays[d.weekday - 1];
     final down = night.down;
-    final dim = isLast ? 1.0 : 0.7;
+    final strong = isLast ? 1.0 : 0.75;
+
+    final children = <Widget>[
+      Positioned.fill(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0x14FFFFFF),
+            borderRadius: BorderRadius.circular(40),
+          ),
+        ),
+      ),
+    ];
+
+    if (down == null) {
+      children.add(
+        Align(
+          alignment: Alignment.center,
+          child: Text(
+            '—',
+            key: Key('phone-week-time-${night.date}'),
+            style: const TextStyle(color: Color(0x66FFFFFF), fontSize: 12),
+          ),
+        ),
+      );
+    } else {
+      final m = minutesFromEvening(down.at);
+      final dy = y(m);
+
+      // 點到目標的細棒：離目標多遠
+      if (targetY != null && (dy - targetY!).abs() > 1) {
+        final top = math.min(dy, targetY!);
+        children.add(
+          Positioned(
+            key: Key('phone-week-stick-${night.date}'),
+            left: 0,
+            right: 0,
+            top: top,
+            height: (dy - targetY!).abs(),
+            child: Center(
+              child: Container(
+                width: 2,
+                color: color.withValues(alpha: 0.35 * strong),
+              ),
+            ),
+          ),
+        );
+      }
+      children.add(
+        Positioned(
+          key: Key('phone-week-dot-${night.date}'),
+          left: 0,
+          right: 0,
+          top: dy - _dot / 2,
+          height: _dot,
+          child: Center(
+            child: Container(
+              width: _dot,
+              height: _dot,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: strong),
+                boxShadow: isLast
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.6),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      );
+      // 時刻寫在遠離目標那一側；上面放不下就放下面
+      final above = targetY == null || dy <= targetY!;
+      var labelTop = above ? dy - _dot / 2 - 15 : dy + _dot / 2 + 2;
+      if (labelTop < 0) labelTop = dy + _dot / 2 + 2;
+      if (labelTop > chartH - 13) {
+        labelTop = dy - _dot / 2 - 15;
+      }
+      children.add(
+        Positioned(
+          left: -4,
+          right: -4,
+          top: labelTop,
+          height: 13,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              clockOf(m),
+              key: Key('phone-week-time-${night.date}'),
+              softWrap: false,
+              style: TextStyle(
+                color: isLast ? Colors.white : const Color(0xCCFFFFFF),
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final inBedSpoken = inBedLabel(down?.inBedMinutes);
     return Semantics(
       label: down == null
           ? '$day ${d.day}: no data'
-          : '$day ${d.day}: ${clockOf(minutesFromEvening(down.at))}',
-      child: Stack(
-        key: Key('phone-week-row-${night.date}'),
-        children: [
-          // 每一列一條淡淡的軌道
-          Positioned(
-            left: dayW,
-            right: timeW,
-            top: 18,
-            height: 2,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(color: Color(0x14FFFFFF)),
+          : '$day ${d.day}: ${clockOf(minutesFromEvening(down.at))}'
+                '${inBedSpoken == null ? '' : ', $inBedSpoken'}',
+      child: Padding(
+        key: Key('phone-week-col-${night.date}'),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          children: [
+            SizedBox(
+              height: chartH,
+              child: Stack(clipBehavior: Clip.none, children: children),
             ),
-          ),
-          Positioned(
-            left: 0,
-            width: dayW,
-            top: 0,
-            bottom: 0,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                day,
-                style: TextStyle(
-                  color: isLast ? Colors.white : const Color(0xB3FFFFFF),
-                  fontSize: 11,
-                  fontWeight: isLast ? FontWeight.w800 : FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          if (down != null && dotX != null)
-            Positioned(
-              key: Key('phone-week-dot-${night.date}'),
-              left: dotX! - 6,
-              top: 13,
-              width: 12,
-              height: 12,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withValues(alpha: dim),
-                  boxShadow: isLast
-                      ? [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.6),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          Positioned(
-            right: 0,
-            width: down == null ? null : timeW,
-            top: 0,
-            bottom: 0,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  down == null
-                      ? '— no data'
-                      : clockOf(minutesFromEvening(down.at)),
-                  key: Key('phone-week-time-${night.date}'),
-                  softWrap: false,
-                  style: TextStyle(
-                    color: down == null
-                        ? const Color(0x66FFFFFF)
-                        : (isLast ? Colors.white : const Color(0xCCFFFFFF)),
-                    fontSize: down == null ? 11 : 12,
-                    fontWeight: down == null ? null : FontWeight.w800,
-                  ),
-                ),
-                if (inBedLabel(down?.inBedMinutes) case final l?)
-                  Text(
-                    l,
-                    key: Key('phone-week-inbed-${night.date}'),
-                    softWrap: false,
-                    style: const TextStyle(
-                      color: Color(0x99FFFFFF),
-                      fontSize: 9.5,
+            SizedBox(
+              height: labelH,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FittedBox(
+                    child: Text(
+                      day,
+                      style: TextStyle(
+                        color: isLast ? Colors.white : const Color(0xB3FFFFFF),
+                        fontSize: 11,
+                        fontWeight: isLast ? FontWeight.w800 : FontWeight.w500,
+                      ),
                     ),
                   ),
-              ],
+                  // A：上床後還用手機多久；沒有就留空（高度照留，星期對齊）
+                  SizedBox(
+                    height: 14,
+                    child: inBedSpoken == null
+                        ? null
+                        : FittedBox(
+                            child: Text(
+                              inBedSpoken.replaceAll(' in bed', ''),
+                              key: Key('phone-week-inbed-${night.date}'),
+                              style: const TextStyle(
+                                color: Color(0x99FFFFFF),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _VDashPainter extends CustomPainter {
+class _HDashPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
       ..color = const Color(0xCCFFFFFF)
       ..strokeWidth = 1.2;
-    for (double y = 0; y < size.height; y += 7) {
-      canvas.drawLine(Offset(0.6, y), Offset(0.6, y + 3.5), p);
+    for (double x = 0; x < size.width; x += 8) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 4, 0), p);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _VDashPainter old) => false;
+  bool shouldRepaint(covariant _HDashPainter old) => false;
 }

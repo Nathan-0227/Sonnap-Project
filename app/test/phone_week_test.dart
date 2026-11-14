@@ -144,7 +144,7 @@ void main() {
   });
 
   group('PhoneWeekView', () {
-    testWidgets('最上面中間值＋晚幾晚；一晚一列；沒資料寫 no data；目標一條線', (tester) async {
+    testWidgets('最上面中間值＋晚幾晚；7 欄；沒資料寫 —；目標一條線', (tester) async {
       final w = phoneWeek(
         endDate: '2026-11-14',
         downs: {
@@ -175,26 +175,35 @@ void main() {
         tester
             .widget<Text>(find.byKey(const Key('phone-week-time-2026-11-10')))
             .data,
-        '— no data',
+        '—',
       );
       expect(find.byKey(const Key('phone-week-dot-2026-11-10')), findsNothing);
       expect(find.byKey(const Key('phone-week-target')), findsOneWidget);
-      // 舊的在上、這一晚在最下面
-      final top = tester
-          .getTopLeft(find.byKey(const Key('phone-week-row-2026-11-08')))
-          .dy;
-      final bottom = tester
-          .getTopLeft(find.byKey(const Key('phone-week-row-2026-11-14')))
-          .dy;
-      expect(bottom, greaterThan(top));
-      // 點的位置照時刻：04:00 在 02:00 右邊
-      final x4 = tester
-          .getCenter(find.byKey(const Key('phone-week-dot-2026-11-12')))
+      // 舊的在左、這一晚在最右邊
+      final left = tester
+          .getTopLeft(find.byKey(const Key('phone-week-col-2026-11-08')))
           .dx;
-      final x2 = tester
-          .getCenter(find.byKey(const Key('phone-week-dot-2026-11-13')))
+      final right = tester
+          .getTopLeft(find.byKey(const Key('phone-week-col-2026-11-14')))
           .dx;
-      expect(x4, greaterThan(x2));
+      expect(right, greaterThan(left));
+      // 點的高度照時刻：04:00 在 02:00 下面（上早下晚）
+      Rect dotOf(String date) => tester.getRect(
+        find.descendant(
+          of: find.byKey(Key('phone-week-dot-$date')),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(
+        dotOf('2026-11-12').center.dy,
+        greaterThan(dotOf('2026-11-13').center.dy),
+      );
+      // 點到目標有一根細棒；目標的時刻寫在刻度上
+      expect(
+        find.byKey(const Key('phone-week-stick-2026-11-12')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('phone-week-target-label')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -211,10 +220,10 @@ void main() {
       );
       Color colorOf(String date) =>
           ((tester
-                      .widget<DecoratedBox>(
+                      .widget<Container>(
                         find.descendant(
                           of: find.byKey(Key('phone-week-dot-$date')),
-                          matching: find.byType(DecoratedBox),
+                          matching: find.byType(Container),
                         ),
                       )
                       .decoration)
@@ -223,7 +232,7 @@ void main() {
       expect(colorOf('2026-11-12'), colorOf('2026-11-13'));
     });
 
-    testWidgets('A＋C 畫在畫面上：有按上床的晚上才有小字；晚了是紅色', (tester) async {
+    testWidgets('A＋C 畫在畫面上：有按上床的晚上星期底下才有 +Nm；晚了是紅色', (tester) async {
       final w = phoneWeek(
         endDate: '2026-11-14',
         downs: {
@@ -239,7 +248,18 @@ void main() {
         tester
             .widget<Text>(find.byKey(const Key('phone-week-inbed-2026-11-14')))
             .data,
-        '+7m in bed',
+        '+7m',
+      );
+      // 在星期底下（圖的下面），不在圖上
+      expect(
+        tester
+            .getRect(find.byKey(const Key('phone-week-inbed-2026-11-14')))
+            .top,
+        greaterThan(
+          tester
+              .getRect(find.byKey(const Key('phone-week-dot-2026-11-14')))
+              .bottom,
+        ),
       );
       expect(
         find.byKey(const Key('phone-week-inbed-2026-11-13')),
@@ -276,7 +296,7 @@ void main() {
         ),
       );
       expect(find.byKey(const Key('phone-week-empty')), findsOneWidget);
-      expect(find.byKey(const Key('phone-week-row-2026-11-14')), findsNothing);
+      expect(find.byKey(const Key('phone-week-col-2026-11-14')), findsNothing);
     });
 
     testWidgets('沒有目標 → 不畫線、不寫晚幾晚', (tester) async {
