@@ -154,6 +154,9 @@ class ReportArtTile extends StatelessWidget {
   final double height;
   final VoidCallback? onTap;
 
+  /// 字置中在底邊（Stress：字在半圓裡）；預設左下。
+  final bool centerText;
+
   const ReportArtTile({
     super.key,
     required this.icon,
@@ -163,6 +166,7 @@ class ReportArtTile extends StatelessWidget {
     required this.text,
     this.height = 190,
     this.onTap,
+    this.centerText = false,
   });
 
   static const background = Color(0xF20C0D24);
@@ -206,7 +210,12 @@ class ReportArtTile extends StatelessWidget {
               ],
             ),
           ),
-          Positioned(left: 14, right: 12, bottom: 12, child: text),
+          Positioned(
+            left: 14,
+            right: 12,
+            bottom: 12,
+            child: centerText ? Center(child: text) : text,
+          ),
         ],
       ),
     );
@@ -226,12 +235,14 @@ class ReportArtText extends StatelessWidget {
   final Key? valueKey;
   final String line;
   final Key? lineKey;
+  final bool center;
   const ReportArtText({
     super.key,
     required this.value,
     required this.line,
     this.valueKey,
     this.lineKey,
+    this.center = false,
   });
 
   static const _shadow = [Shadow(color: Color(0x88000000), blurRadius: 10)];
@@ -240,12 +251,14 @@ class ReportArtText extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: center
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         if (value != null)
           FittedBox(
             fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
+            alignment: center ? Alignment.center : Alignment.centerLeft,
             child: Text(
               value!,
               key: valueKey,

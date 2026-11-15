@@ -1407,7 +1407,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               art: ActivityMountain(
                 key: const Key('report-active-mountain'),
                 parts: parts,
-                apexY: 0.2,
+                apexY: 0.18,
               ),
               text: ReportArtText(
                 value: reportHm(parts.activeMinutes),
@@ -1453,9 +1453,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 ),
               ],
             )
-          // 11-15 第四輪（參考圖）：圓頂在卡片上半、鋪滿整張卡、字在左下
+          // 11-15 第五輪：半圓佔下半張卡、從底邊長出來，字在半圓裡置中
           : ReportArtTile(
               key: const Key('report-stress'),
+              centerText: true,
               icon: Icons.spa_rounded,
               color: _cStress,
               title: 'Stress',
@@ -1470,6 +1471,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     ? 'high ${_secHm(sp.high)}'
                     : stressTileLine(sp),
                 lineKey: const Key('report-stress-line'),
+                center: true,
               ),
             );
     }

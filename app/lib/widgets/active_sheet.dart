@@ -66,16 +66,18 @@ ActiveParts? activeParts(YesterdayActivity y) {
 /// 兩邊都單調往外，所以每個高度只有一段。
 const double kMountainApexX = 0.58;
 
+/// 同日第五輪使用者定「山胖一點」：兩邊往外鼓（t^0.7，比直線早變寬），起伏照留。
 (double, double) mountainEdges(double t) {
+  final f = math.pow(t, 0.7).toDouble();
   final l =
       kMountainApexX -
       kMountainApexX *
-          (t -
-              0.07 * math.sin(2 * math.pi * t) +
-              0.015 * math.sin(7 * math.pi * t));
+          (f -
+              0.05 * math.sin(2 * math.pi * t) +
+              0.012 * math.sin(7 * math.pi * t));
   final r =
       kMountainApexX +
-      (1 - kMountainApexX) * (t + 0.06 * math.sin(3 * math.pi * t));
+      (1 - kMountainApexX) * (f + 0.05 * math.sin(3 * math.pi * t));
   return (l.clamp(0.0, 1.0), r.clamp(0.0, 1.0));
 }
 
@@ -250,17 +252,7 @@ class MountainPainter extends CustomPainter {
       return Offset((left ? l : r) * w, top + t * (h - top));
     }
 
-    // 太陽：只是裝飾
-    final sun = Offset(w * 0.84, h * (apexY + 0.12));
-    final sr = math.min(w, h) * 0.09;
-    canvas.drawCircle(
-      sun,
-      sr * 2.6,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.18)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, sr * 1.2),
-    );
-    canvas.drawCircle(sun, sr, Paint()..color = const Color(0xFFFFFBF2));
+    // 同日第五輪使用者定：不要太陽
 
     // 不規則的輪廓：左邊從山腳往上、山尖稍微圓、右邊往下
     const n = 60;

@@ -2,10 +2,11 @@
 // 守：全部照抄後端、不判斷（沒有 reached／Good／Normal）；沒資料整段不畫；
 //     單一項沒值那一格不畫（不畫成 0）；手錶睡眠還沒到也照樣畫；VO2 max 不放（同首頁）；
 //     圖形真的畫出來（實機抓到過：橫條 0 高、看不見）。
+import 'dart:math' as math;
+
 import 'package:app/models/yesterday_activity.dart';
 import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/services/morning_report.dart';
-import 'package:app/widgets/stress_sheet.dart' show kStressDomeBase;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -325,17 +326,14 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-stress')));
       expect(find.byKey(const Key('report-stress-dome')), findsOneWidget);
       expect(find.byKey(const Key('report-stress-gauge')), findsNothing);
-      // 照參考圖：圖鋪滿整張卡、字在左下、在半圓平的那一邊下面
+      // 圖鋪滿整張卡；半圓從底邊長出來、置中；字在半圓裡置中
       final card = tester.getRect(find.byKey(const Key('report-stress')));
       final dome = tester.getRect(find.byKey(const Key('report-stress-dome')));
       final text = tester.getRect(find.byKey(const Key('report-stress-text')));
       expect(dome.width, closeTo(card.width, 2), reason: '圖鋪滿整張卡');
-      expect(text.left - card.left, lessThan(20), reason: '字在左邊');
-      expect(
-        text.top,
-        greaterThan(dome.top + dome.height * kStressDomeBase - 1),
-        reason: '字在半圓下面',
-      );
+      expect(text.center.dx, closeTo(dome.center.dx, 1.5), reason: '字置中');
+      final r = math.min(dome.height * 0.5, dome.width / 2 * 0.98);
+      expect(text.top, greaterThan(dome.bottom - r), reason: '字在半圓裡');
       final line = tester
           .widget<Text>(find.byKey(const Key('report-stress-line')))
           .data!;

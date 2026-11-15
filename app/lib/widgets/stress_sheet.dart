@@ -11,11 +11,11 @@ import 'chart_probe.dart' show ProbeLayer;
 
 // 早晨報告 Stress（2026-11-15 使用者定，參考圖 Stress 卡）：
 // - 報告上那一格：圖鋪滿整張卡（同日第四輪，照參考圖）；半圓整個露出來、在卡片上半（第一版右上方露一角、
-//   第二版貼底），像打了光的球（左上亮、右下暗、亮邊、平的一邊融進背景）；
+//   第二版貼底），像打了光的球（左上亮、右下暗、亮邊）；第五輪：佔下半張卡、從底邊長出來、置中，字在半圓裡；
 //   由上往下 高 → 中 → 低 → 休息，
 //   **每一段的面積＝那天量到的時間裡各程度的比例**（同 Active time 的山，照實際形狀數值積分）。
 //   **紫色系，不用紅黃**（11-13 定：紅色會被讀成壓力太大、不好）；邊緣一圈亮光；
-//   字在左下（照參考圖，跟 Active time 一樣）。
+//   （第四輪字在左下，第五輪改在半圓裡置中。）
 //   大字＝平均壓力（Garmin 的 0–100 分數，**不加 %**——加了會被讀成「56% 的時間有壓力」），
 //   **不寫 Elevated**。
 // - 點開：圓環（只算量到的時間）＋四行＋「Not measured」；一整天的壓力線（每 3 分鐘一點、
@@ -98,11 +98,12 @@ String stressTileLine(StressParts p) =>
 
 /// 圓心與半徑（以高為 1）。11-15 第四輪使用者定（照參考圖 Stress 卡）：半圓在卡片**上半**，
 /// 平的一邊在 [kStressDomeBase]，整個半圓都在卡片裡（不被左右上切到），下面留給字。
-const double kStressDomeBase = 0.6;
+const double kStressDomeBase = 1.0;
 
 ({double cx, double cy, double r}) stressDomeCircle(double aspect) {
-  final r = math.min(0.36, aspect * 0.4);
-  return (cx: aspect * 0.58, cy: kStressDomeBase, r: r);
+  // 同日第五輪使用者定：佔下半張卡、從底邊長出來、置中（半徑到一半高，也不超出左右）
+  final r = math.min(0.5, aspect / 2 * 0.98);
+  return (cx: aspect / 2, cy: kStressDomeBase, r: r);
 }
 
 /// 高度 y（0＝頂、1＝底）那一條橫線在半圓裡的寬度；平的那一邊以下是 0。
@@ -280,17 +281,8 @@ class StressDomePainter extends CustomPainter {
     );
     canvas.restore();
 
-    // 平的那一邊慢慢融進背景（把下緣那一截的透明度挖掉）
-    canvas.drawRect(
-      Rect.fromLTRB(0, base - radius * 0.35, w, base + 1),
-      Paint()
-        ..blendMode = BlendMode.dstOut
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x00000000), Color(0xE6000000)],
-        ).createShader(Rect.fromLTRB(0, base - radius * 0.35, w, base)),
-    );
+    // ⚠️ 不讓平的那一邊淡出：半圓貼底之後，淡出會吃掉最下面「休息」那一段（通常最大），
+    //    畫面上的比例就不準了（第四輪半圓在上半時有淡出，第五輪拿掉）。
     canvas.restore();
   }
 
