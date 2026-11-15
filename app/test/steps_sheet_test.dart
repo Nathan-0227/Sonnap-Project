@@ -166,7 +166,7 @@ void main() {
       expect(
         find.textContaining('total'),
         findsNothing,
-        reason: '每小時加起來≠官方總數，不寫加總',
+        reason: '不寫加總（大數字已是官方總數）',
       );
     });
 

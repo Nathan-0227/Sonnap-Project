@@ -44,7 +44,7 @@ class YesterdayActivity {
   final List<ActivityHistoryDay> history;
 
   /// 每個鐘頭走幾步（24 格，null＝那小時沒戴錶）；整個沒有是 null（只有 /home 帶，打包檔刻意不帶）。
-  /// ⚠️ 加起來不等於 [steps]（那是官方總數），畫面上不寫加總。
+  /// 畫面上不寫加總：大數字用官方的 [steps]（實抓 30 天兩者逐天相同）。
   final List<int?>? stepsHourly;
 
   const YesterdayActivity({
