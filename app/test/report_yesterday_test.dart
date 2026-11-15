@@ -199,7 +199,7 @@ void main() {
       await pumpReport(tester, fullJson());
       await scrollTo(tester, find.byKey(const Key('report-moveiq')));
       for (final k in [
-        'report-active-bar',
+        'report-active-mountain',
         'report-stress-gauge',
         'report-body-battery-bars',
         'report-moveiq-timeline',
@@ -298,6 +298,23 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('kcal-sheet')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Active time：一座山（漸層＝一整天的比例），點了開 Active time 頁', (tester) async {
+      await pumpReport(tester, fullJson());
+      await scrollTo(tester, find.byKey(const Key('report-active')));
+      expect(find.byKey(const Key('report-active-mountain')), findsOneWidget);
+      expect(find.byKey(const Key('report-active-bar')), findsNothing);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('report-active-value'))).data,
+        '3h 11m',
+      );
+      await tester.tap(find.byKey(const Key('report-active')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('active-sheet')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

@@ -457,6 +457,8 @@ def activity_block(night_iso):
             "active_kcal": r.get("active_kcal"),
             "active_minutes": (round(sum(v for v in active if v) / 60)
                                if any(v is not None for v in active) else None),
+            "highly_active_minutes": (None if r.get("highly_active_sec") is None
+                                      else round(r["highly_active_sec"] / 60)),
         })
 
     return {

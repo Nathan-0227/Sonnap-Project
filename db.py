@@ -565,9 +565,13 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     move_iq              TEXT,                 -- JSON 陣列 [{type, start, minutes}]；NULL = 沒抓到
     resting_kcal         INTEGER,              -- 靜止代謝（Garmin 估的，2026-11-15）
     total_kcal           INTEGER,              -- 一整天總消耗＝靜止＋活動（Garmin 估的）
+    sleeping_sec         INTEGER,              -- 這個日曆日裡睡著的秒數（2026-11-15）
     -- 每個鐘頭走幾步：JSON 24 格（null＝那小時沒戴錶）；NULL＝沒抓到。來源 garmin_steps_intraday.json，
     -- 另一支 set_garmin_steps_hourly 寫（不在 GARMIN_DAILY_FIELDS 裡，存白天資料時不會被蓋掉）
     steps_hourly         TEXT,
+    -- 每 15 分鐘的活動程度：JSON 96 格 [sleep|still|active|high|other, 步數] 或 null（沒戴錶）；
+    -- 來源同上，set_garmin_activity_quarters 寫（2026-11-15，Active time 的時間軸）
+    activity_quarters    TEXT,
     updated_at           TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -612,6 +616,8 @@ COLUMN_MIGRATIONS = [
     ("garmin_daily", "steps_hourly", "TEXT"),
     ("garmin_daily", "resting_kcal", "INTEGER"),
     ("garmin_daily", "total_kcal", "INTEGER"),
+    ("garmin_daily", "sleeping_sec", "INTEGER"),
+    ("garmin_daily", "activity_quarters", "TEXT"),
     # 2026-08-26：Health Connect 能給臥床時間（Garmin 不能），
     #             以及把 final_score 存起來不讓 API 層自己算。
     ("wearable_nightly", "time_in_bed_min", "REAL"),
@@ -2050,7 +2056,7 @@ GARMIN_DAILY_FIELDS = (
     "highly_active_sec", "active_sec", "sedentary_sec", "floors_up",
     "stress_rest_sec", "stress_low_sec", "stress_medium_sec", "stress_high_sec",
     "body_battery_charged", "body_battery_drained", "vo2max", "move_iq",
-    "resting_kcal", "total_kcal",
+    "resting_kcal", "total_kcal", "sleeping_sec",
 )
 
 
@@ -2096,9 +2102,23 @@ def set_garmin_steps_hourly(user_id, date, hours, db_path=None):
         conn.close()
 
 
+def set_garmin_activity_quarters(user_id, date, quarters, db_path=None):
+    """那一天每 15 分鐘的活動程度（96 格）。那天還沒有白天資料那一列就不寫（回 False）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET activity_quarters = ? WHERE user_id = ? AND date = ?",
+            (None if quarters is None else json.dumps(quarters), user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def _garmin_daily_row(row):
     row = dict(row)
-    for key in ("move_iq", "steps_hourly"):
+    for key in ("move_iq", "steps_hourly", "activity_quarters"):
         raw = row.get(key)
         if raw is not None:
             try:

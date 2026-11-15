@@ -28,6 +28,7 @@ import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 import '../widgets/steps_sheet.dart';
 import '../widgets/kcal_sheet.dart';
+import '../widgets/active_sheet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -1354,44 +1355,49 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
     Widget? activeTile;
     if (y.hasActivity) {
-      final hist = last7((h) => h.activeMinutes);
       final active = y.activeMinutes;
+      // 11-15 使用者定：一座山＝一整天，漸層每一段的面積＝那段的比例（active_sheet.dart）
+      final parts = activeParts(y);
       activeTile = ReportTile(
         key: const Key('report-active'),
         icon: Icons.bolt_rounded,
         color: _cActive,
         title: 'Active time',
         value: active == null ? null : reportHm(active),
-        graphic: paintBox(
-          StackedBarPainter([
-            ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
-            ((y.activeSec ?? 0).toDouble(), _cActive.withValues(alpha: 0.55)),
-            (
-              (y.sedentarySec ?? 0).toDouble(),
-              Colors.white.withValues(alpha: 0.16),
-            ),
-          ]),
-          key: const Key('report-active-bar'),
-        ),
-        graphicHeight: 18,
-        onTap: hist.length < 2
-            ? null
-            : () => showReportBarsSheet(
-                context,
-                id: 'active',
-                title: 'Active time',
-                bars: hist,
-                format: (v) => reportHm(v),
+        valueKey: const Key('report-active-value'),
+        graphic: parts != null
+            ? ActivityMountain(
+                key: const Key('report-active-mountain'),
+                parts: parts,
+              )
+            : paintBox(
+                StackedBarPainter([
+                  ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
+                  (
+                    (y.activeSec ?? 0).toDouble(),
+                    _cActive.withValues(alpha: 0.55),
+                  ),
+                  (
+                    (y.sedentarySec ?? 0).toDouble(),
+                    Colors.white.withValues(alpha: 0.16),
+                  ),
+                ]),
+                key: const Key('report-active-bar'),
               ),
+        graphicHeight: parts != null ? 110 : 18,
+        onTap: () => showActiveSheet(context, day: y, fontFamily: kReportFont),
         lines: [
-          Text(
-            [
-              if (y.highlyActiveSec != null)
-                'high ${_secHm(y.highlyActiveSec!)}',
-              if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
-              if (y.sedentarySec != null) 'still ${_secHm(y.sedentarySec!)}',
-            ].join(' · '),
-          ),
+          if (parts != null)
+            Text(activeTileLine(parts))
+          else
+            Text(
+              [
+                if (y.highlyActiveSec != null)
+                  'high ${_secHm(y.highlyActiveSec!)}',
+                if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
+                if (y.sedentarySec != null) 'still ${_secHm(y.sedentarySec!)}',
+              ].join(' · '),
+            ),
         ],
       );
     }

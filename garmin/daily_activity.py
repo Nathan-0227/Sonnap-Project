@@ -47,6 +47,9 @@ FIELDS = (
     #    舊日子要重抓才有，所以多半是 None（不特地重抓）。
     "resting_kcal",          # bmrKilocalories
     "total_kcal",            # totalKilocalories
+    # 2026-11-15（Active time 的山與圓環）：這個**日曆日**裡睡著的秒數。
+    # ⚠️ 以日曆日切，跟報告上方「昨晚睡多久」不是同一個數字，畫面上不另外寫出來。
+    "sleeping_sec",          # sleepingSeconds
 )
 
 _STATS_MAP = {
@@ -64,6 +67,7 @@ _STATS_MAP = {
     "stress_high_sec": "highStressDuration",
     "resting_kcal": "bmrKilocalories",
     "total_kcal": "totalKilocalories",
+    "sleeping_sec": "sleepingSeconds",
 }
 
 # Garmin 用負數表示「沒有這個值」（例如沒戴錶的那天壓力是 -1、-2）

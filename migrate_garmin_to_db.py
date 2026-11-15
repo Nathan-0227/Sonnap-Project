@@ -566,6 +566,8 @@ def import_daily_activity(phone, db_path=None, path=None):
         name, _trusted, _start, _end = wearer_segment(date)
         if name == "wearer_c":
             db.set_garmin_steps_hourly(phone, date, steps_intraday.hourly(slots), db_path=db_path)
+            db.set_garmin_activity_quarters(phone, date, steps_intraday.quarters(slots),
+                                            db_path=db_path)
     return written, skipped
 
 

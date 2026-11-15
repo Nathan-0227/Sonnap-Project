@@ -372,6 +372,7 @@ def yesterday_block(user_id, night_date):
             highly_active_sec=row.get("highly_active_sec"),
             active_sec=row.get("active_sec"),
             sedentary_sec=row.get("sedentary_sec"),
+            sleeping_sec=_sleeping_sec(row),
         ),
         "stress": group(
             rest_sec=row.get("stress_rest_sec"),
@@ -388,11 +389,25 @@ def yesterday_block(user_id, night_date):
         "move_iq": row.get("move_iq"),
         # 每個鐘頭走幾步（24 格，null＝那小時沒戴錶；整個沒抓到是 null）。App 不寫加總（大數字已是官方的 steps）
         "steps_hourly": row.get("steps_hourly"),
+        # 每 15 分鐘 [程度, 步數]（96 格，null＝沒戴錶）。只在這裡，打包檔不帶（同 steps_hourly 的理由）
+        "activity_quarters": row.get("activity_quarters"),
         # 2026-11-14：報告的圖形格子用（步數那座「山」、點開的長條圖、整天心率線）。
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
         "history": _yesterday_history(user_id, day),
         "heart_rate": sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat()),
     }
+
+
+def _sleeping_sec(row):
+    """這個日曆日睡著幾秒。Garmin 有給就照抄；舊日子沒存這欄時，用「一天 − 其他三種」補——
+    Garmin 的四種加起來剛好是 86400（2026-11-15 實測 11-07、11-14 兩天）。三種有缺或超過一天 → None。"""
+    v = row.get("sleeping_sec")
+    if v is not None:
+        return v
+    parts = [row.get(k) for k in ("highly_active_sec", "active_sec", "sedentary_sec")]
+    if any(p is None for p in parts) or sum(parts) > 86400:
+        return None
+    return 86400 - sum(parts)
 
 
 def _yesterday_history(user_id, day):
@@ -411,6 +426,8 @@ def _yesterday_history(user_id, day):
             "active_kcal": r.get("active_kcal"),
             "active_minutes": (round(sum(v for v in active if v) / 60)
                                if any(v is not None for v in active) else None),
+            "highly_active_minutes": (None if r.get("highly_active_sec") is None
+                                      else round(r["highly_active_sec"] / 60)),
         })
     return out
 

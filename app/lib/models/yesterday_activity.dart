@@ -22,6 +22,10 @@ class YesterdayActivity {
   final int? activeSec;
   final int? sedentarySec;
 
+  /// 這個**日曆日**裡睡著的秒數（Garmin 的；舊日子後端用「一天 − 其他三種」補）。
+  /// ⚠️ 跟報告上方「昨晚睡多久」不是同一個數字，畫面上只當山底那段顏色、不另外寫出來。
+  final int? sleepingSec;
+
   final int? stressRestSec;
   final int? stressLowSec;
   final int? stressMediumSec;
@@ -51,6 +55,9 @@ class YesterdayActivity {
   /// 畫面上不寫加總：大數字用官方的 [steps]（實抓 30 天兩者逐天相同）。
   final List<int?>? stepsHourly;
 
+  /// 每 15 分鐘的活動程度（96 格，null＝沒戴錶）；整個沒有是 null（只有 /home 帶，打包檔刻意不帶）。
+  final List<ActivityQuarter?>? activityQuarters;
+
   const YesterdayActivity({
     required this.date,
     this.steps,
@@ -63,6 +70,7 @@ class YesterdayActivity {
     this.highlyActiveSec,
     this.activeSec,
     this.sedentarySec,
+    this.sleepingSec,
     this.stressRestSec,
     this.stressLowSec,
     this.stressMediumSec,
@@ -76,6 +84,7 @@ class YesterdayActivity {
     this.restingHeartRate,
     this.history = const [],
     this.stepsHourly,
+    this.activityQuarters,
   });
 
   /// 活動時間（高強度＋活動）的分鐘數。兩個都沒有是 null。
@@ -127,6 +136,7 @@ class YesterdayActivity {
       highlyActiveSec: i(activity, 'highly_active_sec'),
       activeSec: i(activity, 'active_sec'),
       sedentarySec: i(activity, 'sedentary_sec'),
+      sleepingSec: i(activity, 'sleeping_sec'),
       stressRestSec: i(stress, 'rest_sec'),
       stressLowSec: i(stress, 'low_sec'),
       stressMediumSec: i(stress, 'medium_sec'),
@@ -148,7 +158,34 @@ class YesterdayActivity {
         if (raw is! List || raw.length != 24) return null;
         return [for (final v in raw) (v as num?)?.round()];
       }(),
+      activityQuarters: () {
+        final raw = j['activity_quarters'];
+        if (raw is! List || raw.length != 96) return null;
+        return [for (final v in raw) ActivityQuarter.fromJsonOrNull(v)];
+      }(),
     );
+  }
+}
+
+/// 一格 15 分鐘：Garmin 標的活動程度與那 15 分鐘的步數。
+class ActivityQuarter {
+  /// sleep／still／active／high／other（other＝Garmin 標 generic，意思不明，照實標）。
+  final String level;
+  final int steps;
+
+  const ActivityQuarter(this.level, this.steps);
+
+  static const levels = {'sleep', 'still', 'active', 'high', 'other'};
+
+  /// `[程度, 步數]`；格式不對或不認得的程度 → null（畫面空著）。
+  static ActivityQuarter? fromJsonOrNull(Object? raw) {
+    if (raw is! List || raw.length != 2) return null;
+    final level = raw[0];
+    final steps = raw[1];
+    if (level is! String || !levels.contains(level) || steps is! num) {
+      return null;
+    }
+    return ActivityQuarter(level, steps.round());
   }
 }
 
@@ -193,6 +230,9 @@ class ActivityHistoryDay {
   final int? activeKcal;
   final int? activeMinutes;
 
+  /// 其中高強度的分鐘（Active time 一週圖疊在下面）；舊版後端沒有是 null。
+  final int? highlyActiveMinutes;
+
   /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
   final int? stepGoal;
   final int? distanceM;
@@ -202,6 +242,7 @@ class ActivityHistoryDay {
     this.steps,
     this.activeKcal,
     this.activeMinutes,
+    this.highlyActiveMinutes,
     this.stepGoal,
     this.distanceM,
   });
@@ -213,6 +254,7 @@ class ActivityHistoryDay {
       steps: (raw['steps'] as num?)?.round(),
       activeKcal: (raw['active_kcal'] as num?)?.round(),
       activeMinutes: (raw['active_minutes'] as num?)?.round(),
+      highlyActiveMinutes: (raw['highly_active_minutes'] as num?)?.round(),
       stepGoal: (raw['step_goal'] as num?)?.round(),
       distanceM: (raw['distance_m'] as num?)?.round(),
     );

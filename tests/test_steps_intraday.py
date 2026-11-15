@@ -92,6 +92,18 @@ check("一般的鐘頭 4 × 10", h[20], 40)
 check("整天沒資料 → None", si.hourly([{"start": "10:00", "steps": 0, "level": "none"}]), None)
 check("沒抓到 → None", si.hourly(None), None)
 
+print("\n【2b】每 15 分鐘的活動程度（Active time 的時間軸）")
+q = si.quarters(slots)
+check("96 格", len(q), 96)
+check("14:00 那格＝[active, 300]", q[14 * 4], ["active", 300])
+check("睡著＝sleep、久坐＝still", (q[3 * 4][0], q[20 * 4][0]), ("sleep", "still"))
+check("⚠️ 沒戴錶（none）→ None，不畫成任何一種", q[9 * 4], None)
+check("generic 照實標 other（不硬塞進活動或久坐）",
+      si.quarters([{"start": "10:15", "steps": 50, "level": "generic"}])[41], ["other", 50])
+check("highlyActive → high", si.quarters([{"start": "08:45", "steps": 852, "level": "highlyActive"}])[35],
+      ["high", 852])
+check("整天沒資料 → None", si.quarters([{"start": "10:00", "steps": 0, "level": "none"}]), None)
+
 print("\n【3】合併與補抓")
 m = si.merge_days({"2026-11-01": slots}, {"2026-11-01": [], "2026-11-02": None, "2026-11-13": slots})
 check("空的、沒抓到的留舊的、不刪", sorted(m), ["2026-11-01", "2026-11-13"])
@@ -134,20 +146,25 @@ si.save({"2026-07-01": slots, "2026-11-13": slots}, d / "garmin_steps_intraday.j
 migrate.import_daily_activity(phone, path=d / "garmin_daily_activity.json")
 r = db.get_garmin_daily(phone, "2026-11-13")
 check("本人那天：每小時讀出來是 list", r["steps_hourly"][14], 1200)
+check("本人那天：每 15 分鐘的程度也寫進去", r["activity_quarters"][14 * 4], ["active", 300])
 check("別人戴的那天沒進來", db.get_garmin_daily(phone, "2026-07-01"), None)
 db.upsert_garmin_daily(phone, "2026-11-13", daily.parse_day({"totalSteps": 6000, "activeSeconds": 300}))
 r = db.get_garmin_daily(phone, "2026-11-13")
 check("⚠️ 再存一次白天資料，每小時不會被蓋成 null", (r["steps"], r["steps_hourly"][14]), (6000, 1200))
+check("⚠️ 每 15 分鐘的程度也不會被蓋掉", r["activity_quarters"][14 * 4], ["active", 300])
 check("那天沒有白天資料那一列 → 不寫", db.set_garmin_steps_hourly(phone, "2026-01-01", [0] * 24), False)
 
 print("\n【6】/home 的 yesterday")
 y = client.get("/home", params={"user_id": phone, "date": "2026-11-14"}).json()["yesterday"]
 check("steps_hourly 24 格、沒戴錶的鐘頭是 null", (len(y["steps_hourly"]), y["steps_hourly"][9]), (24, None))
+check("activity_quarters 96 格、沒戴錶是 null", (len(y["activity_quarters"]), y["activity_quarters"][36]),
+      (96, None))
 
 print("\n【7】不進版控")
 check(".gitignore 有它", "garmin/data/garmin_steps_intraday.json" in (ROOT / ".gitignore").read_text(encoding="utf-8"), True)
 src = (ROOT / "build_app_payload.py").read_text(encoding="utf-8")
 check("⚠️ 打包檔（進版控）不帶 steps_hourly", '"steps_hourly":' in src, False)
+check("⚠️ 打包檔也不帶 activity_quarters", '"activity_quarters":' in src, False)
 blob = json.dumps(y)
 check("不寫判斷字眼", any(w in blob.lower() for w in ("reached", "achieved", "good", "poor")), False)
 

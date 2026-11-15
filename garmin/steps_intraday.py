@@ -95,6 +95,35 @@ def hourly(slots: Optional[List[Dict[str, Any]]]) -> Optional[List[Optional[int]
     return hours if any(v is not None for v in hours) else None
 
 
+# 2026-11-15 使用者定（Active time 點開的時間軸）：Garmin 的活動程度 → 畫面上的四種＋一種。
+# ⚠️ generic 是 Garmin 自己標的另一種程度（58 天裡 78 格，多半有步數），意思不明，照實標 other，
+#    不硬塞進「活動」或「久坐」。none（沒戴錶）與不認得的 → None（畫面空著，不畫成任何一種）。
+LEVEL_CODES = {
+    "sleeping": "sleep",
+    "sedentary": "still",
+    "active": "active",
+    "highlyActive": "high",
+    "generic": "other",
+}
+
+
+def quarters(slots: Optional[List[Dict[str, Any]]]) -> Optional[List[Optional[List]]]:
+    """每 15 分鐘 → 96 格 [程度, 步數]；沒戴錶／沒有那一格是 None；整天都沒有 → None。"""
+    if not slots:
+        return None
+    out: List[Optional[List]] = [None] * 96
+    for s in slots:
+        try:
+            hh, mm = str(s["start"]).split(":")
+            i = int(hh) * 4 + int(mm) // 15
+        except (KeyError, ValueError):
+            continue
+        code = LEVEL_CODES.get(s.get("level"))
+        if 0 <= i < 96 and code is not None:
+            out[i] = [code, int(s.get("steps") or 0)]
+    return out if any(v is not None for v in out) else None
+
+
 def merge_days(existing: Dict[str, List], fetched: Dict[str, Optional[List]]) -> Dict[str, List]:
     """只增不減：這次抓到（非空）的那天整天換新的；沒抓到或空的留舊的；從不刪一天。"""
     merged = dict(existing)

@@ -65,7 +65,7 @@ def ok(label, cond, extra=""):
 STATS = {
     "totalSteps": 9955, "dailyStepGoal": 9430, "totalDistanceMeters": 6720,
     "activeKilocalories": 377.0, "highlyActiveSeconds": 1747, "activeSeconds": 9691,
-    "sedentarySeconds": 62062, "floorsAscended": 9.42651,
+    "sedentarySeconds": 62062, "sleepingSeconds": 12900, "floorsAscended": 9.42651,
     "restStressDuration": 27660, "lowStressDuration": 11340,
     "mediumStressDuration": 14880, "highStressDuration": 2100,
     "bmrKilocalories": 1927.0, "totalKilocalories": 2304.0,
@@ -235,7 +235,16 @@ check("history：最近幾天（到那一天為止），照日期排；活動分
       [(x["date"], x["steps"]) for x in y["history"]][-1], ("2026-11-12", 9955))
 check("history 不含那一天之後的", all(x["date"] <= "2026-11-12" for x in y["history"]), True)
 check("history 跟打包檔同一個形狀", sorted(y["history"][-1]),
-      ["active_kcal", "active_minutes", "date", "distance_m", "step_goal", "steps"])
+      ["active_kcal", "active_minutes", "date", "distance_m", "highly_active_minutes",
+       "step_goal", "steps"])
+check("history 的高強度分鐘（Active time 一週圖疊在下面）", y["history"][-1]["highly_active_minutes"], 29)
+check("活動四種：睡著時間照抄 Garmin（這個日曆日的）", y["activity"],
+      {"highly_active_sec": 1747, "active_sec": 9691, "sedentary_sec": 62062, "sleeping_sec": 12900})
+check("舊日子沒存睡著時間 → 一天 − 其他三種（Garmin 四種加起來剛好 86400）",
+      main._sleeping_sec({"highly_active_sec": 690, "active_sec": 4212, "sedentary_sec": 58818}), 22680)
+check("三種有缺 → None（不猜）", main._sleeping_sec({"active_sec": 4212, "sedentary_sec": 58818}), None)
+check("三種加起來超過一天 → None", main._sleeping_sec(
+    {"highly_active_sec": 1, "active_sec": 1, "sedentary_sec": 86400}), None)
 check("history 每天帶那天自己的目標（Steps 一週圖用）", y["history"][-1]["step_goal"], 9430)
 ok("整天心率欄位在（沒有原始讀數時是 null，不回 0）", "heart_rate" in y)
 ok("不給任何判斷字眼", not any(w in json.dumps(y).lower()
