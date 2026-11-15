@@ -56,6 +56,7 @@ import db
 sys.path.insert(0, str(Path(__file__).parent / "garmin"))
 from apply_recovery_modifier import wearer_segment  # noqa: E402
 import daily_activity  # noqa: E402
+import sleep_stages  # noqa: E402
 import steps_intraday  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -149,6 +150,9 @@ def build_rows():
 
     by_base = index_by_date(base)
     by_feat = index_by_date(feats)
+    # 半夜真的醒來幾次：從原始檔還原的時間軸數（summary 的那個每晚多 1，見 timeline_awake_counts）
+    awake = timeline_awake_counts(
+        {f["date"]: (f.get("sleep_start_time"), f.get("wake_time")) for f in feats})
 
     if not (len(final) == len(base) == len(feats)):
         sys.exit(
@@ -176,6 +180,8 @@ def build_rows():
             "rem_min": f.get("rem_minutes"),
             "avg_hr": f.get("avg_heart_rate"),
             "resting_hr": f.get("resting_heart_rate"),
+            # 半夜真的醒來幾次（只呈現，2026-11-15）。沒有時間軸的晚上是 None
+            "awake_count": awake.get(date),
             # ── 入睡／起床時刻 ──
             # 與 build_app_payload.py 的 history 同一個來源（features），
             # 所以 asset 路徑與 API 路徑不會給出兩套不一樣的時間。
@@ -571,6 +577,67 @@ def import_daily_activity(phone, db_path=None, path=None):
     return written, skipped
 
 
+STANDARD_FILE = GARMIN_DATA / "garmin_standard_data.json"
+
+
+def _stage_records(standard):
+    """原始檔裡還原時間軸要用的那幾筆（睡眠階段＋整晚摘要），依日期分桶。"""
+    with Path(standard).open(encoding="utf-8") as f:
+        records = json.load(f)["records"]
+    by_day = {}
+    for r in records:
+        m = r.get("metric")
+        if m == "sleep_stage" or (isinstance(m, str) and m.endswith("_duration_sec")):
+            by_day.setdefault(str(r.get("timestamp", ""))[:10], []).append(r)
+    return by_day
+
+
+def timeline_awake_counts(windows, standard=None):
+    """
+    {日期: (入睡, 起床)} → {日期: 半夜真的醒來幾次}。沒有時刻或還原不出時間軸 → None（不寫成 0）。
+
+    ⚠️ 數的是 garmin/sleep_stages 還原的時間軸上清醒的段數，跟 App 時間軸畫出來的同一份。
+       **不用 summary 的 awake_count**：那個把入睡時刻的整晚摘要也算成一次，每晚多 1
+       （2026-11-15 用真實資料預覽發現：11-14 時間軸醒 2 次、summary 寫 3；124 晚全部正好差 1）。
+    """
+    by_day = _stage_records(standard or STANDARD_FILE)
+    out = {}
+    for date, (start, wake) in windows.items():
+        if not start or not wake:
+            out[date] = None
+            continue
+        day = datetime.fromisoformat(start).date()
+        records = [r for d in (day.fromordinal(day.toordinal() + k) for k in (-1, 0, 1))
+                   for r in by_day.get(d.isoformat(), [])]
+        segments = sleep_stages.stage_segments(records, start, wake)
+        out[date] = sleep_stages.awake_count(segments) if segments else None
+    return out
+
+
+def _garmin_windows(db_path=None):
+    conn = db.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT date, sleep_start_time, wake_time, awake_count "
+            "FROM wearable_nightly WHERE source = 'garmin'"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {r["date"]: (r["sleep_start_time"], r["wake_time"], r["awake_count"]) for r in rows}
+
+
+def verify_awake_counts(db_path=None, standard=None):
+    """
+    資料庫裡每一列 Garmin 的 awake_count 都要等於從原始檔重新還原的時間軸那一晚的清醒段數。
+    回傳 (比對了幾晚, 問題清單)。
+    """
+    stored = _garmin_windows(db_path)
+    expected = timeline_awake_counts({d: (s, w) for d, (s, w, _) in stored.items()}, standard)
+    problems = [f"{d} awake_count: database {got}, timeline {expected[d]}"
+                for d, (_, _, got) in sorted(stored.items()) if got != expected[d]]
+    return len(stored), problems
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Load the Garmin data into wearable_nightly, one account per wearer segment."
@@ -582,7 +649,29 @@ def main():
     parser.add_argument("--db", default=None, help="Database path (for tests).")
     parser.add_argument("--deleted-rows-dir", type=Path, default=DELETED_ROWS_DIR,
                         help="Where rows pruned from the database are backed up before deletion.")
+    parser.add_argument("--awake-count-only", action="store_true",
+                        help="Only fill wearable_nightly.awake_count for Garmin nights "
+                             "(no other column is touched), then verify night by night.")
+    parser.add_argument("--standard", type=Path, default=STANDARD_FILE,
+                        help="garmin_standard_data.json to rebuild the sleep timeline from "
+                             "(for --awake-count-only).")
     args = parser.parse_args()
+
+    if args.awake_count_only:
+        # 回填：只補這一欄、不重算覆寫整列（舊夜晚的分數一個都不動）
+        db.init_db(args.db)
+        windows = {d: (s, w) for d, (s, w, _) in _garmin_windows(args.db).items()}
+        changed = db.set_garmin_awake_counts(
+            timeline_awake_counts(windows, args.standard), args.db)
+        checked, problems = verify_awake_counts(args.db, args.standard)
+        print(f"  awake_count written to {changed} Garmin rows")
+        if problems:
+            print("✗ Verification failed:")
+            for p in problems:
+                print(f"    {p}")
+            sys.exit(1)
+        print(f"✓ Verified: {checked} Garmin nights match the sleep timeline")
+        return
 
     rows, feats = build_rows()
 
@@ -670,6 +759,9 @@ def main():
             print(f"    Backed up first: {backup}")
 
     ok, problems = verify(owners, args.db)
+    _, awake_problems = verify_awake_counts(args.db)
+    problems = problems + awake_problems
+    ok = ok and not awake_problems
     if ok:
         print(f"✓ Verified: {len(rows)} nights are each under exactly one account, "
               f"and final_score / final_quality match garmin_sleep_quality_final.csv row for row")

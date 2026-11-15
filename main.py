@@ -1131,6 +1131,8 @@ async def get_home(
             "sleep_duration_minutes": w_row["duration_min"],
             "sleep_efficiency": w_row["efficiency"],
             "waso_minutes": w_row["waso_min"],
+            # 半夜醒了幾段（只有 Garmin 有；0 是真的值）。早晨報告 Awake 點開最上面那行
+            "awake_count": w_row.get("awake_count"),
             "deep_minutes": w_row["deep_min"],
             "rem_minutes": w_row["rem_min"],
             # 早晨報告的淺睡／深睡／REM 比例條用（2026-11-12）。表裡沒有淺睡欄位，
@@ -1355,6 +1357,8 @@ async def get_insights(
                     # 早晨報告 Awake 點開的一週圖（2026-11-15）：入睡後清醒的分鐘數，
                     # 與 /home 的 metrics.waso_minutes 同一個欄位。0 是真的值（整晚沒醒），null 才是沒資料
                     "waso_minutes": r["waso_min"],
+                    # 每晚醒了幾段（Awake 點開每根長條底下的「×3」）。只有 Garmin 有，null＝沒資料
+                    "awake_count": r.get("awake_count"),
                     # Insights 頁要畫「幾點睡→幾點醒」。與 asset 路徑
                     # （build_app_payload.py 的 history）同一個來源，欄名也相同。
                     "sleep_start_time": r["sleep_start_time"],

@@ -57,7 +57,7 @@ void main() {
   });
 
   group('畫面', () {
-    testWidgets('這一晚：總數照手錶、時間軸、每段一個標籤；不寫醒了幾次', (tester) async {
+    testWidgets('這一晚：總數照手錶、時間軸、每段一個標籤；沒有次數資料就不寫醒了幾次', (tester) async {
       await tester.pumpWidget(
         host(AwakeView(title: 'Awake', totalMinutes: 9, stages: night())),
       );
@@ -75,7 +75,8 @@ void main() {
           .getTopLeft(find.byKey(const Key('awake-strip-span-2')))
           .dx;
       expect(x2, greaterThan(x0));
-      // 不寫次數
+      // 沒給次數（Health Connect 的晚上）→ 不寫，不寫成 0
+      expect(find.byKey(const Key('awake-count-line')), findsNothing);
       expect(find.textContaining('times'), findsNothing);
       // 沒有一週資料 → 下半整段不出現
       expect(find.byKey(const Key('awake-week-average')), findsNothing);
@@ -150,9 +151,19 @@ void main() {
           jsonEncode({
             'wearable': {
               'history': [
-                {'date': '2026-11-14', 'waso_minutes': 9.0},
-                {'date': '2026-11-13', 'waso_minutes': 0},
-                {'date': '2026-11-12', 'waso_minutes': null},
+                {
+                  'date': '2026-11-14',
+                  'waso_minutes': 9.0,
+                  'awake_count': 3,
+                  'sleep_start_time': '2026-11-14T03:38:00+08:00',
+                  'wake_time': '2026-11-14T09:51:00+08:00',
+                },
+                {'date': '2026-11-13', 'waso_minutes': 0, 'awake_count': 0},
+                {
+                  'date': '2026-11-12',
+                  'waso_minutes': null,
+                  'awake_count': null,
+                },
               ],
             },
             'camera': null,
@@ -172,6 +183,12 @@ void main() {
         identity: const BuildTimeUserIdentity(overrideId: 'stub'),
       ).load();
       expect(r.awakeMinutes, {'2026-11-14': 9.0, '2026-11-13': 0.0});
+      // 醒了幾段：0 照收，null 不收
+      expect(r.awakeCounts, {'2026-11-14': 3, '2026-11-13': 0});
+      // 手錶入睡→醒來是牆鐘時間（不是 UTC）
+      expect(r.watchSleep['2026-11-14']!.$1!.hour, 3);
+      expect(r.watchSleep['2026-11-14']!.$2!.minute, 51);
+      expect(r.watchSleep.containsKey('2026-11-13'), isFalse);
     });
   });
 }

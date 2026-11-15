@@ -92,6 +92,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚清醒幾分鐘（後端 /insights）。Awake 點開的一週圖用；沒給、或連不到（null）就只看這一晚。
   final Future<Map<String, double>?> Function()? loadAwakeMinutes;
 
+  /// 一週每晚醒了幾段（Awake 點開的「×3」；只有 Garmin 來源有）。
+  final Future<Map<String, int>?> Function()? loadAwakeCounts;
+
   /// 每晚進分數的效率＋種類＋名字（後端 /insights）。Efficiency 點開的一週用；沒給或連不到就只看這一晚。
   final Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights;
 
@@ -114,6 +117,7 @@ class MorningReportScreen extends StatefulWidget {
     this.loadBedTimes,
     this.loadPhoneDowns,
     this.loadAwakeMinutes,
+    this.loadAwakeCounts,
     this.loadEfficiencyNights,
     this.loadSleepHeartRates,
     this.loadCameraNights,
@@ -1710,6 +1714,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     if (r.bedStart != null && r.bedEnd != null) {
       buttons[r.date] = (r.bedStart, r.bedEnd);
     }
+    // 這一晚手錶幾點認定睡著，以報告上的為準（「躺多久才睡著」，11-15 使用者定）
+    if (r.asleepAt != null) {
+      watch[r.date] = (r.asleepAt, r.wokeAt ?? watch[r.date]?.$2);
+    }
     if (!mounted) return;
     await showBedWeekSheet(
       context,
@@ -1826,6 +1834,13 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ];
       }
     } catch (_) {}
+    Map<String, int>? counts;
+    try {
+      final c = await widget.loadAwakeCounts?.call();
+      if (c != null) {
+        counts = {...c, if (r.awakeCount != null) r.date: r.awakeCount!};
+      }
+    } catch (_) {}
     if (!mounted) return;
     await showAwakeSheet(
       context,
@@ -1835,6 +1850,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       fontFamily: kReportFont,
       date: r.date,
       totalMinutes: r.wasoMinutes!.toDouble(),
+      // 醒了幾段：報告上的優先（/home 剛算好的），沒有才用一週那份
+      count: r.awakeCount ?? counts?[r.date],
+      counts: counts,
       stages: r.stages,
       series: series,
     );

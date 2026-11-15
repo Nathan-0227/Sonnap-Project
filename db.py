@@ -248,6 +248,11 @@ CREATE TABLE IF NOT EXISTS wearable_nightly (
     rem_min        REAL,
     avg_hr         REAL,                      -- 睡眠期間平均心率
     resting_hr     REAL,                      -- 靜止心率（每日單一數字）
+    -- 半夜真的醒來幾次＝還原的時間軸上清醒的段數（garmin/sleep_stages.awake_count，
+    -- 2026-11-15 早晨報告 Awake 點開用）。⚠️ 不是 summary 的 awake_count：那個多算入睡時刻的整晚摘要。
+    -- 只呈現、不計分（Tier3 的醒來次數修正在 pipeline 裡算，不讀這一欄）。
+    -- ⚠️ 只有 Garmin 來源有；Health Connect 一律 NULL。0 是真的值（整晚沒醒）。
+    awake_count    INTEGER,
 
     -- ── 入睡／起床時刻（兩種來源都有）──────────────────────────
     -- ⚠️ sleep_start_time 是**手錶偵測到「睡著」的時刻（生理）**，
@@ -666,6 +671,8 @@ COLUMN_MIGRATIONS = [
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
     ("wearable_nightly", "efficiency_basis", "TEXT"),
+    # 2026-11-15：半夜醒了幾段（早晨報告 Awake 點開的「×3」）。只呈現、不計分。
+    ("wearable_nightly", "awake_count", "INTEGER"),
 ]
 
 
@@ -1146,6 +1153,32 @@ def get_wearable_source(user_id, date, db_path=None):
         conn.close()
 
 
+def set_garmin_awake_counts(counts, db_path=None):
+    """
+    只補 Garmin 那幾列的 awake_count（{日期: 次數或 None}），其他欄位一個都不動。
+    回傳實際改到幾列。
+
+    ⚠️ 刻意不走 upsert_wearable_nightly：那會整列重寫，用手上這份資料檔
+       悄悄換掉舊夜晚的分數（同 migrate_camera_to_db.py --curves-only 的理由）。
+    ⚠️ 只改 source='garmin'：Health Connect 那幾晚沒有這個量，留 NULL。
+    ⚠️ 不看帳號：同一晚的 Garmin 列只會掛在一個帳號下（migrate_garmin_to_db 的 verify 守著）。
+    """
+    conn = connect(db_path)
+    try:
+        changed = 0
+        for date, count in counts.items():
+            cur = conn.execute(
+                "UPDATE wearable_nightly SET awake_count = ? "
+                "WHERE date = ? AND source = 'garmin'",
+                (count, date),
+            )
+            changed += cur.rowcount or 0
+        conn.commit()
+        return changed
+    finally:
+        conn.close()
+
+
 def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     """
     寫入某一晚的穿戴裝置資料。
@@ -1169,6 +1202,8 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     #    然後某天有人發現「怎麼深睡都是空的」再回頭查半天。
     columns = ["duration_min", "efficiency", "waso_min", "deep_min", "rem_min",
                "avg_hr", "resting_hr",
+               # 醒了幾段：只有 Garmin 有，只呈現（2026-11-15）
+               "awake_count",
                # 入睡／起床時刻（ISO8601）。⚠️ 是「睡著」不是「上床」，
                # 上床時刻是 nightly_behavior.lights_out_at，不同構念。
                "sleep_start_time", "wake_time",

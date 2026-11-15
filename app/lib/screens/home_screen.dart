@@ -672,6 +672,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ? camera!.awakeMinutes
                 : null;
           },
+          loadAwakeCounts: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.awakeCounts
+                : null;
+          },
           loadPhoneDowns: () async {
             var camera = _camera;
             if (camera == null && widget.cameraInsights != null) {
@@ -1813,7 +1822,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         camera = await widget.cameraInsights!.load();
       } catch (_) {}
     }
-    return (buttons: camera?.bedButtons ?? const {}, watch: watch);
+    // 手錶的入睡→醒來：後端的比打包檔新，有就蓋過去（「躺多久才睡著」要這一晚的入睡）
+    return (
+      buttons: camera?.bedButtons ?? const {},
+      watch: {...watch, ...?camera?.watchSleep},
+    );
   }
 
   /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Time asleep 的一週圖共用）。

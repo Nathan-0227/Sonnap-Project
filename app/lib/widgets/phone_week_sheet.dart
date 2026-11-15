@@ -16,8 +16,10 @@
 // - **12:00–18:00 的放下手機不算那一晚的就寢**（11-15 使用者定）：報告格子的時間軸本來就是
 //   18:00→12:00。實例 10-05 偵測成 14:07（晚 607 分鐘），一晚就把整週拉歪。畫成 no data、不進中間值與晚幾晚
 // - 11-15 使用者選 A＋C：
-//   A. 星期底下小字「+7m」＝按了 Start Sleep 之後手機還在用多久（後端的
-//      phone_in_bed_minutes，照抄不重算）。只有按了上床按鈕的晚上才有，沒有就不寫（不寫 0）。
+//   A. 按了 Start Sleep 之後手機還在用多久（後端的 phone_in_bed_minutes，照抄不重算）。
+//      11-15 grill 改成**圖底下一排小長條**（取代星期底下的「+7m」小字）：這一排自己的刻度、
+//      數字寫在柱子上、一個顏色、不分紅綠、沒有目標線。事後補的上床也算（Q6）。
+//      沒按 Start Sleep 的晚上寫「—」，**不畫成 0**。
 //      ⚠️ 不畫成點上方的一段線：實際多半只有幾分鐘，在圖上是 2–3 px，整段藏在點後面
 //   C. 標題下面「↑ 23m later than the week before」：這週中間值 vs 前 7 晚中間值，
 //      同 Total sleep 那張：**只代表方向**，晚了紅、早了綠，不說好壞；前一週沒資料就不寫
@@ -126,6 +128,13 @@ String? inBedLabel(double? minutes) {
   if (minutes == null || minutes < 0) return null;
   if (minutes < 1) return '+<1m in bed';
   return '+${formatMinutes(minutes.roundToDouble())} in bed';
+}
+
+/// 小長條上的數字「7m」；沒按 Start Sleep（null）或負數 → null（寫「—」，不寫 0）。
+String? afterStartValue(double? minutes) {
+  if (minutes == null || minutes < 0) return null;
+  if (minutes < 1) return minutes == 0 ? '0m' : '<1m';
+  return formatMinutes(minutes.roundToDouble());
 }
 
 /// 「HH:MM」→ 從 18:00 起算的分鐘；格式不對 → null。
@@ -241,7 +250,8 @@ class PhoneWeekView extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        // 加了「This night」等內容後比較長；矮的螢幕要能捲（同 Awake 那張）
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -365,12 +375,14 @@ class PhoneWeekView extends StatelessWidget {
                   target: targetFromEvening(target),
                 ),
                 if (hasInBed) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   const Text(
-                    '+7m = phone use after Start Sleep',
-                    key: Key('phone-week-inbed-note'),
-                    style: TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                    'Phone use after Start Sleep',
+                    key: Key('phone-after-title'),
+                    style: TextStyle(color: _soft, fontSize: 13),
                   ),
+                  const SizedBox(height: 6),
+                  _AfterStartBars(week: week, color: color),
                 ],
               ],
             ],
@@ -389,7 +401,7 @@ class _ColumnsChart extends StatelessWidget {
   const _ColumnsChart({required this.week, required this.color, this.target});
 
   static const double _axisW = 40;
-  static const double _labelH = 40;
+  static const double _labelH = 26;
 
   @override
   Widget build(BuildContext context) {
@@ -638,38 +650,107 @@ class _Column extends StatelessWidget {
             ),
             SizedBox(
               height: labelH,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  FittedBox(
-                    child: Text(
-                      day,
-                      style: TextStyle(
-                        color: isLast ? Colors.white : const Color(0xB3FFFFFF),
-                        fontSize: 11,
-                        fontWeight: isLast ? FontWeight.w800 : FontWeight.w500,
-                      ),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: FittedBox(
+                  child: Text(
+                    day,
+                    style: TextStyle(
+                      color: isLast ? Colors.white : const Color(0xB3FFFFFF),
+                      fontSize: 11,
+                      fontWeight: isLast ? FontWeight.w800 : FontWeight.w500,
                     ),
                   ),
-                  // A：上床後還用手機多久；沒有就留空（高度照留，星期對齊）
-                  SizedBox(
-                    height: 14,
-                    child: inBedSpoken == null
-                        ? null
-                        : FittedBox(
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 圖底下一排：按 Start Sleep 之後手機又用了多久。欄位跟上面的圖對齊；**這一排自己的刻度**
+/// （最長那晚＝滿，至少 5 分鐘高，不然 1 分鐘也會畫滿）。數字寫在柱子上；沒按 Start Sleep 寫「—」。
+class _AfterStartBars extends StatelessWidget {
+  final PhoneWeek week;
+  final Color color;
+  const _AfterStartBars({required this.week, required this.color});
+
+  static const double _barH = 44;
+  static const double _valueH = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = [
+      for (final n in week.nights)
+        afterStartValue(n.down?.inBedMinutes) == null
+            ? null
+            : n.down!.inBedMinutes!,
+    ];
+    final maxV = math.max(
+      5.0,
+      values.fold<double>(0, (m, v) => math.max(m, v ?? 0)),
+    );
+    return Padding(
+      key: const Key('phone-after-bars'),
+      padding: const EdgeInsets.only(left: _ColumnsChart._axisW),
+      child: SizedBox(
+        height: _barH + _valueH,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < week.nights.length; i++)
+              Expanded(
+                child: () {
+                  final v = values[i];
+                  final date = week.nights[i].date;
+                  final isLast = i == week.nights.length - 1;
+                  final strong = isLast ? 1.0 : 0.7;
+                  final fillH = v == null
+                      ? 0.0
+                      : math.max(2.0, _barH * v / maxV);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          height: _valueH,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
                             child: Text(
-                              inBedSpoken.replaceAll(' in bed', ''),
-                              key: Key('phone-week-inbed-${night.date}'),
-                              style: const TextStyle(
-                                color: Color(0x99FFFFFF),
+                              afterStartValue(v) ?? '—',
+                              key: Key('phone-after-value-$date'),
+                              softWrap: false,
+                              style: TextStyle(
+                                color: v == null
+                                    ? const Color(0x66FFFFFF)
+                                    : (isLast
+                                          ? Colors.white
+                                          : const Color(0xCCFFFFFF)),
                                 fontSize: 10,
+                                fontWeight: v == null ? null : FontWeight.w800,
                               ),
                             ),
                           ),
-                  ),
-                ],
+                        ),
+                        if (v != null)
+                          Container(
+                            key: Key('phone-after-bar-$date'),
+                            width: 12,
+                            height: fillH,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: strong),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }(),
               ),
-            ),
           ],
         ),
       ),

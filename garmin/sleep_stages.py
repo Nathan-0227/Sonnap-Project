@@ -88,6 +88,16 @@ def stage_segments(records: Iterable[dict], sleep_start: str, wake_time: str) ->
     return segments
 
 
+def awake_count(segments: list[dict]) -> int:
+    """時間軸上清醒的段數＝半夜真的醒來幾次（早晨報告 Awake 點開的「×3」，2026-11-15）。
+
+    ⚠️ 不要用 analyze_garmin_sleep 的 awake_count：那個把入睡時刻的整晚摘要（標成 awake 的那筆）
+       也算成一次，每晚多 1（11-15 預覽發現，124/124 晚都正好差 1）。這裡的段落已經扣掉摘要，
+       跟 App 時間軸上畫出來的清醒段是同一份。
+    """
+    return sum(1 for s in segments if s["stage"] == "awake")
+
+
 def stage_minutes(segments: list[dict]) -> dict[str, int]:
     """每個階段加總幾分鐘（四捨五入）。"""
     total = {s: 0.0 for s in STAGES}

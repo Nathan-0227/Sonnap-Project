@@ -25,7 +25,8 @@
 library;
 
 import '../models/night_curve.dart';
-import 'morning_report.dart' show EfficiencyKind, efficiencyKindOf, scoredEfficiency;
+import 'morning_report.dart'
+    show EfficiencyKind, efficiencyKindOf, scoredEfficiency;
 import '../widgets/phone_week_sheet.dart' show PhoneDown;
 import 'dart:convert';
 import 'dart:io';
@@ -72,7 +73,10 @@ class CameraClip {
   const CameraClip({required this.url, required this.label, this.startAt});
 
   /// 後端給的是相對網址（`/camera/clips/<id>.gif`），這裡接上 baseUrl。
-  factory CameraClip.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+  factory CameraClip.fromJson(
+    Map<String, dynamic> json, {
+    String baseUrl = '',
+  }) {
     final base = baseUrl.endsWith('/')
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
@@ -186,7 +190,10 @@ class CameraNight {
     this.usualSupported = false,
   });
 
-  factory CameraNight.fromJson(Map<String, dynamic> json, {String baseUrl = ''}) {
+  factory CameraNight.fromJson(
+    Map<String, dynamic> json, {
+    String baseUrl = '',
+  }) {
     double? num_(Object? v) => (v as num?)?.toDouble();
     final usual = json['usual'] == null
         ? null
@@ -213,7 +220,10 @@ class CameraNight {
           : null,
       clips: [
         for (final c in (json['clips'] as List?) ?? const [])
-          CameraClip.fromJson(Map<String, dynamic>.from(c as Map), baseUrl: baseUrl),
+          CameraClip.fromJson(
+            Map<String, dynamic>.from(c as Map),
+            baseUrl: baseUrl,
+          ),
       ],
       clipsNote: json['clips_note'] as String?,
       clipsSupported: json.containsKey('clips'),
@@ -256,11 +266,19 @@ class CameraInsightsResult {
 
   /// 同一個 `behavior.history` 的放下手機時刻與後端判的晚不晚（日期 → 那一晚）。
   /// 早晨報告 Phone down 點開的一週圖用；is_late 照抄後端，Dart 不重算。
-    final Map<String, PhoneDown> phoneDowns;
+  final Map<String, PhoneDown> phoneDowns;
 
   /// 同一個回應裡 `wearable.history` 的每晚清醒分鐘（日期 → 分鐘；0 是真的值）。
   /// 早晨報告 Awake 點開的一週圖用。
   final Map<String, double> awakeMinutes;
+
+  /// 同一個 `wearable.history` 的每晚醒了幾段（日期 → 次數；0 是真的值）。只有 Garmin 來源有。
+  /// 早晨報告 Awake 點開每根長條底下的「×3」用（2026-11-15）。
+  final Map<String, int> awakeCounts;
+
+  /// 同一個 `wearable.history` 的手錶入睡→醒來（日期 → 兩個時刻，牆鐘）。
+  /// Time in bed 點開「躺多久才睡著」用：比打包檔新（打包檔要等早晨匯入才有那一晚）。
+  final Map<String, (DateTime?, DateTime?)> watchSleep;
 
   /// 每晚**進分數的效率**＋是哪一種＋名字（`wearable.history` 配 `behavior.history`）。
   /// 數字用 [scoredEfficiency] 挑——跟早晨報告的格子同一支。
@@ -270,12 +288,13 @@ class CameraInsightsResult {
   /// 早晨報告 Sleeping heart rate 點開的一週用；只有 Garmin 來源的晚上有。
   final Map<String, SleepHeartRate> sleepHeartRates;
 
-
   const CameraInsightsResult(
     this.status, {
     this.bedButtons = const {},
-        this.phoneDowns = const {},
+    this.phoneDowns = const {},
     this.awakeMinutes = const {},
+    this.awakeCounts = const {},
+    this.watchSleep = const {},
     this.efficiencyNights = const {},
     this.sleepHeartRates = const {},
     this.nights = const [],
@@ -326,10 +345,9 @@ class CameraInsightsService implements CameraInsightsSource {
       return const CameraInsightsResult(CameraInsightsStatus.noUser);
     }
 
-    final uri = Uri.parse('$baseUrl/insights').replace(queryParameters: {
-      'user_id': userId,
-      'days': '$days',
-    });
+    final uri = Uri.parse(
+      '$baseUrl/insights',
+    ).replace(queryParameters: {'user_id': userId, 'days': '$days'});
     final client = HttpClient()..connectionTimeout = timeout;
     try {
       final request = await client.getUrl(uri).timeout(timeout);
@@ -372,23 +390,32 @@ class CameraInsightsService implements CameraInsightsSource {
           }
         }
       }
-            final awakeMinutes = <String, double>{};
+      final awakeMinutes = <String, double>{};
+      final awakeCounts = <String, int>{};
+      final watchSleep = <String, (DateTime?, DateTime?)>{};
       final efficiencyNights = <String, EfficiencyNight>{};
       final sleepHeartRates = <String, SleepHeartRate>{};
       final behaviorByDate = <String, Map<String, dynamic>>{
         if (behavior is Map<String, dynamic>)
-          for (final j in (behavior['history'] as List<dynamic>? ?? const [])
-              .whereType<Map<String, dynamic>>())
+          for (final j
+              in (behavior['history'] as List<dynamic>? ?? const [])
+                  .whereType<Map<String, dynamic>>())
             if (j['date'] is String) j['date'] as String: j,
       };
       final wearable = decoded['wearable'];
       if (wearable is Map<String, dynamic>) {
-        for (final j in (wearable['history'] as List<dynamic>? ?? const [])
-            .whereType<Map<String, dynamic>>()) {
+        for (final j
+            in (wearable['history'] as List<dynamic>? ?? const [])
+                .whereType<Map<String, dynamic>>()) {
           final date = j['date'];
           if (date is! String) continue;
           final v = j['waso_minutes'];
           if (v is num) awakeMinutes[date] = v.toDouble();
+          final count = j['awake_count'];
+          if (count is num) awakeCounts[date] = count.toInt();
+          final asleep = parseWallClock(j['sleep_start_time']);
+          final woke = parseWallClock(j['wake_time']);
+          if (asleep != null || woke != null) watchSleep[date] = (asleep, woke);
           final hr = j['sleep_heart_rate'];
           if (hr is Map && hr['avg'] is num && hr['min'] is num) {
             sleepHeartRates[date] = SleepHeartRate(
@@ -417,6 +444,8 @@ class CameraInsightsService implements CameraInsightsSource {
           bedButtons: bedButtons,
           phoneDowns: phoneDowns,
           awakeMinutes: awakeMinutes,
+          awakeCounts: awakeCounts,
+          watchSleep: watchSleep,
           efficiencyNights: efficiencyNights,
           sleepHeartRates: sleepHeartRates,
         );
@@ -430,9 +459,11 @@ class CameraInsightsService implements CameraInsightsSource {
         CameraInsightsStatus.ok,
         bedButtons: bedButtons,
         phoneDowns: phoneDowns,
-          awakeMinutes: awakeMinutes,
-          efficiencyNights: efficiencyNights,
-          sleepHeartRates: sleepHeartRates,
+        awakeMinutes: awakeMinutes,
+        awakeCounts: awakeCounts,
+        watchSleep: watchSleep,
+        efficiencyNights: efficiencyNights,
+        sleepHeartRates: sleepHeartRates,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,
@@ -457,7 +488,8 @@ CameraInsightsService? buildCameraInsights({
   String? baseUrlOverride,
   String? userIdOverride,
 }) {
-  final baseUrl = (baseUrlOverride ?? ApiSleepRepository.configuredBaseUrl).trim();
+  final baseUrl = (baseUrlOverride ?? ApiSleepRepository.configuredBaseUrl)
+      .trim();
   if (baseUrl.isEmpty) return null;
   return CameraInsightsService(
     baseUrl: baseUrl,

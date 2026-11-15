@@ -2,8 +2,10 @@
 //
 // 上半：**這一晚**——大數字是手錶自己的總數（同 Sleep Stages 圖例：還原的段落有 2 晚對不上，
 //       以手錶為準），下面一條入睡→起床的時間軸、清醒的段落亮起來，再下面每一段一個小標籤
-//       「03:41 · 6m」（照時間排、多了就換行、不藏）。**不寫醒了幾次**（手錶有很多 1–2 分鐘的段落，
-//       次數聽起來比實際嚇人；要訂最短多久才算又沒有文獻）。段落長度**不加總成第二個總數**。
+//       「03:41 · 6m」（照時間排、多了就換行、不藏）。段落長度**不加總成第二個總數**。
+//       11-15 grill 改了（使用者定）：**要寫醒了幾次**——大數字底下「Woke up 3 times · 38m in total」、
+//       一週每根長條底下「×3」。次數照抄後端（wearable_nightly.awake_count，手錶的段數，不重算、
+//       不訂最短多久才算）；0 次寫「×0」；沒資料（Health Connect 的晚上）寫「—」、不寫 0。
 //       沒有時間軸的晚上（Health Connect）只寫總數＋「No timeline for this night」，不編段落。
 // 下半：**這一週**——7 欄、同 Total sleep 那張的膠囊；「Average 8m awake」＋幾晚有資料＋
 //       「↑ 5m vs the week before」（只代表方向，紅升綠降）。平均、晚數、跟前一週比
@@ -51,6 +53,16 @@ String awakeSpanLabel(AwakeSpan s) =>
 String awakeAverageLine(SleepWeek w) =>
     'Average ${formatMinutes(w.averageMinutes!)} awake';
 
+/// 「Woke up 3 times · 38m in total」；沒有次數 → null（那一行不出現）。
+String? awakeCountLine(int? count, double totalMinutes) {
+  if (count == null) return null;
+  return 'Woke up $count ${count == 1 ? 'time' : 'times'} · '
+      '${formatMinutes(totalMinutes)} in total';
+}
+
+/// 長條底下的「×3」；沒資料 → 「—」（0 次照寫 ×0）。
+String awakeCountMark(int? count) => count == null ? '—' : '×$count';
+
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 Future<void> showAwakeSheet(
@@ -60,6 +72,8 @@ Future<void> showAwakeSheet(
   required Color color,
   required String date,
   required double totalMinutes,
+  int? count,
+  Map<String, int>? counts,
   SleepStages? stages,
   List<NightValue>? series,
   String? fontFamily,
@@ -73,6 +87,8 @@ Future<void> showAwakeSheet(
         icon: icon,
         color: color,
         totalMinutes: totalMinutes,
+        count: count,
+        counts: counts ?? const {},
         stages: stages,
         week: series == null ? null : sleepWeek(series, date),
       ),
@@ -85,6 +101,12 @@ class AwakeView extends StatelessWidget {
   final IconData icon;
   final Color color;
   final double totalMinutes;
+
+  /// 這一晚醒了幾段；null＝沒資料（那一行不出現）。
+  final int? count;
+
+  /// 一週每晚醒了幾段（日期 → 次數）；沒有的晚上寫「—」。
+  final Map<String, int> counts;
   final SleepStages? stages;
 
   /// null＝沒有一週資料（連不到後端），下半整段不出現。
@@ -94,6 +116,8 @@ class AwakeView extends StatelessWidget {
     super.key,
     required this.title,
     required this.totalMinutes,
+    this.count,
+    this.counts = const {},
     this.stages,
     this.week,
     this.icon = Icons.visibility_rounded,
@@ -170,6 +194,16 @@ class AwakeView extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              if (awakeCountLine(count, totalMinutes) case final line?)
+                Text(
+                  line,
+                  key: const Key('awake-count-line'),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               const SizedBox(height: 12),
               if (stages == null)
                 const Text(
@@ -240,8 +274,8 @@ class AwakeView extends StatelessWidget {
                   ),
                 const SizedBox(height: 14),
                 SizedBox(
-                  height: 170,
-                  child: _WeekBars(week: w, color: color),
+                  height: 186,
+                  child: _WeekBars(week: w, color: color, counts: counts),
                 ),
               ],
             ],
@@ -354,9 +388,14 @@ class _NightStrip extends StatelessWidget {
 class _WeekBars extends StatelessWidget {
   final SleepWeek week;
   final Color color;
-  const _WeekBars({required this.week, required this.color});
+  final Map<String, int> counts;
+  const _WeekBars({
+    required this.week,
+    required this.color,
+    this.counts = const {},
+  });
 
-  static const double _labelH = 22;
+  static const double _labelH = 38;
   static const double _valueH = 16;
 
   @override
@@ -385,7 +424,8 @@ class _WeekBars extends StatelessWidget {
                   return Semantics(
                     label:
                         '${_weekdays[d.weekday - 1]} ${d.day}: '
-                        '${v == null ? 'no data' : '${formatMinutes(v)} awake'}',
+                        '${v == null ? 'no data' : '${formatMinutes(v)} awake'}'
+                        '${counts[n.date] == null ? '' : ', woke up ${counts[n.date]} times'}',
                     child: Padding(
                       key: Key('awake-week-bar-${n.date}'),
                       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -465,22 +505,43 @@ class _WeekBars extends StatelessWidget {
                           ),
                           SizedBox(
                             height: _labelH,
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: FittedBox(
-                                child: Text(
-                                  _weekdays[d.weekday - 1],
-                                  style: TextStyle(
-                                    color: isLast
-                                        ? Colors.white
-                                        : const Color(0xB3FFFFFF),
-                                    fontSize: 11,
-                                    fontWeight: isLast
-                                        ? FontWeight.w800
-                                        : FontWeight.w500,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                // 醒了幾次（照抄後端；沒資料寫「—」）
+                                FittedBox(
+                                  child: Text(
+                                    awakeCountMark(counts[n.date]),
+                                    key: Key('awake-week-times-${n.date}'),
+                                    style: TextStyle(
+                                      color: counts[n.date] == null
+                                          ? const Color(0x66FFFFFF)
+                                          : Color.lerp(
+                                              color,
+                                              Colors.white,
+                                              0.5,
+                                            )!.withValues(alpha: strong),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  child: Text(
+                                    _weekdays[d.weekday - 1],
+                                    style: TextStyle(
+                                      color: isLast
+                                          ? Colors.white
+                                          : const Color(0xB3FFFFFF),
+                                      fontSize: 11,
+                                      fontWeight: isLast
+                                          ? FontWeight.w800
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

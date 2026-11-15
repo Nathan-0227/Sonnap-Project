@@ -232,7 +232,7 @@ void main() {
       expect(colorOf('2026-11-12'), colorOf('2026-11-13'));
     });
 
-    testWidgets('A＋C 畫在畫面上：有按上床的晚上星期底下才有 +Nm；晚了是紅色', (tester) async {
+    testWidgets('A＋C 畫在畫面上：圖底下一排小長條（按 Start Sleep 之後多久）；晚了是紅色', (tester) async {
       final w = phoneWeek(
         endDate: '2026-11-14',
         downs: {
@@ -246,26 +246,30 @@ void main() {
       );
       expect(
         tester
-            .widget<Text>(find.byKey(const Key('phone-week-inbed-2026-11-14')))
+            .widget<Text>(find.byKey(const Key('phone-after-value-2026-11-14')))
             .data,
-        '+7m',
+        '7m',
       );
-      // 在星期底下（圖的下面），不在圖上
+      // 在圖的下面，不在圖上
       expect(
-        tester
-            .getRect(find.byKey(const Key('phone-week-inbed-2026-11-14')))
-            .top,
+        tester.getRect(find.byKey(const Key('phone-after-bar-2026-11-14'))).top,
         greaterThan(
           tester
               .getRect(find.byKey(const Key('phone-week-dot-2026-11-14')))
               .bottom,
         ),
       );
+      // 沒按 Start Sleep 的晚上寫「—」、不畫柱子（不是 0）
       expect(
-        find.byKey(const Key('phone-week-inbed-2026-11-13')),
-        findsNothing,
+        tester
+            .widget<Text>(find.byKey(const Key('phone-after-value-2026-11-13')))
+            .data,
+        '—',
       );
-      expect(find.byKey(const Key('phone-week-inbed-note')), findsOneWidget);
+      expect(find.byKey(const Key('phone-after-bar-2026-11-13')), findsNothing);
+      expect(find.byKey(const Key('phone-after-title')), findsOneWidget);
+      // 舊的「+7m」小字拿掉了
+      expect(find.textContaining('+7m'), findsNothing);
       final change = tester.widget<Text>(
         find.byKey(const Key('phone-week-change')),
       );
@@ -274,7 +278,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('沒有任何一晚按了上床 → 不出現說明那行', (tester) async {
+    testWidgets('沒有任何一晚按了上床 → 不出現那一排小長條', (tester) async {
       final w = phoneWeek(
         endDate: '2026-11-14',
         downs: {'2026-11-14': PhoneDown(t('2026-11-14 03:26'), false)},
@@ -282,7 +286,7 @@ void main() {
       await tester.pumpWidget(
         host(PhoneWeekView(title: 'Phone down', week: w)),
       );
-      expect(find.byKey(const Key('phone-week-inbed-note')), findsNothing);
+      expect(find.byKey(const Key('phone-after-bars')), findsNothing);
       expect(find.byKey(const Key('phone-week-change')), findsNothing);
     });
 

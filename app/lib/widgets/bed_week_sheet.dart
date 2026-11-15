@@ -11,6 +11,10 @@
 //   膠囊在線上面＝那晚比平常早、在下面＝比平常晚。中間值要 ≥3 晚才畫線
 // - 拿掉：淡色帶、目標小月亮、四項圖例。只留一行小字說明空心＝手錶
 // - 按鈕與手錶的晚上一起算（同長條）。**不說規律好不好**（好壞只有後端能判斷）
+// - 11-15 使用者定（grill）：**躺多久才睡著**。按鈕的晚上，從上床到**手錶認定睡著**那一段畫淡、
+//   交界一條白線；最上面「This night」寫「Fell asleep 18m after Start Sleep」。
+//   當下按的與事後補的都算、不另外標（Q1）；手錶在按鈕之前就睡著（負數）→ 那晚不畫、不寫（Q2）。
+//   不跟文獻的 30 分鐘切點比、不說好壞（手錶的入睡判定本身不一定準）
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -26,10 +30,39 @@ class BedSpan {
   final DateTime start;
   final DateTime end;
   final BedSource source;
-  const BedSpan(this.start, this.end, this.source);
+
+  /// 手錶認定睡著的時刻。只有按鈕的晚上有意義（手錶的晚上起點本來就是入睡）。
+  final DateTime? asleepAt;
+  const BedSpan(this.start, this.end, this.source, [this.asleepAt]);
 
   int get minutes => end.difference(start).inMinutes;
+
+  /// 按 Start Sleep 之後幾分鐘手錶才認定睡著。手錶的晚上、沒有入睡時刻、
+  /// 手錶在按鈕**之前**就睡著（負數）、入睡不早於下床 → null：那晚不畫、不寫（不寫成 0）。
+  ///
+  /// ⚠️ 只比**牆鐘**：手錶時刻經 parseWallClock 是 UTC 標記的牆鐘，按鈕時刻是本地 DateTime，
+  /// 直接相減會差 8 小時（11-15 用真實資料預覽才抓到：每一晚都被當成「入睡晚於下床」）。
+  int? get latencyMinutes {
+    final a0 = asleepAt;
+    if (source != BedSource.button || a0 == null) return null;
+    final a = _wall(a0), s = _wall(start), e = _wall(end);
+    if (a.isBefore(s) || !a.isBefore(e)) return null;
+    return a.difference(s).inMinutes;
+  }
+
+  static DateTime _wall(DateTime x) =>
+      DateTime(x.year, x.month, x.day, x.hour, x.minute, x.second);
 }
+
+/// 「Fell asleep 18m after Start Sleep」；算不出來 → null。
+String? bedLatencyLine(int? minutes) {
+  if (minutes == null) return null;
+  if (minutes < 1) return 'Fell asleep right after Start Sleep';
+  return 'Fell asleep ${formatMinutes(minutes.toDouble())} after Start Sleep';
+}
+
+String _hm(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 class BedWeekNight {
   final String date; // yyyy-MM-dd（起床那天）
@@ -112,7 +145,11 @@ BedWeek bedWeek({
         final key = _iso(DateTime.utc(end.year, end.month, end.day - i));
         final b = buttons[key];
         if (b != null && _plausible(b.$1, b.$2)) {
-          return BedWeekNight(key, BedSpan(b.$1!, b.$2!, BedSource.button));
+          // 手錶的入睡一起帶著（「躺多久才睡著」）；沒有就 null
+          return BedWeekNight(
+            key,
+            BedSpan(b.$1!, b.$2!, BedSource.button, watch[key]?.$1),
+          );
         }
         final w = watch[key];
         if (w != null && _plausible(w.$1, w.$2)) {
@@ -163,6 +200,11 @@ class BedWeekView extends StatelessWidget {
     final medEnd = week.medianEnd;
     final avgMin = week.averageMinutes;
     final n = week.nightsWithData;
+    final lastSpan = week.nights.isEmpty ? null : week.nights.last.span;
+    final latency = bedLatencyLine(lastSpan?.latencyMinutes);
+    final anyLatency = week.nights.any(
+      (x) => (x.span?.latencyMinutes ?? 0) > 0,
+    );
 
     return Container(
       key: const Key('bed-week-sheet'),
@@ -177,7 +219,8 @@ class BedWeekView extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        // 加了「This night」等內容後比較長；矮的螢幕要能捲（同 Awake 那張）
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -210,6 +253,51 @@ class BedWeekView extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              if (latency != null) ...[
+                Container(
+                  key: const Key('bed-last-night'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0x14FFFFFF),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0x1FFFFFFF)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This night',
+                        style: TextStyle(color: _soft, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Start Sleep ${_hm(lastSpan!.start)}  →  '
+                        'asleep ${_hm(lastSpan.asleepAt!)}',
+                        key: const Key('bed-last-night-times'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        latency,
+                        key: const Key('bed-latency'),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Container(height: 1, color: const Color(0x1FFFFFFF)),
+                ),
+              ],
               if (medStart == null || medEnd == null || avgMin == null)
                 const Text(
                   'No bedtimes this week',
@@ -242,6 +330,25 @@ class BedWeekView extends StatelessWidget {
                 height: 250,
                 child: _ClockChart(week: week, color: color),
               ),
+              if (anyLatency) ...[
+                const SizedBox(height: 10),
+                Row(
+                  key: const Key('bed-week-latency-note'),
+                  children: [
+                    _swatch(color.withValues(alpha: 0.3), hollow: false),
+                    const SizedBox(width: 6),
+                    const Flexible(
+                      child: Text(
+                        'Lighter = before your watch saw you asleep',
+                        style: TextStyle(
+                          color: Color(0x99FFFFFF),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (week.watchNights > 0) ...[
                 const SizedBox(height: 10),
                 Row(
@@ -442,7 +549,8 @@ class _Night extends StatelessWidget {
           : '${_weekdays[d.weekday - 1]} ${d.day}: '
                 '${clockOf(minutesFromEvening(s.start))} to '
                 '${clockOf(minutesFromEvening(s.end))}'
-                '${watch ? ' (watch)' : ''}',
+                '${watch ? ' (watch)' : ''}'
+                '${s.latencyMinutes == null ? '' : ', asleep after ${formatMinutes(s.latencyMinutes!.toDouble())}'}',
       child: Padding(
         key: Key('bed-week-bar-${night.date}'),
         padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -469,31 +577,13 @@ class _Night extends StatelessWidget {
                       right: 0,
                       top: top,
                       height: math.max(8, bottom - top),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(40),
-                          // 手錶的晚上空心：入睡→醒來，不是上床→下床
-                          gradient: watch
-                              ? null
-                              : LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color.lerp(
-                                      color,
-                                      Colors.white,
-                                      0.45,
-                                    )!.withValues(alpha: strong),
-                                    color.withValues(alpha: strong),
-                                  ],
-                                ),
-                          border: watch
-                              ? Border.all(
-                                  color: color.withValues(alpha: strong),
-                                  width: 2,
-                                )
-                              : null,
-                        ),
+                      child: _Capsule(
+                        span: s,
+                        height: math.max(8, bottom - top),
+                        color: color,
+                        strong: strong,
+                        watch: watch,
+                        date: night.date,
                       ),
                     )
                   else
@@ -528,6 +618,76 @@ class _Night extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 一晚的膠囊。按鈕的晚上有手錶入睡時刻時，上床→睡著那一段畫淡、交界一條白線（躺多久才睡著）。
+class _Capsule extends StatelessWidget {
+  final BedSpan span;
+  final double height;
+  final Color color;
+  final double strong;
+  final bool watch;
+  final String date;
+  const _Capsule({
+    required this.span,
+    required this.height,
+    required this.color,
+    required this.strong,
+    required this.watch,
+    required this.date,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.lerp(color, Colors.white, 0.45)!.withValues(alpha: strong),
+        color.withValues(alpha: strong),
+      ],
+    );
+    if (watch) {
+      // 手錶的晚上空心：入睡→醒來，不是上床→下床
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: color.withValues(alpha: strong), width: 2),
+        ),
+      );
+    }
+    final lat = span.latencyMinutes;
+    if (lat == null || lat <= 0 || span.minutes <= 0) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(40),
+          gradient: gradient,
+        ),
+      );
+    }
+    final split = (height * lat / span.minutes).clamp(0.0, height - 2);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(40),
+      child: Column(
+        // 要撐滿寬度：沒有 child 的 ColoredBox／DecoratedBox 預設寬度是 0（11-15 預覽抓到只剩白線）
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            key: Key('bed-week-latency-$date'),
+            height: split,
+            child: ColoredBox(color: color.withValues(alpha: 0.3 * strong)),
+          ),
+          Container(
+            height: 2,
+            color: Colors.white.withValues(alpha: 0.9 * strong),
+          ),
+          Expanded(
+            child: DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
+          ),
+        ],
       ),
     );
   }

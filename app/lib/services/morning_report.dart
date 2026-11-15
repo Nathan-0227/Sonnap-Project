@@ -155,6 +155,9 @@ class MorningReport {
 
   // ── More details（照抄後端） ──
   final double? wasoMinutes;
+
+  /// 半夜醒了幾段（手錶，照抄後端；只有 Garmin 來源有，0 是真的值）。
+  final int? awakeCount;
   final double? avgHeartRate;
   final double? restingHeartRate;
 
@@ -236,6 +239,7 @@ class MorningReport {
     this.rating,
     this.ratingLabel,
     this.wasoMinutes,
+    this.awakeCount,
     this.avgHeartRate,
     this.restingHeartRate,
     this.efficiency,
@@ -329,6 +333,7 @@ class MorningReport {
       rating: rating ?? this.rating,
       ratingLabel: ratingLabel ?? this.ratingLabel,
       wasoMinutes: wasoMinutes,
+      awakeCount: awakeCount,
       avgHeartRate: avgHeartRate,
       restingHeartRate: restingHeartRate,
       efficiency: efficiency,
@@ -584,6 +589,7 @@ MorningReport buildMorningReport({
       rating: rating,
       ratingLabel: ratingJson?['label'] as String? ?? rating?.label,
       wasoMinutes: has ? n(metrics, 'waso_minutes') : null,
+      awakeCount: has ? n(metrics, 'awake_count')?.round() : null,
       avgHeartRate: has ? n(metrics, 'avg_heart_rate') : null,
       restingHeartRate: has ? n(metrics, 'resting_heart_rate') : null,
       efficiency: has ? scoredEfficiency(basis, behavior, metrics) : null,
