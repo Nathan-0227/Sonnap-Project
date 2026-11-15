@@ -1,6 +1,8 @@
 // 早晨報告 Last night 的圖形格子（2026-11-15 使用者定 Q1–Q7）。
 // 守：Efficiency 的水面會動、減少動態效果時靜止（使用者：喜歡但有點靜態）；
 //     沒按上床時夜空弧不畫上床點也不報錯；填滿的高度照舊＝效率。
+import 'package:app/screens/morning_report_screen.dart'
+    show phoneAfterStartLine;
 import 'package:app/widgets/last_night_art.dart';
 import 'package:app/widgets/report_tiles.dart';
 import 'dart:ui' show PictureRecorder;
@@ -126,5 +128,11 @@ void main() {
     expect(cameraPerHourText(18.4), '18 moves / hour');
     expect(cameraPerHourText(0.6), '1 move / hour');
     expect(cameraPerHourText(0), '0 moves / hour');
+  });
+
+  test('Phone down 第三行：按 Start Sleep 之後多久（照抄後端；沒按不寫）', () {
+    expect(phoneAfterStartLine(null), isNull);
+    expect(phoneAfterStartLine(0), 'Down right after Start Sleep');
+    expect(phoneAfterStartLine(32), '32m after Start Sleep');
   });
 }

@@ -156,6 +156,14 @@ String reportDateTitle(DateTime d) {
 }
 
 /// 「放下手機比目標晚多少」那一行。**只照抄後端的分鐘數**；沒有就不寫。
+/// Phone down 第三行（11-15 使用者定，併進 Phone down 不另開一格）：按 Start Sleep 之後又過多久才放下手機。
+/// 照抄後端；沒按 Start Sleep（null）不寫；0 寫 right after。
+String? phoneAfterStartLine(double? minutes) {
+  if (minutes == null) return null;
+  if (minutes < 1) return 'Down right after Start Sleep';
+  return '${reportHm(minutes)} after Start Sleep';
+}
+
 String? adherenceLine(double? minutes) {
   if (minutes == null) return null;
   if (minutes <= 0) return 'On time';
@@ -1168,6 +1176,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               ),
             // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
             if (line != null) Text(line, key: const Key('report-adherence')),
+            if (phoneAfterStartLine(r.phoneAfterStartMinutes) case final after?)
+              Text(after, key: const Key('report-phone-after-start')),
           ],
         ),
       );

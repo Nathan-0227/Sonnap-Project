@@ -143,6 +143,10 @@ class MorningReport {
   /// 後端算的「比目標晚幾分鐘」。⚠️ 只照抄，不在 Dart 重算（跨午夜那條紀律）。
   final double? adherenceMinutes;
 
+  /// 按 Start Sleep 之後到放下手機隔了多久（後端 `phone_in_bed_minutes`＝lights_out − bed_start，下界）。
+  /// ⚠️ 只照抄；沒按 Start Sleep 是 null（不是 0）。滑到睡著的晚上會偏大（螢幕自動鎖才算放下）。
+  final double? phoneAfterStartMinutes;
+
   /// 起床自評。後端的優先；沒有後端時用手機上存的。
   final MorningRating? rating;
 
@@ -228,6 +232,7 @@ class MorningReport {
     this.lightsOutAt,
     this.targetBedtime,
     this.adherenceMinutes,
+    this.phoneAfterStartMinutes,
     this.rating,
     this.ratingLabel,
     this.wasoMinutes,
@@ -320,6 +325,7 @@ class MorningReport {
       lightsOutAt: lightsOutAt,
       targetBedtime: targetBedtime,
       adherenceMinutes: adherenceMinutes,
+      phoneAfterStartMinutes: phoneAfterStartMinutes,
       rating: rating ?? this.rating,
       ratingLabel: ratingLabel ?? this.ratingLabel,
       wasoMinutes: wasoMinutes,
@@ -331,9 +337,12 @@ class MorningReport {
       efficiencyKind: efficiencyKind,
       efficiencyCaveat: efficiencyCaveat,
       camera: camera ?? this.camera,
-      summaryText: clearSummary ? summaryText : (summaryText ?? this.summaryText),
-      summarySource:
-          clearSummary ? summarySource : (summarySource ?? this.summarySource),
+      summaryText: clearSummary
+          ? summaryText
+          : (summaryText ?? this.summaryText),
+      summarySource: clearSummary
+          ? summarySource
+          : (summarySource ?? this.summarySource),
       tip: clearSummary ? tip : (tip ?? this.tip),
       level: replaceGame ? level : this.level,
       xpIntoLevel: replaceGame ? xpIntoLevel : this.xpIntoLevel,
@@ -341,8 +350,9 @@ class MorningReport {
       xpProgress: replaceGame ? xpProgress : this.xpProgress,
       nightXp: replaceGame ? nightXp : this.nightXp,
       nightXpSoFar: replaceGame ? (nightXpSoFar ?? false) : this.nightXpSoFar,
-      recentNightXp:
-          replaceGame ? (recentNightXp ?? const []) : this.recentNightXp,
+      recentNightXp: replaceGame
+          ? (recentNightXp ?? const [])
+          : this.recentNightXp,
       goalMinutes: goalMinutes ?? this.goalMinutes,
     );
   }
@@ -372,8 +382,9 @@ class MorningReport {
       replaceGame: true,
       level: game?.level,
       xpIntoLevel: game?.xpIntoLevel,
-      xpLevelSize:
-          game == null || forNext == null ? null : game.xpIntoLevel + forNext,
+      xpLevelSize: game == null || forNext == null
+          ? null
+          : game.xpIntoLevel + forNext,
       xpProgress: game?.progress,
       nightXp: night?.total,
       nightXpSoFar: night != null && night.finalQuality == null,
@@ -399,7 +410,10 @@ class MorningReport {
       summarySource: json['source'] as String?,
       tip: tipText == null || tipText.isEmpty
           ? null
-          : ReportTip(kind: tipJson?['kind'] as String? ?? 'tip', text: tipText),
+          : ReportTip(
+              kind: tipJson?['kind'] as String? ?? 'tip',
+              text: tipText,
+            ),
     );
   }
 }
@@ -431,7 +445,10 @@ enum EfficiencyKind {
 }
 
 /// [basis] 是哪一種；效率沒算（basis 是 null）→ null。純函式。
-EfficiencyKind? efficiencyKindOf(String? basis, Map<String, dynamic>? behavior) {
+EfficiencyKind? efficiencyKindOf(
+  String? basis,
+  Map<String, dynamic>? behavior,
+) {
   if (basis == null) return null;
   if (behavior?['measured_efficiency_basis'] == basis) {
     return EfficiencyKind.buttons;
@@ -444,8 +461,11 @@ EfficiencyKind? efficiencyKindOf(String? basis, Map<String, dynamic>? behavior) 
 
 /// 一晚**進分數的效率**：依 basis 去 behavior 找同一個 basis 的那個數字，都對不上才用手錶的。
 /// 早晨報告的 Efficiency 格子與點開後的一週長條**共用這一支**（這一晚的長條一定等於格子上的數字）。
-double? scoredEfficiency(String? basis, Map<String, dynamic>? behavior,
-    Map<String, dynamic>? metrics) {
+double? scoredEfficiency(
+  String? basis,
+  Map<String, dynamic>? behavior,
+  Map<String, dynamic>? metrics,
+) {
   if (basis == null) return null;
   for (final key in const ['measured_efficiency', 'watch_wake_efficiency']) {
     if (behavior?['${key}_basis'] == basis) {
@@ -492,16 +512,18 @@ MorningReport buildMorningReport({
     final status = (home['status'] as Map?)?.cast<String, dynamic>();
     final display = (home['display'] as Map?)?.cast<String, dynamic>();
     final previous = (home['previous_night'] as Map?)?.cast<String, dynamic>();
-    final ratingJson = (home['morning_rating'] as Map?)?.cast<String, dynamic>();
-    final composition =
-        (scoring?['composition'] as Map?)?.cast<String, dynamic>();
+    final ratingJson = (home['morning_rating'] as Map?)
+        ?.cast<String, dynamic>();
+    final composition = (scoring?['composition'] as Map?)
+        ?.cast<String, dynamic>();
     final score = (scoring?['final_score'] as num?)?.toDouble();
     final has = score != null;
     double? n(Map<String, dynamic>? m, String k) => (m?[k] as num?)?.toDouble();
 
     final start = bedStart ?? parseWallClock(behavior?['bed_start_at']);
-    final end =
-        bedStart != null ? bedEnd : parseWallClock(behavior?['bed_end_at']);
+    final end = bedStart != null
+        ? bedEnd
+        : parseWallClock(behavior?['bed_end_at']);
     final basis = composition?['efficiency_basis'] as String?;
     String? caveat;
     for (final c in (composition?['caveats'] as List?) ?? const []) {
@@ -537,23 +559,28 @@ MorningReport buildMorningReport({
       remMinutes: has ? n(metrics, 'rem_minutes') : null,
       remMeasured: scoring?['rem_measured'] == true,
       stages: has
-          ? (SleepStages.fromJsonOrNull(metrics?['sleep_stages']) ?? bundleStages)
+          ? (SleepStages.fromJsonOrNull(metrics?['sleep_stages']) ??
+                bundleStages)
           : null,
       dream: dream,
       // 白天資料跟睡眠分數無關：那一天有就畫（手錶睡眠還沒到也一樣）
       yesterday: YesterdayActivity.fromJsonOrNull(home['yesterday']),
-      heartRate:
-          has ? NightCurve.fromJsonOrNull(metrics?['heart_rate_curve']) : null,
-      movement:
-          has ? NightCurve.fromJsonOrNull(metrics?['movement_curve']) : null,
-      cameraMotion:
-          has ? NightCurve.fromJsonOrNull(metrics?['camera_curve']) : null,
+      heartRate: has
+          ? NightCurve.fromJsonOrNull(metrics?['heart_rate_curve'])
+          : null,
+      movement: has
+          ? NightCurve.fromJsonOrNull(metrics?['movement_curve'])
+          : null,
+      cameraMotion: has
+          ? NightCurve.fromJsonOrNull(metrics?['camera_curve'])
+          : null,
       source: ReportSource.backend,
       previousTimeInBed: n(previous, 'time_in_bed_minutes'),
       previousSleepMinutes: n(previous, 'sleep_duration_minutes'),
       lightsOutAt: parseWallClock(behavior?['lights_out_at']),
       targetBedtime: behavior?['target_bedtime'] as String?,
       adherenceMinutes: n(behavior, 'adherence_minutes'),
+      phoneAfterStartMinutes: n(behavior, 'phone_in_bed_minutes'),
       rating: rating,
       ratingLabel: ratingJson?['label'] as String? ?? rating?.label,
       wasoMinutes: has ? n(metrics, 'waso_minutes') : null,
@@ -561,7 +588,9 @@ MorningReport buildMorningReport({
       restingHeartRate: has ? n(metrics, 'resting_heart_rate') : null,
       efficiency: has ? scoredEfficiency(basis, behavior, metrics) : null,
       efficiencyBasis: has ? basis : null,
-      efficiencyLabel: has ? (composition?['efficiency_label'] as String?) : null,
+      efficiencyLabel: has
+          ? (composition?['efficiency_label'] as String?)
+          : null,
       efficiencyKind: has ? efficiencyKindOf(basis, behavior) : null,
       efficiencyCaveat: has ? caveat : null,
     );
@@ -587,8 +616,9 @@ MorningReport buildMorningReport({
       qualityColor: sameNightAsBundle ? session!.display.scoreColor : null,
       scoreMessage: sameNightAsBundle ? session!.display.scoreMessage : null,
       mood: entry.petMood,
-      moodDescription:
-          sameNightAsBundle ? session!.display.moodDescription : null,
+      moodDescription: sameNightAsBundle
+          ? session!.display.moodDescription
+          : null,
       sleepMinutes: hours == null ? null : hours * 60,
       deepMinutes: entry.deepMinutes?.toDouble(),
       remMeasured: bundleStages?.remMeasured ?? false,
@@ -641,14 +671,16 @@ class MorningReportService implements MorningReportSource {
       _get('/night-summary', date, summaryTimeout);
 
   Future<Map<String, dynamic>?> _get(
-      String path, String date, Duration wait) async {
+    String path,
+    String date,
+    Duration wait,
+  ) async {
     if (baseUrl.trim().isEmpty) return null;
     final userId = await identity.currentUserId();
     if (userId == null) return null;
-    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: {
-      'user_id': userId,
-      'date': date,
-    });
+    final uri = Uri.parse(
+      '$baseUrl$path',
+    ).replace(queryParameters: {'user_id': userId, 'date': date});
     final client = HttpClient()..connectionTimeout = timeout;
     try {
       final request = await client.getUrl(uri).timeout(timeout);
