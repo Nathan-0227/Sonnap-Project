@@ -1,3 +1,4 @@
+import 'awake_heart_rate.dart';
 import 'night_curve.dart';
 
 /// 早晨報告「Yesterday」那一塊：前一個日曆日的 Garmin 白天資料（`/home` 的 `yesterday`）。
@@ -55,6 +56,9 @@ class YesterdayActivity {
   /// 那天的靜止心率（Garmin 每天一個數字）。
   final int? restingHeartRate;
 
+  /// 醒著的心率（報告的 Awake HR；只有 /home 帶）。見 [AwakeHeartRate]。
+  final AwakeHeartRate? awakeHeartRate;
+
   /// 最近幾天的步數、活動卡路里、活動分鐘（首頁點小卡開的長條圖用）。
   final List<ActivityHistoryDay> history;
 
@@ -91,6 +95,7 @@ class YesterdayActivity {
     this.moveIq,
     this.dayHeartRate,
     this.restingHeartRate,
+    this.awakeHeartRate,
     this.history = const [],
     this.stepsHourly,
     this.activityQuarters,
@@ -160,6 +165,7 @@ class YesterdayActivity {
       dayHeartRate: NightCurve.fromJsonOrNull(j['heart_rate']),
       restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)
           ?.round(),
+      awakeHeartRate: AwakeHeartRate.fromJsonOrNull(j['awake_heart_rate']),
       history: [
         for (final h in (j['history'] as List?) ?? const [])
           ?ActivityHistoryDay.fromJsonOrNull(h),
@@ -248,6 +254,10 @@ class ActivityHistoryDay {
   final Map<String, int?>? stressMinutes;
   final int? stressAvg;
 
+  /// 那天醒著的心率平均與最高（Awake HR 一週圖；只有 /home 帶）。
+  final int? awakeHrAvg;
+  final int? awakeHrMax;
+
   /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
   final int? stepGoal;
   final int? distanceM;
@@ -260,6 +270,8 @@ class ActivityHistoryDay {
     this.highlyActiveMinutes,
     this.stressMinutes,
     this.stressAvg,
+    this.awakeHrAvg,
+    this.awakeHrMax,
     this.stepGoal,
     this.distanceM,
   });
@@ -279,6 +291,8 @@ class ActivityHistoryDay {
             }
           : null,
       stressAvg: (raw['stress_avg'] as num?)?.round(),
+      awakeHrAvg: ((raw['awake_hr'] as Map?)?['avg'] as num?)?.round(),
+      awakeHrMax: ((raw['awake_hr'] as Map?)?['max'] as num?)?.round(),
       stepGoal: (raw['step_goal'] as num?)?.round(),
       distanceM: (raw['distance_m'] as num?)?.round(),
     );

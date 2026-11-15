@@ -401,7 +401,26 @@ def yesterday_block(user_id, night_date):
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
         "history": _yesterday_history(user_id, day),
         "heart_rate": sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat()),
+        # 2026-11-15 Awake HR：扣掉睡著之後的平均、最高、各區間分鐘＋整天的原始讀數。
+        # 不給靜止心率、最低、Normal／High（Research-Background/心率門檻.md）。打包檔不帶（每 2 分鐘的讀數太大）
+        "awake_heart_rate": _awake_hr(user_id, day, row),
     }
+
+
+def _awake_hr(user_id, day, row, windows=None):
+    """那個日曆日醒著的心率。睡著＝跨進這天的兩晚（起床日＝這天、隔天）手錶的入睡→起床，
+    聯集 Garmin 每 15 分鐘標 sleep 的格子。"""
+    if windows is None:
+        windows = db.list_sleep_windows(user_id, day.isoformat(),
+                                        (day + timedelta(days=1)).isoformat())
+    nights = [windows[d] for d in (day.isoformat(), (day + timedelta(days=1)).isoformat())
+              if d in windows]
+    start = f"{day.isoformat()}T00:00:00+08:00"
+    end = f"{(day + timedelta(days=1)).isoformat()}T00:00:00+08:00"
+    return sleep_heart_rate.awake_heart_rate(
+        _hr_records_near(start, end) or [], day.isoformat(), nights,
+        quarters=(row or {}).get("activity_quarters"),
+        zones=sleep_heart_rate.GARMIN_HR_ZONES)
 
 
 def _sleeping_sec(row):
@@ -420,6 +439,7 @@ def _yesterday_history(user_id, day):
     """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。"""
     since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
     stress_avgs = sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+    windows = db.list_sleep_windows(user_id, since, (day + timedelta(days=1)).isoformat())
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
         if not any(r.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
@@ -438,8 +458,19 @@ def _yesterday_history(user_id, day):
             # Stress 一週圖：各程度幾分鐘＋那天的平均壓力（從每 3 分鐘的讀數算）
             "stress_minutes": _payload.stress_minutes(r),
             "stress_avg": stress_avgs.get(r["date"]),
+            # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
+            "awake_hr": _awake_hr_summary(user_id, r, windows),
         })
     return out
+
+
+def _awake_hr_summary(user_id, r, windows):
+    try:
+        d = date_cls.fromisoformat(r["date"])
+    except (TypeError, ValueError):
+        return None
+    a = _awake_hr(user_id, d, r, windows)
+    return None if a is None else {"avg": a["avg"], "max": a["max"]}
 
 
 def night_stages(w_row):

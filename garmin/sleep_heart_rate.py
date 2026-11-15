@@ -181,3 +181,120 @@ def _curve(
         "min_at": low_t.isoformat(),
         "bucket_minutes": bucket_minutes,
     }
+
+
+# ── 醒著的心率（2026-11-15 使用者定：早晨報告 Yesterday 的 Awake HR） ──
+#
+# 那一個日曆日裡**扣掉睡著的時段**之後的心率：平均、最高（含時刻）、各區間幾分鐘。
+# 睡著那段已經在上面的 Sleeping HR，這裡不重複；**不放靜止心率、不放最低**（使用者定，
+# 靜止心率在報告上半部已經有了）。
+#
+# 🔴 不寫 Normal／High、不比「平常」：Research-Background/心率門檻.md 查過，醒著的平均心率
+#    沒有結果關聯的切點（把臨床「>80」套上去，本人 76 天裡 47 天會被標 High），而它主要
+#    取決於那天走了多少路，跟自己平常比也沒有意義。區間只寫「幾分鐘」，不說哪一區好。
+#
+# 區間是 **Garmin Connect 裡本人的設定**（2026-11-15 讀到：方法 HR_MAX、最大心率 199，
+# 五區下緣 100／119／139／159／179＝最大心率的 50／60／70／80／90%）。不是文獻門檻，
+# 是手錶 App 自己用的區間，App 照寫「max 199」讓人知道是哪一把尺。
+# ⚠️ 只對本人（wearer_c）成立；換人戴要重讀 Garmin 的設定。
+GARMIN_HR_ZONES = {"max": 199, "floors": [100, 119, 139, 159, 179]}
+
+# 手錶每 2 分鐘一筆心率：一筆＝2 分鐘（區間時間這樣換算）
+HR_READING_MINUTES = 2
+
+# 醒著的讀數少於 1 小時就不給（只戴了一下子，平均沒有代表性）
+AWAKE_MIN_READINGS = 30
+
+
+def _spans_from_quarters(quarters, day_start):
+    """96 格的 [程度, 步數]：程度是 sleep 的那幾格 → [(起, 迄)]。"""
+    out = []
+    for i, q in enumerate(quarters or []):
+        if isinstance(q, (list, tuple)) and q and q[0] == "sleep":
+            s = day_start + timedelta(minutes=15 * i)
+            out.append((s, s + timedelta(minutes=15)))
+    return out
+
+
+def _merge_spans(spans):
+    spans = sorted(spans)
+    out = []
+    for s, e in spans:
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
+
+
+def awake_heart_rate(
+    records: Iterable[dict],
+    day: str,
+    sleep_windows: Iterable = (),
+    quarters=None,
+    zones: Optional[dict] = None,
+    tz: str = "+08:00",
+) -> Optional[dict]:
+    """那個日曆日醒著的心率。資料不夠（醒著的讀數 < 1 小時）回 None。
+
+    睡著＝下面兩個的聯集（都裁到這一天之內）：
+    - sleep_windows：手錶的入睡 → 起床（跨進這天的那兩晚，同 Sleeping HR 用的那一段）
+    - quarters：Garmin 每 15 分鐘的活動程度裡標成 sleep 的格子（補午睡、補沒有那一晚資料的時候）
+
+    回傳：
+        {"avg", "max", "max_at",                       ← 只從醒著的讀數算
+         "readings": [{"t", "value"}, …],              ← 那天**全部**原始讀數（含睡著），App 畫整天的線
+         "asleep": [{"start", "end"}, …],              ← 睡著的時段，App 把那段畫淡
+         "zones": {"max", "floors", "minutes": [低於 1 區, 1 區, …, 5 區]} 或 None}
+    """
+    try:
+        start = datetime.fromisoformat(f"{day}T00:00:00{tz}")
+    except ValueError:
+        return None
+    end = start + timedelta(days=1)
+
+    spans = []
+    for w in sleep_windows or ():
+        s, e = (_parse(w[0]), _parse(w[1])) if w else (None, None)
+        if s is None or e is None or s.tzinfo is None or e.tzinfo is None or e <= s:
+            continue
+        s, e = max(s, start), min(e, end)
+        if s < e:
+            spans.append((s, e))
+    spans = _merge_spans(spans + _spans_from_quarters(quarters, start))
+
+    def asleep(t):
+        return any(s <= t < e for s, e in spans)
+
+    readings = []
+    for r in records:
+        if r.get("metric") != "heart_rate":
+            continue
+        t, v = _parse(r.get("timestamp")), r.get("value")
+        if t is None or t.tzinfo is None or not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        if v <= 0 or not (start <= t < end):
+            continue
+        readings.append((t, float(v)))
+    readings.sort(key=lambda tv: tv[0])
+    awake = [(t, v) for t, v in readings if not asleep(t)]
+    if len(awake) < AWAKE_MIN_READINGS:
+        return None
+
+    values = [v for _, v in awake]
+    top_t, top_v = max(awake, key=lambda tv: (tv[1], -tv[0].timestamp()))  # 同值取最早
+    zone_out = None
+    if zones and zones.get("floors"):
+        floors = list(zones["floors"])
+        minutes = [0] * (len(floors) + 1)
+        for v in values:
+            minutes[sum(1 for f in floors if v >= f)] += HR_READING_MINUTES
+        zone_out = {"max": zones.get("max"), "floors": floors, "minutes": minutes}
+    return {
+        "avg": round(sum(values) / len(values)),
+        "max": round(top_v),
+        "max_at": top_t.isoformat(),
+        "readings": [{"t": t.isoformat(), "value": round(v)} for t, v in readings],
+        "asleep": [{"start": s.isoformat(), "end": e.isoformat()} for s, e in spans],
+        "zones": zone_out,
+    }

@@ -2160,6 +2160,26 @@ def list_garmin_daily(user_id, since, until, db_path=None):
     return [_garmin_daily_row(r) for r in rows]
 
 
+def list_sleep_windows(user_id, since, until, db_path=None):
+    """since..until（含，起床日）每一晚手錶的入睡、起床時刻 → {日期: (入睡, 起床)}。
+    早晨報告 Awake HR 用來扣掉睡著的時段；兩個時刻缺一個的晚上不放。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT date, sleep_start_time, wake_time FROM wearable_nightly "
+            "WHERE user_id = ? AND date >= ? AND date <= ?",
+            (user_id, since, until),
+        ).fetchall()
+    finally:
+        conn.close()
+    out = {}
+    for r in rows:
+        r = dict(r)
+        if r.get("sleep_start_time") and r.get("wake_time"):
+            out[str(r["date"])] = (r["sleep_start_time"], r["wake_time"])
+    return out
+
+
 def latest_vo2max(user_id, on_or_before, since, db_path=None):
     """since..on_or_before 之間最近一次量到的 VO2 max → (值, 日期)；沒有就 None。"""
     conn = connect(db_path)

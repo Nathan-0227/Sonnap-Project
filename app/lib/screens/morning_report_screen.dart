@@ -13,6 +13,7 @@ import '../widgets/home_pet.dart';
 import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show NightValue, shortDate;
+import '../widgets/awake_hr_sheet.dart';
 import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
@@ -1500,7 +1501,28 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
     Widget? dayHrTile;
     final dayHr = y.dayHeartRate;
-    if (dayHr != null) {
+    final awakeHr = y.awakeHeartRate;
+    if (awakeHr != null) {
+      // 11-15 使用者定（參考 Apple Watch）：發光的愛心跟著醒著的平均心率跳；只放平均、最高、
+      // 各區間時間——不放靜止心率、最低，不寫 Normal／High、不比平常（awake_hr_sheet.dart）
+      dayHrTile = ReportArtTile(
+        key: const Key('report-awake-hr'),
+        icon: Icons.favorite_rounded,
+        color: kAwakeHr,
+        title: 'Awake HR',
+        onTap: () => showAwakeHrSheet(context, day: y, fontFamily: kReportFont),
+        art: GlowingHeart(
+          key: const Key('report-awake-hr-heart'),
+          bpm: awakeHr.avg,
+        ),
+        text: ReportArtText(
+          value: awakeHrTileValue(awakeHr),
+          valueKey: const Key('report-awake-hr-value'),
+          line: awakeHrTileLine(awakeHr),
+          lineKey: const Key('report-awake-hr-line'),
+        ),
+      );
+    } else if (dayHr != null) {
       dayHrTile = ReportTile(
         key: const Key('report-day-hr'),
         icon: Icons.monitor_heart_rounded,

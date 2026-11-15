@@ -237,9 +237,11 @@ check("Move IQ 三段", len(y["move_iq"]), 3)
 check("history：最近幾天（到那一天為止），照日期排；活動分鐘＝高強度＋活動",
       [(x["date"], x["steps"]) for x in y["history"]][-1], ("2026-11-12", 9955))
 check("history 不含那一天之後的", all(x["date"] <= "2026-11-12" for x in y["history"]), True)
-check("history 跟打包檔同一個形狀", sorted(y["history"][-1]),
-      ["active_kcal", "active_minutes", "date", "distance_m", "highly_active_minutes",
+# awake_hr（Awake HR 一週圖）只在 /home：要扣掉睡著，得讀資料庫裡每晚的入睡／起床；App 沒有就不畫一週
+check("history 跟打包檔同一個形狀（另加只在 /home 的 awake_hr）", sorted(y["history"][-1]),
+      ["active_kcal", "active_minutes", "awake_hr", "date", "distance_m", "highly_active_minutes",
        "step_goal", "steps", "stress_avg", "stress_minutes"])
+ok("Awake HR 欄位在（測試資料沒有原始心率時是 null，不回 0）", "awake_heart_rate" in y)
 check("history 每天各壓力程度幾分鐘（Stress 一週圖）", y["history"][-1]["stress_minutes"],
       {"rest": 461, "low": 189, "medium": 248, "high": 35})
 check("history 的高強度分鐘（Active time 一週圖疊在下面）", y["history"][-1]["highly_active_minutes"], 29)
