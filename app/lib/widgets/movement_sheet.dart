@@ -203,8 +203,14 @@ class _MovementViewState extends State<MovementView> {
     return null;
   }
 
+  /// 暫停（11-15 使用者要）：GIF 停在當下那一格；換一段就從頭播。
+  bool _paused = false;
+
   void _select(DateTime? at, {bool reveal = false}) {
-    setState(() => _sel = at);
+    setState(() {
+      _sel = at;
+      _paused = false;
+    });
     if (reveal && _playerKey.currentContext != null) {
       Scrollable.ensureVisible(
         _playerKey.currentContext!,
@@ -377,22 +383,56 @@ class _MovementViewState extends State<MovementView> {
                                 GestureDetector(
                                   key: const Key('mv-clip-enlarge'),
                                   onTap: () => _fullScreen(clip),
-                                  child: Image.network(
-                                    clip.url,
-                                    key: const Key('mv-clip-player'),
-                                    fit: BoxFit.contain,
-                                    gaplessPlayback: true,
-                                    errorBuilder: (_, _, _) => const Center(
-                                      child: Text(
-                                        'Clip could not be loaded',
-                                        style: TextStyle(
-                                          color: _soft,
-                                          fontSize: 12,
+                                  // 暫停＝TickerMode 關掉，GIF 停在當下那一格
+                                  child: TickerMode(
+                                    key: const Key('mv-clip-ticker'),
+                                    enabled: !_paused,
+                                    child: Image.network(
+                                      clip.url,
+                                      key: const Key('mv-clip-player'),
+                                      fit: BoxFit.contain,
+                                      gaplessPlayback: true,
+                                      errorBuilder: (_, _, _) => const Center(
+                                        child: Text(
+                                          'Clip could not be loaded',
+                                          style: TextStyle(
+                                            color: _soft,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
+                                if (_paused)
+                                  const IgnorePointer(
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        22,
+                                        16,
+                                        22,
+                                        16,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.bottomLeft,
+                                        child: Text(
+                                          '❚❚ Paused',
+                                          key: Key('mv-paused'),
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            shadows: [
+                                              Shadow(
+                                                color: Color(0xAA000000),
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 // 觀景窗框（11-15 使用者：影片要有 frame）：四角括號＋左上時刻、右上第幾段
                                 IgnorePointer(
                                   child: _Viewfinder(
@@ -436,6 +476,16 @@ class _MovementViewState extends State<MovementView> {
                           key: const Key('mv-prev'),
                           icon: Icons.skip_previous_rounded,
                           onTap: () => _step(-1),
+                        ),
+                        const SizedBox(width: 6),
+                        _RoundButton(
+                          key: const Key('mv-pause'),
+                          icon: _paused
+                              ? Icons.play_arrow_rounded
+                              : Icons.pause_rounded,
+                          onTap: clip == null
+                              ? null
+                              : () => setState(() => _paused = !_paused),
                         ),
                         const SizedBox(width: 6),
                         _RoundButton(

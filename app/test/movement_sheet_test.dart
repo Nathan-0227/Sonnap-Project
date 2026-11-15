@@ -131,6 +131,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep');
 
+      // 暫停：GIF 停住、畫面寫 Paused；再按繼續；換一段就從頭播
+      bool playing() => tester.widget<TickerMode>(find.byKey(const Key('mv-clip-ticker'))).enabled;
+      expect(playing(), isTrue);
+      await tester.tap(find.byKey(const Key('mv-pause')));
+      await tester.pump();
+      expect(playing(), isFalse);
+      expect(find.byKey(const Key('mv-paused')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('mv-pause')));
+      await tester.pump();
+      expect(playing(), isTrue);
+      await tester.tap(find.byKey(const Key('mv-pause')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('mv-next')));
+      await tester.pump();
+      expect(playing(), isTrue, reason: '換一段就從頭播');
+      expect(find.byKey(const Key('mv-paused')), findsNothing);
+      await tester.tap(find.byKey(const Key('mv-prev')));
+      await tester.pump();
+
       await tester.tap(find.byKey(const Key('mv-clip-enlarge')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('mv-clip-fullscreen')), findsOneWidget);
