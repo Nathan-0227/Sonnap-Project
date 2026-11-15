@@ -1035,30 +1035,81 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       ),
     );
 
+    // 11-15 使用者給參考圖：12 小時鐘面，上床到下床那段亮，多久寫在圓心、時刻寫在底下
     final inBedTile = ReportArtTile(
       key: const Key('report-in-bed'),
       icon: Icons.bed_rounded,
       color: _cBed,
       title: 'Time in bed',
       dashed: inBed == null,
+      centerText: true,
       onTap: widget.loadBedTimes == null ? null : () => _showBedWeek(r),
-      art: lastNightArt(
-        NightArcPainter(
-          start == null ? null : nightMinute(start.hour, start.minute),
-          start == null || end == null
-              ? null
-              : nightMinute(end.hour, end.minute),
-          _cBed,
-        ),
-        key: const Key('report-bed-timeline'),
+      art: LayoutBuilder(
+        builder: (context, box) {
+          final size = Size(box.maxWidth, box.maxHeight);
+          final rad = BedClockPainter.radius(size);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              lastNightArt(
+                BedClockPainter(
+                  start == null ? null : (start.hour, start.minute),
+                  end == null ? null : (end.hour, end.minute),
+                  inBed,
+                  _cBed,
+                ),
+                key: const Key('report-bed-timeline'),
+              ),
+              Positioned(
+                left: size.width / 2 - rad * 0.58,
+                width: rad * 1.16,
+                top: size.height * BedClockPainter.centerY - rad * 0.5,
+                height: rad,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            inBed == null ? '—' : reportHm(inBed),
+                            key: const Key('report-in-bed-value'),
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          ?_badge(
+                            inBed == null
+                                ? null
+                                : changeOf(inBed, r.previousTimeInBed),
+                            'report-in-bed-change',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Text(
+                      'in bed',
+                      style: TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
       text: ReportArtText(
-        value: inBed == null ? '—' : reportHm(inBed),
-        valueKey: const Key('report-in-bed-value'),
-        valueTrailing: _badge(
-          inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
-          'report-in-bed-change',
-        ),
+        value: null,
+        center: true,
         // 沒按按鈕：不拿手錶的入睡冒充上床
         line: start == null
             ? 'No bedtime recorded'
@@ -1734,7 +1785,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     if (!mounted) return;
     await showHeartRateSheet(
       context,
-      color: _cHr,
+      // 跟外面那一格同一個靛藍（11-15 使用者：裡面的顏色不統一）
+      color: _cSleepHr,
       fontFamily: kReportFont,
       curve: curve,
       date: r.date,

@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 // 早晨報告「Last night」的圖（2026-11-15 使用者定 Q1–Q7）：每一格整張是圖、標題左上、字左下，
 // 跟 Yesterday 同一套（`ReportArtTile`）。**圖就是那個數字**，不是裝飾：
-// - Total sleep：極光光帶從左往右填，亮的長度＝睡了多久÷目標（超過就滿、不變色），月亮停在填到的地方
-// - Time in bed：夜空弧 18:00（月亮）→ 12:00（日出），上床到下床那段亮
+// - Total sleep：極光光帶從左往右填，亮的長度＝睡了多久÷目標（超過就滿、不變色）；不放月亮（使用者定）
+// - Time in bed：12 小時鐘面（使用者給參考圖），上床（月亮圖示）到下床（鬧鐘圖示）那段亮、多久寫在圓心
 // - Phone down：半圓鐘面，空心圈＝目標、亮點＝實際放下手機，中間一道淡光（不分好壞，同一色）
 // - Awake：一條星河，醒著的那幾段亮起琥珀色光點（位置＝整晚的哪裡）
-// - Sleeping HR：靛藍色的慢線＋月亮，**不跳、不用紅**（跟會跳的珊瑚紅 Awake HR 分開）
+// - Sleeping HR：靛藍色的慢線，**不跳、不用紅**（跟會跳的珊瑚紅 Awake HR 分開）；不放月亮（使用者定）
 // - Movement (camera)：床的輪廓＋動作曲線，動得多的那幾刻泛出漣漪（只呈現、不算分）
 // （Efficiency 維持使用者喜歡的「從底下填滿」，另外加了水面的動態：report_tiles.dart LiquidFill。）
 // 字寫在底下，所以圖都放在中間偏上、底下 40% 留給字。
@@ -31,25 +31,6 @@ void _drawStars(Canvas canvas, Rect area, int n, int seed, double alpha) {
       p,
     );
   }
-}
-
-/// 一彎月亮（用兩個圓相減）。
-void _drawMoon(Canvas canvas, Offset c, double r, Color color) {
-  canvas.drawCircle(
-    c,
-    r * 1.9,
-    Paint()
-      ..color = color.withValues(alpha: 0.25)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r),
-  );
-  final moon = Path.combine(
-    PathOperation.difference,
-    Path()..addOval(Rect.fromCircle(center: c, radius: r)),
-    Path()..addOval(
-      Rect.fromCircle(center: c + Offset(r * 0.45, -r * 0.3), radius: r * 0.85),
-    ),
-  );
-  canvas.drawPath(moon, Paint()..color = const Color(0xFFFFF4D6));
 }
 
 Paint _glow(Color c, double width, double blur) => Paint()
@@ -125,7 +106,6 @@ class AuroraFillPainter extends CustomPainter {
       _drawStars(canvas, Rect.fromLTRB(x0, 0, xf, h), 26, 7, 0.9);
       canvas.restore();
     }
-    _drawMoon(canvas, Offset(xf, cy(xf) - thick * 1.25), h * 0.055, color);
   }
 
   @override
@@ -133,51 +113,153 @@ class AuroraFillPainter extends CustomPainter {
       old.fraction != fraction || old.color != color;
 }
 
-// ── Time in bed：夜空弧 18:00 → 12:00 ──
+// ── Time in bed：12 小時鐘面（11-15 使用者給參考圖）──
+// 一圈＝12 小時（12 在上），上床到下床那一段亮；起點是月亮圖示、終點是鬧鐘圖示。
+// 字（多久）寫在圓心，時刻寫在底下。
 
-class NightArcPainter extends CustomPainter {
-  /// 從 18:00 起算的分鐘數（0–1080）；null＝沒按上床（只畫空的弧）。
-  final double? start;
-  final double? end;
+/// 時刻在 12 小時鐘面上的角度（12 點在正上方、順時針）。
+double bedClockAngle(int hour, int minute) =>
+    -math.pi / 2 + 2 * math.pi * ((hour % 12) + minute / 60) / 12;
+
+class BedClockPainter extends CustomPainter {
+  /// 上床、下床的 (時, 分)；start 為 null＝沒按（只畫空的錶面）。
+  final (int, int)? start;
+  final (int, int)? end;
+
+  /// 上床到下床幾分鐘（超過 12 小時畫滿一圈）。
+  final double? minutes;
   final Color color;
-  NightArcPainter(this.start, this.end, this.color);
+  BedClockPainter(this.start, this.end, this.minutes, this.color);
 
-  static const span = 1080.0;
+  /// 圓心（相對格子大小），字也照這個位置擺。
+  static const double centerY = 0.47;
+
+  static double radius(Size s) => math.min(s.width * 0.34, s.height * 0.3);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    final c = Offset(w * 0.5, h * 0.66);
-    final r = math.min(w * 0.4, h * 0.44);
+    final c = Offset(size.width * 0.5, size.height * centerY);
+    final r = radius(size);
+    final stroke = r * 0.2;
     final rect = Rect.fromCircle(center: c, radius: r);
-    double ang(double m) => math.pi + math.pi * (m.clamp(0, span) / span);
-    Offset at(double m) => c + Offset(math.cos(ang(m)), math.sin(ang(m))) * r;
 
-    _drawStars(canvas, Rect.fromLTWH(0, h * 0.12, w, h * 0.5), 18, 3, 0.5);
-    canvas.drawArc(rect, math.pi, math.pi, false, _line(_dim, 6));
-    // 兩端：左邊月亮（傍晚）、右邊日出的光
-    _drawMoon(canvas, at(0) + const Offset(0, 10), 5, color);
+    // 錶面：底圈（淡紫）＋內圈細線＋ 12／3／6／9
     canvas.drawCircle(
-      at(span) + const Offset(0, 8),
-      9,
+      c,
+      r,
       Paint()
-        ..color = const Color(0xFFFFC98A).withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = color.withValues(alpha: 0.22),
     );
+    canvas.drawCircle(
+      c,
+      r - stroke * 0.75,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0x22FFFFFF),
+    );
+    for (final (h, label) in [(0, '12'), (3, '3'), (6, '6'), (9, '9')]) {
+      final a = bedClockAngle(h, 0);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 8),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final at = c + Offset(math.cos(a), math.sin(a)) * (r - stroke * 1.45);
+      tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
+    }
+
     final s = start;
     if (s == null) return;
+    final a0 = bedClockAngle(s.$1, s.$2);
     final e = end;
-    if (e != null && e > s) {
-      canvas.drawArc(rect, ang(s), ang(e) - ang(s), false, _glow(color, 10, 5));
-      canvas.drawArc(rect, ang(s), ang(e) - ang(s), false, _line(color, 6));
-      canvas.drawCircle(at(e), 4.5, Paint()..color = Colors.white);
+    final m = minutes;
+    if (e != null && m != null && m > 0) {
+      final sweep = math.min(2 * math.pi * m / 720, 2 * math.pi - 0.001);
+      canvas.drawArc(
+        rect,
+        a0,
+        sweep,
+        false,
+        _glow(color, stroke * 1.3, stroke * 0.5),
+      );
+      canvas.drawArc(
+        rect,
+        a0,
+        sweep,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          ..shader = SweepGradient(
+            startAngle: 0,
+            endAngle: 2 * math.pi,
+            transform: GradientRotation(a0),
+            colors: [
+              Color.lerp(color, Colors.white, 0.1)!,
+              color,
+              Color.lerp(color, const Color(0xFF5B6CFF), 0.4)!,
+            ],
+            stops: [0, (sweep / (2 * math.pi)) * 0.6, sweep / (2 * math.pi)],
+          ).createShader(rect),
+      );
+      _knob(
+        canvas,
+        c,
+        r,
+        bedClockAngle(e.$1, e.$2),
+        stroke,
+        Icons.alarm_rounded,
+      );
     }
-    canvas.drawCircle(at(s), 4.5, Paint()..color = Colors.white);
+    _knob(canvas, c, r, a0, stroke, Icons.bedtime_rounded);
+  }
+
+  /// 弧上的小白圓＋圖示（參考圖的月亮與鬧鐘）。
+  void _knob(
+    Canvas canvas,
+    Offset c,
+    double r,
+    double a,
+    double stroke,
+    IconData icon,
+  ) {
+    final at = c + Offset(math.cos(a), math.sin(a)) * r;
+    final kr = stroke * 0.95;
+    canvas.drawCircle(
+      at,
+      kr * 1.4,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.3)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, kr * 0.5),
+    );
+    canvas.drawCircle(at, kr, Paint()..color = const Color(0xFFEDEBFF));
+    final tp = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: kr * 1.3,
+          color: const Color(0xFF3A3F8F),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
   }
 
   @override
-  bool shouldRepaint(NightArcPainter old) =>
-      old.start != start || old.end != end || old.color != color;
+  bool shouldRepaint(BedClockPainter old) =>
+      old.start != start ||
+      old.end != end ||
+      old.minutes != minutes ||
+      old.color != color;
 }
 
 // ── Phone down：半圓鐘面 ──
@@ -347,7 +429,6 @@ class SleepHrWavePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
     _drawStars(canvas, Rect.fromLTWH(0, h * 0.12, w, h * 0.45), 16, 5, 0.45);
-    _drawMoon(canvas, Offset(w * 0.8, h * 0.24), h * 0.06, color);
     if (points.length < 2) return;
     var lo = points.first.$2, hi = points.first.$2;
     for (final p in points) {

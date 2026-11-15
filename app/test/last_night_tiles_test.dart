@@ -77,12 +77,19 @@ void main() {
     );
   });
 
-  test('夜空弧：沒按上床（null）不報錯', () {
+  test('沒資料、超過 12 小時都不報錯（鐘面最多畫滿一圈）', () {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
-    NightArcPainter(
+    BedClockPainter(
       null,
       null,
+      null,
+      Colors.blue,
+    ).paint(canvas, const Size(170, 190));
+    BedClockPainter(
+      (23, 40),
+      (7, 15),
+      815,
       Colors.blue,
     ).paint(canvas, const Size(170, 190));
     PhoneDialPainter(
@@ -101,5 +108,12 @@ void main() {
       Colors.yellow,
     ).paint(canvas, const Size(350, 190));
     recorder.endRecording();
+  });
+
+  test('鐘面角度：12 點在正上方、順時針，下午與上午同一個位置', () {
+    expect(bedClockAngle(0, 0), closeTo(-1.5707963, 1e-6));
+    expect(bedClockAngle(3, 0), closeTo(0, 1e-9));
+    expect(bedClockAngle(15, 0), closeTo(bedClockAngle(3, 0), 1e-9));
+    expect(bedClockAngle(23, 30), closeTo(bedClockAngle(11, 30), 1e-9));
   });
 }
