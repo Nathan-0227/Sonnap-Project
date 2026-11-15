@@ -221,22 +221,25 @@ String? activeChangeLine(ActiveWeek w) {
 
 class ActivityMountain extends StatelessWidget {
   final ActiveParts parts;
-  const ActivityMountain({super.key, required this.parts});
+
+  /// 山尖在高度的哪裡（0–1）。鋪滿整張卡時要讓出標題那一截。
+  final double apexY;
+  const ActivityMountain({super.key, required this.parts, this.apexY = 0.06});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(painter: MountainPainter(parts), size: Size.infinite);
+  Widget build(BuildContext context) => CustomPaint(
+    painter: MountainPainter(parts, apexY: apexY),
+    size: Size.infinite,
+  );
 }
 
 class MountainPainter extends CustomPainter {
   final ActiveParts parts;
-  MountainPainter(this.parts);
+  final double apexY;
+  MountainPainter(this.parts, {this.apexY = 0.06});
 
   /// 段與段之間的過渡（山高的比例）：柔一點像參考圖，但不糊到讀不出每段多大。
   static const blend = 0.05;
-
-  /// 山尖在畫面高度的哪裡。
-  static const apexY = 0.06;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -248,7 +251,7 @@ class MountainPainter extends CustomPainter {
     }
 
     // 太陽：只是裝飾
-    final sun = Offset(w * 0.86, h * 0.2);
+    final sun = Offset(w * 0.84, h * (apexY + 0.12));
     final sr = math.min(w, h) * 0.09;
     canvas.drawCircle(
       sun,

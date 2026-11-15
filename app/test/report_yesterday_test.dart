@@ -5,6 +5,7 @@
 import 'package:app/models/yesterday_activity.dart';
 import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/services/morning_report.dart';
+import 'package:app/widgets/stress_sheet.dart' show kStressDomeBase;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -324,15 +325,16 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-stress')));
       expect(find.byKey(const Key('report-stress-dome')), findsOneWidget);
       expect(find.byKey(const Key('report-stress-gauge')), findsNothing);
-      // 字在圓心上：跟半圓同一條中線、貼著底邊、整塊落在半圓裡
+      // 照參考圖：圖鋪滿整張卡、字在左下、在半圓平的那一邊下面
+      final card = tester.getRect(find.byKey(const Key('report-stress')));
       final dome = tester.getRect(find.byKey(const Key('report-stress-dome')));
       final text = tester.getRect(find.byKey(const Key('report-stress-text')));
-      expect(text.center.dx, closeTo(dome.center.dx, 1));
-      expect(text.bottom, closeTo(dome.bottom, 1));
+      expect(dome.width, closeTo(card.width, 2), reason: '圖鋪滿整張卡');
+      expect(text.left - card.left, lessThan(20), reason: '字在左邊');
       expect(
         text.top,
-        greaterThan(dome.bottom - dome.width / 2),
-        reason: '在半圓裡',
+        greaterThan(dome.top + dome.height * kStressDomeBase - 1),
+        reason: '字在半圓下面',
       );
       final line = tester
           .widget<Text>(find.byKey(const Key('report-stress-line')))

@@ -142,6 +142,139 @@ class ReportTile extends StatelessWidget {
   }
 }
 
+/// 圖鋪滿整張卡的格子（2026-11-15 使用者定，照參考圖 Stress／Activity 卡）：
+/// 圖一路畫到卡片邊緣（裁成圓角），標題疊在左上、字疊在左下；底色是近黑，光才亮得起來。
+/// 早晨報告的 Active time（山）與 Stress（圓頂）用。
+class ReportArtTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final Widget art;
+  final Widget text;
+  final double height;
+  final VoidCallback? onTap;
+
+  const ReportArtTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.art,
+    required this.text,
+    this.height = 190,
+    this.onTap,
+  });
+
+  static const background = Color(0xF20C0D24);
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Container(
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: reportCard().copyWith(color: background),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          art,
+          Positioned(
+            left: 14,
+            right: 10,
+            top: 12,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (onTap != null)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: ReportColors.dim,
+                  ),
+              ],
+            ),
+          ),
+          Positioned(left: 14, right: 12, bottom: 12, child: text),
+        ],
+      ),
+    );
+    return onTap == null
+        ? body
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: body,
+          );
+  }
+}
+
+/// 疊在圖上的大字＋小字（參考圖的「56%／Elevated」位置；我們只寫事實）。
+class ReportArtText extends StatelessWidget {
+  final String? value;
+  final Key? valueKey;
+  final String line;
+  final Key? lineKey;
+  const ReportArtText({
+    super.key,
+    required this.value,
+    required this.line,
+    this.valueKey,
+    this.lineKey,
+  });
+
+  static const _shadow = [Shadow(color: Color(0x88000000), blurRadius: 10)];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (value != null)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value!,
+              key: valueKey,
+              softWrap: false,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                shadows: _shadow,
+              ),
+            ),
+          ),
+        Text(
+          line,
+          key: lineKey,
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          style: const TextStyle(
+            color: Color(0xE6FFFFFF),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            shadows: _shadow,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// 一格「從底下往上填滿」的卡（2026-11-15 使用者定，照參考圖的 Battery 卡）：
 /// 填滿的高度＝[fraction]（0–1），大數字在左下、單位小一號，下面一行小字。
 /// 早晨報告的 Efficiency 用：填多高就是那一晚的效率。

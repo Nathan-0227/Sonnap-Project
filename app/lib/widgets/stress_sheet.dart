@@ -10,11 +10,12 @@ import '../theme/report_style.dart' show reportHm;
 import 'chart_probe.dart' show ProbeLayer;
 
 // 早晨報告 Stress（2026-11-15 使用者定，參考圖 Stress 卡）：
-// - 報告上那一格：一個半圓整個露出來（平的一邊貼底，同日第二輪使用者定；第一版是右上方露一角），
+// - 報告上那一格：圖鋪滿整張卡（同日第四輪，照參考圖）；半圓整個露出來、在卡片上半（第一版右上方露一角、
+//   第二版貼底），像打了光的球（左上亮、右下暗、亮邊、平的一邊融進背景）；
 //   由上往下 高 → 中 → 低 → 休息，
 //   **每一段的面積＝那天量到的時間裡各程度的比例**（同 Active time 的山，照實際形狀數值積分）。
 //   **紫色系，不用紅黃**（11-13 定：紅色會被讀成壓力太大、不好）；邊緣一圈亮光；
-//   字在圓心上（底邊正中間、置中，壓在半圓裡）。
+//   字在左下（照參考圖，跟 Active time 一樣）。
 //   大字＝平均壓力（Garmin 的 0–100 分數，**不加 %**——加了會被讀成「56% 的時間有壓力」），
 //   **不寫 Elevated**。
 // - 點開：圓環（只算量到的時間）＋四行＋「Not measured」；一整天的壓力線（每 3 分鐘一點、
@@ -95,14 +96,19 @@ String stressTileLine(StressParts p) =>
 
 // ── 圓頂的形狀（寬高比 [aspect]＝寬÷高；座標都以高為 1） ──
 
-/// 圓心與半徑（以高為 1）。11-15 第二輪使用者定：**整個半圓露出來**——圓心在底邊正中間，
-/// 半徑撐到左右快碰邊（也不超過格子高），平的那一邊貼著底。
-({double cx, double cy, double r}) stressDomeCircle(double aspect) =>
-    (cx: aspect / 2, cy: 1.0, r: math.min(aspect / 2 * 0.98, 0.98));
+/// 圓心與半徑（以高為 1）。11-15 第四輪使用者定（照參考圖 Stress 卡）：半圓在卡片**上半**，
+/// 平的一邊在 [kStressDomeBase]，整個半圓都在卡片裡（不被左右上切到），下面留給字。
+const double kStressDomeBase = 0.6;
 
-/// 高度 y（0＝頂、1＝底）那一條橫線在圓頂裡的寬度（被格子左右邊界切掉）。
+({double cx, double cy, double r}) stressDomeCircle(double aspect) {
+  final r = math.min(0.36, aspect * 0.4);
+  return (cx: aspect * 0.58, cy: kStressDomeBase, r: r);
+}
+
+/// 高度 y（0＝頂、1＝底）那一條橫線在半圓裡的寬度；平的那一邊以下是 0。
 double stressDomeWidth(double y, double aspect) {
   final c = stressDomeCircle(aspect);
+  if (y > c.cy) return 0;
   final dy = y - c.cy;
   if (dy.abs() >= c.r) return 0;
   final half = math.sqrt(c.r * c.r - dy * dy);
@@ -110,17 +116,15 @@ double stressDomeWidth(double y, double aspect) {
   return math.max(0, r - l);
 }
 
-/// 圓頂的分段：[(程度, 上緣 y, 下緣 y)]，由上往下 高 → 中 → 低 → 休息，
+/// 半圓的分段：[(程度, 上緣 y, 下緣 y)]，由上往下 高 → 中 → 低 → 休息，
 /// **每一段的面積＝那段佔量到時間的比例**（數值積分）。佔 0 的段不回。純函式。
 List<(String, double, double)> stressDomeBands(StressParts p, double aspect) {
   final total = p.total.toDouble();
   if (total <= 0) return const [];
-  final top = math.max(
-    0.0,
-    stressDomeCircle(aspect).cy - stressDomeCircle(aspect).r,
-  );
+  final c = stressDomeCircle(aspect);
+  final top = math.max(0.0, c.cy - c.r), bottom = c.cy;
   const n = 400;
-  final ys = [for (var i = 0; i <= n; i++) top + (1 - top) * i / n];
+  final ys = [for (var i = 0; i <= n; i++) top + (bottom - top) * i / n];
   final cum = List<double>.filled(n + 1, 0);
   for (var i = 1; i <= n; i++) {
     cum[i] =
@@ -132,7 +136,7 @@ List<(String, double, double)> stressDomeBands(StressParts p, double aspect) {
   final whole = cum[n];
   double yFor(double share) {
     if (share <= 0) return top;
-    if (share >= 1) return 1;
+    if (share >= 1) return bottom;
     for (var i = 1; i <= n; i++) {
       if (cum[i] / whole >= share) {
         final a = cum[i - 1] / whole, b = cum[i] / whole;
@@ -140,7 +144,7 @@ List<(String, double, double)> stressDomeBands(StressParts p, double aspect) {
         return ys[i - 1] + (ys[i] - ys[i - 1]) * f;
       }
     }
-    return 1;
+    return bottom;
   }
 
   final out = <(String, double, double)>[];
@@ -164,11 +168,14 @@ class StressDome extends StatelessWidget {
       CustomPaint(painter: StressDomePainter(parts), size: Size.infinite);
 }
 
+/// 參考圖的質感：像一顆打了光的球——外面一圈光暈、左上亮、右下暗、邊緣一圈亮邊、
+/// 平的那一邊慢慢融進背景。色帶（每段面積＝比例）在最底下，光影疊在上面。
 class StressDomePainter extends CustomPainter {
   final StressParts parts;
   StressDomePainter(this.parts);
 
-  static const blend = 0.04;
+  // 過渡柔一點（參考圖是平滑漸層）；每段的中心仍在原位，面積比例不變
+  static const blend = 0.14;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -178,20 +185,35 @@ class StressDomePainter extends CustomPainter {
     final c = stressDomeCircle(aspect);
     final center = Offset(c.cx * h, c.cy * h);
     final radius = c.r * h;
-    final circle = Path()
-      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    final base = c.cy * h;
     final dome = Path.combine(
       PathOperation.intersect,
-      circle,
-      Path()..addRect(Offset.zero & size),
+      Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
+      Path()..addRect(Rect.fromLTRB(0, 0, w, base)),
     );
-
     final bands = stressDomeBands(parts, aspect);
     if (bands.isEmpty) return;
+
+    canvas.saveLayer(Offset.zero & size, Paint());
+
+    // 外面一圈光暈（只在平的那一邊以上）
+    canvas.save();
+    canvas.clipRect(Rect.fromLTRB(0, 0, w, base));
+    canvas.drawCircle(
+      center,
+      radius * 1.08,
+      Paint()
+        ..color = kStressMedium.withValues(alpha: 0.35)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.22),
+    );
+    canvas.restore();
+
+    // 色帶
     final top = bands.first.$2;
+    final span = c.cy - top;
+    double norm(double y) => ((y - top) / span).clamp(0.0, 1.0);
     final colors = <Color>[];
     final stops = <double>[];
-    double norm(double y) => ((y - top) / (1 - top)).clamp(0.0, 1.0);
     for (final (i, (level, t0, t1)) in bands.indexed) {
       final col = stressLevelColor(level);
       final first = i == 0, last = i == bands.length - 1;
@@ -212,19 +234,62 @@ class StressDomePainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: colors,
           stops: stops,
-        ).createShader(Rect.fromLTRB(0, top * h, w, h)),
+        ).createShader(Rect.fromLTRB(0, top * h, w, base)),
     );
-    // 邊緣一圈亮光（參考圖）：只畫在圓頂裡面
+
     canvas.save();
     canvas.clipPath(dome);
+    // 左上亮
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = RadialGradient(
+          center: Alignment.topLeft,
+          radius: 1.1,
+          colors: [
+            Colors.white.withValues(alpha: 0.55),
+            Colors.white.withValues(alpha: 0),
+          ],
+          stops: const [0, 0.65],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+    // 右下暗
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0.9, 0.2),
+          radius: 0.9,
+          colors: [
+            const Color(0xFF120A2E).withValues(alpha: 0.45),
+            const Color(0xFF120A2E).withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
+    // 邊緣一圈亮邊
     canvas.drawCircle(
       center,
       radius,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = h * 0.09
-        ..color = Colors.white.withValues(alpha: 0.42)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, h * 0.045),
+        ..strokeWidth = radius * 0.16
+        ..color = Colors.white.withValues(alpha: 0.5)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.07),
+    );
+    canvas.restore();
+
+    // 平的那一邊慢慢融進背景（把下緣那一截的透明度挖掉）
+    canvas.drawRect(
+      Rect.fromLTRB(0, base - radius * 0.35, w, base + 1),
+      Paint()
+        ..blendMode = BlendMode.dstOut
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x00000000), Color(0xE6000000)],
+        ).createShader(Rect.fromLTRB(0, base - radius * 0.35, w, base)),
     );
     canvas.restore();
   }

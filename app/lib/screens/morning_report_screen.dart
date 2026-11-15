@@ -1396,62 +1396,24 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 ),
               ],
             )
-          // 11-15 第二輪（參考圖）：大字小字疊在山的中間，山佔滿整格
-          : ReportTile(
+          // 11-15 第三輪（參考圖）：山鋪滿整張卡、標題疊在左上、字疊在左下
+          : ReportArtTile(
               key: const Key('report-active'),
               icon: Icons.bolt_rounded,
               color: _cActive,
               title: 'Active time',
-              graphicHeight: 150,
               onTap: () =>
                   showActiveSheet(context, day: y, fontFamily: kReportFont),
-              graphic: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ActivityMountain(
-                    key: const Key('report-active-mountain'),
-                    parts: parts,
-                  ),
-                  Align(
-                    alignment: const Alignment(-1, 0.25),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            reportHm(parts.activeMinutes),
-                            key: const Key('report-active-value'),
-                            softWrap: false,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              shadows: [
-                                Shadow(color: Color(0x66000000), blurRadius: 8),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Text(
-                          activeTileLine(parts),
-                          key: const Key('report-active-line'),
-                          softWrap: false,
-                          overflow: TextOverflow.fade,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            shadows: [
-                              Shadow(color: Color(0x66000000), blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              art: ActivityMountain(
+                key: const Key('report-active-mountain'),
+                parts: parts,
+                apexY: 0.2,
+              ),
+              text: ReportArtText(
+                value: reportHm(parts.activeMinutes),
+                valueKey: const Key('report-active-value'),
+                line: activeTileLine(parts),
+                lineKey: const Key('report-active-line'),
               ),
             );
     }
@@ -1466,7 +1428,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ('High', y.stressHighSec, _cStress),
       ];
       // 11-15 使用者定（參考圖 Stress 卡）：整個半圓露出來（貼底），各段面積＝各程度的比例；
-      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在圓心上（stress_sheet.dart）
+      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在左下（stress_sheet.dart）
       final sp = stressParts(y);
       final avg = stressAvgOf(y);
       stressTile = sp == null
@@ -1491,60 +1453,23 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 ),
               ],
             )
-          : ReportTile(
+          // 11-15 第四輪（參考圖）：圓頂在卡片上半、鋪滿整張卡、字在左下
+          : ReportArtTile(
               key: const Key('report-stress'),
               icon: Icons.spa_rounded,
               color: _cStress,
               title: 'Stress',
-              graphicHeight: 150,
               onTap: () =>
                   showStressSheet(context, day: y, fontFamily: kReportFont),
-              graphic: Stack(
-                fit: StackFit.expand,
-                children: [
-                  StressDome(key: const Key('report-stress-dome'), parts: sp),
-                  Align(
-                    // 字在圓心上（同日第三輪使用者定）：底邊正中間、置中，壓在半圓裡
-                    alignment: Alignment.bottomCenter,
-                    child: Column(
-                      key: const Key('report-stress-text'),
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        if (avg != null)
-                          Text(
-                            '$avg',
-                            key: const Key('report-stress-value'),
-                            softWrap: false,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              shadows: [
-                                Shadow(color: Color(0x66000000), blurRadius: 8),
-                              ],
-                            ),
-                          ),
-                        Text(
-                          avg == null
-                              ? 'high ${_secHm(sp.high)}'
-                              : stressTileLine(sp),
-                          key: const Key('report-stress-line'),
-                          softWrap: false,
-                          overflow: TextOverflow.fade,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            shadows: [
-                              Shadow(color: Color(0x66000000), blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              art: StressDome(key: const Key('report-stress-dome'), parts: sp),
+              text: ReportArtText(
+                key: const Key('report-stress-text'),
+                value: avg == null ? null : '$avg',
+                valueKey: const Key('report-stress-value'),
+                line: avg == null
+                    ? 'high ${_secHm(sp.high)}'
+                    : stressTileLine(sp),
+                lineKey: const Key('report-stress-line'),
               ),
             );
     }

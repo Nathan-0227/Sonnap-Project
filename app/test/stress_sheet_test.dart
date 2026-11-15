@@ -94,18 +94,20 @@ void main() {
       }
     });
 
-    test('整個半圓露出來：平的一邊貼底，左、右、上都沒被格子切掉', () {
-      for (final aspect in [0.8, 1.0, 1.1, 1.6]) {
+    test('整個半圓露出來、在卡片上半：左、右、上都沒被切到；平的那一邊以下是空的（留給字）', () {
+      for (final aspect in [0.7, 0.85, 1.0, 1.4]) {
         final c = stressDomeCircle(aspect);
-        expect(c.cy, 1.0, reason: '圓心在底邊');
+        expect(c.cy, kStressDomeBase);
+        expect(c.cy, lessThan(0.7), reason: '在上半，下面留給字');
         expect(c.cx - c.r, greaterThanOrEqualTo(0), reason: '左邊沒被切');
         expect(c.cx + c.r, lessThanOrEqualTo(aspect), reason: '右邊沒被切');
-        expect(c.cy - c.r, greaterThanOrEqualTo(0), reason: '頂端沒被切');
+        expect(c.cy - c.r, greaterThan(0.15), reason: '頂端讓出標題那一截');
         expect(
-          stressDomeWidth(0.9999, aspect),
+          stressDomeWidth(c.cy - 1e-4, aspect),
           closeTo(2 * c.r, 0.01),
-          reason: '貼底那一邊是整條直徑',
+          reason: '平的那一邊是整條直徑',
         );
+        expect(stressDomeWidth(c.cy + 0.01, aspect), 0, reason: '下面是空的');
       }
     });
 
