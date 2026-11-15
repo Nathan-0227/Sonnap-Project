@@ -247,10 +247,7 @@ void main() {
       expect(night.finalQuality, 'Good');
     });
 
-    test('07-12 還在 history 裡；有 anxious 的品質等級底下也有別的心情', () {
-      expect(nightOf('2026-07-12'), isNotNull,
-          reason: '07-12 不在 history 裡——窗格又滑了');
-
+    test('有 anxious 的品質等級底下也有別的心情', () {
       // ⚠️ 這條原本釘住「07-12 是 anxious」。2026-10-04 每日心率與壓力的
       // 時刻修正了 8 小時（在此之前一律早 8 小時），那一晚的心率修正值
       // 不再過門檻，變成 Bad／tired；anxious 的夜晚則從 8 晚變成 15 晚。

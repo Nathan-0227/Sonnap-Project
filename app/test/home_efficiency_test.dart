@@ -66,6 +66,11 @@ void main() {
     }
     final metrics = copy['metrics'] as Map<String, dynamic>;
     metrics['sleep_efficiency'] = 100.0;
+    // ⚠️ history 與 metrics 兩邊都要清掉，不然「舊版打包檔」那條測到的是
+    // 現行打包檔剛好帶著的 scored_efficiency，等於沒測到退路。
+    metrics.remove('scored_efficiency');
+    metrics.remove('scored_efficiency_basis');
+    metrics.remove('scored_efficiency_label');
     if (tonight != null) {
       for (final target in [history.last, metrics]) {
         target['scored_efficiency'] = tonight.$1;
