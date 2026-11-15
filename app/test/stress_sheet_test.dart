@@ -94,6 +94,21 @@ void main() {
       }
     });
 
+    test('整個半圓露出來：平的一邊貼底，左、右、上都沒被格子切掉', () {
+      for (final aspect in [0.8, 1.0, 1.1, 1.6]) {
+        final c = stressDomeCircle(aspect);
+        expect(c.cy, 1.0, reason: '圓心在底邊');
+        expect(c.cx - c.r, greaterThanOrEqualTo(0), reason: '左邊沒被切');
+        expect(c.cx + c.r, lessThanOrEqualTo(aspect), reason: '右邊沒被切');
+        expect(c.cy - c.r, greaterThanOrEqualTo(0), reason: '頂端沒被切');
+        expect(
+          stressDomeWidth(0.9999, aspect),
+          closeTo(2 * c.r, 0.01),
+          reason: '貼底那一邊是整條直徑',
+        );
+      }
+    });
+
     test('紫色系：沒有紅、黃、橘', () {
       for (final l in stressLevels) {
         final c = stressLevelColor(l);
