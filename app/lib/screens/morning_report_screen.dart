@@ -1453,10 +1453,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 ),
               ],
             )
-          // 11-15 第五輪：半圓佔下半張卡、從底邊長出來，字在半圓裡置中
+          // 11-15 第六輪：半圓從底邊長出來、再大一點（左右被切），字在半圓左邊
           : ReportArtTile(
               key: const Key('report-stress'),
-              centerText: true,
               icon: Icons.spa_rounded,
               color: _cStress,
               title: 'Stress',
@@ -1471,7 +1470,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     ? 'high ${_secHm(sp.high)}'
                     : stressTileLine(sp),
                 lineKey: const Key('report-stress-line'),
-                center: true,
               ),
             );
     }

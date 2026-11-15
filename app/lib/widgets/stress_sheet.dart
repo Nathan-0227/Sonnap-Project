@@ -101,8 +101,9 @@ String stressTileLine(StressParts p) =>
 const double kStressDomeBase = 1.0;
 
 ({double cx, double cy, double r}) stressDomeCircle(double aspect) {
-  // 同日第五輪使用者定：佔下半張卡、從底邊長出來、置中（半徑到一半高，也不超出左右）
-  final r = math.min(0.5, aspect / 2 * 0.98);
+  // 第五輪：從底邊長出來、置中。第六輪使用者定「再大一點」：半徑到 0.62 個卡片高，
+  // 比卡片寬的時候左右兩邊被卡片邊緣切掉（像大圓頂從底下升起來）；寬卡片時也不超過寬度的 0.62
+  final r = math.min(0.62, aspect * 0.62);
   return (cx: aspect / 2, cy: kStressDomeBase, r: r);
 }
 

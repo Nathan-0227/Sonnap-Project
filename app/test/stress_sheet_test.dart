@@ -2,6 +2,8 @@
 // 守：圓頂各段面積＝各程度比例；紫色系不用紅黃；大字不加 %、不寫 Elevated；
 //     壓力線量不到斷開、泡泡吸到真讀數（超過 3 分鐘寫 no reading）、程度照 Garmin 的分法；
 //     一週沒資料寫 —、高在最下面；不提分數、不給建議。
+import 'dart:math' as math;
+
 import 'package:app/models/night_curve.dart';
 import 'package:app/models/yesterday_activity.dart';
 import 'package:app/widgets/stress_sheet.dart';
@@ -94,19 +96,17 @@ void main() {
       }
     });
 
-    test('半圓佔下半張卡、從底邊長出來、置中；整個半圓露出來（左右上都沒被切）', () {
+    test('半圓從底邊長出來、置中、超過半張卡（窄卡片時左右被切）；面積照實際露出來的算', () {
       for (final aspect in [0.7, 0.85, 1.0, 1.4]) {
         final c = stressDomeCircle(aspect);
         expect(c.cy, 1.0, reason: '平的一邊貼底');
         expect(c.cx, closeTo(aspect / 2, 1e-9), reason: '置中');
-        expect(c.cx - c.r, greaterThanOrEqualTo(0), reason: '左邊沒被切');
-        expect(c.cx + c.r, lessThanOrEqualTo(aspect), reason: '右邊沒被切');
-        expect(c.r, lessThanOrEqualTo(0.5), reason: '最多佔一半高');
-        expect(c.r, greaterThan(0.33), reason: '大約下半張卡');
+        expect(c.cy - c.r, greaterThan(0.3), reason: '頂端讓出標題那一截');
+        expect(c.r, greaterThan(0.43), reason: '比半張卡大');
         expect(
           stressDomeWidth(1 - 1e-4, aspect),
-          closeTo(2 * c.r, 0.01),
-          reason: '貼底那一邊是整條直徑',
+          closeTo(math.min(2 * c.r, aspect), 0.01),
+          reason: '底邊那一條＝直徑，被卡片切掉就是整個寬',
         );
       }
     });

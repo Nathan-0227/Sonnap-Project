@@ -143,7 +143,8 @@ class ReportTile extends StatelessWidget {
 }
 
 /// 圖鋪滿整張卡的格子（2026-11-15 使用者定，照參考圖 Stress／Activity 卡）：
-/// 圖一路畫到卡片邊緣（裁成圓角），標題疊在左上、字疊在左下；底色是近黑，光才亮得起來。
+/// 圖一路畫到卡片邊緣（裁成圓角），標題疊在左上、字疊在左下。
+/// 底色**維持報告其他格子的半透明紫**（同日第六輪使用者定；第四輪試過近黑）。
 /// 早晨報告的 Active time（山）與 Stress（圓頂）用。
 class ReportArtTile extends StatelessWidget {
   final IconData icon;
@@ -169,14 +170,12 @@ class ReportArtTile extends StatelessWidget {
     this.centerText = false,
   });
 
-  static const background = Color(0xF20C0D24);
-
   @override
   Widget build(BuildContext context) {
     final body = Container(
       height: height,
       clipBehavior: Clip.antiAlias,
-      decoration: reportCard().copyWith(color: background),
+      decoration: reportCard(),
       child: Stack(
         fit: StackFit.expand,
         children: [

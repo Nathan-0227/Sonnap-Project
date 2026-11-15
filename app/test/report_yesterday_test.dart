@@ -326,13 +326,13 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-stress')));
       expect(find.byKey(const Key('report-stress-dome')), findsOneWidget);
       expect(find.byKey(const Key('report-stress-gauge')), findsNothing);
-      // 圖鋪滿整張卡；半圓從底邊長出來、置中；字在半圓裡置中
+      // 圖鋪滿整張卡；半圓從底邊長出來；字在半圓左邊（貼左、在半圓裡）
       final card = tester.getRect(find.byKey(const Key('report-stress')));
       final dome = tester.getRect(find.byKey(const Key('report-stress-dome')));
       final text = tester.getRect(find.byKey(const Key('report-stress-text')));
       expect(dome.width, closeTo(card.width, 2), reason: '圖鋪滿整張卡');
-      expect(text.center.dx, closeTo(dome.center.dx, 1.5), reason: '字置中');
-      final r = math.min(dome.height * 0.5, dome.width / 2 * 0.98);
+      expect(text.left - card.left, lessThan(20), reason: '字在左邊');
+      final r = math.min(dome.height * 0.62, dome.width * 0.62);
       expect(text.top, greaterThan(dome.bottom - r), reason: '字在半圓裡');
       final line = tester
           .widget<Text>(find.byKey(const Key('report-stress-line')))
