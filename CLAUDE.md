@@ -373,7 +373,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 首頁右上**沒有夢境日記圖示**（11-15 使用者定：草地上那本日記就是入口），只剩衣櫃、獎勵、設定 | — |
 | **導覽列**（2026-11-13 使用者定，照參考圖）：只有圖示、沒有文字；Home · Friends ｜ **中間一顆凸出的紫色圓鈕＝開始睡覺**（畫睡著的狗頭 `dog_tired.png`，缺圖退回月亮）：**先滑出 Sleep schedule**（同時鐘卡那個轉盤，按鈕字換成 Start Sleep），按了才開始；把面板關掉＝不開始、不記上床。面板背景是使用者生成的夜晚窗景 `assets/backgrounds/schedule_night.jpg`（三個入口共用；讀不到退回深藍）｜ Insights · Assistant。**Settings 搬到首頁右上角的人像**，按返回回首頁。選中的分頁紫色＋底下小點，圖示保留朗讀名稱（`widgets/moon_nav_bar.dart`） | 中間那顆只送一個請求（`StartSleepRequests`），**開始睡覺的流程只在首頁一份**；在別的分頁按會先切回 Home，起床報告才接得下去。⚠️ Settings 刻意留在 IndexedStack（不另開一頁）：首頁與設定頁共用就寢時間，要即時同步（`bedtime_sync_test`）。⚠️ 頁面延伸到導覽列後面（extendBody），但內容只排到導覽列上緣：高度用 body 的 `padding.bottom`，**不能用 `viewPadding`**（Scaffold 已經拿掉系統那段，實機量過，首頁最底那列會被蓋住） |
 | **等級徽章在寵物正上方**，不在標題旁（2026-11-13 使用者定）；沒有後端不畫 | `game_test.dart` 量位置守著 |
-| **寵物用隊友的 2D 分層小狗**（`lib/pet2d/`，經 `widgets/home_pet.dart` 這個插槽）。**缺圖的心情畫 bored，絕不畫 happy** | tired／anxious 只有 bored 的圖；隊友原版退回 happy，焦慮的夜晚畫成開心的狗（紅線 5）。`pet2d_test.dart` 守著 |
+| **寵物用隊友的 2D 分層寵物**（`lib/pet2d/`，2026-11-15 換成 v4.6.45：**小狗四種心情都有圖、多一隻灰色虎斑貓**，經 `widgets/home_pet.dart` 這個插槽）。**設定頁「Pet」選小狗或貓**（`services/pet_choice.dart`，**只存在手機上**、預設小狗、不認得的值當小狗）。**缺圖的心情畫 bored，絕不畫 happy**（`PetDefinition.resolve()`，隊友原版退回 happy）。⚠️ 起床／等報告／睡覺的 GIF 與睡姿圖**只有小狗版**：選貓時走各自的程式版退路（寵物是 `HomePet`，所以是貓；睡覺畫面是 tired 的貓）；**一週心情列與導覽列的狗頭圖示還沒有貓的版本**（待辦：請隊友補貓頭） | 焦慮的夜晚畫成開心的寵物＝紅線 5。`pet2d_test.dart` 用一隻故意缺圖的假寵物守退路、守兩隻四種心情都畫自己的圖；`pet_choice_test.dart` 守選貓時三個畫面都不出現小狗 GIF（拿掉判斷三條都會紅） |
 | **「跟上一晚比」只代表方向：上升紅、下降綠**（台灣股市慣例，使用者定） | 改成「變好綠、變差紅」就是在 Dart 判斷好壞——睡得多不一定好，攝影機動作更已驗證與任何結果無關 |
 | 比的是**上一個有資料的晚上**；那一項沒逐夜資料時**不畫比較** | 編出比較數字。效率、深睡的逐夜資料來自後端 PR（`feat/history-eff-deep`） |
 | **警語畫面上不放**，點效率／深睡卡才跳出，文字照抄 `score_claim.py`；Sleep Stages 卡不放警語（使用者定） | — |
@@ -483,7 +483,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 | 白天資料跟睡眠分數無關：手錶睡眠還沒到（沒分數）也照樣畫 | — |
 | **每個鐘頭走幾步**（2026-11-15）：同一次登入多打一個 `get_steps_data`（每 15 分鐘一格、`startGMT` 是 **GMT**，換成當地時間只在 `garmin/steps_intraday.py`）→ `garmin/data/garmin_steps_intraday.json`（**不進版控**，使用者定：等於公開作息）→ `migrate_garmin_to_db.py` 寫進 `garmin_daily.steps_hourly`（24 格 JSON；**另一支 `set_garmin_steps_hourly` 寫**，存白天資料時不會被蓋掉）→ `/home` 的 `yesterday.steps_hourly`。**打包檔刻意不帶**（它進版控）。補抓同白天資料：`--daily-since`、一次最多 30 天、429 就停 | Garmin 標 `none` 的格子＝沒戴錶，那個鐘頭整個沒有就是 null |
 | ⚠️ Move IQ 的 `duration` **單位是分鐘**（對過起訖時刻）；一整天沒戴錶時 Garmin 回步數 0，那是「沒資料」不是「走了 0 步」；Garmin 用負數表示沒有值 | 寫錯都不會報錯 |
-| 這支錶（Vivoactive 3）**沒有** SpO2、HRV、呼吸、訓練準備度；VO2 max 只在有 GPS 走路／跑步的日子更新 | 2026-11-13 試抓 |
+| 這支錶（Vivoactive 3）**沒有** SpO2、HRV、呼吸、訓練準備度、**Body Battery**（2026-11-15 實測：Garmin 回的全是空值，本人 78 天一天都沒有；報告那一格的程式留著，沒資料就不畫）；VO2 max 只在有 GPS 走路／跑步的日子更新 | 2026-11-13 試抓 |
 
 ### ✅ 早晨報告（2026-11-12，`feature/morning-report`）
 

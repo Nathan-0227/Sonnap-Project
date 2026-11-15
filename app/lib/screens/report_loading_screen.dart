@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/pet_choice.dart';
 import '../services/morning_report.dart';
 import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
@@ -87,7 +88,8 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
   PreparedReport? _ready;
 
   /// 場景圖讀不到 → 退回星空＋小狗。
-  bool _sceneFailed = false;
+  // 等報告的 GIF 只有小狗版；選貓時一開始就走星空＋寵物（寵物是貓）
+  bool _sceneFailed = PetChoice.isCat;
 
   @override
   void initState() {
@@ -164,7 +166,9 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
-                        shadows: [Shadow(color: Color(0x99000000), blurRadius: 8)],
+                        shadows: [
+                          Shadow(color: Color(0x99000000), blurRadius: 8),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -267,7 +271,7 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
   }
 
   Widget _pet() => SizedBox(
-        height: 200,
-        child: Center(child: HomePet(mood: widget.mood, size: 190)),
-      );
+    height: 200,
+    child: Center(child: HomePet(mood: widget.mood, size: 190)),
+  );
 }

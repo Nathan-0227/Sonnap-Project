@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/pet_choice.dart';
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
 import '../services/sleep_sounds.dart';
@@ -105,6 +106,11 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
 
   Future<void> _checkScene() async {
     var ok = false;
+    // 睡覺的 GIF 只有小狗版；選貓時走房間背景＋寵物（[SleepingPet] 會畫貓）
+    if (PetChoice.isCat) {
+      if (mounted) setState(() => _hasScene = false);
+      return;
+    }
     try {
       await rootBundle.load(widget.sceneAsset);
       ok = true;
@@ -113,6 +119,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
   }
 
   Future<void> _startIntro() async {
+    if (PetChoice.isCat) return; // 趴下睡著的過場只有小狗版
     final d = await wakeUpGifDuration(widget.introAsset);
     if (d == null || !mounted) return;
     // GIF 的動畫狀態在圖片快取裡是共用的：前一晚播過的話會從中間開始，先清掉

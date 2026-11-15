@@ -5,11 +5,13 @@ import 'package:lottie/lottie.dart';
 import '../pet2d/pet_catalog.dart';
 import '../pet2d/pet_models.dart';
 import '../pet2d/pet_widget.dart';
+import '../services/pet_choice.dart';
 import 'pet_mood_animation.dart';
 
 /// 首頁的寵物「插槽」：外面只給心情與衣服，裡面畫哪一套寵物由這裡決定。
 ///
-/// 現在畫的是隊友的 2D 分層小狗（`lib/pet2d/`）。換寵物時只改這個檔案，
+/// 畫的是隊友的 2D 分層寵物（`lib/pet2d/`）：使用者在設定頁選小狗或貓（[PetChoice]，
+/// 2026-11-15）。心情一律先過 `pet.resolve()`（缺圖畫 bored，不畫 happy）。換寵物時只改這個檔案，
 /// 首頁、晚上版、睡覺畫面都不用動（2026-11-12 定案）。
 ///
 /// 退路由好到壞（2D 讀不到 → Lottie → 爪印），Lottie 一個都不刪。
@@ -48,11 +50,11 @@ class HomePet extends StatefulWidget {
 
 /// 後端心情字串 → 2D 寵物的心情。不認得的一律 bored。
 PetMood petMoodFromBackend(String? mood) => switch (mood) {
-      'happy' => PetMood.happy,
-      'tired' => PetMood.tired,
-      'anxious' => PetMood.anxious,
-      _ => PetMood.bored,
-    };
+  'happy' => PetMood.happy,
+  'tired' => PetMood.tired,
+  'anxious' => PetMood.anxious,
+  _ => PetMood.bored,
+};
 
 /// 衣櫃的 item_id（`game/inventory.py`）→ 隊友畫好的衣服圖。
 /// 不在表上的（bow、top_hat、crown）沒有圖，改疊 emoji。
@@ -72,10 +74,10 @@ AccessoryDefinition? layeredAccessoryFor(String? itemId) {
 }
 
 double _growthScale(String? stage) => switch (stage) {
-      'baby' => 0.85,
-      'adult' => 1.12,
-      _ => 1.0,
-    };
+  'baby' => 0.85,
+  'adult' => 1.12,
+  _ => 1.0,
+};
 
 class _HomePetState extends State<HomePet> {
   /// 2D 的圖讀不到時改走 Lottie。
@@ -84,11 +86,25 @@ class _HomePetState extends State<HomePet> {
   @override
   void initState() {
     super.initState();
+    PetChoice.current.addListener(_onSpecies);
     _checkLayeredAssets();
   }
 
+  @override
+  void dispose() {
+    PetChoice.current.removeListener(_onSpecies);
+    super.dispose();
+  }
+
+  void _onSpecies() {
+    setState(() => _layeredMissing = false);
+    _checkLayeredAssets();
+  }
+
+  PetDefinition get _petDef => petDefinitionFor(PetChoice.current.value);
+
   Future<void> _checkLayeredAssets() async {
-    final pose = dog01.poseFor(petMoodFromBackend(widget.mood));
+    final pose = _petDef.poseFor(petMoodFromBackend(widget.mood));
     try {
       await rootBundle.load(pose.body.assetPath);
     } catch (_) {
@@ -105,8 +121,11 @@ class _HomePetState extends State<HomePet> {
       fit: BoxFit.contain,
       errorBuilder: (context, error, stack) => SizedBox.square(
         dimension: widget.size,
-        child: Icon(Icons.pets_rounded,
-            color: Colors.white54, size: widget.size * 0.4),
+        child: Icon(
+          Icons.pets_rounded,
+          color: Colors.white54,
+          size: widget.size * 0.4,
+        ),
       ),
     );
   }
@@ -119,8 +138,9 @@ class _HomePetState extends State<HomePet> {
     final Widget pet = _layeredMissing
         ? _lottieFallback()
         : LayeredPet(
-            pet: dog01,
-            mood: petMoodFromBackend(widget.mood),
+            key: ValueKey('pet2d-${_petDef.id}'),
+            pet: _petDef,
+            mood: _petDef.resolve(petMoodFromBackend(widget.mood)),
             accessory: layered,
             size: widget.size,
             speed: widget.speed,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/pet_choice.dart';
 import 'home_pet.dart';
 
 /// 晚上版與睡覺畫面的寵物：睡在一彎月亮上。
@@ -42,8 +43,12 @@ class _MoonPainter extends CustomPainter {
     final c = Offset(size.width * 0.5, size.height * 0.52);
     final outer = Path()..addOval(Rect.fromCircle(center: c, radius: r));
     final bite = Path()
-      ..addOval(Rect.fromCircle(
-          center: c.translate(r * 0.42, -r * 0.42), radius: r * 0.86));
+      ..addOval(
+        Rect.fromCircle(
+          center: c.translate(r * 0.42, -r * 0.42),
+          radius: r * 0.86,
+        ),
+      );
     final moon = Path.combine(PathOperation.difference, outer, bite);
 
     canvas.drawPath(
@@ -108,6 +113,22 @@ class _SleepingPetState extends State<SleepingPet>
   @override
   Widget build(BuildContext context) {
     final s = widget.size;
+    // 睡姿圖只有小狗版；選貓時畫 tired 那隻貓、動作放慢（2026-11-15 使用者定）
+    if (PetChoice.isCat) {
+      return SizedBox(
+        key: const Key('sleeping-pet'),
+        width: s,
+        height: s,
+        child: Center(
+          child: HomePet(
+            key: const Key('sleeping-pet-cat'),
+            mood: 'tired',
+            size: s * 0.82,
+            speed: 0.55,
+          ),
+        ),
+      );
+    }
     return SizedBox(
       key: const Key('sleeping-pet'),
       width: s,
