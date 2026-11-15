@@ -452,6 +452,8 @@ def activity_block(night_iso):
         history.append({
             "date": d,
             "steps": r.get("steps"),
+            "step_goal": r.get("step_goal"),
+            "distance_m": r.get("distance_m"),
             "active_kcal": r.get("active_kcal"),
             "active_minutes": (round(sum(v for v in active if v) / 60)
                                if any(v is not None for v in active) else None),
@@ -481,6 +483,8 @@ def activity_block(night_iso):
         ),
         "vo2max": vo2,
         "move_iq": row.get("move_iq"),
+        # ⚠️ 刻意不帶 steps_hourly（每個鐘頭走幾步）：這個打包檔進版控，那份資料使用者定不進版控
+        #    （＝公開作息）。只有 /home 的 yesterday 有，早晨報告的 Steps 點開才畫。
         "heart_rate": heart,
         "history": history,
     }

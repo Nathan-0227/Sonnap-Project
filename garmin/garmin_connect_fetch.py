@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import daily_activity as daily
 import merge_standard_data as merge
+import steps_intraday
 from migrate_daily_series_tz import TZ_MARKER_KEY, TZ_MARKER_VALUE, is_converted
 
 # 【2026-08-11】生成的資料檔集中放在 garmin/data/，讓 garmin/ 目錄下只留程式碼。
@@ -302,6 +303,54 @@ def run_daily_activity(client: Any, fetched_days: List[date], args: argparse.Nam
     print(f"    asked {len(days)} days, got {len(fetched)}; "
           f"new {len(report['new'])}, updated {len(report['updated'])}, "
           f"kept (nothing fetched) {len(report['kept'])}")
+    if stopped_at:
+        print(f"    ! Garmin answered 429 (too many requests) at {stopped_at}; stopped. "
+              "Saved what was fetched; the rest will be tried next run.")
+    print(f"    file: {path}")
+
+
+def fetch_steps_intraday(client: Any, days: List[date], pause: float, tz_hours: float,
+                         sleep=time.sleep) -> Tuple[Dict[str, Any], Optional[str]]:
+    """每一天的每 15 分鐘步數（`get_steps_data`）。規則同白天資料：一個請求失敗就那天 None；
+    **429 立刻停**，已經抓到的照樣回傳。"""
+    out: Dict[str, Any] = {}
+    fn = getattr(client, "get_steps_data", None)
+    if not callable(fn):
+        return out, None
+    for d in days:
+        ds = d.isoformat()
+        sleep(pause)
+        try:
+            resp = fn(ds)
+        except Exception as exc:  # noqa: BLE001
+            if daily.is_rate_limited(exc):
+                return out, ds
+            resp = None
+        out[ds] = steps_intraday.parse_steps_chart(resp, ds, tz_hours)
+    return out, None
+
+
+def run_steps_intraday(client: Any, fetched_days: List[date], args: argparse.Namespace,
+                       path: Path = steps_intraday.DATA_FILE, today: Optional[date] = None,
+                       sleep=time.sleep) -> None:
+    """抓每 15 分鐘步數並併進 garmin_steps_intraday.json（不進版控）。
+
+    ⚠️ 這裡出錯不能讓睡眠或白天那兩份失敗——呼叫端用 try 包著。
+    """
+    today = today or date.today()
+    existing = steps_intraday.load(path)
+    days = sorted(set(fetched_days))
+    if args.daily_since:
+        since = date.fromisoformat(args.daily_since)
+        days += steps_intraday.days_to_backfill(existing, since, today, already=days,
+                                                limit=args.daily_limit)
+    tz_hours = merge.parse_tz(args.tz).utcoffset(None).total_seconds() / 3600
+    fetched, stopped_at = fetch_steps_intraday(client, days, args.daily_pause, tz_hours, sleep=sleep)
+    merged = steps_intraday.merge_days(existing, fetched)
+    steps_intraday.save(merged, path)
+    got = sum(1 for v in fetched.values() if steps_intraday.has_data(v))
+    print("- steps every 15 min:")
+    print(f"    asked {len(days)} days, got data for {got}")
     if stopped_at:
         print(f"    ! Garmin answered 429 (too many requests) at {stopped_at}; stopped. "
               "Saved what was fetched; the rest will be tried next run.")
@@ -965,6 +1014,11 @@ def main() -> None:
             run_daily_activity(client, sorted(fetched_days), args, path=daily_path)
         except Exception as exc:  # noqa: BLE001
             print(f"- daily activity: FAILED ({type(exc).__name__}: {exc}); sleep data is unaffected.")
+        try:
+            steps_path = Path(args.output).with_name(steps_intraday.DATA_FILE.name)
+            run_steps_intraday(client, sorted(fetched_days), args, path=steps_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"- steps every 15 min: FAILED ({type(exc).__name__}: {exc}); other data is unaffected.")
     print(f"- fetched_days: {len(fetched_days)}")
     print(f"- records: {standard_payload['total_records']}")
     if merge_report is None:

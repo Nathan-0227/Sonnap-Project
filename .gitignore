@@ -42,3 +42,7 @@ garmin/data/_backup_*/
 
 # tapo_metric_logger 的輸出（每晚約 3MB 的原始度量，不進版控）
 /tapo_metrics/
+
+# 每 15 分鐘的步數＝公開作息（2026-11-15 使用者定不進版控）
+garmin/data/garmin_steps_intraday.json
+garmin/data/garmin_steps_intraday.json.tmp

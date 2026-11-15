@@ -231,7 +231,8 @@ check("history：最近幾天（到那一天為止），照日期排；活動分
       [(x["date"], x["steps"]) for x in y["history"]][-1], ("2026-11-12", 9955))
 check("history 不含那一天之後的", all(x["date"] <= "2026-11-12" for x in y["history"]), True)
 check("history 跟打包檔同一個形狀", sorted(y["history"][-1]),
-      ["active_kcal", "active_minutes", "date", "steps"])
+      ["active_kcal", "active_minutes", "date", "distance_m", "step_goal", "steps"])
+check("history 每天帶那天自己的目標（Steps 一週圖用）", y["history"][-1]["step_goal"], 9430)
 ok("整天心率欄位在（沒有原始讀數時是 null，不回 0）", "heart_rate" in y)
 ok("不給任何判斷字眼", not any(w in json.dumps(y).lower()
                                for w in ("good", "normal", "poor", "reached", "achieved")))

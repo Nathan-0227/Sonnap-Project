@@ -383,6 +383,8 @@ def yesterday_block(user_id, night_date):
         "vo2max": None if vo2 is None else {"value": vo2[0], "measured_on": vo2[1]},
         # 沒有事件是 []（照實），沒抓到是 null
         "move_iq": row.get("move_iq"),
+        # 每個鐘頭走幾步（24 格，null＝那小時沒戴錶；整個沒抓到是 null）。加起來≠steps，App 不寫加總
+        "steps_hourly": row.get("steps_hourly"),
         # 2026-11-14：報告的圖形格子用（步數那座「山」、點開的長條圖、整天心率線）。
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
         "history": _yesterday_history(user_id, day),
@@ -401,6 +403,8 @@ def _yesterday_history(user_id, day):
         out.append({
             "date": r["date"],
             "steps": r.get("steps"),
+            "step_goal": r.get("step_goal"),
+            "distance_m": r.get("distance_m"),
             "active_kcal": r.get("active_kcal"),
             "active_minutes": (round(sum(v for v in active if v) / 60)
                                if any(v is not None for v in active) else None),

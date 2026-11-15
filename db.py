@@ -563,6 +563,9 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     body_battery_drained INTEGER,
     vo2max               REAL,
     move_iq              TEXT,                 -- JSON 陣列 [{type, start, minutes}]；NULL = 沒抓到
+    -- 每個鐘頭走幾步：JSON 24 格（null＝那小時沒戴錶）；NULL＝沒抓到。來源 garmin_steps_intraday.json，
+    -- 另一支 set_garmin_steps_hourly 寫（不在 GARMIN_DAILY_FIELDS 裡，存白天資料時不會被蓋掉）
+    steps_hourly         TEXT,
     updated_at           TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -604,6 +607,7 @@ COLUMN_MIGRATIONS = [
     # 2026-11-13：攝影機整晚的動作曲線（只呈現、不計分）。Sleep Stages 卡點 Camera 疊上去。
     ("camera_nightly", "motion_curve", "TEXT"),
     ("camera_nightly", "motion_episodes", "TEXT"),
+    ("garmin_daily", "steps_hourly", "TEXT"),
     # 2026-08-26：Health Connect 能給臥床時間（Garmin 不能），
     #             以及把 final_score 存起來不讓 API 層自己算。
     ("wearable_nightly", "time_in_bed_min", "REAL"),
@@ -2073,14 +2077,29 @@ def upsert_garmin_daily(user_id, date, row, db_path=None):
         conn.close()
 
 
+def set_garmin_steps_hourly(user_id, date, hours, db_path=None):
+    """那一天每個鐘頭走幾步（24 格）。那天還沒有白天資料那一列就不寫（回 False）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET steps_hourly = ? WHERE user_id = ? AND date = ?",
+            (None if hours is None else json.dumps(hours), user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def _garmin_daily_row(row):
     row = dict(row)
-    raw = row.get("move_iq")
-    if raw is not None:
-        try:
-            row["move_iq"] = json.loads(raw)
-        except ValueError:
-            row["move_iq"] = None
+    for key in ("move_iq", "steps_hourly"):
+        raw = row.get(key)
+        if raw is not None:
+            try:
+                row[key] = json.loads(raw)
+            except ValueError:
+                row[key] = None
     return row
 
 

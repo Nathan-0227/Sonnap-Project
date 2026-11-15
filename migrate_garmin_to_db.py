@@ -56,6 +56,7 @@ import db
 sys.path.insert(0, str(Path(__file__).parent / "garmin"))
 from apply_recovery_modifier import wearer_segment  # noqa: E402
 import daily_activity  # noqa: E402
+import steps_intraday  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -557,6 +558,14 @@ def import_daily_activity(phone, db_path=None, path=None):
             continue
         db.upsert_garmin_daily(phone, date, row, db_path=db_path)
         written += 1
+    # 每個鐘頭走幾步（另一個檔，不進版控）：同一個判準（只收本人、只寫手機帳號），
+    # 寫在白天資料那一列上；那天沒有白天資料就不寫
+    steps_path = (path.with_name(steps_intraday.DATA_FILE.name) if path
+                  else steps_intraday.DATA_FILE)
+    for date, slots in sorted(steps_intraday.load(steps_path).items()):
+        name, _trusted, _start, _end = wearer_segment(date)
+        if name == "wearer_c":
+            db.set_garmin_steps_hourly(phone, date, steps_intraday.hourly(slots), db_path=db_path)
     return written, skipped
 
 
