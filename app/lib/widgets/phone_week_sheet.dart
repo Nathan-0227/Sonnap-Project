@@ -161,6 +161,9 @@ Future<void> showPhoneWeekSheet(
   required PhoneWeek week,
   String? target,
   String? fontFamily,
+  DateTime? startSleepAt,
+  DateTime? phoneDownAt,
+  double? afterStartMinutes,
 }) {
   return showReportSheet<void>(
     context: context,
@@ -172,9 +175,23 @@ Future<void> showPhoneWeekSheet(
         color: color,
         week: week,
         target: target,
+        startSleepAt: startSleepAt,
+        phoneDownAt: phoneDownAt,
+        afterStartMinutes: afterStartMinutes,
       ),
     ),
   );
+}
+
+String _hhmm(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// 這一晚：按 Start Sleep 之後又過多久才放下手機（後端 phone_in_bed_minutes，照抄；下界）。
+/// 沒按 Start Sleep（null）→ null，那一塊不出現；不到 1 分鐘寫 right after。
+String? phoneAfterStartLine(double? minutes) {
+  if (minutes == null) return null;
+  if (minutes < 1) return 'Phone down right after Start Sleep';
+  return '${formatMinutes(minutes)} after Start Sleep';
 }
 
 class PhoneWeekView extends StatelessWidget {
@@ -183,11 +200,19 @@ class PhoneWeekView extends StatelessWidget {
   final Color color;
   final PhoneWeek week;
   final String? target;
+
+  /// 這一晚按 Start Sleep、放下手機的時刻，與中間隔了多久（後端照抄）。
+  final DateTime? startSleepAt;
+  final DateTime? phoneDownAt;
+  final double? afterStartMinutes;
   const PhoneWeekView({
     super.key,
     required this.title,
     required this.week,
     this.target,
+    this.startSleepAt,
+    this.phoneDownAt,
+    this.afterStartMinutes,
     this.icon = Icons.phone_android_rounded,
     this.color = const Color(0xFFFFC97A),
   });
@@ -249,6 +274,52 @@ class PhoneWeekView extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              if (phoneAfterStartLine(afterStartMinutes) case final after?
+                  when startSleepAt != null && phoneDownAt != null) ...[
+                Container(
+                  key: const Key('phone-last-night'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0x14FFFFFF),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0x1FFFFFFF)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'This night',
+                        style: TextStyle(color: _soft, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Start Sleep ${_hhmm(startSleepAt!)}  →  '
+                        'phone down ${_hhmm(phoneDownAt!)}',
+                        key: const Key('phone-last-night-times'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        after,
+                        key: const Key('phone-after-start'),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Container(height: 1, color: const Color(0x1FFFFFFF)),
+                ),
+              ],
               if (med == null)
                 const Text(
                   'No phone-down times this week',

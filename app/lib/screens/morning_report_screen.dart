@@ -156,14 +156,6 @@ String reportDateTitle(DateTime d) {
 }
 
 /// 「放下手機比目標晚多少」那一行。**只照抄後端的分鐘數**；沒有就不寫。
-/// Phone down 第三行（11-15 使用者定，併進 Phone down 不另開一格）：按 Start Sleep 之後又過多久才放下手機。
-/// 照抄後端；沒按 Start Sleep（null）不寫；0 寫 right after。
-String? phoneAfterStartLine(double? minutes) {
-  if (minutes == null) return null;
-  if (minutes < 1) return 'Down right after Start Sleep';
-  return '${reportHm(minutes)} after Start Sleep';
-}
-
 String? adherenceLine(double? minutes) {
   if (minutes == null) return null;
   if (minutes <= 0) return 'On time';
@@ -1176,8 +1168,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               ),
             // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
             if (line != null) Text(line, key: const Key('report-adherence')),
-            if (phoneAfterStartLine(r.phoneAfterStartMinutes) case final after?)
-              Text(after, key: const Key('report-phone-after-start')),
           ],
         ),
       );
@@ -1862,7 +1852,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       downs[r.date] = PhoneDown(
         mine,
         downs[r.date]?.isLate,
-        downs[r.date]?.inBedMinutes,
+        // 這一晚以報告上的為準（後端剛算好的可能比一週那份新）
+        r.phoneAfterStartMinutes ?? downs[r.date]?.inBedMinutes,
       );
     }
     if (!mounted) return;
@@ -1874,6 +1865,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       fontFamily: kReportFont,
       target: r.targetBedtime,
       week: phoneWeek(endDate: r.date, downs: downs),
+      // 11-15 使用者定：這一晚「幾點按 Start Sleep → 幾點放下、隔了多久」寫在頁面最上面
+      startSleepAt: r.bedStart,
+      phoneDownAt: r.lightsOutAt,
+      afterStartMinutes: r.phoneAfterStartMinutes,
     );
   }
 

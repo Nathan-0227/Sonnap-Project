@@ -1,8 +1,7 @@
 // 早晨報告 Last night 的圖形格子（2026-11-15 使用者定 Q1–Q7）。
 // 守：Efficiency 的水面會動、減少動態效果時靜止（使用者：喜歡但有點靜態）；
 //     沒按上床時夜空弧不畫上床點也不報錯；填滿的高度照舊＝效率。
-import 'package:app/screens/morning_report_screen.dart'
-    show phoneAfterStartLine;
+import 'package:app/widgets/phone_week_sheet.dart';
 import 'package:app/widgets/last_night_art.dart';
 import 'package:app/widgets/report_tiles.dart';
 import 'dart:ui' show PictureRecorder;
@@ -130,9 +129,54 @@ void main() {
     expect(cameraPerHourText(0), '0 moves / hour');
   });
 
-  test('Phone down 第三行：按 Start Sleep 之後多久（照抄後端；沒按不寫）', () {
+  test('Phone down 點開頁最上面：按 Start Sleep 之後多久（照抄後端；沒按不寫）', () {
     expect(phoneAfterStartLine(null), isNull);
-    expect(phoneAfterStartLine(0), 'Down right after Start Sleep');
+    expect(phoneAfterStartLine(0), 'Phone down right after Start Sleep');
     expect(phoneAfterStartLine(32), '32m after Start Sleep');
+  });
+
+  testWidgets('Phone down 點開頁：最上面寫這一晚幾點按 Start Sleep、幾點放下、隔了多久；沒按就不出現', (
+    tester,
+  ) async {
+    Future<void> pump({DateTime? start, double? after}) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PhoneWeekView(
+              title: 'Phone down',
+              target: '03:00',
+              week: phoneWeek(
+                endDate: '2026-11-14',
+                downs: {
+                  '2026-11-14': PhoneDown(
+                    DateTime(2026, 11, 14, 3, 27),
+                    true,
+                    after,
+                  ),
+                },
+              ),
+              startSleepAt: start,
+              phoneDownAt: DateTime(2026, 11, 14, 3, 27),
+              afterStartMinutes: after,
+            ),
+          ),
+        ),
+      ),
+    );
+    await pump(start: DateTime(2026, 11, 14, 3, 20), after: 6.7);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('phone-last-night-times'))).data,
+      'Start Sleep 03:20  →  phone down 03:27',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('phone-after-start'))).data,
+      '7m after Start Sleep',
+    );
+    await pump();
+    expect(
+      find.byKey(const Key('phone-last-night')),
+      findsNothing,
+      reason: '沒按 Start Sleep 不寫、不寫 0',
+    );
   });
 }
