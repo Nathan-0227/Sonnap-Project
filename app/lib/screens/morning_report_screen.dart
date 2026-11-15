@@ -29,6 +29,7 @@ import '../widgets/sleepy_pet.dart';
 import '../widgets/steps_sheet.dart';
 import '../widgets/kcal_sheet.dart';
 import '../widgets/active_sheet.dart';
+import '../widgets/stress_sheet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -1464,25 +1465,86 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ('Medium', y.stressMediumSec, _cStress.withValues(alpha: 0.8)),
         ('High', y.stressHighSec, _cStress),
       ];
-      stressTile = ReportTile(
-        key: const Key('report-stress'),
-        icon: Icons.spa_rounded,
-        color: _cStress,
-        title: 'Stress',
-        graphic: paintBox(
-          GaugePainter([for (final p in parts) ((p.$2 ?? 0).toDouble(), p.$3)]),
-          key: const Key('report-stress-gauge'),
-        ),
-        graphicHeight: 52,
-        lines: [
-          Text(
-            [
-              for (final p in parts)
-                if (p.$2 != null) '${p.$1} ${_secHm(p.$2!)}',
-            ].join(' · '),
-          ),
-        ],
-      );
+      // 11-15 使用者定（參考圖 Stress 卡）：右上方露出的圓頂，各段面積＝各程度的比例；
+      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在左下（stress_sheet.dart）
+      final sp = stressParts(y);
+      final avg = stressAvgOf(y);
+      stressTile = sp == null
+          ? ReportTile(
+              key: const Key('report-stress'),
+              icon: Icons.spa_rounded,
+              color: _cStress,
+              title: 'Stress',
+              graphic: paintBox(
+                GaugePainter([
+                  for (final p in parts) ((p.$2 ?? 0).toDouble(), p.$3),
+                ]),
+                key: const Key('report-stress-gauge'),
+              ),
+              graphicHeight: 52,
+              lines: [
+                Text(
+                  [
+                    for (final p in parts)
+                      if (p.$2 != null) '${p.$1} ${_secHm(p.$2!)}',
+                  ].join(' · '),
+                ),
+              ],
+            )
+          : ReportTile(
+              key: const Key('report-stress'),
+              icon: Icons.spa_rounded,
+              color: _cStress,
+              title: 'Stress',
+              graphicHeight: 150,
+              onTap: () =>
+                  showStressSheet(context, day: y, fontFamily: kReportFont),
+              graphic: Stack(
+                fit: StackFit.expand,
+                children: [
+                  StressDome(key: const Key('report-stress-dome'), parts: sp),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (avg != null)
+                          Text(
+                            '$avg',
+                            key: const Key('report-stress-value'),
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(color: Color(0x66000000), blurRadius: 8),
+                              ],
+                            ),
+                          ),
+                        Text(
+                          avg == null
+                              ? 'high ${_secHm(sp.high)}'
+                              : stressTileLine(sp),
+                          key: const Key('report-stress-line'),
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(color: Color(0x66000000), blurRadius: 6),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
     }
 
     Widget? batteryTile;

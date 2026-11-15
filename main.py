@@ -351,6 +351,7 @@ def yesterday_block(user_id, night_date):
     row = db.get_garmin_daily(user_id, day.isoformat())
     if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
         return None
+    stress_curve = sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
     vo2 = db.latest_vo2max(
         user_id, on_or_before=day.isoformat(),
         since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
@@ -379,7 +380,12 @@ def yesterday_block(user_id, night_date):
             low_sec=row.get("stress_low_sec"),
             medium_sec=row.get("stress_medium_sec"),
             high_sec=row.get("stress_high_sec"),
+            # 量不到的時間（在動＋其他）；兩個都沒存（舊日子）→ null，App 不寫那一行
+            not_measured_sec=_payload.sum_or_none(row.get("stress_activity_sec"),
+                                   row.get("stress_uncategorized_sec")),
         ),
+        # 一整天的壓力線（每 3 分鐘一點，量不到的時候沒有點）＋平均、最低、最高。只呈現、不判斷
+        "stress_curve": stress_curve,
         "body_battery": group(
             charged=row.get("body_battery_charged"),
             drained=row.get("body_battery_drained"),
@@ -413,6 +419,7 @@ def _sleeping_sec(row):
 def _yesterday_history(user_id, day):
     """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。"""
     since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
+    stress_avgs = sleep_heart_rate.stress_day_averages(_garmin_records() or [])
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
         if not any(r.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
@@ -428,6 +435,9 @@ def _yesterday_history(user_id, day):
                                if any(v is not None for v in active) else None),
             "highly_active_minutes": (None if r.get("highly_active_sec") is None
                                       else round(r["highly_active_sec"] / 60)),
+            # Stress 一週圖：各程度幾分鐘＋那天的平均壓力（從每 3 分鐘的讀數算）
+            "stress_minutes": _payload.stress_minutes(r),
+            "stress_avg": stress_avgs.get(r["date"]),
         })
     return out
 

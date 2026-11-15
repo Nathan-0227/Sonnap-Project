@@ -68,6 +68,7 @@ STATS = {
     "sedentarySeconds": 62062, "sleepingSeconds": 12900, "floorsAscended": 9.42651,
     "restStressDuration": 27660, "lowStressDuration": 11340,
     "mediumStressDuration": 14880, "highStressDuration": 2100,
+    "activityStressDuration": 10800, "uncategorizedStressDuration": 120,
     "bmrKilocalories": 1927.0, "totalKilocalories": 2304.0,
 }
 # 2026-10-09 實際抓到的形狀
@@ -227,8 +228,10 @@ check("步數與目標照實給（不判斷達標）", (y["steps"], y["step_goal
 check("靜止代謝、總消耗照實給（同一個 get_stats，不多打請求）",
       (y["resting_kcal"], y["total_kcal"], y["active_kcal"]), (1927, 2304, 377))
 ok("不給熱量目標、不寫剩多少", not any(k in y for k in ("kcal_goal", "kcal_left", "remaining_kcal")))
-check("壓力只給秒數", y["stress"], {"rest_sec": 27660, "low_sec": 11340,
-                                     "medium_sec": 14880, "high_sec": 2100})
+check("壓力只給秒數；量不到的時間＝在動＋其他", y["stress"], {"rest_sec": 27660, "low_sec": 11340,
+                                     "medium_sec": 14880, "high_sec": 2100,
+                                     "not_measured_sec": 10800 + 120})
+ok("整天壓力線欄位在（沒有原始讀數時是 null，不回 0）", "stress_curve" in y)
 check("VO2 max：最近一次＋量到的日期", y["vo2max"], {"value": 45.7, "measured_on": "2026-10-09"})
 check("Move IQ 三段", len(y["move_iq"]), 3)
 check("history：最近幾天（到那一天為止），照日期排；活動分鐘＝高強度＋活動",
@@ -236,7 +239,9 @@ check("history：最近幾天（到那一天為止），照日期排；活動分
 check("history 不含那一天之後的", all(x["date"] <= "2026-11-12" for x in y["history"]), True)
 check("history 跟打包檔同一個形狀", sorted(y["history"][-1]),
       ["active_kcal", "active_minutes", "date", "distance_m", "highly_active_minutes",
-       "step_goal", "steps"])
+       "step_goal", "steps", "stress_avg", "stress_minutes"])
+check("history 每天各壓力程度幾分鐘（Stress 一週圖）", y["history"][-1]["stress_minutes"],
+      {"rest": 461, "low": 189, "medium": 248, "high": 35})
 check("history 的高強度分鐘（Active time 一週圖疊在下面）", y["history"][-1]["highly_active_minutes"], 29)
 check("活動四種：睡著時間照抄 Garmin（這個日曆日的）", y["activity"],
       {"highly_active_sec": 1747, "active_sec": 9691, "sedentary_sec": 62062, "sleeping_sec": 12900})

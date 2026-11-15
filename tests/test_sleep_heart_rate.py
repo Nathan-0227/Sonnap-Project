@@ -117,6 +117,27 @@ check("Health Connect 來源沒有曲線", m2["heart_rate_curve"], None)
 check("Garmin 來源也有動作曲線", m["movement_curve"] is not None, True)
 check("Health Connect 沒有動作曲線", m2["movement_curve"], None)
 
+print("\n【5b】一整天的壓力線（Stress 點開）")
+def srecs(start, values, every_min=3):
+    t0 = datetime.fromisoformat(start)
+    return [{"timestamp": (t0 + timedelta(minutes=every_min * i)).isoformat(),
+             "metric": "stress_score", "value": v, "unit": "score"} for i, v in enumerate(values)]
+day = srecs("2026-11-13T23:51:00+08:00", [99, 99, 99]) + \
+      srecs("2026-11-14T00:00:00+08:00", [20, 40, -1, -2, 96, 0, 30, 30, 30, 30]) + \
+      srecs("2026-11-15T00:00:00+08:00", [88])
+st = hr.day_stress(day, "2026-11-14")
+check("每 3 分鐘一點、不平均（每一筆原始讀數一格）", [p["value"] for p in st["points"]][:2], [20, 40])
+check("⚠️ 負數＝量不到，沒有那一點（App 斷開）",
+      [p["t"][11:16] for p in st["points"]][:3], ["00:00", "00:03", "00:12"])
+check("0 是真的值（完全放鬆）", st["min"], 0)
+check("只取那個日曆日（前一天 23:51 的 99、隔天 00:00 的 88 不算）", st["max"], 96)
+check("平均從原始讀數算", st["avg"], round((20 + 40 + 96 + 0 + 30 * 4) / 8))
+check("讀數太少 → None", hr.day_stress(srecs("2026-11-14T00:00:00+08:00", [20, 30]), "2026-11-14"), None)
+avgs = hr.stress_day_averages(day)
+check("每天平均：負數不算、照讀數自己的日期", (avgs["2026-11-13"], avgs["2026-11-14"], avgs["2026-11-15"]),
+      (99, st["avg"], 88))
+check("不寫 Elevated 之類", any(w in json.dumps(st).lower() for w in ("elevated", "high", "normal")), False)
+
 print("\n【6】不判斷")
 text = json.dumps(curve).lower()
 check("沒有 normal／high／low／good 字眼",

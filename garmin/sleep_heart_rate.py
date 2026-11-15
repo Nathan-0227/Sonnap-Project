@@ -82,6 +82,38 @@ def day_heart_rate(records: Iterable[dict], day: str, tz: str = "+08:00") -> Opt
     return curve
 
 
+# 2026-11-15 使用者定（早晨報告 Stress 點開的「一整天的壓力線」）：Garmin 本來就每 3 分鐘一筆，
+# 用 3 分鐘的格子＝每一筆原始讀數一格，不平均掉尖峰。
+STRESS_BUCKET_MINUTES = 3
+
+
+def day_stress(records: Iterable[dict], day: str, tz: str = "+08:00") -> Optional[dict]:
+    """一整個日曆日的壓力線（0–100，Garmin 的分數）。量不到的時候（在動、沒戴錶）就沒有那一點，
+    App 斷開不連線。avg／min／max 從原始讀數算。**只呈現，不判斷**（不寫 Elevated、不用紅黃）。"""
+    try:
+        start = datetime.fromisoformat(f"{day}T00:00:00{tz}")
+    except ValueError:
+        return None
+    end = start + timedelta(days=1) - timedelta(seconds=1)
+    return _curve(list(records), "stress_score", start.isoformat(), end.isoformat(),
+                  STRESS_BUCKET_MINUTES, digits=0)
+
+
+def stress_day_averages(records: Iterable[dict]) -> dict:
+    """每個日曆日（照讀數自己的牆鐘日期）的平均壓力，一次掃完。負數＝沒有值，不算。"""
+    sums: dict = {}
+    for r in records:
+        if r.get("metric") != "stress_score":
+            continue
+        v, ts = r.get("value"), str(r.get("timestamp") or "")
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0 or len(ts) < 10:
+            continue
+        s = sums.setdefault(ts[:10], [0.0, 0])
+        s[0] += v
+        s[1] += 1
+    return {d: round(t / n) for d, (t, n) in sums.items() if n}
+
+
 def _curve(
     records: Iterable[dict],
     metric: str,

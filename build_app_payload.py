@@ -441,6 +441,8 @@ def activity_block(night_iso):
 
     raw = load_json(GARMIN_DATA / "garmin_standard_data.json") or {}
     heart = sleep_heart_rate.day_heart_rate(raw.get("records", []), day.isoformat())
+    stress_curve = sleep_heart_rate.day_stress(raw.get("records", []), day.isoformat())
+    stress_avgs = sleep_heart_rate.stress_day_averages(raw.get("records", []))
 
     history = []
     for i in range(ACTIVITY_HISTORY_DAYS - 1, -1, -1):
@@ -459,6 +461,9 @@ def activity_block(night_iso):
                                if any(v is not None for v in active) else None),
             "highly_active_minutes": (None if r.get("highly_active_sec") is None
                                       else round(r["highly_active_sec"] / 60)),
+            # Stress 一週圖：各程度幾分鐘＋那天的平均壓力（從每 3 分鐘的讀數算）
+            "stress_minutes": stress_minutes(r),
+            "stress_avg": stress_avgs.get(d),
         })
 
     return {
@@ -480,7 +485,12 @@ def activity_block(night_iso):
             low_sec=row.get("stress_low_sec"),
             medium_sec=row.get("stress_medium_sec"),
             high_sec=row.get("stress_high_sec"),
+            # 量不到的時間（在動＋其他）；兩個都沒存（舊日子）→ null，App 不寫那一行
+            not_measured_sec=sum_or_none(row.get("stress_activity_sec"),
+                                   row.get("stress_uncategorized_sec")),
         ),
+        # 一整天的壓力線（每 3 分鐘一點，量不到的時候沒有點）＋平均、最低、最高。只呈現、不判斷
+        "stress_curve": stress_curve,
         "body_battery": group(
             charged=row.get("body_battery_charged"),
             drained=row.get("body_battery_drained"),
@@ -492,6 +502,20 @@ def activity_block(night_iso):
         "heart_rate": heart,
         "history": history,
     }
+
+
+def sum_or_none(*vals):
+    """都沒有 → None；有就加總（沒有的當 0）。"""
+    return None if all(v is None for v in vals) else sum(v or 0 for v in vals)
+
+
+def stress_minutes(r):
+    """那天各壓力程度幾分鐘（rest/low/medium/high）；四個都沒有 → None。"""
+    keys = ("rest", "low", "medium", "high")
+    vals = [r.get(f"stress_{k}_sec") for k in keys]
+    if all(v is None for v in vals):
+        return None
+    return {k: (None if v is None else round(v / 60)) for k, v in zip(keys, vals)}
 
 
 def scored_efficiency_fields(base_row):

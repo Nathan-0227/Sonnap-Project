@@ -180,9 +180,10 @@ void main() {
       );
       await scrollTo(tester, find.byKey(const Key('report-moveiq')));
       expect(find.text('3h 11m'), findsOneWidget, reason: '活動時間＝高強度＋活動');
+      // 11-15 起壓力那一格是圓頂：四段的時間改在點開的頁；格子上只寫高的時間（有平均時前面加 avg）
       expect(
-        find.text('Rest 7h 41m · Low 3h 9m · Medium 4h 8m · High 35m'),
-        findsOneWidget,
+        tester.widget<Text>(find.byKey(const Key('report-stress-line'))).data,
+        endsWith('high 35m'),
       );
       expect(find.text('+48 / −61'), findsOneWidget);
       expect(find.text('1 walk · 1 ride'), findsOneWidget);
@@ -200,7 +201,7 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-moveiq')));
       for (final k in [
         'report-active-mountain',
-        'report-stress-gauge',
+        'report-stress-dome',
         'report-body-battery-bars',
         'report-moveiq-timeline',
       ]) {
@@ -315,6 +316,24 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('active-sheet')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Stress：右上方的圓頂、大字不加 %，點了開 Stress 頁', (tester) async {
+      await pumpReport(tester, fullJson());
+      await scrollTo(tester, find.byKey(const Key('report-stress')));
+      expect(find.byKey(const Key('report-stress-dome')), findsOneWidget);
+      expect(find.byKey(const Key('report-stress-gauge')), findsNothing);
+      final line = tester
+          .widget<Text>(find.byKey(const Key('report-stress-line')))
+          .data!;
+      expect(line.contains('%'), isFalse);
+      expect(line.toLowerCase().contains('elevated'), isFalse);
+      await tester.tap(find.byKey(const Key('report-stress')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('stress-sheet')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

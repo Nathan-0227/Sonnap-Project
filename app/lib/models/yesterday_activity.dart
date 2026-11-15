@@ -31,6 +31,13 @@ class YesterdayActivity {
   final int? stressMediumSec;
   final int? stressHighSec;
 
+  /// 量不到壓力的時間（在動＋沒戴錶等）；舊日子沒存是 null。
+  final int? stressNotMeasuredSec;
+
+  /// 一整天的壓力線（每 3 分鐘一點，量不到的時候沒有點；avg／min／max 從讀數算）。
+  /// ⚠️ 只呈現：不寫 Elevated、不用紅黃。
+  final NightCurve? stressCurve;
+
   final int? bodyBatteryCharged;
   final int? bodyBatteryDrained;
 
@@ -75,6 +82,8 @@ class YesterdayActivity {
     this.stressLowSec,
     this.stressMediumSec,
     this.stressHighSec,
+    this.stressNotMeasuredSec,
+    this.stressCurve,
     this.bodyBatteryCharged,
     this.bodyBatteryDrained,
     this.vo2max,
@@ -141,6 +150,8 @@ class YesterdayActivity {
       stressLowSec: i(stress, 'low_sec'),
       stressMediumSec: i(stress, 'medium_sec'),
       stressHighSec: i(stress, 'high_sec'),
+      stressNotMeasuredSec: i(stress, 'not_measured_sec'),
+      stressCurve: NightCurve.fromJsonOrNull(j['stress_curve']),
       bodyBatteryCharged: i(bb, 'charged'),
       bodyBatteryDrained: i(bb, 'drained'),
       vo2max: (vo2?['value'] as num?)?.toDouble(),
@@ -233,6 +244,10 @@ class ActivityHistoryDay {
   /// 其中高強度的分鐘（Active time 一週圖疊在下面）；舊版後端沒有是 null。
   final int? highlyActiveMinutes;
 
+  /// 各壓力程度幾分鐘（rest／low／medium／high）與那天的平均壓力（Stress 一週圖）。
+  final Map<String, int?>? stressMinutes;
+  final int? stressAvg;
+
   /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
   final int? stepGoal;
   final int? distanceM;
@@ -243,6 +258,8 @@ class ActivityHistoryDay {
     this.activeKcal,
     this.activeMinutes,
     this.highlyActiveMinutes,
+    this.stressMinutes,
+    this.stressAvg,
     this.stepGoal,
     this.distanceM,
   });
@@ -255,6 +272,13 @@ class ActivityHistoryDay {
       activeKcal: (raw['active_kcal'] as num?)?.round(),
       activeMinutes: (raw['active_minutes'] as num?)?.round(),
       highlyActiveMinutes: (raw['highly_active_minutes'] as num?)?.round(),
+      stressMinutes: raw['stress_minutes'] is Map
+          ? {
+              for (final k in const ['rest', 'low', 'medium', 'high'])
+                k: ((raw['stress_minutes'] as Map)[k] as num?)?.round(),
+            }
+          : null,
+      stressAvg: (raw['stress_avg'] as num?)?.round(),
       stepGoal: (raw['step_goal'] as num?)?.round(),
       distanceM: (raw['distance_m'] as num?)?.round(),
     );
