@@ -3,8 +3,12 @@ import 'package:intl/intl.dart';
 
 import '../models/wall_clock.dart';
 import '../services/friends_service.dart';
+import '../services/pet_choice.dart';
+import '../widgets/friend_night_card.dart';
 import '../widgets/mood_filter_bar.dart';
+import '../widgets/streak_card.dart';
 import '../widgets/top_streak_card.dart';
+import 'friend_sharing_screen.dart';
 
 /// 好友。資料來自 `GET /friends`。
 ///
@@ -23,6 +27,10 @@ import '../widgets/top_streak_card.dart';
 ///    心情也是行為版，所以篩選列拿掉了「Sick」——那個選項永遠篩不出任何人。
 ///
 /// ⚠️ 這個畫面一格都不算。連續夜數、排名都照抄後端，排行不在 Dart 重排。
+///
+/// 2026-11-15（使用者定，grill）：每個人自己選公開什麼（右上角 → What friends can see）；
+/// 最上面是**我的 Streak 大卡**，下面多一段朋友最近 7 天的**動態卡**（只有他公開的項目）。
+/// 朋友沒公開的值是 null，畫面就不畫那一項，不寫成 0。
 class FriendsScreen extends StatefulWidget {
   /// null = 這支 build 沒有後端，畫面會老實講要連上後端。
   final FriendsService? service;
@@ -36,6 +44,7 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> {
   String selectedMood = "All";
   FriendsResult<FriendsState>? _result;
+  List<FriendNightCard> _feed = const [];
 
   /// 好友畫面的篩選選項。⚠️ 沒有「Sick」，理由見類別說明。
   static const List<Map<String, String>> moodOptions = [
@@ -72,6 +81,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final r = await service.fetch();
     if (!mounted) return;
     setState(() => _result = r);
+    // 寵物原本只存在手機上：跟後端不一樣就送一次，朋友才畫得出你選的那一隻
+    final mine = PetChoice.current.value.name;
+    final server = r.value?.me?.petSpecies;
+    if (r.isOk && server != null && server != mine) {
+      await service.patchSharing(petSpecies: mine);
+    }
+    final feed = await service.fetchFeed();
+    if (!mounted) return;
+    if (feed.isOk) setState(() => _feed = feed.value!);
+  }
+
+  Future<void> _openSharing() async {
+    final service = widget.service;
+    if (service == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => FriendSharingScreen(service: service)),
+    );
+    await _load();
   }
 
   void _toast(String text) {
@@ -126,17 +153,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
   /// `DateTime.tryParse("...+08:00")` 回的是 UTC，`.hour` 會早 8 小時。
   static String lightsOutLine(FriendSummary f) {
     final at = parseWallClock(f.lastLightsOutAt);
-    if (at == null) return 'No record yet';
+    if (at == null) {
+      // 時刻沒公開（或只公開準時與否）：有準時就寫準時
+      if (f.lastNightLate != null) return f.lastNightLate! ? 'Late last night' : 'On time last night';
+      return 'No record yet';
+    }
     final time = DateFormat('HH:mm').format(at);
     final late = f.lastNightLate == true ? ' · late' : '';
     return 'Phone down $time (${f.lastNightDate ?? ''})$late';
   }
 
   void _showFriend(FriendSummary f) {
+    final latest = _feed.where((c) => c.handle == f.handle).firstOrNull;
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: const Color(0xFF10265A),
-      builder: (context) => Padding(
+      builder: (context) => SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -144,19 +177,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
           children: [
             Text(f.displayName,
                 style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            // 他的 Streak 卡（他沒公開的部分後端已經遮掉）
+            StreakCard(summary: f, species: speciesOf(f.petSpecies)),
             Text(lightsOutLine(f), style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 4),
-            Text('Streak ${f.currentStreak} · best ${f.bestStreak}',
-                style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 4),
-            Text(
-              // ⚠️ 分母一定要講出來，理由同 Insights 的熬夜比率卡。
-              f.recordedNights == 0
-                  ? 'No nights recorded yet'
-                  : 'Late on ${f.lateNights} of ${f.recordedNights} recorded nights',
-              style: const TextStyle(color: Colors.white70),
-            ),
+            if (f.lateNights != null)
+              Text(
+                // ⚠️ 分母一定要講出來，理由同 Insights 的熬夜比率卡。
+                f.recordedNights == 0
+                    ? 'No nights recorded yet'
+                    : 'Late on ${f.lateNights} of ${f.recordedNights} recorded nights',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            if (latest != null) ...[
+              const SizedBox(height: 12),
+              FriendNightCardView(card: latest),
+            ],
             const SizedBox(height: 16),
             TextButton.icon(
               key: const Key('remove-friend'),
@@ -203,9 +240,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Friends ✨",
-                  style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Friends ✨",
+                        style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (widget.service != null)
+                      IconButton(
+                        key: const Key('open-sharing'),
+                        tooltip: 'What friends can see',
+                        onPressed: _openSharing,
+                        icon: const Icon(Icons.visibility_rounded, color: Colors.white70),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -252,6 +302,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         : state.friends.where((f) => moodLabel(f.petMood) == selectedMood).toList();
 
     return [
+      if (state.me != null) StreakCard(summary: state.me!),
       _inviteCard(state.myInviteCode),
       _circleCard(state.friends),
       if (state.leaderboard.isNotEmpty)
@@ -284,6 +335,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
             style: TextStyle(color: Colors.white70)))
       else
         for (final f in visible) _friendRow(f),
+      if (_feed.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        const Text("Last 7 days",
+            key: Key('feed-title'),
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        for (final c in _feed)
+          FriendNightCardView(
+            card: c,
+            onTap: () {
+              final f = state.friends.where((x) => x.handle == c.handle).firstOrNull;
+              if (f != null) _showFriend(f);
+            },
+          ),
+      ],
       if (state.notes['what_is_shared'] != null) ...[
         const SizedBox(height: 12),
         Text(state.notes['what_is_shared']!,
@@ -409,8 +475,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
                     Text(lightsOutLine(f), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                    Text('Streak ${f.currentStreak}',
-                        style: const TextStyle(color: Color(0xFF8498B7), fontSize: 12)),
+                    if (f.currentStreak != null)
+                      Text('Streak ${f.currentStreak}',
+                          style: const TextStyle(color: Color(0xFF8498B7), fontSize: 12)),
                   ],
                 ),
               ),

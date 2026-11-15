@@ -157,7 +157,12 @@ ok("反向對照：/home 真的讀到了自評（否則上面三條會假性通�
 for folder in ("garmin", "game", "social"):
     hits = [p.name for p in (ROOT / folder).rglob("*.py")
             if "morning_rating" in p.read_text(encoding="utf-8", errors="ignore")]
-    check(f"{folder}/ 沒有任何地方讀自評", hits, [])
+    # 2026-11-15 使用者定（好友分享 grill）：自評可以**自己選擇**給好友看——只准 sharing.py 讀，
+    # 而且**預設關**。評分、遊戲照舊一個字都不准讀。
+    allowed = ["sharing.py"] if folder == "social" else []
+    check(f"{folder}/ 讀自評的只有 {allowed or '（沒有）'}", hits, allowed)
+import social.sharing as _sharing  # noqa: E402
+check("自評預設不給好友看", _sharing.defaults()["morning_rating"], False)
 for name in ("score_claim.py", "build_app_payload.py"):
     check(f"{name} 不讀自評", "morning_rating" in (ROOT / name).read_text(encoding="utf-8"), False)
 check("上一晚的睡眠長度給「跟上一晚比」用", h2["previous_night"]["sleep_duration_minutes"], 420)

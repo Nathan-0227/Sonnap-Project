@@ -47,7 +47,7 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 import camera_clips
 import camera_usual
@@ -62,6 +62,7 @@ from game import inventory, state as game_state
 
 # 好友。⚠️ 只分享行為指標，別人的 user_id 永遠不出後端，見 social/__init__.py。
 from social import friends as social_friends
+from social import sharing as social_sharing
 
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
 #    pet_mood 的 Tier B 規則（QUALITY_TO_MOOD + anxious 生理覆寫）
@@ -1713,11 +1714,99 @@ class AddFriendRequest(BaseModel):
     invite_code: str
 
 
-def _friend_summary(friend_id):
+FEED_DAYS = 7
+
+
+class SharingPatch(BaseModel):
+    user_id: str
+    # ⚠️ StrictBool：一般的 bool 會把 "yes"／"1" 自動轉成 True，偷偷打開分享（測試抓到）
+    items: Optional[Dict[str, StrictBool]] = None
+    time_precision: Optional[str] = None
+    pet_species: Optional[str] = None
+
+
+def _sharing(user_id):
+    return social_sharing.effective(db.get_friend_sharing(user_id))
+
+
+def _friend_summary(friend_id, masked=True):
     user = db.get_user(friend_id)
     handle = db.ensure_invite_code(friend_id)
     rows = db.get_nightly_behavior(friend_id, days=FRIEND_HISTORY_DAYS)
-    return social_friends.build_friend_summary(user, handle, rows)
+    settings = _sharing(friend_id)
+    summary = social_friends.build_friend_summary(
+        user, handle, rows, pet_species=settings["pet_species"])
+    return social_friends.apply_sharing(summary, settings) if masked else summary
+
+
+async def _night_card(user_id, date, settings, game=None, closet=None, challenges=None):
+    """那一晚好友看得到的卡（只有打開的項目）。數字跟本人的 /home 同一份。"""
+    home = await get_home(user_id=user_id, date=date)
+    latest = (home.get("behavior") or {})
+    mood, _ = social_friends.pet_state.mood_for_adherence(latest.get("adherence_minutes"))
+    cam = next((r for r in db.get_camera_nightly(user_id, days=60) if r.get("date") == date), None)
+    ctx = {
+        "home": home,
+        "game": game,
+        "closet": closet,
+        "challenges": challenges,
+        "camera": cam,
+        "prebed_minutes": db.prebed_phone_minutes(user_id, date),
+        "behavior_mood": mood if latest.get("lights_out_at") else None,
+    }
+    return social_sharing.night_card(ctx, settings)
+
+
+def _recent_dates(user_id, days=FEED_DAYS):
+    """最近 days 個日曆日裡有記錄（行為或手錶）的晚上，新的在前。"""
+    from datetime import date as _d, timedelta
+    today = _d.today()
+    window = {(today - timedelta(days=i)).isoformat() for i in range(days)}
+    have = {r["date"] for r in db.get_nightly_behavior(user_id, days=days + 2)}
+    have |= {r["date"] for r in db.get_wearable_nightly(user_id, days=days + 2)}
+    return sorted(have & window, reverse=True)
+
+
+async def _cards_for(user_id, days=FEED_DAYS):
+    settings = _sharing(user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    game = game_state.build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated)
+    closet = db.get_game_state(user_id) or {}
+    return [
+        {"date": d, "items": await _night_card(user_id, d, settings, game, closet, evaluated)}
+        for d in _recent_dates(user_id, days)
+    ]
+
+
+def _require_sharing_user(user_id):
+    require_user(user_id)
+    return _sharing(user_id)
+
+
+@app.get("/sharing")
+async def get_sharing(user_id: str = Query(...)):
+    """我讓好友看到什麼：分組的開關、時刻要不要準確、永遠不給的三項（只是說明）。"""
+    return social_sharing.view(_require_sharing_user(user_id))
+
+
+@app.patch("/sharing")
+async def patch_sharing(req: SharingPatch):
+    """改分享設定。不認得的項目（含永遠不給的那三個）→ 422，一個都不改。"""
+    require_user(req.user_id)
+    try:
+        social_sharing.validate_patch(req.items, req.time_precision, req.pet_species)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.set_friend_sharing(req.user_id, req.items, req.time_precision, req.pet_species)
+    return social_sharing.view(_sharing(req.user_id))
+
+
+@app.get("/sharing/preview")
+async def sharing_preview(user_id: str = Query(...)):
+    """朋友看到的我：摘要（遮過）＋最近一晚的卡。設定頁的預覽用。"""
+    require_user(user_id)
+    cards = await _cards_for(user_id, days=FEED_DAYS)
+    return {"friend": _friend_summary(user_id), "card": cards[0] if cards else None}
 
 
 def _friend_by_handle(user_id, handle):
@@ -1739,12 +1828,14 @@ async def get_friends(user_id: str = Query(...)):
     summaries = [_friend_summary(fid) for fid in db.list_friend_ids(user_id)]
     return {
         "my_invite_code": db.ensure_invite_code(user_id),
+        # 我自己的 Streak 卡（自己看自己，不遮）
+        "me": _friend_summary(user_id, masked=False),
         "friends": summaries,
         "leaderboard": social_friends.leaderboard(summaries),
         "notes": {
             "what_is_shared": (
-                "Friends only see behaviour: when the phone was put down, streaks and late nights. "
-                "Sleep scores, sleep stages and heart rate are never shared."
+                "Each friend chooses what you can see. Camera clips, Move IQ times and the apps "
+                "used before bed are never shared."
             ),
             "streak_breaks_on_missing_nights": (
                 "A night without a record breaks the streak, so streaks cannot be built by only "
@@ -1772,10 +1863,29 @@ async def add_friend(req: AddFriendRequest):
     return {"friend": _friend_summary(friend_id)}
 
 
+@app.get("/friends/feed")
+async def get_friends_feed(user_id: str = Query(...)):
+    """
+    朋友們最近 7 天每一晚的卡（新的在前），每張只有那位朋友打開的項目。
+    ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "feed" 會被當成邀請碼。
+    """
+    require_user(user_id)
+    cards = []
+    for fid in db.list_friend_ids(user_id):
+        s = _friend_summary(fid)
+        for c in await _cards_for(fid):
+            cards.append({"handle": s["handle"], "display_name": s["display_name"],
+                          "pet_species": s["pet_species"], **c})
+    cards.sort(key=lambda c: (c["date"], c["display_name"]), reverse=True)
+    return {"cards": cards}
+
+
 @app.get("/friends/{handle}")
 async def get_friend(handle: str, user_id: str = Query(...)):
     require_user(user_id)
-    return {"friend": _friend_summary(_friend_by_handle(user_id, handle))}
+    fid = _friend_by_handle(user_id, handle)
+    cards = await _cards_for(fid)
+    return {"friend": _friend_summary(fid), "card": cards[0] if cards else None}
 
 
 @app.delete("/friends/{handle}")

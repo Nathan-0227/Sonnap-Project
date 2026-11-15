@@ -87,6 +87,28 @@ class _StubFriends implements FriendsService {
     return FriendsResult(FriendsStatus.ok, value: handle);
   }
 
+  // 2026-11-15：分享設定與動態卡。這幾支畫面測試不看它們，回空的就好
+  @override
+  Future<FriendsResult<List<FriendNightCard>>> fetchFeed() async =>
+      const FriendsResult(FriendsStatus.ok, value: []);
+
+  @override
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchFriend(String handle) async =>
+      const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<SharingSettings>> fetchSharing() async =>
+      const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<SharingSettings>> patchSharing(
+          {Map<String, bool>? items, String? timePrecision, String? petSpecies}) async =>
+      const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchPreview() async =>
+      const FriendsResult(FriendsStatus.failed);
+
   @override
   String get baseUrl => 'stub';
 
@@ -275,9 +297,14 @@ void main() {
       final stub = _StubFriends();
       await pump(tester, stub);
       await tester.tap(find.byKey(const Key('friend-BOB234')));
-      await tester.pumpAndSettle();
+      // 彈出來的卡上有會動的寵物與火，pumpAndSettle 等不到停——一格一格推到滑上來
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.ensureVisible(find.byKey(const Key('remove-friend')));
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('remove-friend')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
       expect(stub.removeCalls, ['BOB234']);
     });
 

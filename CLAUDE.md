@@ -347,7 +347,7 @@ Garmin 回報那幾晚睡眠期間內零清醒），那些不是壞資料，不�
 | 功能 | 在哪 | 不能破的規則 |
 |---|---|---|
 | 遊戲化（XP／等級／衣櫃／成就） | `game/`、`GET /game`、`POST /game/claim`、`GET /closet`、`POST /closet/equip` | 紅線 4、5。一晚 XP = 行為（準時 30／容許內 15／熬夜 0）＋品質（Good 20／Normal 10／Poor・Bad 0）→ 熬夜又睡不好 = 0。行為上限大於品質上限，沒戴錶的人也升得了級。**XP 不存**，每次從 `nightly_behavior`／`wearable_nightly` 即時算；表只存使用者動作（領取、穿戴） |
-| 好友 | `social/friends.py`、`/friends`、`/friends/{handle}` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。回傳欄位是**白名單** `FRIEND_FIELDS`（只有行為指標：放下手機的時刻、熬夜、連續天數），不得加深睡／REM／心率／分數。心情用純行為版（不含生理的 `anxious` 覆寫） |
+| 好友 | `social/friends.py`、`social/sharing.py`、`/friends`、`/friends/feed`、`/friends/{handle}`、`/sharing`、`/sharing/preview` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。**2026-11-15 起每個人自己選讓好友看到什麼**（使用者定，grill）：能分享的仍是**白名單**（`sharing.ITEMS`，每一項一個 picker 從那一晚的 `/home` 挑值——跟本人報告同一份）；**預設只開行為**（放下手機、準時、連續、寵物心情、衣服與徽章、挑戰），其他（分數、睡多久、心率、壓力、步數…）預設關、自己打開；**三項永遠不給**、連選項都沒有：攝影機片段、Move IQ 每段時刻、睡前用了哪些 App（PATCH 送進來 422；`items` 用 StrictBool，"yes" 不會被轉成 true）。對所有好友同一組設定；時刻可選「只寫準時與否」。沒公開的值是 null、App 不畫（不寫 0）。好友頁最上面是自己的 **Streak 大卡**（他選的狗／貓＋火：0 晚沒有、1–2 小、3+ 大，減少動態效果不動；週一→週日一排，晚了空心圈不打叉不用紅）＋最近 7 天**動態卡**。寵物狗／貓由 App 送到 `friend_sharing.pet_species`。心情用純行為版。⚠️ 夢境不能分享（後端沒有每個人一份的夢）；手機使用只給睡前 60 分鐘加總。排行榜（七個標籤＋晚／日·週·月·年）是**第二批**、還沒做 |
 | 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段 |
 | 就寢提醒 | `bedtime_reminder.dart`、`sonnap/notify`（AlarmManager） | 提前 30 分鐘，**留在 Dart**。關掉開關要 cancel（不是只是不排新的）。⚠️ 手機重開機後鬧鐘會消失，要等下次開 App 才重排 |
 | 就寢守門（Accessibility） | `bedtime_guard.dart`、`sonnap/guard` | 守「目標前 30 分 → 目標後 6 小時」，判斷全在 Dart，Kotlin 只照做。`canRetrieveWindowContent="false"`（不讀畫面內容，設定頁的承諾靠它）。⚠️ **Google Play 不會讓它上架**；Android 13+ 側載要先「允許受限設定」。實機清單見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
@@ -473,7 +473,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 
 | 規則 | 理由 |
 |---|---|
-| **只呈現、不計分**：評分、寵物心情、XP、挑戰、好友一律不讀（`tests/test_garmin_daily.py`【9】守著） | 紅線 4 |
+| **只呈現、不計分**：評分、寵物心情、XP、挑戰一律不讀（`tests/test_garmin_daily.py`【9】守著）；好友看不看得到由本人在 What friends can see 選（2026-11-15 起，預設關，經 `social/sharing.py` 從 /home 挑） | 紅線 4 |
 | **不判斷**：步數只寫「goal 9,430」（不寫 reached、不變色）；VO2 max 只給數字＋量到的日期（不分等級）；**壓力只給各程度的時間，不加說明、不用紅黃**（使用者定） | 紅線 2；VO2 max 的常模要年齡與性別 |
 | 寫到**另一個檔**，不碰 `garmin_standard_data.json`；這個檔**只增不減**（沒抓到的欄位留舊的、從不刪一天）；**進版控**（使用者定，Move IQ 會露出每天幾點出門走路） | 那份有自己的合併規則，也丟過資料 |
 | 白天資料的檔放在 `--output` **同一個資料夾** | 測試把 --output 指到暫存資料夾時，不會寫到真的 `garmin/data/`（2026-11-13 測試抓到過） |
@@ -563,7 +563,7 @@ Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %�
 
 | 規則 | 理由 |
 |---|---|
-| **起床自評**（`POST /rested`、表 `morning_ratings`）題目照抄 Consensus Sleep Diary-M 第 10 題；**不進分數、不給 XP、不給好友看** | `test_morning_report.py`【4】存了「很累」與「很有精神」前後比分數與 XP，並掃 `garmin/`、`game/`、`social/` 不得讀它 |
+| **起床自評**（`POST /rested`、表 `morning_ratings`）題目照抄 Consensus Sleep Diary-M 第 10 題；**不進分數、不給 XP**；給不給好友看由本人選（2026-11-15 起，**預設關**） | `test_morning_report.py`【4】存了「很累」與「很有精神」前後比分數與 XP，並掃 `garmin/`、`game/` 不得讀它、`social/` 只准 `sharing.py` 讀 |
 | 標籤只收 `behavior/morning_tips.TAGS` 的 id，不收自由文字 | 隱私、無法統計，送進 AI 還可能被拿來改寫指令 |
 | 記下 `minutes_after_wake` | 日誌標準是起床一小時內；App 允許 6 小時內補填，分析時可以只取 ≤ 60 的 |
 | **小建議 12 句只在 `behavior/morning_tips.py`**，措辭與 `Research-Background/起床小建議與自評.md` 逐字一致（測試【2】讀文件比對） | 改措辭先改文件；句子由使用者審過 |
@@ -1654,6 +1654,7 @@ python tests/test_db_show.py
 python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
+python tests/test_friend_sharing.py      # 2026-11-15 新增：預設只給行為、沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_advice_fallback.py     # 2026-11-06 新增：API 失敗（如金鑰 401）時夢境退回規則式文字、不整批中斷；fallback 下次會重生
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉

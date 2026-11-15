@@ -23,6 +23,8 @@ FRIEND_FIELDS = (
     "late_night_ratio",
     "late_nights",
     "recorded_nights",
+    "pet_species",          # 狗／貓（畫他的寵物用；2026-11-15）
+    "streak_week",          # 這一週（週一→週日）每天：on_time / late / none / future
 )
 
 
@@ -55,7 +57,7 @@ def best_streak(rows):
     return best
 
 
-def build_friend_summary(user, handle, behavior_rows):
+def build_friend_summary(user, handle, behavior_rows, pet_species="dog", today=None):
     """
     一個朋友可以分享的摘要。user 是 db.get_user() 的那一列，
     handle 是他的邀請碼，behavior_rows 是他的 nightly_behavior（由舊到新）。
@@ -67,6 +69,9 @@ def build_friend_summary(user, handle, behavior_rows):
     mood, _ = pet_state.mood_for_adherence(latest.get("adherence_minutes") if latest else None)
     ratio, late, recorded = adherence.late_night_ratio(rows)
     streak, _ = current_streak(rows)
+    from datetime import date as _date
+    from social.sharing import streak_week
+    week = streak_week(rows, today or _date.today(), night_achieved)
 
     summary = {
         "handle": handle,
@@ -82,9 +87,36 @@ def build_friend_summary(user, handle, behavior_rows):
         "late_night_ratio": ratio,
         "late_nights": late,
         "recorded_nights": recorded,
+        "pet_species": pet_species,
+        "streak_week": week,
     }
     assert tuple(summary) == FRIEND_FIELDS, "摘要欄位必須剛好是白名單"
     return summary
+
+
+def apply_sharing(summary, settings):
+    """
+    照這個人的分享設定遮掉摘要裡沒公開的（2026-11-15）。遮掉＝None，**不是 0**。
+    ⚠️ 欄位照舊剛好是 FRIEND_FIELDS（App 認得的形狀不變），只是值變 None。
+    """
+    items = settings["items"]
+    out = dict(summary)
+    if not items.get("phone_down_time") or settings["time_precision"] == "on_time_only":
+        out["last_lights_out_at"] = None
+    if not items.get("on_time"):
+        out["last_night_late"] = None
+        out["late_night_ratio"] = None
+        out["late_nights"] = None
+        out["streak_week"] = None
+    if not items.get("streak"):
+        out["current_streak"] = None
+        out["best_streak"] = None
+    if not items.get("pet_mood"):
+        out["pet_mood"] = None
+    if not items.get("outfit"):
+        out["pet_species"] = None
+    assert tuple(out) == FRIEND_FIELDS
+    return out
 
 
 def leaderboard(summaries):
@@ -93,6 +125,8 @@ def leaderboard(summaries):
 
     ⚠️ 只排行為指標。不排分數、不排深睡——那些跨裝置不能比（見 social/__init__.py）。
     """
+    # 沒公開連續天數的人不上榜（遮掉的是 None）
+    summaries = [s for s in summaries if s.get("current_streak") is not None]
     ordered = sorted(
         summaries,
         key=lambda s: (-s["current_streak"], -s["best_streak"], s["display_name"]),

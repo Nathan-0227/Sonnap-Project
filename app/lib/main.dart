@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'screens/assistant_screen.dart';
 import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
+import 'screens/friend_sharing_screen.dart';
 import 'screens/health_connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/pet_choice.dart';
@@ -505,6 +506,10 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
         onBedtimeGuardTap: _openGuard,
         onHealthConnectTap: _openHealth,
+        onFriendSharingTap: _friends == null
+            ? null
+            : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => FriendSharingScreen(service: _friends!))),
       ),
     ];
   }
