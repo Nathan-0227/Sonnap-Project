@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/pet_choice.dart';
 import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/sleepy_pet.dart';
@@ -58,14 +59,17 @@ class WakeUpScreen extends StatefulWidget {
 
 /// 起床動畫的頁面：**直接切進來、不淡入**。睡覺畫面與 GIF 第一格是同一個房間，
 /// 硬切看起來像沒換畫面；淡入的那一段反而會露出底下的首頁（有分數卡）。
-Route<void> wakeUpRoute({String? mood, DateTime? wakeAt, VoidCallback? onDone}) =>
-    PageRouteBuilder<void>(
-      opaque: true,
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) =>
-          WakeUpScreen(mood: mood, wakeAt: wakeAt, onDone: onDone),
-    );
+Route<void> wakeUpRoute({
+  String? mood,
+  DateTime? wakeAt,
+  VoidCallback? onDone,
+}) => PageRouteBuilder<void>(
+  opaque: true,
+  transitionDuration: Duration.zero,
+  reverseTransitionDuration: Duration.zero,
+  pageBuilder: (_, _, _) =>
+      WakeUpScreen(mood: mood, wakeAt: wakeAt, onDone: onDone),
+);
 
 /// 使用者做的起床 GIF（2026-11-13 使用者定：改用 GIF）。
 /// **有這個檔就播它、沒有就退回下面程式畫的那一版**——缺檔不會報錯。
@@ -81,8 +85,9 @@ const Duration kWakeUpMin = Duration(seconds: 1);
 const Duration kWakeUpMax = Duration(seconds: 6);
 
 /// 有些 GIF 每格寫 0 毫秒，瀏覽器一律當成 100 毫秒播；這裡照同一個慣例。
-Duration gifFrameDuration(Duration d) =>
-    d < const Duration(milliseconds: 20) ? const Duration(milliseconds: 100) : d;
+Duration gifFrameDuration(Duration d) => d < const Duration(milliseconds: 20)
+    ? const Duration(milliseconds: 100)
+    : d;
 
 Duration clampWakeUpDuration(Duration d) =>
     d < kWakeUpMin ? kWakeUpMin : (d > kWakeUpMax ? kWakeUpMax : d);
@@ -169,7 +174,10 @@ class _WakeUpScreenState extends State<WakeUpScreen>
   }
 
   Future<void> _start() async {
-    final gif = await wakeUpGifDuration(widget.gifAsset);
+    // 起床 GIF 只有小狗版；選貓時走程式版（裡面的寵物跟著選的那一隻）
+    final gif = PetChoice.isCat
+        ? null
+        : await wakeUpGifDuration(widget.gifAsset);
     if (!mounted) return;
     setState(() {
       _ready = true;
@@ -197,8 +205,12 @@ class _WakeUpScreenState extends State<WakeUpScreen>
   }
 
   /// t 在 [a, b] 之間的進度（0–1，前後夾住），套上曲線。
-  static double _seg(double t, double a, double b,
-      [Curve curve = Curves.easeInOut]) {
+  static double _seg(
+    double t,
+    double a,
+    double b, [
+    Curve curve = Curves.easeInOut,
+  ]) {
     if (t <= a) return 0;
     if (t >= b) return 1;
     return curve.transform((t - a) / (b - a));
@@ -216,14 +228,14 @@ class _WakeUpScreenState extends State<WakeUpScreen>
           child: !_ready
               ? const SizedBox.expand()
               : _gif
-                  ? AnimatedBuilder(
-                      animation: _t,
-                      builder: (context, _) => _gifScene(context, _t.value),
-                    )
-                  : AnimatedBuilder(
-                      animation: _t,
-                      builder: (context, _) => _scene(context, _t.value),
-                    ),
+              ? AnimatedBuilder(
+                  animation: _t,
+                  builder: (context, _) => _gifScene(context, _t.value),
+                )
+              : AnimatedBuilder(
+                  animation: _t,
+                  builder: (context, _) => _scene(context, _t.value),
+                ),
         ),
       ),
     );
@@ -276,10 +288,7 @@ class _WakeUpScreenState extends State<WakeUpScreen>
           left: 0,
           right: 0,
           top: MediaQuery.paddingOf(context).top + 48,
-          child: Opacity(
-            opacity: hello,
-            child: _hello(),
-          ),
+          child: Opacity(opacity: hello, child: _hello()),
         ),
         Positioned(
           left: 0,
@@ -347,7 +356,11 @@ class _WakeUpScreenState extends State<WakeUpScreen>
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [Color(0xFFFFF1B8), Color(0xFFFFC46B), Color(0x00FFC46B)],
+                  colors: [
+                    Color(0xFFFFF1B8),
+                    Color(0xFFFFC46B),
+                    Color(0x00FFC46B),
+                  ],
                   stops: [0.0, 0.45, 1.0],
                 ),
               ),
@@ -453,8 +466,14 @@ class _WakeUpScreenState extends State<WakeUpScreen>
 
 class _StarsPainter extends CustomPainter {
   static const _stars = [
-    (0.09, 0.08, 2.0), (0.85, 0.11, 3.0), (0.74, 0.22, 2.0), (0.15, 0.27, 2.0),
-    (0.92, 0.33, 2.0), (0.36, 0.07, 2.0), (0.55, 0.17, 2.5), (0.27, 0.40, 2.0),
+    (0.09, 0.08, 2.0),
+    (0.85, 0.11, 3.0),
+    (0.74, 0.22, 2.0),
+    (0.15, 0.27, 2.0),
+    (0.92, 0.33, 2.0),
+    (0.36, 0.07, 2.0),
+    (0.55, 0.17, 2.5),
+    (0.27, 0.40, 2.0),
   ];
 
   @override

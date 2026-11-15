@@ -1,6 +1,6 @@
-// 隊友的 2D 分層寵物（OneDrive pet_preview_multi_v4_5_10，2026-11-12 搬入）。
-// 與原版的差別只有：缺圖時改畫 bored（見 PetDefinition.resolve）。
-// 座標、尺寸、定位點一律不動——那些是人工對好的。
+// 隊友的 2D 分層寵物資料模型（pet_preview v4.6.45，2026-11-15 換版）。
+// 與原版的差別：缺圖的心情一律退回 **bored**，原版退回 happy（resolve()）。
+// 焦慮、疲倦的晚上畫成開心的寵物，正是紅線 5 要防的事；pet2d_test.dart 守著。
 import 'package:flutter/material.dart';
 
 enum PetMood { happy, bored, tired, anxious }
@@ -143,12 +143,8 @@ class PetDefinition {
   final Map<PetMood, Map<AccessorySlot, AccessoryAnchor>> anchors;
   final Map<PetMood, BlinkSpec> blinkSpecs;
 
-  /// 這個心情實際要畫哪一組圖。
-  ///
-  /// ⚠️ **缺圖一律畫 bored，絕不畫 happy**（隊友原版退回 happy；接進 App 時改掉）。
-  /// 把焦慮、疲倦的夜晚畫成開心的狗，正是紅線 5 要防的「不管怎樣都給獎勵」。
-  /// 動畫參數與衣服定位點也跟著用 bored 的——那兩樣是照各組圖的座標調的，
-  /// 拿 tired 的參數去動 bored 的圖，頭會轉到錯的角度。
+  /// 這個心情有自己的圖就用；沒有就整組改用 bored（圖、動畫、衣服定位點、眨眼一起換）。
+  /// ⚠️ 不可退回 happy。動畫參數與衣服定位點也跟著用 bored 的——那兩樣是照各組圖的座標調的。
   PetMood resolve(PetMood mood) =>
       poses.containsKey(mood) ? mood : PetMood.bored;
 
@@ -156,7 +152,8 @@ class PetDefinition {
 
   bool hasDedicatedPose(PetMood mood) => poses.containsKey(mood);
 
-  AnimationProfile animationFor(PetMood mood) => animations[resolve(mood)]!;
+  AnimationProfile animationFor(PetMood mood) =>
+      animations[resolve(mood)] ?? animations[PetMood.bored]!;
 
   BlinkSpec? blinkFor(PetMood mood) => blinkSpecs[resolve(mood)];
 
@@ -206,4 +203,32 @@ class AccessoryTweak {
       rotationDeg: rotationDeg ?? this.rotationDeg,
     );
   }
+}
+
+
+/// Preview-only local adjustments to an individual pet layer. The rotation and
+/// scale are relative to the baseline LayerSpec and animation multipliers.
+class PetLayerTweak {
+  const PetLayerTweak({
+    this.dx = 0,
+    this.dy = 0,
+    this.scale = 1,
+    this.rotationDeg = 0,
+  });
+  final double dx;
+  final double dy;
+  final double scale;
+  final double rotationDeg;
+
+  PetLayerTweak copyWith({
+    double? dx,
+    double? dy,
+    double? scale,
+    double? rotationDeg,
+  }) => PetLayerTweak(
+        dx: dx ?? this.dx,
+        dy: dy ?? this.dy,
+        scale: scale ?? this.scale,
+        rotationDeg: rotationDeg ?? this.rotationDeg,
+      );
 }

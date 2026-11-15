@@ -69,6 +69,13 @@ flutter:
     - assets/pets/dog01/
     - assets/pets/dog01/happy/
     - assets/pets/dog01/bored/
+    # 2026-11-15 隊友 v4.6.45：小狗 tired／anxious 真圖、灰色虎斑貓四種心情
+    - assets/pets/dog01/tired/
+    - assets/pets/dog01/anxious/
+    - assets/pets/cat01/happy/
+    - assets/pets/cat01/bored/
+    - assets/pets/cat01/tired/
+    - assets/pets/cat01/anxious/
     - assets/accessories/head/
     - assets/accessories/face/
     - assets/accessories/neck/

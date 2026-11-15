@@ -7,6 +7,7 @@ import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/health_connect_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
 import 'widgets/moon_nav_bar.dart';
 import 'screens/onboarding_screen.dart';
@@ -318,6 +319,8 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _restoreSettings() async {
+    // 選的寵物（小狗／貓，只存在手機上）：讀回來，首頁寵物插槽跟著換
+    await PetChoice.load(widget.store ?? const PlatformKeyValueStore());
     final stored = await _settings.load();
     if (!mounted) return;
     final parsed = parseBedtime(stored.targetBedtime);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/account_service.dart';
 import '../services/alarm.dart';
 import '../services/key_value_store.dart';
+import '../services/pet_choice.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -118,6 +119,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     widget.onReminderChanged?.call(value);
+  }
+
+  Future<void> _choosePet() async {
+    final picked = await showModalBottomSheet<PetSpecies>(
+      context: context,
+      backgroundColor: const Color(0xFF10265A),
+      builder: (context) => SafeArea(
+        child: Padding(
+          key: const Key('pet-choice-sheet'),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Your pet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final s in PetSpecies.values)
+                ListTile(
+                  key: Key('pet-choice-${s.name}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    s == PetChoice.current.value
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: const Color(0xFF9B87FF),
+                  ),
+                  title: Text(
+                    petSpeciesLabel(s),
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  onTap: () => Navigator.of(context).pop(s),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) await PetChoice.choose(widget.store, picked);
   }
 
   void _showComingSoon(String feature) {
@@ -266,12 +312,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 12),
 
-                _buildSettingTile(
-                  icon: Icons.pets_rounded,
-                  title: "Pet",
-                  subtitle: widget.petName,
-                  onTap:
-                      widget.onPetTap ?? () => _showComingSoon("Pet settings"),
+                // 2026-11-15 使用者定：選小狗或貓，存在手機上（PetChoice）。
+                // 原本寫死 "Golden Retriever"，跟畫面上的寵物對不上。
+                ValueListenableBuilder<PetSpecies>(
+                  valueListenable: PetChoice.current,
+                  builder: (context, species, _) => _buildSettingTile(
+                    icon: Icons.pets_rounded,
+                    title: "Pet",
+                    subtitle: petSpeciesLabel(species),
+                    onTap: widget.onPetTap ?? _choosePet,
+                  ),
                 ),
 
                 const SizedBox(height: 12),

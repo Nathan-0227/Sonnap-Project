@@ -1,7 +1,3 @@
-// 隊友的 2D 分層寵物圖層設定（pet_preview v4.5.10）。
-// 與原版的差別：拿掉「tired／anxious 用 happy 的衣服定位點」那兩行
-// （缺圖時整組改用 bored，見 PetDefinition.resolve）。
-// tired／anxious 的動畫參數留著，等那兩組圖畫好就會用到。
 import 'package:flutter/material.dart';
 
 import 'pet_models.dart';
@@ -96,6 +92,94 @@ const _boredPose = PetPoseAssets(
   ),
 );
 
+// Tired uses six pre-aligned 1024 x 1024 RGBA canvases. Original
+// Tired artwork is now normalized to full-size transparent layers.
+// The pet lies down; ears remain behind the head and the tail behind body.
+const _tiredPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/tail.png',
+    position: Offset(770, 571),
+    sourceAnchor: Offset(803, 563),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/body.png',
+    position: Offset(0, 0),
+    sourceAnchor: Offset(0, 0),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/ear_right.png',
+    position: Offset(428, 267),
+    sourceAnchor: Offset(428, 267),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/ear_left.png',
+    position: Offset(183, 238),
+    sourceAnchor: Offset(183, 238),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/head_base.png',
+    position: Offset(300, 438),
+    sourceAnchor: Offset(300, 438),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+  effect: LayerSpec(
+    assetPath: 'assets/pets/dog01/tired/zzz.png',
+    position: Offset(0, 0),
+    sourceAnchor: Offset(0, 0),
+    sourceSize: Size(1024, 1024),
+    sourceScale: 100,
+  ),
+);
+
+// Anxious: five separated transparent layers aligned on one 1024 canvas.
+// Ears remain BEHIND the head. Separate pivot points preserve ear roots.
+// Anxious v4.6.16: permanent positions/rotations from the user-approved Layer Tuner pose.
+// Body remains the lengthened, 1024-aligned version from v4.6.15.
+// Pivots retain their anatomical locations, and positions are calibrated
+// against the approved full-body reference using code-only layer transforms.
+const _anxiousPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/dog01/anxious/tail.png',
+    position: Offset(735.7, 360.6), sourceAnchor: Offset(758, 489),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+    rotationDeg: -4.0,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/dog01/anxious/body.png',
+    position: Offset.zero, sourceAnchor: Offset.zero,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/dog01/anxious/ear_right.png',
+    position: Offset(452.9, 94.9), sourceAnchor: Offset(474, 224),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+    rotationDeg: 121.6,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/dog01/anxious/ear_left.png',
+    position: Offset(208.9, 172.9), sourceAnchor: Offset(243, 205),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+    rotationDeg: -10.6,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/dog01/anxious/head.png',
+    position: Offset(292.5, 348.8), sourceAnchor: Offset(328, 402),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+    rotationDeg: 2.3,
+  ),
+);
+
 const _happyAnimation = AnimationProfile(
   durationMs: 5000,
   tailBaseDeg: -6,
@@ -135,41 +219,47 @@ const _boredAnimation = AnimationProfile(
 );
 
 const _tiredAnimation = AnimationProfile(
-  durationMs: 7600,
-  tailBaseDeg: -10,
-  tailAmplitudeDeg: 0.8,
-  tailCycles: 0.8,
-  bodyLift: 2.8,
+  durationMs: 9300,
+  // Broad but slow tired tail sway, pivot kept inside the body for no seam.
+  tailBaseDeg: 17.0,
+  tailAmplitudeDeg: 13.0,
+  tailCycles: 1,
+  bodyLift: 8.0,
   bodyCycles: 1,
-  headBaseDeg: 15,
-  headAmplitudeDeg: 2.6,
-  headCycles: 0.85,
-  earLeftBaseDeg: -4,
-  earLeftAmplitudeDeg: 1.0,
-  earLeftCycles: 0.8,
-  earRightBaseDeg: -44,
-  earRightAmplitudeDeg: 1.0,
-  earRightCycles: 0.8,
-  headDrop: 7.0,
-  headDropCycles: 0.85,
+  headBaseDeg: 0,
+  headAmplitudeDeg: 4.6,
+  headCycles: 1,
+  earLeftBaseDeg: 0,
+  earLeftAmplitudeDeg: 2.9,
+  earLeftCycles: 1,
+  earRightBaseDeg: 0,
+  earRightAmplitudeDeg: 2.6,
+  earRightCycles: 1,
+  headDrop: 36.0,
+  headDropCycles: 1,
 );
 
 const _anxiousAnimation = AnimationProfile(
-  durationMs: 3600,
-  tailBaseDeg: -7,
-  tailAmplitudeDeg: 1.6,
-  tailCycles: 7,
-  bodyLift: 1.0,
-  bodyCycles: 4,
-  headBaseDeg: 12,
-  headAmplitudeDeg: 1.0,
-  headCycles: 5,
-  earLeftBaseDeg: 0,
-  earLeftAmplitudeDeg: 2.4,
-  earLeftCycles: 6,
-  earRightBaseDeg: -40,
-  earRightAmplitudeDeg: 2.0,
-  earRightCycles: 5.5,
+  // v4.6.18: seamless periodic motion, with more expressive ear movement.
+  durationMs: 6700,
+  tailBaseDeg: 0.0,
+  tailAmplitudeDeg: 9.0,
+  // Whole-number cycles guarantee identical rotation at loop boundaries.
+  tailCycles: 1.0,
+  bodyLift: 5.0,
+  bodyCycles: 1,
+  headBaseDeg: 0.0,
+  headAmplitudeDeg: 4.3,
+  headCycles: 1,
+  earLeftBaseDeg: 0.0,
+  // Ears follow head + their own larger counter-sway.
+  earLeftAmplitudeDeg: 5.5,
+  earLeftCycles: 2.0,
+  earRightBaseDeg: 0.0,
+  earRightAmplitudeDeg: 5.8,
+  earRightCycles: 2.0,
+  headDrop: 9.0,
+  headDropCycles: 1,
 );
 
 const _happyAnchors = <AccessorySlot, AccessoryAnchor>{
@@ -184,12 +274,38 @@ const _boredAnchors = <AccessorySlot, AccessoryAnchor>{
   AccessorySlot.neck: AccessoryAnchor(position: Offset(417.0, 556.8), scale: 1.334, rotationDeg: -10.6),
 };
 
+// Confirmed Tired attachment positions from the preview UI.
+// Happy/Bored anchors remain unchanged.
+const _tiredAnchors = <AccessorySlot, AccessoryAnchor>{
+  AccessorySlot.head: AccessoryAnchor(position: Offset(349.5, 139.8), scale: 0.680, rotationDeg: 9.7),
+  AccessorySlot.face: AccessoryAnchor(position: Offset(265.2, 309.4), scale: 0.890, rotationDeg: 9.5),
+  AccessorySlot.neck: AccessoryAnchor(position: Offset(469.5, 568.3), scale: 1.504, rotationDeg: -13.7),
+};
+
+// Anxious placeholders only: refine in the preview with drag/scale/rotation.
+// They do NOT overwrite the nine confirmed Happy/Bored/Tired anchors.
+// Anxious accessory anchors confirmed by the user's on-screen tuner (2026-11-14).
+// Independent of Happy / Bored / Tired anchor maps.
+const _anxiousAnchors = <AccessorySlot, AccessoryAnchor>{
+  AccessorySlot.head: AccessoryAnchor(
+    position: Offset(351.8, 28.9), scale: 0.700, rotationDeg: 5.6,
+  ),
+  AccessorySlot.face: AccessoryAnchor(
+    position: Offset(261.2, 200.0), scale: 0.910, rotationDeg: 7.1,
+  ),
+  AccessorySlot.neck: AccessoryAnchor(
+    position: Offset(497.2, 455.7), scale: 1.741, rotationDeg: -17.2,
+  ),
+};
+
 const dog01 = PetDefinition(
   id: 'dog01',
   label: 'Dog 01',
   poses: {
     PetMood.happy: _happyPose,
     PetMood.bored: _boredPose,
+    PetMood.tired: _tiredPose,
+    PetMood.anxious: _anxiousPose,
   },
   animations: {
     PetMood.happy: _happyAnimation,
@@ -200,6 +316,8 @@ const dog01 = PetDefinition(
   anchors: {
     PetMood.happy: _happyAnchors,
     PetMood.bored: _boredAnchors,
+    PetMood.tired: _tiredAnchors,
+    PetMood.anxious: _anxiousAnchors,
   },
   blinkSpecs: {
     PetMood.happy: BlinkSpec(
@@ -211,7 +329,248 @@ const dog01 = PetDefinition(
   },
 );
 
-const pets = <PetDefinition>[dog01];
+// Cat 01 Happy: approved five-layer alignment (v4.6.22). Animated
+// rotations keep the existing anatomical pivots; static positions unchanged.
+const _catHappyPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/cat01/happy/tail.png',
+    position: Offset(807, 455), sourceAnchor: Offset(807, 455),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/cat01/happy/body.png',
+    position: Offset(550, 640), sourceAnchor: Offset(550, 640),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/cat01/happy/ear_right.png',
+    position: Offset(495.3, 338.7), sourceAnchor: Offset(513, 352),
+    rotationDeg: 0.0,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/cat01/happy/ear_left.png',
+    position: Offset(268.4, 332.3), sourceAnchor: Offset(295, 350),
+    rotationDeg: -18.2,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/cat01/happy/head.png',
+    position: Offset(375, 467), sourceAnchor: Offset(375, 467),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+);
+
+// Cat-specific Happy animation. Each motion starts and ends at the
+// approved static pose; the pet_widget.dart envelope makes looping smooth.
+const _catHappyAnimation = AnimationProfile(
+  durationMs: 5600,
+  tailBaseDeg: 0, tailAmplitudeDeg: 23.0, tailCycles: 1,
+  bodyLift: 6.5, bodyCycles: 1,
+  headBaseDeg: 0, headAmplitudeDeg: 4.2, headCycles: 1,
+  earLeftBaseDeg: 0, earLeftAmplitudeDeg: 8.0, earLeftCycles: 2,
+  earRightBaseDeg: 0, earRightAmplitudeDeg: 7.0, earRightCycles: 2,
+  headDrop: 5.0, headDropCycles: 1,
+);
+
+
+// Cat 01 Bored: 5 aligned 1024x1024 layers rebuilt from the user-provided
+// bored parts sheet. This is the first Flutter integration pass; positions can
+// be tuned later with the same layer-tuner workflow used for Happy.
+const _catBoredPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/cat01/bored/tail.png',
+    position: Offset(741.3, 722.3), sourceAnchor: Offset(759, 740),
+    rotationDeg: -2.3,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/cat01/bored/body.png',
+    position: Offset.zero, sourceAnchor: Offset.zero,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/cat01/bored/ear_right.png',
+    position: Offset(518.1, 347.7), sourceAnchor: Offset(527, 330),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/cat01/bored/ear_left.png',
+    position: Offset(263.6, 362.4), sourceAnchor: Offset(237, 327),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/cat01/bored/head.png',
+    position: Offset(380, 457), sourceAnchor: Offset(380, 457),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+);
+
+const _catBoredAnimation = AnimationProfile(
+  durationMs: 7200,
+  // Bored cat: slow tail sway, subtle head nod and independent ear twitches.
+  tailBaseDeg: 0.0, tailAmplitudeDeg: 17.0, tailCycles: 1,
+  bodyLift: 4.0, bodyCycles: 1,
+  headBaseDeg: 0.0, headAmplitudeDeg: 3.0, headCycles: 1,
+  earLeftBaseDeg: 0.0, earLeftAmplitudeDeg: 5.0, earLeftCycles: 2,
+  earRightBaseDeg: 0.0, earRightAmplitudeDeg: 4.0, earRightCycles: 2,
+  headDrop: 15.0, headDropCycles: 1,
+);
+
+// Cat 01 Tired: separate full-canvas 1024x1024 layers.
+// Initial pose is aligned visually; adjust using Cat Tired Layer Tuner.
+const _catTiredPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/cat01/tired/tail.png',
+    position: Offset(796.1, 774.9), sourceAnchor: Offset(805, 704),
+    rotationDeg: -38.7,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/cat01/tired/body.png',
+    position: Offset.zero, sourceAnchor: Offset.zero,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/cat01/tired/ear_right.png',
+    position: Offset(502.0, 377.4), sourceAnchor: Offset(502, 404),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/cat01/tired/ear_left.png',
+    position: Offset(283.0, 382.8), sourceAnchor: Offset(252, 405),
+    rotationDeg: -9.1,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/cat01/tired/head.png',
+    position: Offset(389.2, 516.0), sourceAnchor: Offset(336, 516),
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+);
+
+// Gentle sleepy motion, separate from the existing Dog Tired treatment.
+// Whole-number wave cycles ensure a continuous loop with no pose reset jump.
+const _catTiredAnimation = AnimationProfile(
+  durationMs: 9000,
+  // Expressive but still sleepy: preserve the approved rest pose.
+  // Whole-number waves and zero-phase motion keep the cycle seamless.
+  tailBaseDeg: 0.0, tailAmplitudeDeg: 18.0, tailCycles: 1,
+  bodyLift: 8.0, bodyCycles: 1,
+  headBaseDeg: 0.0, headAmplitudeDeg: 5.2, headCycles: 1,
+  earLeftBaseDeg: 0.0, earLeftAmplitudeDeg: 3.8, earLeftCycles: 1,
+  earRightBaseDeg: 0.0, earRightAmplitudeDeg: 3.5, earRightCycles: 1,
+  headDrop: 25.0, headDropCycles: 1,
+);
+
+
+// Cat 01 Anxious: user-approved static placement from Cat 01 Anxious
+// Layer Tuner. All five layers stay on full 1024x1024 transparent canvases.
+// These offsets are now fixed and are safe to animate around their current pivots.
+const _catAnxiousPose = PetPoseAssets(
+  designSize: 1024,
+  tail: LayerSpec(
+    assetPath: 'assets/pets/cat01/anxious/tail.png',
+    position: Offset(668.1, 515.4), sourceAnchor: Offset(725.7, 511.0),
+    rotationDeg: -18.2,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  body: LayerSpec(
+    assetPath: 'assets/pets/cat01/anxious/body.png',
+    position: Offset.zero, sourceAnchor: Offset.zero,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earRight: LayerSpec(
+    assetPath: 'assets/pets/cat01/anxious/ear_right.png',
+    position: Offset(518.2, 326.0), sourceAnchor: Offset(527.0, 326.0),
+    rotationDeg: 0.0,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  earLeft: LayerSpec(
+    assetPath: 'assets/pets/cat01/anxious/ear_left.png',
+    position: Offset(222.6, 314.7), sourceAnchor: Offset(244.7, 314.7),
+    rotationDeg: -4.6,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+  head: LayerSpec(
+    assetPath: 'assets/pets/cat01/anxious/head.png',
+    position: Offset(382.0, 444.0), sourceAnchor: Offset(382.0, 444.0),
+    rotationDeg: 0.0,
+    sourceSize: Size(1024, 1024), sourceScale: 100,
+  ),
+);
+
+// Cat 01 Anxious animation: slightly more alert than Tired, but still subtle.
+// All cycles are whole-number to keep the loop seamless when repeating.
+const _catAnxiousAnimation = AnimationProfile(
+  durationMs: 6200,
+  tailBaseDeg: 0, tailAmplitudeDeg: 12.0, tailCycles: 1,
+  bodyLift: 5.0, bodyCycles: 1,
+  headBaseDeg: 0, headAmplitudeDeg: 4.6, headCycles: 1,
+  earLeftBaseDeg: 0, earLeftAmplitudeDeg: 8.5, earLeftCycles: 2,
+  earRightBaseDeg: 0, earRightAmplitudeDeg: 8.0, earRightCycles: 2,
+  headDrop: 8.0, headDropCycles: 1,
+);
+
+const cat01 = PetDefinition(
+  id: 'cat01',
+  label: 'Cat 01 - Gray Tabby',
+  poses: {
+    PetMood.happy: _catHappyPose,
+    PetMood.bored: _catBoredPose,
+    PetMood.tired: _catTiredPose,
+    PetMood.anxious: _catAnxiousPose,
+  },
+  animations: {
+    PetMood.happy: _catHappyAnimation,
+    PetMood.bored: _catBoredAnimation,
+    PetMood.tired: _catTiredAnimation,
+    PetMood.anxious: _catAnxiousAnimation,
+  },
+  anchors: {
+    // Cat 01 Happy: confirmed accessory anchors.
+    PetMood.happy: {
+      AccessorySlot.head: AccessoryAnchor(
+        position: Offset(400.1, 204.9), scale: 0.700, rotationDeg: -1.5),
+      AccessorySlot.face: AccessoryAnchor(
+        position: Offset(354.0, 420.1), scale: 0.924, rotationDeg: 0.0),
+      AccessorySlot.neck: AccessoryAnchor(
+        position: Offset(590.0, 620.5), scale: 1.470, rotationDeg: -19.2),
+    },
+    // Cat 01 Bored: user-confirmed accessory anchors (v4.6.30).
+    PetMood.bored: {
+      AccessorySlot.head: AccessoryAnchor(
+        position: Offset(431.8, 266.2), scale: 0.624, rotationDeg: -3.0),
+      AccessorySlot.face: AccessoryAnchor(
+        position: Offset(359.2, 466.2), scale: 0.782, rotationDeg: 1.5),
+      AccessorySlot.neck: AccessoryAnchor(
+        position: Offset(622.3, 559.4), scale: 1.231, rotationDeg: -28.8),
+    },
+    // Cat 01 Tired: user-confirmed accessory anchors (v4.6.39).
+    PetMood.tired: {
+      AccessorySlot.head: AccessoryAnchor(
+        position: Offset(435.5, 292.2), scale: 0.640, rotationDeg: 0.0),
+      AccessorySlot.face: AccessoryAnchor(
+        position: Offset(366.0, 497.6), scale: 0.812, rotationDeg: 5.1),
+      AccessorySlot.neck: AccessoryAnchor(
+        position: Offset(545.6, 673.0), scale: 1.270, rotationDeg: -15.0),
+    },
+    // Cat 01 Anxious: user-confirmed accessory anchors (v4.6.45).
+    PetMood.anxious: {
+      AccessorySlot.head: AccessoryAnchor(
+        position: Offset(413.2, 174.4), scale: 0.690, rotationDeg: 0.0),
+      AccessorySlot.face: AccessoryAnchor(
+        position: Offset(369.2, 390.6), scale: 0.944, rotationDeg: 0.0),
+      AccessorySlot.neck: AccessoryAnchor(
+        position: Offset(554.8, 590.8), scale: 1.381, rotationDeg: -18.1),
+    },
+  },
+);
+
+const pets = <PetDefinition>[dog01, cat01];
 
 const accessories = <AccessoryDefinition>[
   AccessoryDefinition(
