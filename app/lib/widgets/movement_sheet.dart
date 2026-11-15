@@ -19,6 +19,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'last_night_art.dart' show CameraBarsPainter;
 import 'report_sheet.dart';
 
 import '../models/night_curve.dart';
@@ -558,7 +559,7 @@ class _MovementViewState extends State<MovementView> {
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: 120,
+                  height: 140,
                   child: _MotionLine(
                     curve: (n.motionCurve ?? widget.curve)!,
                     episodes: eps ?? const [],
@@ -905,6 +906,9 @@ class _MotionLineState extends State<_MotionLine> {
   }
 }
 
+/// 整晚的動作：跟外面那一格同一套光柱（11-15 使用者：裡面也要變成外面的樣子）。
+/// 每 5 分鐘一根，高度＝那 5 分鐘有幾成時間在動（照抄、不平滑）；越高越從淡紫轉金色、帶光暈。
+/// ⚠️ 柱頂＝ [yOf]，片段的點與點選的泡泡照舊放在同一個高度上。
 class _LinePainter extends CustomPainter {
   final NightCurve curve;
   final Color color;
@@ -915,40 +919,48 @@ class _LinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pts = [
-      for (final p in curve.points) Offset(xOf(p.time), yOf(p.value)),
-    ];
-    final line = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (final p in pts.skip(1)) {
-      line.lineTo(p.dx, p.dy);
+    const lavender = CameraBarsPainter.lavender, gold = CameraBarsPainter.gold;
+    final pts = curve.points;
+    final step = pts.length < 2 ? 6.0 : size.width / (pts.length - 1);
+    final barW = (step * 0.62).clamp(1.5, 7.0);
+    final top = yOf(double.infinity); // 最高那根的柱頂
+    for (final p in pts) {
+      final x = xOf(p.time);
+      final y = yOf(p.value);
+      final f = h - top <= 0 ? 0.0 : ((h - y) / (h - top)).clamp(0.0, 1.0);
+      final bh = math.max(3.0, h - y);
+      final c = Color.lerp(lavender, gold, ((f - 0.35) / 0.5).clamp(0.0, 1.0))!;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - barW / 2, h - bh, barW, bh),
+        Radius.circular(barW / 2),
+      );
+      if (f > 0.5) {
+        canvas.drawRRect(
+          rect.inflate(barW * 0.8),
+          Paint()
+            ..color = gold.withValues(alpha: 0.35 * f)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, barW * 1.6),
+        );
+      }
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              c.withValues(alpha: p.value <= 0 ? 0.25 : 0.55),
+              c.withValues(alpha: p.value <= 0 ? 0.3 : 0.6 + 0.4 * f),
+            ],
+          ).createShader(rect.outerRect),
+      );
     }
-    final area = Path.from(line)
-      ..lineTo(pts.last.dx, h)
-      ..lineTo(pts.first.dx, h)
-      ..close();
-    canvas.drawPath(
-      area,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: 0.35), color.withValues(alpha: 0)],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, h)),
-    );
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round,
-    );
     canvas.drawLine(
-      Offset(0, h),
-      Offset(size.width, h),
+      Offset(0, h + 2),
+      Offset(size.width, h + 2),
       Paint()
-        ..color = const Color(0x1FFFFFFF)
-        ..strokeWidth = 1,
+        ..color = lavender.withValues(alpha: 0.5)
+        ..strokeWidth = 1.2,
     );
   }
 

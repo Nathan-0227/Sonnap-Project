@@ -1244,7 +1244,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     }
 
     Widget? camTile;
-    if (r.camera?.usualLabel != null) {
+    final perHour = r.camera?.eventsPerHour;
+    if (r.camera?.usualLabel != null || perHour != null) {
       final cam = r.cameraMotion;
       camTile = ReportArtTile(
         key: const Key('report-camera-tile'),
@@ -1263,11 +1264,20 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ),
           key: const Key('report-camera-line'),
         ),
-        // 後端寫好的那句「跟你平常比」，照抄當大字
+        // 11-15 使用者定：大字＝一小時動幾次（後端 events_per_hour，四捨五入到整數）；
+        // 後端那句「跟你平常比」照抄成小字。🔴 不放文獻常模（11 次／小時）：事件率跨夜不穩 3.1 倍、
+        // 我們的「一次」跟文獻不是同一個構念（CLAUDE.md 紅線 2 展開），並列會被讀成「比一般人多」
         text: ReportArtText(
-          value: r.camera!.usualLabel!,
-          valueKey: const Key('report-camera'),
-          line: 'Camera data is not part of your score.',
+          value: perHour == null
+              ? r.camera!.usualLabel
+              : cameraPerHourText(perHour),
+          // 沒有次數時大字就是「跟平常比」那句，鍵跟著那句走
+          valueKey: Key(
+            perHour == null ? 'report-camera' : 'report-camera-rate',
+          ),
+          line: perHour == null ? null : r.camera!.usualLabel,
+          lineKey: const Key('report-camera'),
+          extra: const [Text('Camera data is not part of your score.')],
         ),
       );
     }

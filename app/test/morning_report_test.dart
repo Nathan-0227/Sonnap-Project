@@ -631,6 +631,33 @@ void main() {
       expect(find.text('On time'), findsNothing);
     });
 
+    testWidgets('攝影機格子：大字＝一小時動幾次，「跟平常比」那句變小字；不放文獻常模', (tester) async {
+      const camera = CameraNight(
+        date: '2026-11-12',
+        usualLabel: 'SENTINEL-camera-usual',
+        usualSupported: true,
+        eventsPerHour: 18.4,
+      );
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
+            .withExtras(camera: camera),
+      );
+      await tester.scrollUntilVisible(find.byKey(const Key('report-camera-rate')), 300,
+          scrollable: find.byType(Scrollable).first);
+      expect(textOf(tester, 'report-camera-rate'), '18 moves / hour');
+      expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
+      final tile = find.byKey(const Key('report-camera-tile'));
+      final all = tester
+          .widgetList<Text>(find.descendant(of: tile, matching: find.byType(Text)))
+          .map((t) => t.data ?? '')
+          .join(' | ')
+          .toLowerCase();
+      for (final w in ['typical', 'normal', 'average adult', '11 ', 'restless']) {
+        expect(all, isNot(contains(w)), reason: w);
+      }
+    });
+
     testWidgets('昨晚的格子：直接攤開（不再收合），照抄 WASO、心率、效率＋警語＋basis、攝影機',
         (tester) async {
       const camera = CameraNight(

@@ -489,7 +489,7 @@ class CameraBarsPainter extends CustomPainter {
   static const gold = Color(0xFFFFD96A);
 
   /// 柱子底線的位置（相對高度）；時刻標在它下面。
-  static const double baseY = 0.56;
+  static const double baseY = 0.47;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -518,7 +518,7 @@ class CameraBarsPainter extends CustomPainter {
 
     final x0 = w * 0.06, x1 = w * 0.94;
     final base = h * baseY;
-    final maxH = h * 0.3;
+    final maxH = h * 0.26;
     final t0 = points.first.$1, t1 = points.last.$1;
     final span = t1.difference(t0).inSeconds.toDouble();
     if (span <= 0) return;
@@ -611,6 +611,12 @@ class CameraBarsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CameraBarsPainter old) => old.points != points;
+}
+
+/// Movement (camera) 的大字：「18 moves / hour」（後端的 events_per_hour，四捨五入到整數；1 次寫 move）。
+String cameraPerHourText(double perHour) {
+  final n = perHour.round();
+  return '$n move${n == 1 ? '' : 's'} / hour';
 }
 
 /// 鋪滿整張卡的 CustomPaint。

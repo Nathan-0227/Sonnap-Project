@@ -121,4 +121,10 @@ void main() {
     expect(bedClockAngle(15, 0), closeTo(bedClockAngle(3, 0), 1e-9));
     expect(bedClockAngle(23, 30), closeTo(bedClockAngle(11, 30), 1e-9));
   });
+
+  test('攝影機大字：一小時動幾次（四捨五入到整數，1 次寫 move）', () {
+    expect(cameraPerHourText(18.4), '18 moves / hour');
+    expect(cameraPerHourText(0.6), '1 move / hour');
+    expect(cameraPerHourText(0), '0 moves / hour');
+  });
 }
