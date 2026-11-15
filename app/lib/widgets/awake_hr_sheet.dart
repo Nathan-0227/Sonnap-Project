@@ -60,6 +60,11 @@ String awakeHrZoneRange(List<int> floors, int i) {
   return '${floors[i - 1]}–${floors[i] - 1}';
 }
 
+/// 0 分鐘的區間合成一句：「Zone 4, Zone 5: 0m」。
+String awakeHrEmptyZonesLine(List<int> minutes) =>
+    '${[for (var i = 0; i < minutes.length; i++)
+      if (minutes[i] == 0) awakeHrZoneLabel(i)].join(', ')}: 0m';
+
 String _minutes(int m) =>
     m < 60 ? '${m}m' : (m % 60 == 0 ? '${m ~/ 60}h' : '${m ~/ 60}h ${m % 60}m');
 
@@ -189,9 +194,9 @@ class GlowingHeartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    // 愛心在格子右上半：留左下給字
-    final side = math.min(w * 0.62, h * 0.62);
-    final c = Offset(w * 0.62, h * 0.43);
+    // 11-15 使用者定：愛心置中（標題與底下的字之間）
+    final side = math.min(w * 0.58, h * 0.56);
+    final c = Offset(w * 0.5, h * 0.44);
     final s = side * (1 + 0.06 * beat);
     final box = Rect.fromCenter(center: c, width: s, height: s * 0.92);
     final heart = awakeHeartPath(box);
@@ -346,15 +351,8 @@ class AwakeHrView extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Beats per minute, from your watch. Time asleep is left out — '
-                'that part is in Sleeping HR above.',
-                key: Key('awake-hr-note'),
-                style: TextStyle(color: _soft, fontSize: 12, height: 1.35),
-              ),
               if (a.readings.isNotEmpty) ...[
-                const SizedBox(height: 22),
+                const _Divider(),
                 const Text(
                   'Through the day',
                   style: TextStyle(
@@ -365,8 +363,7 @@ class AwakeHrView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'A reading every 2 minutes. Gaps are when the watch was off. '
-                  'Tap or slide to see one.',
+                  'Tap or slide to see a reading.',
                   style: TextStyle(color: _soft, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
@@ -394,43 +391,49 @@ class AwakeHrView extends StatelessWidget {
                 ),
               ],
               if (zones != null && floors != null && zoneTotal > 0) ...[
-                const SizedBox(height: 22),
-                Text(
-                  a.zoneMax == null
-                      ? 'Time in zones'
-                      : 'Time in zones (max ${a.zoneMax})',
-                  key: const Key('awake-hr-zones-title'),
-                  style: const TextStyle(
+                const _Divider(),
+                const Text(
+                  'Time in zones',
+                  key: Key('awake-hr-zones-title'),
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'The heart rate zones set in your Garmin app. Awake time only.',
-                  style: TextStyle(color: _soft, fontSize: 12),
+                Text(
+                  a.zoneMax == null
+                      ? 'Garmin zones · awake only'
+                      : 'Garmin zones · max ${a.zoneMax} · awake only',
+                  key: const Key('awake-hr-zones-note'),
+                  style: const TextStyle(color: _soft, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
+                // 11-15 使用者：資訊太多 → 0 分鐘的區間不列一行，最後一句帶過
                 for (var i = zones.length - 1; i >= 0; i--)
-                  _ZoneRow(
-                    key: Key('awake-hr-zone-$i'),
-                    label: awakeHrZoneLabel(i),
-                    range: awakeHrZoneRange(floors, i),
-                    minutes: zones[i],
-                    fraction: zones[i] / zoneTotal,
-                    color: Color.lerp(
-                      const Color(0xFF6F7AB8),
-                      kAwakeHr,
-                      i / (zones.length - 1),
-                    )!,
+                  if (zones[i] > 0)
+                    _ZoneRow(
+                      key: Key('awake-hr-zone-$i'),
+                      label: awakeHrZoneLabel(i),
+                      range: awakeHrZoneRange(floors, i),
+                      minutes: zones[i],
+                      fraction: zones[i] / zoneTotal,
+                      color: Color.lerp(
+                        const Color(0xFF6F7AB8),
+                        kAwakeHr,
+                        i / (zones.length - 1),
+                      )!,
+                    ),
+                if (zones.any((m) => m == 0))
+                  Text(
+                    awakeHrEmptyZonesLine(zones),
+                    key: const Key('awake-hr-zones-empty'),
+                    style: const TextStyle(color: _soft, fontSize: 12),
                   ),
               ],
               if (showWeek) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Container(height: 1, color: const Color(0x1FFFFFFF)),
-                ),
+                const _Divider(),
                 const Text(
                   'Last 7 days',
                   style: TextStyle(
@@ -441,7 +444,7 @@ class AwakeHrView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Dot: average while awake. Line up to the day\'s peak.',
+                  'Dot = average · line = peak',
                   style: TextStyle(color: _soft, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
@@ -522,6 +525,17 @@ class _Key extends StatelessWidget {
   );
 }
 
+/// 段落之間的細線（11-15 使用者：資訊之間要有一條線）。
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 18),
+    child: Container(height: 1, color: const Color(0x1FFFFFFF)),
+  );
+}
+
 class _ZoneRow extends StatelessWidget {
   final String label;
   final String range;
@@ -539,16 +553,17 @@ class _ZoneRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 9),
+    padding: const EdgeInsets.only(bottom: 8),
     child: Row(
       children: [
         SizedBox(
-          width: 104,
+          width: 150,
           child: Text.rich(
+            maxLines: 1,
             TextSpan(
               children: [
                 TextSpan(
-                  text: '$label\n',
+                  text: '$label  ',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -583,9 +598,11 @@ class _ZoneRow extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         SizedBox(
-          width: 54,
+          width: 66,
           child: Text(
             _minutes(minutes),
+            softWrap: false,
+            overflow: TextOverflow.visible,
             textAlign: TextAlign.right,
             style: const TextStyle(
               color: Colors.white,

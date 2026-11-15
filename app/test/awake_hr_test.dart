@@ -243,7 +243,12 @@ void main() {
     final all = texts(tester, sheet).join(' | ');
     expect(all, contains('78 bpm'));
     expect(all, contains('peak at 17:20'));
-    expect(all, contains('Time in zones (max 199)'));
+    expect(all, contains('Time in zones'));
+    expect(all, contains('max 199'));
+    // 0 分鐘的區間不各列一行，合成一句（11-15 使用者：資訊太多）
+    expect(find.byKey(const Key('awake-hr-zone-4')), findsNothing);
+    expect(find.byKey(const Key('awake-hr-zone-1')), findsOneWidget);
+    expect(all, contains('Zone 4, Zone 5: 0m'));
     expect(all, contains('Asleep · see Sleeping HR'));
     expect(all, contains('Below zone 1'));
     expect(all, contains('11h 40m'));
