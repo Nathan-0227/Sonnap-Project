@@ -60,6 +60,10 @@ c = hr.heart_rate_curve(recs(START, values), START, WAKE)
 check("最低是原始讀數的 50，不是 5 分鐘平均", c["min"], 50)
 check("最高是原始讀數的 70", c["max"], 70)
 check("平均", c["avg"], 60)
+check("最低那一刻是第一筆 50 的原始時刻", c["min_at"], START)
+values = [60] * 10 + [47] + [60] * 10 + [47] + [60] * 8
+c = hr.heart_rate_curve(recs(START, values), START, WAKE)
+check("最低出現兩次 → 取最早那一筆（01:20）", c["min_at"], "2026-11-12T01:20:00+08:00")
 
 print("\n【3】資料不夠 → None")
 check("只有 10 分鐘的讀數", hr.heart_rate_curve(recs(START, [60] * 5), START, WAKE), None)
@@ -112,6 +116,60 @@ m2 = client.get("/home", params={"user_id": uid2, "date": "2026-11-12"}).json()[
 check("Health Connect 來源沒有曲線", m2["heart_rate_curve"], None)
 check("Garmin 來源也有動作曲線", m["movement_curve"] is not None, True)
 check("Health Connect 沒有動作曲線", m2["movement_curve"], None)
+
+print("\n【5b】一整天的壓力線（Stress 點開）")
+def srecs(start, values, every_min=3):
+    t0 = datetime.fromisoformat(start)
+    return [{"timestamp": (t0 + timedelta(minutes=every_min * i)).isoformat(),
+             "metric": "stress_score", "value": v, "unit": "score"} for i, v in enumerate(values)]
+day = srecs("2026-11-13T23:51:00+08:00", [99, 99, 99]) + \
+      srecs("2026-11-14T00:00:00+08:00", [20, 40, -1, -2, 96, 0, 30, 30, 30, 30]) + \
+      srecs("2026-11-15T00:00:00+08:00", [88])
+st = hr.day_stress(day, "2026-11-14")
+check("每 3 分鐘一點、不平均（每一筆原始讀數一格）", [p["value"] for p in st["points"]][:2], [20, 40])
+check("⚠️ 負數＝量不到，沒有那一點（App 斷開）",
+      [p["t"][11:16] for p in st["points"]][:3], ["00:00", "00:03", "00:12"])
+check("0 是真的值（完全放鬆）", st["min"], 0)
+check("只取那個日曆日（前一天 23:51 的 99、隔天 00:00 的 88 不算）", st["max"], 96)
+check("平均從原始讀數算", st["avg"], round((20 + 40 + 96 + 0 + 30 * 4) / 8))
+check("讀數太少 → None", hr.day_stress(srecs("2026-11-14T00:00:00+08:00", [20, 30]), "2026-11-14"), None)
+avgs = hr.stress_day_averages(day)
+check("每天平均：負數不算、照讀數自己的日期", (avgs["2026-11-13"], avgs["2026-11-14"], avgs["2026-11-15"]),
+      (99, st["avg"], 88))
+check("不寫 Elevated 之類", any(w in json.dumps(st).lower() for w in ("elevated", "high", "normal")), False)
+
+print("\n【5c】醒著的心率（Awake HR）：扣掉睡著、只從醒著的讀數算")
+D = "2026-11-14"
+# 00:00–02:00 睡著（手錶的那一晚）50；02:00–04:00 醒著 80；04:00–06:00 午睡（只有 15 分鐘格子標 sleep）55；
+# 06:00–08:00 醒著 120；23:00–24:00 睡著（隔天那晚的入睡）48
+day_hr = (recs(f"{D}T00:00:00+08:00", [50] * 60) + recs(f"{D}T02:00:00+08:00", [80] * 60)
+          + recs(f"{D}T04:00:00+08:00", [55] * 60) + recs(f"{D}T06:00:00+08:00", [120] * 59 + [150])
+          + recs(f"{D}T23:00:00+08:00", [48] * 30)
+          + recs("2026-11-13T23:50:00+08:00", [200] * 5)        # 前一天的不算
+          + [{"metric": "heart_rate", "timestamp": f"{D}T10:00:00+08:00", "value": 0}])  # 0 不是讀數
+nights = [("2026-11-13T22:30:00+08:00", f"{D}T02:00:00+08:00"),
+          (f"{D}T23:00:00+08:00", "2026-11-15T07:00:00+08:00")]
+qs = [None] * 96
+for i in range(16, 24):          # 04:00–06:00
+    qs[i] = ["sleep", 0]
+qs[40] = ["active", 300]         # 不是 sleep 的格子不影響
+aw = hr.awake_heart_rate(day_hr, D, nights, quarters=qs, zones=hr.GARMIN_HR_ZONES)
+check("平均只算醒著的（80 與 120 各 2 小時，最後一筆 150）", aw["avg"], round((80 * 60 + 120 * 59 + 150) / 120))
+check("最高與時刻", (aw["max"], aw["max_at"][11:16]), (150, "07:58"))
+check("整天的線含睡著那段（App 畫淡）", len(aw["readings"]), 60 + 60 + 60 + 60 + 30)
+check("睡著的時段：裁到這一天、合併兩種來源",
+      [(a["start"][11:16], a["end"][11:16]) for a in aw["asleep"]],
+      [("00:00", "02:00"), ("04:00", "06:00"), ("23:00", "00:00")])
+check("區間分鐘：80 低於 1 區 120 分、120 在 2 區（下緣 119）118 分、150 在 3 區 2 分（一筆＝2 分鐘）",
+      aw["zones"]["minutes"], [120, 0, 118, 2, 0, 0])
+check("區間照寫是哪一把尺", (aw["zones"]["max"], aw["zones"]["floors"]), (199, [100, 119, 139, 159, 179]))
+check("醒著的讀數 < 1 小時 → None",
+      hr.awake_heart_rate(recs(f"{D}T10:00:00+08:00", [80] * 29), D), None)
+check("沒有睡著資料 → 整天都算醒著",
+      hr.awake_heart_rate(recs(f"{D}T10:00:00+08:00", [80] * 30), D)["avg"], 80)
+check("沒給區間 → zones 是 None", hr.awake_heart_rate(recs(f"{D}T10:00:00+08:00", [80] * 30), D)["zones"], None)
+check("不給靜止心率、最低（使用者定）", sorted(k for k in aw if k in ("resting", "min", "min_at")), [])
+check("不寫 Normal／High", any(w in json.dumps(aw).lower() for w in ("normal", "high", "elevated", "good")), False)
 
 print("\n【6】不判斷")
 text = json.dumps(curve).lower()

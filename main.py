@@ -38,6 +38,7 @@ main.py — Sonnap 後端 API
     先跑一次：python db.py --init && python db.py --seed
 """
 
+import bisect
 import json
 from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
@@ -297,6 +298,39 @@ def _garmin_records():
     return _STANDARD_CACHE["records"]
 
 
+# 心率讀數依時刻排好的索引（2026-11-15）：/insights 每晚都要算一次睡著心率，
+# 每晚掃一次整份原始檔讓 /insights 從 1 秒內變成 3 秒，剛好撞上 App 的 3 秒逾時（一週那段時有時無）。
+_HR_INDEX = {"key": None, "times": [], "recs": []}
+
+
+def _hr_records_near(start, wake):
+    """
+    只拿入睡 → 起床之間的心率讀數，交給 sleep_heart_rate.heart_rate_curve（結果與傳整份相同）。
+
+    ⚠️ 沒時區標記的讀數或時刻：退回整份，讓 heart_rate_curve 自己照原本的規則處理。
+    """
+    records = _garmin_records()
+    if not records:
+        return None
+    key = (id(records), len(records))
+    if _HR_INDEX["key"] != key:
+        pairs = []
+        for r in records:
+            if r.get("metric") != "heart_rate":
+                continue
+            t = sleep_heart_rate._parse(r.get("timestamp"))
+            if t is not None and t.tzinfo is not None:
+                pairs.append((t, r))
+        pairs.sort(key=lambda p: p[0])
+        _HR_INDEX.update(key=key, times=[p[0] for p in pairs], recs=[p[1] for p in pairs])
+    s, w = sleep_heart_rate._parse(start), sleep_heart_rate._parse(wake)
+    if s is None or w is None or s.tzinfo is None or w.tzinfo is None:
+        return records
+    lo = bisect.bisect_left(_HR_INDEX["times"], s)
+    hi = bisect.bisect_right(_HR_INDEX["times"], w)
+    return _HR_INDEX["recs"][lo:hi]
+
+
 # VO2 max 不是每天都有（只有 GPS 走路、跑步的日子會更新），報告顯示最近一次；
 # 太舊就不顯示（2026-11-13 使用者定）。
 VO2MAX_LOOKBACK_DAYS = 90
@@ -320,6 +354,7 @@ def yesterday_block(user_id, night_date):
     row = db.get_garmin_daily(user_id, day.isoformat())
     if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
         return None
+    stress_curve = sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
     vo2 = db.latest_vo2max(
         user_id, on_or_before=day.isoformat(),
         since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
@@ -333,18 +368,27 @@ def yesterday_block(user_id, night_date):
         "step_goal": row.get("step_goal"),
         "distance_m": row.get("distance_m"),
         "active_kcal": row.get("active_kcal"),
+        # 靜止代謝與一整天總消耗（Garmin 估的；舊日子沒有是 null）。不給目標、不寫剩多少
+        "resting_kcal": row.get("resting_kcal"),
+        "total_kcal": row.get("total_kcal"),
         "floors_up": row.get("floors_up"),
         "activity": group(
             highly_active_sec=row.get("highly_active_sec"),
             active_sec=row.get("active_sec"),
             sedentary_sec=row.get("sedentary_sec"),
+            sleeping_sec=_sleeping_sec(row),
         ),
         "stress": group(
             rest_sec=row.get("stress_rest_sec"),
             low_sec=row.get("stress_low_sec"),
             medium_sec=row.get("stress_medium_sec"),
             high_sec=row.get("stress_high_sec"),
+            # 量不到的時間（在動＋其他）；兩個都沒存（舊日子）→ null，App 不寫那一行
+            not_measured_sec=_payload.sum_or_none(row.get("stress_activity_sec"),
+                                   row.get("stress_uncategorized_sec")),
         ),
+        # 一整天的壓力線（每 3 分鐘一點，量不到的時候沒有點）＋平均、最低、最高。只呈現、不判斷
+        "stress_curve": stress_curve,
         "body_battery": group(
             charged=row.get("body_battery_charged"),
             drained=row.get("body_battery_drained"),
@@ -352,16 +396,53 @@ def yesterday_block(user_id, night_date):
         "vo2max": None if vo2 is None else {"value": vo2[0], "measured_on": vo2[1]},
         # 沒有事件是 []（照實），沒抓到是 null
         "move_iq": row.get("move_iq"),
+        # 每個鐘頭走幾步（24 格，null＝那小時沒戴錶；整個沒抓到是 null）。App 不寫加總（大數字已是官方的 steps）
+        "steps_hourly": row.get("steps_hourly"),
+        # 每 15 分鐘 [程度, 步數]（96 格，null＝沒戴錶）。只在這裡，打包檔不帶（同 steps_hourly 的理由）
+        "activity_quarters": row.get("activity_quarters"),
         # 2026-11-14：報告的圖形格子用（步數那座「山」、點開的長條圖、整天心率線）。
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
         "history": _yesterday_history(user_id, day),
         "heart_rate": sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat()),
+        # 2026-11-15 Awake HR：扣掉睡著之後的平均、最高、各區間分鐘＋整天的原始讀數。
+        # 不給靜止心率、最低、Normal／High（Research-Background/心率門檻.md）。打包檔不帶（每 2 分鐘的讀數太大）
+        "awake_heart_rate": _awake_hr(user_id, day, row),
     }
+
+
+def _awake_hr(user_id, day, row, windows=None):
+    """那個日曆日醒著的心率。睡著＝跨進這天的兩晚（起床日＝這天、隔天）手錶的入睡→起床，
+    聯集 Garmin 每 15 分鐘標 sleep 的格子。"""
+    if windows is None:
+        windows = db.list_sleep_windows(user_id, day.isoformat(),
+                                        (day + timedelta(days=1)).isoformat())
+    nights = [windows[d] for d in (day.isoformat(), (day + timedelta(days=1)).isoformat())
+              if d in windows]
+    start = f"{day.isoformat()}T00:00:00+08:00"
+    end = f"{(day + timedelta(days=1)).isoformat()}T00:00:00+08:00"
+    return sleep_heart_rate.awake_heart_rate(
+        _hr_records_near(start, end) or [], day.isoformat(), nights,
+        quarters=(row or {}).get("activity_quarters"),
+        zones=sleep_heart_rate.GARMIN_HR_ZONES)
+
+
+def _sleeping_sec(row):
+    """這個日曆日睡著幾秒。Garmin 有給就照抄；舊日子沒存這欄時，用「一天 − 其他三種」補——
+    Garmin 的四種加起來剛好是 86400（2026-11-15 實測 11-07、11-14 兩天）。三種有缺或超過一天 → None。"""
+    v = row.get("sleeping_sec")
+    if v is not None:
+        return v
+    parts = [row.get(k) for k in ("highly_active_sec", "active_sec", "sedentary_sec")]
+    if any(p is None for p in parts) or sum(parts) > 86400:
+        return None
+    return 86400 - sum(parts)
 
 
 def _yesterday_history(user_id, day):
     """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。"""
     since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
+    stress_avgs = sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+    windows = db.list_sleep_windows(user_id, since, (day + timedelta(days=1)).isoformat())
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
         if not any(r.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
@@ -370,11 +451,31 @@ def _yesterday_history(user_id, day):
         out.append({
             "date": r["date"],
             "steps": r.get("steps"),
+            "step_goal": r.get("step_goal"),
+            "distance_m": r.get("distance_m"),
             "active_kcal": r.get("active_kcal"),
             "active_minutes": (round(sum(v for v in active if v) / 60)
                                if any(v is not None for v in active) else None),
+            "highly_active_minutes": (None if r.get("highly_active_sec") is None
+                                      else round(r["highly_active_sec"] / 60)),
+            # Stress 一週圖：各程度幾分鐘＋那天的平均壓力（從每 3 分鐘的讀數算）
+            "stress_minutes": _payload.stress_minutes(r),
+            "stress_avg": stress_avgs.get(r["date"]),
+            # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
+            "awake_hr": _awake_hr_summary(user_id, r, windows),
+            # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
+            "move_iq": r.get("move_iq"),
         })
     return out
+
+
+def _awake_hr_summary(user_id, r, windows):
+    try:
+        d = date_cls.fromisoformat(r["date"])
+    except (TypeError, ValueError):
+        return None
+    a = _awake_hr(user_id, d, r, windows)
+    return None if a is None else {"avg": a["avg"], "max": a["max"]}
 
 
 def night_stages(w_row):
@@ -408,6 +509,12 @@ def night_stages(w_row):
     }
 
 
+def _sleep_hr_summary(w_row):
+    """一週圖用：那一晚睡著期間心率的平均與最低（整條曲線太大，一週只帶兩個數）。沒有 → None。"""
+    c = night_heart_rate(w_row)
+    return None if c is None else {"avg": c["avg"], "min": c["min"]}
+
+
 def night_heart_rate(w_row):
     """
     那一晚睡著期間的心率曲線（早晨報告的 Heart rate 卡，2026-11-13）。
@@ -421,7 +528,7 @@ def night_heart_rate(w_row):
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
     if not start or not wake:
         return None
-    records = _garmin_records()
+    records = _hr_records_near(start, wake)
     if not records:
         return None
     return sleep_heart_rate.heart_rate_curve(records, start, wake)
@@ -1028,6 +1135,8 @@ async def get_home(
             "sleep_duration_minutes": w_row["duration_min"],
             "sleep_efficiency": w_row["efficiency"],
             "waso_minutes": w_row["waso_min"],
+            # 半夜醒了幾段（只有 Garmin 有；0 是真的值）。早晨報告 Awake 點開最上面那行
+            "awake_count": w_row.get("awake_count"),
             "deep_minutes": w_row["deep_min"],
             "rem_minutes": w_row["rem_min"],
             # 早晨報告的淺睡／深睡／REM 比例條用（2026-11-12）。表裡沒有淺睡欄位，
@@ -1246,6 +1355,14 @@ async def get_insights(
                     #    deep_min），欄名與 asset 路徑的 history 相同。
                     "sleep_efficiency": r["efficiency"],
                     "deep_minutes": r["deep_min"],
+                    # 早晨報告 Sleeping heart rate 點開的一週圖（2026-11-15）：睡著那一段的
+                    # 平均與最低，跟報告格子**同一支** night_heart_rate（只有 Garmin 來源有）。
+                    "sleep_heart_rate": _sleep_hr_summary(r),
+                    # 早晨報告 Awake 點開的一週圖（2026-11-15）：入睡後清醒的分鐘數，
+                    # 與 /home 的 metrics.waso_minutes 同一個欄位。0 是真的值（整晚沒醒），null 才是沒資料
+                    "waso_minutes": r["waso_min"],
+                    # 每晚醒了幾段（Awake 點開每根長條底下的「×3」）。只有 Garmin 有，null＝沒資料
+                    "awake_count": r.get("awake_count"),
                     # Insights 頁要畫「幾點睡→幾點醒」。與 asset 路徑
                     # （build_app_payload.py 的 history）同一個來源，欄名也相同。
                     "sleep_start_time": r["sleep_start_time"],
@@ -1294,6 +1411,12 @@ async def get_insights(
                     "motion_threshold_basis": r["motion_threshold_basis"],
                     # 「跟你平常比」。⚠️ label 是給人讀的那句話，Dart 照抄不重寫。
                     "usual": r.get("usual"),
+                    # 每一段動作（早晨報告 Movement 點開的時間軸與每小時次數，2026-11-15）。
+                    # label 跟片段**同一支** camera_clips.label_for；舊夜晚還沒回填 → null（不是空陣列）
+                    "episodes": _camera_episodes(r.get("motion_episodes")),
+                    # 整段錄影的動作線（開始 → 結束錄影，不剪成睡著那段；2026-11-15 使用者定：
+                    # Movement 點開的線要跟每小時次數涵蓋同一段時間）。沒有 → null
+                    "motion_curve": json.loads(r["motion_curve"]) if r.get("motion_curve") else None,
                     "roi": r["roi"],
                     "csv_name": r["csv_name"],
                     **_camera_clips_for(clip_nights.get(r["date"])),
@@ -1308,6 +1431,25 @@ async def get_insights(
             ),
         },
     }
+
+
+def _camera_episodes(raw):
+    """camera_nightly.motion_episodes（JSON）→ [{start_at, seconds, label}]；沒有 → None。"""
+    if not raw:
+        return None
+    try:
+        eps = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    out = []
+    for e in eps:
+        try:
+            t = datetime.fromisoformat(e["start_at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        out.append({"start_at": e["start_at"], "seconds": e.get("seconds"),
+                    "label": camera_clips.label_for(t, e.get("seconds") or 0)})
+    return out
 
 
 def _camera_clips_for(night):

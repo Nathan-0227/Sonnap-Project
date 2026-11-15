@@ -249,6 +249,11 @@ CREATE TABLE IF NOT EXISTS wearable_nightly (
     rem_min        REAL,
     avg_hr         REAL,                      -- 睡眠期間平均心率
     resting_hr     REAL,                      -- 靜止心率（每日單一數字）
+    -- 半夜真的醒來幾次＝還原的時間軸上清醒的段數（garmin/sleep_stages.awake_count，
+    -- 2026-11-15 早晨報告 Awake 點開用）。⚠️ 不是 summary 的 awake_count：那個多算入睡時刻的整晚摘要。
+    -- 只呈現、不計分（Tier3 的醒來次數修正在 pipeline 裡算，不讀這一欄）。
+    -- ⚠️ 只有 Garmin 來源有；Health Connect 一律 NULL。0 是真的值（整晚沒醒）。
+    awake_count    INTEGER,
 
     -- ── 入睡／起床時刻（兩種來源都有）──────────────────────────
     -- ⚠️ sleep_start_time 是**手錶偵測到「睡著」的時刻（生理）**，
@@ -398,6 +403,7 @@ CREATE TABLE IF NOT EXISTS camera_nightly (
     roi            TEXT,                     -- "x,y,w,h"；沒有 ROI 時 NULL
     csv_name       TEXT,                     -- 哪一份錄影算出來的
     motion_curve   TEXT,                     -- JSON：每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線）
+    motion_episodes TEXT,                    -- JSON：每一段動作的開始與秒數（早晨報告 Movement 點開，2026-11-15）
     created_at     TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -563,6 +569,17 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     body_battery_drained INTEGER,
     vo2max               REAL,
     move_iq              TEXT,                 -- JSON 陣列 [{type, start, minutes}]；NULL = 沒抓到
+    resting_kcal         INTEGER,              -- 靜止代謝（Garmin 估的，2026-11-15）
+    total_kcal           INTEGER,              -- 一整天總消耗＝靜止＋活動（Garmin 估的）
+    sleeping_sec         INTEGER,              -- 這個日曆日裡睡著的秒數（2026-11-15）
+    stress_activity_sec  INTEGER,              -- 在動、量不到壓力的秒數（2026-11-15）
+    stress_uncategorized_sec INTEGER,          -- 其他量不到壓力的秒數（沒戴錶等）
+    -- 每個鐘頭走幾步：JSON 24 格（null＝那小時沒戴錶）；NULL＝沒抓到。來源 garmin_steps_intraday.json，
+    -- 另一支 set_garmin_steps_hourly 寫（不在 GARMIN_DAILY_FIELDS 裡，存白天資料時不會被蓋掉）
+    steps_hourly         TEXT,
+    -- 每 15 分鐘的活動程度：JSON 96 格 [sleep|still|active|high|other, 步數] 或 null（沒戴錶）；
+    -- 來源同上，set_garmin_activity_quarters 寫（2026-11-15，Active time 的時間軸）
+    activity_quarters    TEXT,
     updated_at           TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -603,6 +620,14 @@ CREATE INDEX IF NOT EXISTS idx_block_events_user_date
 COLUMN_MIGRATIONS = [
     # 2026-11-13：攝影機整晚的動作曲線（只呈現、不計分）。Sleep Stages 卡點 Camera 疊上去。
     ("camera_nightly", "motion_curve", "TEXT"),
+    ("camera_nightly", "motion_episodes", "TEXT"),
+    ("garmin_daily", "steps_hourly", "TEXT"),
+    ("garmin_daily", "resting_kcal", "INTEGER"),
+    ("garmin_daily", "total_kcal", "INTEGER"),
+    ("garmin_daily", "sleeping_sec", "INTEGER"),
+    ("garmin_daily", "activity_quarters", "TEXT"),
+    ("garmin_daily", "stress_activity_sec", "INTEGER"),
+    ("garmin_daily", "stress_uncategorized_sec", "INTEGER"),
     # 2026-08-26：Health Connect 能給臥床時間（Garmin 不能），
     #             以及把 final_score 存起來不讓 API 層自己算。
     ("wearable_nightly", "time_in_bed_min", "REAL"),
@@ -650,6 +675,8 @@ COLUMN_MIGRATIONS = [
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
     ("wearable_nightly", "efficiency_basis", "TEXT"),
+    # 2026-11-15：半夜醒了幾段（早晨報告 Awake 點開的「×3」）。只呈現、不計分。
+    ("wearable_nightly", "awake_count", "INTEGER"),
 ]
 
 
@@ -1139,6 +1166,32 @@ def get_wearable_source(user_id, date, db_path=None):
         conn.close()
 
 
+def set_garmin_awake_counts(counts, db_path=None):
+    """
+    只補 Garmin 那幾列的 awake_count（{日期: 次數或 None}），其他欄位一個都不動。
+    回傳實際改到幾列。
+
+    ⚠️ 刻意不走 upsert_wearable_nightly：那會整列重寫，用手上這份資料檔
+       悄悄換掉舊夜晚的分數（同 migrate_camera_to_db.py --curves-only 的理由）。
+    ⚠️ 只改 source='garmin'：Health Connect 那幾晚沒有這個量，留 NULL。
+    ⚠️ 不看帳號：同一晚的 Garmin 列只會掛在一個帳號下（migrate_garmin_to_db 的 verify 守著）。
+    """
+    conn = connect(db_path)
+    try:
+        changed = 0
+        for date, count in counts.items():
+            cur = conn.execute(
+                "UPDATE wearable_nightly SET awake_count = ? "
+                "WHERE date = ? AND source = 'garmin'",
+                (count, date),
+            )
+            changed += cur.rowcount or 0
+        conn.commit()
+        return changed
+    finally:
+        conn.close()
+
+
 def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     """
     寫入某一晚的穿戴裝置資料。
@@ -1162,6 +1215,8 @@ def upsert_wearable_nightly(user_id, date, source, metrics, db_path=None):
     #    然後某天有人發現「怎麼深睡都是空的」再回頭查半天。
     columns = ["duration_min", "efficiency", "waso_min", "deep_min", "rem_min",
                "avg_hr", "resting_hr",
+               # 醒了幾段：只有 Garmin 有，只呈現（2026-11-15）
+               "awake_count",
                # 入睡／起床時刻（ISO8601）。⚠️ 是「睡著」不是「上床」，
                # 上床時刻是 nightly_behavior.lights_out_at，不同構念。
                "sleep_start_time", "wake_time",
@@ -1224,6 +1279,21 @@ def set_camera_motion_curve(user_id, date, curve, db_path=None):
         conn.close()
 
 
+def set_camera_motion_episodes(user_id, date, episodes, db_path=None):
+    """**只**補那一晚的 motion_episodes，其他欄位一個都不動（2026-11-15，回填舊夜晚用）。
+    理由同 set_camera_motion_curve。回傳改了幾列（那一晚不存在就是 0，不新增）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE camera_nightly SET motion_episodes = ? WHERE user_id = ? AND date = ?",
+            (json.dumps(episodes) if episodes is not None else None, user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def upsert_camera_nightly(user_id, date, result, db_path=None):
     """把 `tapo_sleep_onset.analyse()` 的結果寫成一列（可重複執行）。
 
@@ -1248,8 +1318,8 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
                  events_total, events_per_hour,
                  bed_times_provenance, sleep_onset_provenance,
                  motion_threshold_pct, motion_threshold_basis, roi,
-                 csv_name, motion_curve, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 csv_name, motion_curve, motion_episodes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 bed_start_at                = excluded.bed_start_at,
                 bed_end_at                  = excluded.bed_end_at,
@@ -1266,7 +1336,8 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
                 motion_threshold_basis      = excluded.motion_threshold_basis,
                 roi                         = excluded.roi,
                 csv_name                    = excluded.csv_name,
-                motion_curve                = excluded.motion_curve
+                motion_curve                = excluded.motion_curve,
+                motion_episodes             = excluded.motion_episodes
             """,
             (user_id, date,
              result.get("bed_start_at"), result.get("bed_end_at"),
@@ -1282,6 +1353,7 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
              ",".join(str(v) for v in roi) if roi else None,
              result.get("csv"),
              json.dumps(result["motion_curve"]) if result.get("motion_curve") else None,
+             json.dumps(result["motion_episodes"]) if result.get("motion_episodes") is not None else None,
              now_iso()),
         )
         conn.commit()
@@ -2036,6 +2108,8 @@ GARMIN_DAILY_FIELDS = (
     "highly_active_sec", "active_sec", "sedentary_sec", "floors_up",
     "stress_rest_sec", "stress_low_sec", "stress_medium_sec", "stress_high_sec",
     "body_battery_charged", "body_battery_drained", "vo2max", "move_iq",
+    "resting_kcal", "total_kcal", "sleeping_sec",
+    "stress_activity_sec", "stress_uncategorized_sec",
 )
 
 
@@ -2067,14 +2141,43 @@ def upsert_garmin_daily(user_id, date, row, db_path=None):
         conn.close()
 
 
+def set_garmin_steps_hourly(user_id, date, hours, db_path=None):
+    """那一天每個鐘頭走幾步（24 格）。那天還沒有白天資料那一列就不寫（回 False）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET steps_hourly = ? WHERE user_id = ? AND date = ?",
+            (None if hours is None else json.dumps(hours), user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def set_garmin_activity_quarters(user_id, date, quarters, db_path=None):
+    """那一天每 15 分鐘的活動程度（96 格）。那天還沒有白天資料那一列就不寫（回 False）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET activity_quarters = ? WHERE user_id = ? AND date = ?",
+            (None if quarters is None else json.dumps(quarters), user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def _garmin_daily_row(row):
     row = dict(row)
-    raw = row.get("move_iq")
-    if raw is not None:
-        try:
-            row["move_iq"] = json.loads(raw)
-        except ValueError:
-            row["move_iq"] = None
+    for key in ("move_iq", "steps_hourly", "activity_quarters"):
+        raw = row.get(key)
+        if raw is not None:
+            try:
+                row[key] = json.loads(raw)
+            except ValueError:
+                row[key] = None
     return row
 
 
@@ -2103,6 +2206,26 @@ def list_garmin_daily(user_id, since, until, db_path=None):
     finally:
         conn.close()
     return [_garmin_daily_row(r) for r in rows]
+
+
+def list_sleep_windows(user_id, since, until, db_path=None):
+    """since..until（含，起床日）每一晚手錶的入睡、起床時刻 → {日期: (入睡, 起床)}。
+    早晨報告 Awake HR 用來扣掉睡著的時段；兩個時刻缺一個的晚上不放。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT date, sleep_start_time, wake_time FROM wearable_nightly "
+            "WHERE user_id = ? AND date >= ? AND date <= ?",
+            (user_id, since, until),
+        ).fetchall()
+    finally:
+        conn.close()
+    out = {}
+    for r in rows:
+        r = dict(r)
+        if r.get("sleep_start_time") and r.get("wake_time"):
+            out[str(r["date"])] = (r["sleep_start_time"], r["wake_time"])
+    return out
 
 
 def latest_vo2max(user_id, on_or_before, since, db_path=None):

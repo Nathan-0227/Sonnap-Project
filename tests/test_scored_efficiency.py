@@ -46,7 +46,7 @@ check("沒有評分列 → 三個 None", score_claim.scored_efficiency(None), (N
 check("直讀 efficiency_used／basis",
       score_claim.scored_efficiency({"efficiency_used": 90.7,
                                      "efficiency_basis": se.WATCH_WAKE_EFFICIENCY_BASIS}),
-      (90.7, se.WATCH_WAKE_EFFICIENCY_BASIS, "Start sleep to watch wake"))
+      (90.7, se.WATCH_WAKE_EFFICIENCY_BASIS, "Sleep button"))
 
 import build_app_payload as payload  # noqa: E402
 

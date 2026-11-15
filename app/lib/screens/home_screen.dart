@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
+import '../models/wall_clock.dart';
 import '../services/account_service.dart';
 import '../services/sleep_sounds.dart';
 import '../services/alarm.dart';
@@ -17,10 +18,12 @@ import '../services/night_compare.dart';
 import '../services/sleep_repository.dart';
 import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
+import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
 import '../widgets/day_heart_rate_chart.dart';
 import '../models/yesterday_activity.dart';
+import '../widgets/dream_book.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
@@ -631,6 +634,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _dreamReads.markRead(date);
             if (mounted) setState(() => _dreamReadDate = date);
           },
+          isDreamRead: () => _dreamReads.isRead(date),
+          loadBedTimes: _bedTimes,
+                    loadEfficiencyNights: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.efficiencyNights
+                : null;
+          },
+          loadCameraNights: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.nights
+                : null;
+          },
+          loadSleepHeartRates: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.sleepHeartRates
+                : null;
+          },
+          loadAwakeMinutes: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.awakeMinutes
+                : null;
+          },
+          loadAwakeCounts: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.status == CameraInsightsStatus.ok
+                ? camera!.awakeCounts
+                : null;
+          },
+          loadPhoneDowns: () async {
+            var camera = _camera;
+            if (camera == null && widget.cameraInsights != null) {
+              camera = await widget.cameraInsights!.load();
+            }
+            return camera?.phoneDowns ?? const {};
+          },
+          loadSleepSeries: () async => _sleepMinutesSeries((await _sessionFuture).history),
           initial: initial,
           load: load,
           loadSummary: loadSummary,
@@ -1246,12 +1304,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _iconAction(
-                  const Key('open-diary'),
-                  Icons.menu_book_rounded,
-                  'Dream diary',
-                  () => _showDream(session),
-                ),
+                // 夢境日記的圖示拿掉了（2026-11-15 使用者定）：草地上那本日記就是入口
                 _iconAction(
                   const Key('open-closet'),
                   Icons.checkroom_rounded,
@@ -1344,10 +1397,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
           ),
+          // 心情標籤在小狗正下方中間（2026-11-15 使用者定）
           Positioned(
-            right: 30,
+            left: 0,
+            right: 0,
             bottom: 0,
-            child: Container(
+            child: Center(
+              child: Container(
               key: const Key('mood-chip'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
@@ -1371,14 +1427,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
+          ),
         ],
       ),
     );
-    // 小狗說「I had a dream…」，點開才看完整夢境（2026-11-13 使用者定）。
-    // 只有真的有夢才出現；看過就縮成一朵小雲。
-    // ⚠️ 位置照整個畫面寬度算，不是照小狗那個 230 的框：小狗的頭在框的左半邊、
-    //    右緣大約就在中線，雲朵要從中線右邊開始才不會蓋到臉（實機截圖抓到過蓋住半張臉）。
-    //    放在框裡面的話推不出去，推到框外又點不到。
+    // 夢境入口：草地上一本攤開的日記，跟早晨報告同一個（2026-11-15 使用者定，取代原本的雲朵）。
+    // 沒看過就抖＋紅點，點開看完整夢境；只有真的有夢才出現。
+    // ⚠️ 位置照整個畫面寬度算（小狗那個框只有 230 寬）：放在小狗右下的草地上、心情標籤的右邊。
     final petWithDream = dreamDate == null
         ? pet
         : LayoutBuilder(
@@ -1392,11 +1447,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Center(child: pet),
                     Positioned(
-                      key: const Key('dream-bubble'),
-                      top: 4,
-                      left: math.min(w / 2 + 14, w - kDreamBubbleWidth - 4),
-                      child: DreamBubble(
-                        read: _dreamReadDate == dreamDate,
+                      key: const Key('home-dream'),
+                      right: 6,
+                      // 貼在草地上（使用者定：再往下靠近草地）
+                      bottom: 2,
+                      child: DreamBook(
+                        unread: _dreamReadDate != dreamDate,
                         onTap: () => _showDream(session),
                       ),
                     ),
@@ -1746,6 +1802,64 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static String _fmtPts(double v) => '${v.round()}%';
   static String _fmtRate(double v) => '${v.toStringAsFixed(0)} /hr';
 
+  /// 報告 Time in bed 一週圖的資料：按鈕（後端 /insights，連不到就沒有）＋手錶入睡→醒來（打包檔）。
+  Future<
+    ({
+      Map<String, (DateTime?, DateTime?)> buttons,
+      Map<String, (DateTime?, DateTime?)> watch,
+    })
+  >
+  _bedTimes() async {
+    final watch = <String, (DateTime?, DateTime?)>{};
+    try {
+      for (final e in (await _sessionFuture).history) {
+        watch[e.date] = (parseWallClock(e.bedtime), parseWallClock(e.wakeTime));
+      }
+    } catch (_) {}
+    var camera = _camera;
+    if (camera == null && widget.cameraInsights != null) {
+      try {
+        camera = await widget.cameraInsights!.load();
+      } catch (_) {}
+    }
+    // 手錶的入睡→醒來：後端的比打包檔新，有就蓋過去（「躺多久才睡著」要這一晚的入睡）
+    return (
+      buttons: camera?.bedButtons ?? const {},
+      watch: {...watch, ...?camera?.watchSleep},
+    );
+  }
+
+  /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Time asleep 的一週圖共用）。
+  static List<NightValue> _sleepMinutesSeries(List<HistoryEntry> history) =>
+      _series(
+        history,
+        (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
+      );
+
+  Future<void> _showSleepWeek(
+      SleepSession session, List<NightValue> series) async {
+    final end = session.history.lastOrNull?.date;
+    if (end == null) return;
+    int? goal;
+    try {
+      final wake = await _alarm.settings.wakeTime(_bedtime);
+      goal = sleepSpan(_bedtime, wake).inMinutes;
+    } catch (_) {
+      goal = null;
+    }
+    if (!mounted) return;
+    await showSleepWeekSheet(
+      context,
+      title: 'Sleep',
+      // 標題跟 Sleep 小卡同一個圖示、同一個顏色
+      icon: Icons.nightlight_round,
+      color: const Color(0xFFB9A6FF),
+      series: series,
+      endDate: end,
+      goalMinutes: goal,
+    );
+  }
+
   /// 每一項的逐夜數值（給「跟上一晚比」與長條圖）。沒值的晚上不放進來。
   static List<NightValue> _series(
     List<HistoryEntry> history,
@@ -1766,10 +1880,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final h = session.history;
     final current = h.lastOrNull?.date;
 
-    final durationSeries = _series(
-      h,
-      (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
-    );
+    final durationSeries = _sleepMinutesSeries(h);
     // ⚠️ 「跟上一晚比」與長條圖只放**同一種**效率：臥床版 88% 跟手錶版 100% 不是同一個量，
     //    混在一起比會畫出一個假的下降箭頭。舊版打包檔 basis 全是 null，就照舊全部一起比。
     final effBasis = h.lastOrNull?.scoredEfficiencyBasis;
@@ -1801,13 +1912,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               value: minutes == null ? null : _hm(minutes),
               compare: cmp(durationSeries, formatMinutes),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'duration',
-              title: 'Sleep',
-              series: durationSeries,
-              format: formatMinutes,
-            ),
+            // 2026-11-14 使用者定：跟報告的 Time asleep 同一張（這一晚往回 7 晚＋平均＋目標虛線）
+            () => _showSleepWeek(session, durationSeries),
           );
     final effTile = tappable(
             InfoTile(
@@ -2003,9 +2109,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static String _comma(int v) => NumberFormat('#,##0').format(v);
 
   /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
-  /// 步數、活動卡路里、活動時間、VO2 max、整天心率一列一列往下、中間細線分隔，最後一行 Move IQ。
+  /// 步數、活動卡路里、活動時間、整天心率一列一列往下、中間細線分隔。
+  /// Move IQ 不放首頁（2026-11-14 使用者定）；早晨報告的 Yesterday 格子還有。
   /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
-  ({List<Widget> rows, Widget? moveIq}) _activityParts(YesterdayActivity a) {
+  List<Widget> _activityParts(YesterdayActivity a) {
     List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
       for (final h in a.history)
         if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
@@ -2019,11 +2126,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final active = a.activeMinutes;
     final hr = a.dayHeartRate;
-    final moves = a.moveIq ?? const <MoveIqEvent>[];
-    final walks = moves.where((m) => m.type == 'walking').length;
-    final rides = moves.where((m) => m.type == 'cycling').length;
-    final others = moves.length - walks - rides;
-
     final rows = <Widget>[
       _activityRow(
         key: 'tile-steps',
@@ -2072,20 +2174,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
     ];
 
-    final moveIq = moves.isEmpty
-        ? null
-        : Text(
-            [
-              'Move IQ',
-              if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
-              if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
-              if (others > 0) '$others other',
-            ].join(' · '),
-            key: const Key('home-moveiq'),
-            style: const TextStyle(
-                color: SonnapColors.textSecondary, fontSize: 12),
-          );
-    return (rows: rows, moveIq: moveIq);
+    return rows;
   }
 
   /// 兩欄（左 Sleep、右 Activity，照 Otter Life，2026-11-13 使用者定）：
@@ -2132,7 +2221,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   // （使用者 2026-11-13：「不要下面留那麼多空間」「線條也平衡一下」）
                   const SizedBox(height: 10),
                   const Divider(height: 1, color: SonnapColors.cardBorder),
-                  for (final (i, r) in [...act.rows, ?act.moveIq].indexed) ...[
+                  for (final (i, r) in act.indexed) ...[
                     if (i > 0) const Divider(height: 1, color: SonnapColors.cardBorder),
                     Expanded(
                       child: Align(alignment: Alignment.centerLeft, child: r),

@@ -12,11 +12,16 @@ class NightCurve {
   final double min;
   final double max;
 
+  /// 最低那一筆**原始讀數**的時刻（後端 `min_at`，2026-11-15）；舊版後端沒有 → null。
+  /// 跟 [points] 同一個基準（isUtc 的牆鐘）。
+  final DateTime? minAt;
+
   const NightCurve({
     required this.points,
     required this.avg,
     required this.min,
     required this.max,
+    this.minAt,
   });
 
   static NightCurve? fromJsonOrNull(Object? raw) {
@@ -29,6 +34,13 @@ class NightCurve {
       return null;
     }
     final points = <NightCurvePoint>[];
+    DateTime? wall(Object? s) {
+      final parsed = parseWallClock(s);
+      return parsed == null || parsed.isUtc
+          ? parsed
+          : DateTime.utc(parsed.year, parsed.month, parsed.day, parsed.hour,
+              parsed.minute, parsed.second);
+    }
     for (final p in rawPoints) {
       if (p is! Map) continue;
       // ⚠️ 牆鐘時間：字串裡的 +08:00 照抄，不換成 UTC（同 parseWallClock）。
@@ -51,6 +63,7 @@ class NightCurve {
       avg: avg.toDouble(),
       min: min.toDouble(),
       max: max.toDouble(),
+      minAt: wall(raw['min_at']),
     );
   }
 }

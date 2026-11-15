@@ -1,19 +1,38 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../services/game_service.dart' show NightXp;
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import '../theme/report_style.dart';
+import '../widgets/dream_book.dart';
 import '../widgets/dream_diary.dart';
 import '../widgets/home_pet.dart';
 import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
-import '../services/night_compare.dart' show shortDate;
+import '../services/night_compare.dart' show NightValue, shortDate;
+import '../widgets/awake_hr_sheet.dart';
 import '../widgets/day_heart_rate_chart.dart';
+import '../widgets/last_night_art.dart';
+import '../widgets/move_iq_sheet.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
+import '../widgets/phone_week_sheet.dart';
+import '../services/camera_insights.dart'
+    show CameraNight, EfficiencyNight, SleepHeartRate;
+import '../widgets/heart_rate_sheet.dart';
+import '../widgets/movement_sheet.dart';
+import '../widgets/efficiency_sheet.dart';
+import '../widgets/awake_week_sheet.dart';
+import '../widgets/bed_week_sheet.dart';
+import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
+import '../widgets/steps_sheet.dart';
+import '../widgets/kcal_sheet.dart';
+import '../widgets/active_sheet.dart';
+import '../widgets/stress_sheet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -50,6 +69,41 @@ class MorningReportScreen extends StatefulWidget {
   /// 點開夢境之後（首頁用來記「這個夢看過了」）。
   final VoidCallback? onDreamOpened;
 
+  /// 這一晚的夢看過了沒（首頁的 DreamReadStore）。沒給＝當作沒看過，日記本會抖。
+  final Future<bool> Function()? isDreamRead;
+
+  /// 每晚睡了幾分鐘（首頁那一份打包檔的 history）。Time asleep 點開的一週長條圖用；沒給就不能點。
+  final Future<List<NightValue>> Function()? loadSleepSeries;
+
+  /// 每晚的上床／起床：按鈕（後端）與手錶（打包檔）各一份，日期 → (開始, 結束)。
+  /// Time in bed 點開的一週圖用；沒給就不能點。
+  final Future<
+    ({
+      Map<String, (DateTime?, DateTime?)> buttons,
+      Map<String, (DateTime?, DateTime?)> watch,
+    })
+  >
+  Function()?
+  loadBedTimes;
+
+  /// 每晚放下手機的時刻＋後端判的晚不晚（後端 /insights）。Phone down 點開的一週圖用；沒給就不能點。
+  final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
+
+  /// 每晚清醒幾分鐘（後端 /insights）。Awake 點開的一週圖用；沒給、或連不到（null）就只看這一晚。
+  final Future<Map<String, double>?> Function()? loadAwakeMinutes;
+
+  /// 一週每晚醒了幾段（Awake 點開的「×3」；只有 Garmin 來源有）。
+  final Future<Map<String, int>?> Function()? loadAwakeCounts;
+
+  /// 每晚進分數的效率＋種類＋名字（後端 /insights）。Efficiency 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights;
+
+  /// 每晚睡著那一段的心率平均＋最低（後端 /insights）。Sleeping heart rate 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<Map<String, SleepHeartRate>?> Function()? loadSleepHeartRates;
+
+  /// 每晚的攝影機資料（後端 /insights 的 camera.history）。Movement 點開的一週用；沒給或連不到就只看這一晚。
+  final Future<List<CameraNight>?> Function()? loadCameraNights;
+
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -58,6 +112,15 @@ class MorningReportScreen extends StatefulWidget {
     this.pending = true,
     this.canOpenInsights = false,
     this.onDreamOpened,
+    this.isDreamRead,
+    this.loadSleepSeries,
+    this.loadBedTimes,
+    this.loadPhoneDowns,
+    this.loadAwakeMinutes,
+    this.loadAwakeCounts,
+    this.loadEfficiencyNights,
+    this.loadSleepHeartRates,
+    this.loadCameraNights,
   });
 
   @override
@@ -107,9 +170,22 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   late MorningReport _report = widget.initial;
   bool _loading = false;
 
+  /// 先當作看過（不抖），問到「還沒看過」才開始抖——免得看過的人一打開先抖一下。
+  bool _dreamRead = true;
+
   @override
   void initState() {
     super.initState();
+    final isRead = widget.isDreamRead;
+    if (isRead == null) {
+      _dreamRead = false;
+    } else {
+      isRead()
+          .then((read) {
+            if (mounted && !read) setState(() => _dreamRead = false);
+          })
+          .catchError((_) {});
+    }
     final load = widget.load;
     if (load != null) {
       _loading = true;
@@ -155,10 +231,35 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-list'),
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
                 children: [
-                  _header(r),
-                  const SizedBox(height: 14),
-                  _hero(r),
-                  if (r.level != null) ...[const SizedBox(height: 14), _xp(r)],
+                  // 頂端日出背景（使用者生成的 dawn.png）：日期與分數區一起，跟著捲動
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Positioned(
+                        left: -16,
+                        right: -16,
+                        top: -18,
+                        bottom: 0,
+                        child: ReportDawnBackdrop(),
+                      ),
+                      Column(
+                        children: [
+                          _header(r),
+                          const SizedBox(height: 14),
+                          _hero(r),
+                          if (r.level != null) ...[
+                            const SizedBox(height: 4),
+                            _xp(r),
+                          ],
+                          if (_moodLine(r) != null) ...[
+                            const SizedBox(height: 14),
+                            _moodLine(r)!,
+                          ],
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ],
+                  ),
                   if (hasBuddy) ...[const SizedBox(height: 14), _buddy(r)],
                   // 昨晚的數字（2026-11-14 改成圖形格子，參考圖：每一格的圖就是那個數字）
                   const SizedBox(height: 18),
@@ -318,233 +419,228 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  // ── 圓環＋山丘＋小狗＋自評小標籤 ─────────────────────────────────
+  // ── 半圓分數＋小狗（置中）＋自評小標籤＋日記本 ───────────────────────
+  // 2026-11-14 使用者定（參考圖：主角在中間、上面一道弧）：分數只畫**一條半圓線**，
+  // 不墊深色圓盤；小狗坐在弧底下的草坡上；左下 You felt、右下日記本；那句話在場景下面置中。
+
+  static const double _sceneHeight = 262;
+  static const double _arcRadius = 150;
+
+  /// 半圓的圓心離場景底部多高（弧的兩端在這個高度）。
+  static const double _arcBaseFromBottom = 80;
 
   Widget _hero(MorningReport r) {
-    const ring = 236.0;
     return SizedBox(
-      height: 352,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            top: 4,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: SizedBox(
-                width: ring,
-                height: ring,
-                child: r.hasScore ? _scoreRing(r) : _waitingRing(),
+      height: _sceneHeight,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          const arcTop = _sceneHeight - _arcBaseFromBottom - _arcRadius;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 半圓線
+              Positioned(
+                left: w / 2 - _arcRadius - 10,
+                top: arcTop - 10,
+                width: (_arcRadius + 10) * 2,
+                height: _arcRadius + 20,
+                child: CustomPaint(
+                  key: Key(r.hasScore ? 'report-gauge' : 'report-waiting'),
+                  painter: r.hasScore
+                      ? _ArcPainter(value: (r.score! / 100).clamp(0.0, 1.0))
+                      : const _DashedArcPainter(),
+                ),
               ),
-            ),
-          ),
-          // 山丘：延伸到左右邊（抵掉 ListView 的 16 邊距）
-          const Positioned(
-            left: -16,
-            right: -16,
-            bottom: 0,
-            height: 120,
-            child: CustomPaint(painter: _HillPainter()),
-          ),
-          // 小狗頭邊一朵小雲，點開看完整夢境；那一晚沒有夢就不出現。
-          // 報告用小的（不寫字）：大的那朵會蓋到分數圓環的右半邊，圓環右邊只剩約 70 寬。
-          if (r.dream != null)
-            Positioned(
-              key: const Key('report-dream'),
-              right: 4,
-              bottom: r.hasScore ? 162 : 150,
-              child: DreamBubble(compact: true, onTap: () => _showDream(r)),
-            ),
-          if (r.hasScore)
-            Positioned(
-              right: 18,
-              bottom: 50,
-              child: HomePet(
-                key: const Key('report-pet-awake'),
-                mood: r.mood,
-                size: 110,
+              // 弧裡面的字（小狗頭上）
+              Positioned(
+                left: w / 2 - _arcRadius + 24,
+                width: (_arcRadius - 24) * 2,
+                top: arcTop + 18,
+                child: r.hasScore ? _scoreText(r) : _waitingText(),
               ),
-            )
-          else
-            const Positioned(
-              right: 8,
-              bottom: 40,
-              child: SleepingPet(key: Key('report-pet-asleep'), size: 140),
-            ),
-          Positioned(
-            left: 0,
-            bottom: 8,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 230),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (r.rating != null) _ratingChip(r),
-                  if (r.hasScore &&
-                      r.moodDescription != null &&
-                      r.moodDescription!.isNotEmpty) ...[
-                    if (r.rating != null) const SizedBox(height: 8),
-                    Text(
-                      r.moodDescription!,
-                      key: const Key('report-mood-line'),
-                      style: const TextStyle(
-                        color: ReportColors.soft,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ],
+              // 小狗坐在弧底下的草坡上：腳下一片淡影子
+              Positioned(
+                left: w / 2 - 44,
+                bottom: 6,
+                child: const _GroundShadow(width: 88),
               ),
-            ),
-          ),
-        ],
+              if (r.hasScore)
+                Positioned(
+                  left: w / 2 - 58,
+                  bottom: 4,
+                  child: HomePet(
+                    key: const Key('report-pet-awake'),
+                    mood: r.mood,
+                    size: 116,
+                  ),
+                )
+              else
+                Positioned(
+                  left: w / 2 - 65,
+                  bottom: -4,
+                  child: const SleepingPet(
+                    key: Key('report-pet-asleep'),
+                    size: 130,
+                  ),
+                ),
+              // 左下：起床自評（臉＋字）
+              if (r.rating != null)
+                Positioned(
+                  left: 0,
+                  bottom: 4,
+                  width: w / 2 - 54,
+                  child: _ratingChip(r),
+                ),
+              // 右下：夢境日記（使用者生成）。點開看完整夢境；那一晚沒有夢就不出現。
+              // 2026-11-14 取代頭邊小雲：雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上。
+              if (r.dream != null)
+                Positioned(
+                  key: const Key('report-dream'),
+                  // 草坡往右邊斜下去，書要放低一點才在草地上
+                  right: 6,
+                  bottom: -30,
+                  child: DreamBook(
+                    unread: !_dreamRead,
+                    onTap: () => _showDream(r),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _scoreRing(MorningReport r) {
+  /// 小狗那句話（照抄後端 mood_description），放在經驗條下面置中。
+  Widget? _moodLine(MorningReport r) {
+    final mood = r.moodDescription;
+    if (!r.hasScore || mood == null || mood.isEmpty) return null;
+    return Text(
+      mood,
+      key: const Key('report-mood-line'),
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: ReportColors.soft,
+        fontSize: 13,
+        shadows: _onSky,
+      ),
+    );
+  }
+
+  static const _onSky = [Shadow(color: Color(0x99060A20), blurRadius: 14)];
+
+  Widget _scoreText(MorningReport r) {
     final score = r.score!.round();
     final color = _hex(r.qualityColor) ?? ReportColors.accent;
     final line = [
       if (r.quality != null) r.quality!,
       if (r.scoreMessage != null && r.scoreMessage!.isNotEmpty) r.scoreMessage!,
     ].join(' · ');
-    return CustomPaint(
-      key: const Key('report-gauge'),
-      painter: _RingPainter(value: (score / 100).clamp(0.0, 1.0)),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$score',
-              key: const Key('report-score'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 64,
-                fontWeight: FontWeight.w900,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'Sleep score',
-              style: TextStyle(color: ReportColors.muted, fontSize: 13),
-            ),
-            if (line.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-                child: Text(
-                  line,
-                  key: const Key('report-quality'),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 沒有分數時：虛線圓環。只有「剛結束的那一晚」才說在等資料；
-  /// 更早的晚上說沒有資料（yet：早晨匯入晚跑幾天，還是可能補進來）。
-  Widget _waitingRing() {
-    return CustomPaint(
-      key: const Key('report-waiting'),
-      painter: const _DashedRingPainter(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.watch_rounded,
-              color: ReportColors.lilac,
-              size: 30,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.pending ? kWaitingForWatch : kNoWatchData,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                height: 1.25,
-              ),
-            ),
-            if (widget.pending) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Your score shows up here once your watch syncs.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: ReportColors.muted,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _ratingChip(MorningReport r) {
-    final rating = r.rating!;
-    return Container(
-      key: const Key('report-rating'),
-      padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: ReportColors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            restedFaceAsset(rating.rested),
-            width: 30,
-            height: 30,
-            errorBuilder: (_, _, _) => const SizedBox(width: 30, height: 30),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$score',
+          key: const Key('report-score'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 58,
+            fontWeight: FontWeight.w900,
+            height: 1,
+            shadows: _onSky,
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'You felt',
-                  style: TextStyle(color: ReportColors.muted, fontSize: 11),
-                ),
-                Text(
-                  r.ratingLabel ?? rating.label,
-                  key: const Key('report-rating-label'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+        ),
+        const SizedBox(height: 2),
+        const Text(
+          'Sleep score',
+          style: TextStyle(
+            color: ReportColors.soft,
+            fontSize: 13,
+            shadows: _onSky,
+          ),
+        ),
+        if (line.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            line,
+            key: const Key('report-quality'),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              shadows: _onSky,
             ),
           ),
         ],
-      ),
+      ],
+    );
+  }
+
+  Widget _waitingText() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.watch_rounded, color: ReportColors.lilac, size: 26),
+        const SizedBox(height: 6),
+        Text(
+          widget.pending ? kWaitingForWatch : kNoWatchData,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            height: 1.25,
+            shadows: _onSky,
+          ),
+        ),
+        if (widget.pending) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Your score shows up here once your watch syncs.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: ReportColors.soft,
+              fontSize: 12,
+              height: 1.35,
+              shadows: _onSky,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 起床自評：只放臉＋那個字（2026-11-14 使用者定：拿掉「You felt」、不要框，不突兀）。
+  Widget _ratingChip(MorningReport r) {
+    final rating = r.rating!;
+    return Row(
+      key: const Key('report-rating'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(
+          restedFaceAsset(rating.rested),
+          width: 22,
+          height: 22,
+          errorBuilder: (_, _, _) => const SizedBox(width: 22, height: 22),
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            r.ratingLabel ?? rating.label,
+            key: const Key('report-rating-label'),
+            style: const TextStyle(
+              color: ReportColors.soft,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              shadows: _onSky,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -554,104 +650,46 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final size = r.xpLevelSize;
     final into = r.xpIntoLevel ?? 0;
     final night = r.nightXp;
-    return Container(
+    // 2026-11-14 使用者定（參考圖）：不要卡片框，直接放在草坡上——
+    // 大字 Lv.6 → 「Your experience」＋右邊這一晚的 +N XP → 經驗條（字寫在條裡）。
+    return Column(
       key: const Key('report-xp'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: reportCard(radius: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [ReportColors.purple, Color(0xFFC08BFF)],
-              ),
-            ),
-            child: Text(
-              'Lv${r.level}',
-              key: const Key('report-level'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Lv.${r.level}',
+          key: const Key('report-level'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 34,
+            fontWeight: FontWeight.w900,
+            height: 1.1,
+            shadows: _onSky,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        size == null
-                            ? 'Max level'
-                            : '${_n(into)} / ${_n(size)} XP',
-                        key: const Key('report-xp-text'),
-                        style: const TextStyle(
-                          color: ReportColors.muted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    if (size != null)
-                      Text(
-                        '${_n(size - into)} to Lv${(r.level ?? 0) + 1}',
-                        key: const Key('report-xp-to-next'),
-                        style: const TextStyle(
-                          color: ReportColors.muted,
-                          fontSize: 12,
-                        ),
-                      ),
-                  ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Expanded(
+              child: Text(
+                'Your experience',
+                style: TextStyle(
+                  color: ReportColors.soft,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  shadows: _onSky,
                 ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: SizedBox(
-                    height: 8,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ColoredBox(color: Colors.white.withValues(alpha: 0.14)),
-                        FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: (r.xpProgress ?? 0).clamp(0.0, 1.0),
-                          child: const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  ReportColors.purple,
-                                  Color(0xFFFFB36B),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (night != null) ...[
-            const SizedBox(width: 12),
-            Container(
-              key: const Key('report-night-xp'),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0x29FFC83D),
-                borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ),
+            // 這一晚 +N（照抄 /game）；差的晚上照實寫 +0，不藏（紅線 5）
+            if (night != null)
+              Row(
+                key: const Key('report-night-xp'),
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
                     '+$night XP',
@@ -659,25 +697,39 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       color: ReportColors.gold,
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      height: 1.1,
+                      shadows: _onSky,
                     ),
                   ),
                   if (r.nightXpSoFar)
                     const Text(
-                      'so far',
+                      ' so far',
                       key: Key('report-night-xp-so-far'),
                       style: TextStyle(
                         color: ReportColors.gold,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                 ],
               ),
-            ),
           ],
+        ),
+        const SizedBox(height: 6),
+        _XpBar(date: r.date, into: into, size: size, nights: r.recentNightXp),
+        if (size != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${_n(size - into)} to Lv.${(r.level ?? 0) + 1}',
+            key: const Key('report-xp-to-next'),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: ReportColors.soft,
+              fontSize: 11,
+              shadows: _onSky,
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -919,16 +971,17 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   static const _cAsleep = Color(0xFFB9A6FF);
   static const _cBed = Color(0xFF8FA8FF);
-  static const _cPhone = Color(0xFFFFC97A);
+  static const _cPhone = Color(0xFF6FE3D0);
   static const _cEff = Color(0xFF7EC8FF);
-  static const _cAwake = Color(0xFFFF8AD8);
+  static const _cAwake = Color(0xFFFFC27A);
   static const _cHr = Color(0xFFFF8AB8);
+  static const _cSleepHr = Color(0xFF8C9BFF);
   static const _cCam = Color(0xFFFFD96A);
   static const _cSteps = Color(0xFFFFB37A);
+  static const _cKcal = Color(0xFFFF8A6B);
   static const _cActive = Color(0xFFFFD96A);
   static const _cStress = Color(0xFFA996FF);
   static const _cBattery = Color(0xFF6FE3C1);
-  static const _cMove = Color(0xFF7ED957);
 
   Widget? _badge(ChangeDirection? d, String key) =>
       d == null || d == ChangeDirection.same ? null : _changeBadge(d, key);
@@ -944,29 +997,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     ];
   }
 
-  void _openCurve(MorningReport r, String overlay) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: ReportColors.sheet,
-      builder: (_) => SafeArea(
-        child: Padding(
-          key: Key('report-curve-$overlay'),
-          padding: const EdgeInsets.all(16),
-          child: SleepStagesCard(
-            stages: r.stages!,
-            totalSleepMinutes: r.sleepMinutes?.round(),
-            heartRate: r.heartRate,
-            movement: r.movement,
-            camera: r.cameraMotion,
-            restingHeartRate: r.restingHeartRate,
-            initialOverlay: overlay,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _lastNightTiles(MorningReport r) {
     final asleep = r.hasScore ? r.sleepMinutes : null;
     final goal = r.goalMinutes;
@@ -974,69 +1004,122 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final start = r.bedStart;
     final end = r.bedEnd;
 
-    final asleepTile = ReportTile(
+    // 11-15 使用者定（Q1–Q7）：整張是圖、標題左上、字左下（last_night_art.dart）
+    final asleepTile = ReportArtTile(
       key: const Key('report-asleep'),
       icon: Icons.nightlight_round,
       color: _cAsleep,
-      title: 'Time asleep',
-      value: asleep == null ? '—' : reportHm(asleep),
-      valueKey: const Key('report-duration'),
-      valueTrailing: _badge(
-        asleep == null ? null : changeOf(asleep, r.previousSleepMinutes),
-        'report-duration-change',
-      ),
+      title: 'Total sleep',
       dashed: asleep == null,
-      // 光帶長度＝睡了多久÷目標；**不依達標與否變色**（使用者定）
-      graphic: asleep != null && goal != null && goal > 0
-          ? paintBox(
-              WaveBarPainter(asleep / goal, _cAsleep),
-              key: const Key('report-goal-bar'),
-            )
-          : null,
-      graphicHeight: 30,
-      lines: [
-        if (asleep == null)
-          const Text('From your watch')
-        else if (goal != null)
-          Text(
-            'of your ${reportHm(goal)} goal',
-            key: const Key('report-goal-line'),
-          ),
-      ],
+      onTap: widget.loadSleepSeries == null ? null : () => _showSleepWeek(r),
+      // 光帶長度＝睡了多久÷目標；**不依達標與否變色**（使用者定）；手錶還沒到只畫暗的光帶
+      art: lastNightArt(
+        AuroraFillPainter(
+          asleep != null && goal != null && goal > 0 ? asleep / goal : null,
+          _cAsleep,
+        ),
+        key: const Key('report-goal-bar'),
+      ),
+      text: ReportArtText(
+        value: asleep == null ? '—' : reportHm(asleep),
+        valueKey: const Key('report-duration'),
+        valueTrailing: _badge(
+          asleep == null ? null : changeOf(asleep, r.previousSleepMinutes),
+          'report-duration-change',
+        ),
+        extra: [
+          if (asleep == null)
+            const Text('From your watch')
+          else if (goal != null)
+            Text(
+              'of your ${reportHm(goal)} goal',
+              key: const Key('report-goal-line'),
+            ),
+        ],
+      ),
     );
 
-    final inBedTile = ReportTile(
+    // 11-15 使用者給參考圖：12 小時鐘面，上床到下床那段亮，多久寫在圓心、時刻寫在底下
+    final inBedTile = ReportArtTile(
       key: const Key('report-in-bed'),
       icon: Icons.bed_rounded,
       color: _cBed,
       title: 'Time in bed',
-      value: inBed == null ? '—' : reportHm(inBed),
-      valueKey: const Key('report-in-bed-value'),
-      valueTrailing: _badge(
-        inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
-        'report-in-bed-change',
-      ),
       dashed: inBed == null,
-      graphic: start == null
-          ? null
-          : paintBox(
-              NightTimelinePainter(
-                nightMinute(start.hour, start.minute),
-                end == null ? null : nightMinute(end.hour, end.minute),
-                _cBed,
+      centerText: true,
+      onTap: widget.loadBedTimes == null ? null : () => _showBedWeek(r),
+      art: LayoutBuilder(
+        builder: (context, box) {
+          final size = Size(box.maxWidth, box.maxHeight);
+          final rad = BedClockPainter.radius(size);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              lastNightArt(
+                BedClockPainter(
+                  start == null ? null : (start.hour, start.minute),
+                  end == null ? null : (end.hour, end.minute),
+                  inBed,
+                  _cBed,
+                ),
+                key: const Key('report-bed-timeline'),
               ),
-              key: const Key('report-bed-timeline'),
-            ),
-      graphicHeight: 30,
-      lines: [
+              Positioned(
+                left: size.width / 2 - rad * 0.58,
+                width: rad * 1.16,
+                top: size.height * BedClockPainter.centerY - rad * 0.5,
+                height: rad,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            inBed == null ? '—' : reportHm(inBed),
+                            key: const Key('report-in-bed-value'),
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          ?_badge(
+                            inBed == null
+                                ? null
+                                : changeOf(inBed, r.previousTimeInBed),
+                            'report-in-bed-change',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Text(
+                      'in bed',
+                      style: TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      text: ReportArtText(
+        value: null,
+        center: true,
         // 沒按按鈕：不拿手錶的入睡冒充上床
-        Text(
-          start == null
-              ? 'No bedtime recorded'
-              : '${reportClock(start)} → ${end == null ? '—' : reportClock(end)}',
-          key: const Key('report-times'),
-        ),
-      ],
+        line: start == null
+            ? 'No bedtime recorded'
+            : '${reportClock(start)} → ${end == null ? '—' : reportClock(end)}',
+        lineKey: const Key('report-times'),
+      ),
     );
 
     Widget? phoneTile;
@@ -1048,43 +1131,49 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       final th = ok ? int.tryParse(tParts[0]) : null;
       final tm = ok ? int.tryParse(tParts[1]) : null;
       final line = adherenceLine(r.adherenceMinutes);
-      phoneTile = ReportTile(
+      phoneTile = ReportArtTile(
         key: const Key('report-phone-down'),
         icon: Icons.phone_android_rounded,
         color: _cPhone,
         title: 'Phone down',
-        value: reportClock(lightsOut),
-        valueKey: const Key('report-phone-down-at'),
-        graphic: th == null || tm == null
-            ? null
-            : paintBox(
-                ClockArcPainter(
-                  nightMinute(th, tm),
-                  nightMinute(lightsOut.hour, lightsOut.minute),
-                  _cPhone,
+        onTap: widget.loadPhoneDowns == null ? null : () => _showPhoneWeek(r),
+        art: lastNightArt(
+          PhoneDialPainter(
+            th == null || tm == null ? null : nightMinute(th, tm),
+            nightMinute(lightsOut.hour, lightsOut.minute),
+            _cPhone,
+          ),
+          key: const Key('report-phone-arc'),
+        ),
+        text: ReportArtText(
+          value: reportClock(lightsOut),
+          valueKey: const Key('report-phone-down-at'),
+          extra: [
+            if (target != null)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'Your target '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: Text(
+                        target,
+                        key: const Key('report-target'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                key: const Key('report-phone-arc'),
               ),
-        graphicHeight: 40,
-        lines: [
-          if (target != null)
-            // Wrap：半格放不下時換行，不溢出
-            Wrap(
-              children: [
-                const Text('Your target '),
-                Text(
-                  target,
-                  key: const Key('report-target'),
-                  style: const TextStyle(
-                    color: ReportColors.accent,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
-          if (line != null) Text(line, key: const Key('report-adherence')),
-        ],
+            // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
+            if (line != null) Text(line, key: const Key('report-adherence')),
+          ],
+        ),
       );
     }
 
@@ -1105,167 +1194,129 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ];
         }
       }
-      awakeTile = ReportTile(
+      awakeTile = ReportArtTile(
         key: const Key('report-awake'),
         icon: Icons.visibility_rounded,
         color: _cAwake,
         title: 'Awake',
-        value: reportHm(r.wasoMinutes!),
-        valueKey: const Key('report-waso'),
-        graphic: segs == null
-            ? null
-            : paintBox(
-                SegmentStripPainter(segs, _cAwake),
-                key: const Key('report-awake-strip'),
-              ),
-        graphicHeight: 20,
-        lines: const [Text('during the night')],
+        onTap: () => _showAwake(r),
+        art: lastNightArt(
+          StarRiverPainter(segs, _cAwake),
+          key: const Key('report-awake-strip'),
+        ),
+        text: ReportArtText(
+          value: reportHm(r.wasoMinutes!),
+          valueKey: const Key('report-waso'),
+          line: 'during the night',
+        ),
       );
     }
 
     // 心率：有曲線就用曲線那一段的平均（跟 Sleep Stages 點 Heart rate 同一個數）；
     // 沒有曲線才用 metrics 的平均。⚠️ 同一頁不得出現兩個不同的「平均心率」。
+    // 11-15：靛藍、月亮、慢線、**不跳**——跟 Yesterday 會跳的珊瑚紅 Awake HR 分開
     Widget? hrTile;
     final hrCurve = r.heartRate;
     final hrAvg = hrCurve?.avg ?? r.avgHeartRate;
     if (r.hasScore && (hrAvg != null || r.restingHeartRate != null)) {
-      hrTile = ReportTile(
+      hrTile = ReportArtTile(
         key: const Key('report-hr-tile'),
         icon: Icons.favorite_rounded,
-        color: _cHr,
-        title: 'Heart rate',
-        value: hrAvg == null ? null : '${hrAvg.round()} bpm',
-        graphic: hrCurve == null
-            ? null
-            : paintBox(
-                SparklinePainter(_curvePoints(hrCurve), _cHr),
-                key: const Key('report-hr-line'),
-              ),
-        onTap: hrCurve == null || r.stages == null
-            ? null
-            : () => _openCurve(r, 'heartRate'),
-        lines: [
-          Text(
-            [
-              if (hrAvg != null) '${hrAvg.round()} bpm avg',
-              if (r.restingHeartRate != null)
-                '${r.restingHeartRate!.round()} resting',
-            ].join(' · '),
-            key: const Key('report-hr'),
+        color: _cSleepHr,
+        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）
+        title: 'Sleeping HR',
+        // 點開：這一晚依階段上色的線＋各階段平均＋一週（2026-11-15）
+        onTap: hrCurve == null ? null : () => _showHeartRate(r),
+        art: lastNightArt(
+          SleepHrWavePainter(
+            hrCurve == null ? const [] : _curvePoints(hrCurve),
+            _cSleepHr,
           ),
-        ],
+          // 沒有曲線就只有月亮，不掛「線」的鍵
+          key: hrCurve == null ? null : const Key('report-hr-line'),
+        ),
+        text: ReportArtText(
+          value: hrAvg == null ? null : '${hrAvg.round()} bpm',
+          line: [
+            if (hrAvg != null) '${hrAvg.round()} bpm avg',
+            if (r.restingHeartRate != null)
+              '${r.restingHeartRate!.round()} resting',
+          ].join(' · '),
+          lineKey: const Key('report-hr'),
+        ),
       );
     }
 
     Widget? camTile;
-    if (r.camera?.usualLabel != null) {
+    final perHour = r.camera?.eventsPerHour;
+    if (r.camera?.usualLabel != null || perHour != null) {
       final cam = r.cameraMotion;
-      camTile = ReportTile(
+      camTile = ReportArtTile(
         key: const Key('report-camera-tile'),
         icon: Icons.videocam_rounded,
         color: _cCam,
         title: 'Movement (camera)',
-        graphic: cam == null
-            ? null
-            : paintBox(
-                SparklinePainter(_curvePoints(cam), _cCam, lo: 0),
-                key: const Key('report-camera-line'),
-              ),
-        onTap: cam == null || r.stages == null
-            ? null
-            : () => _openCurve(r, 'camera'),
-        lines: [
-          // 後端寫好的那句「跟你平常比」，照抄
-          Text(
-            r.camera!.usualLabel!,
-            key: const Key('report-camera'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+        // 光柱＋時間軸＋大字＋小字，比別格多一點高度
+        height: 210,
+        // 點開：片段（影片）＋動作線＋一週跟平常比（2026-11-15）
+        onTap: () => _showMovement(r),
+        art: lastNightArt(
+          CameraBarsPainter(
+            cam == null
+                ? const []
+                : [for (final p in cam.points) (p.time, p.value)],
           ),
-          const Text(
-            'Camera data is not part of your score.',
-            style: TextStyle(color: ReportColors.faint, fontSize: 11),
+          key: const Key('report-camera-line'),
+        ),
+        // 11-15 使用者定：大字＝一小時動幾次（後端 events_per_hour，四捨五入到整數）；
+        // 後端那句「跟你平常比」照抄成小字。🔴 不放文獻常模（11 次／小時）：事件率跨夜不穩 3.1 倍、
+        // 我們的「一次」跟文獻不是同一個構念（CLAUDE.md 紅線 2 展開），並列會被讀成「比一般人多」
+        text: ReportArtText(
+          value: perHour == null
+              ? r.camera!.usualLabel
+              : cameraPerHourText(perHour),
+          // 沒有次數時大字就是「跟平常比」那句，鍵跟著那句走
+          valueKey: Key(
+            perHour == null ? 'report-camera' : 'report-camera-rate',
           ),
-        ],
+          line: perHour == null ? null : r.camera!.usualLabel,
+          lineKey: const Key('report-camera'),
+          extra: const [Text('Camera data is not part of your score.')],
+        ),
       );
     }
 
-    // 效率：圓環＝百分比。警語與 basis 很長，點格子才跳出來（以前也是收在 More details 裡）
+    // 效率：使用者喜歡的「從底下往上填滿」（11-15 照參考圖 Battery 卡），只加了水面的動態。
+    // 警語與 basis 很長，點格子才跳出來
     Widget? effTile;
     if (r.hasScore && r.efficiency != null) {
-      final notes = [
-        // 與 Insights 頁同一個寫法（「Efficiency - 原文」）：後端那段字照抄
-        if (r.efficiencyCaveat != null) 'Efficiency - ${r.efficiencyCaveat!}',
-        // App 裡有好幾個「效率」，只有 basis 分得開
-        if (r.efficiencyBasis != null) 'Basis: ${r.efficiencyBasis}',
-      ];
-      effTile = ReportTile(
+      effTile = ReportFillTile(
         key: const Key('report-efficiency-tile'),
         icon: Icons.speed_rounded,
         color: _cEff,
         title: 'Efficiency',
-        // 照抄，不四捨五入掉小數
-        value: '${r.efficiency}%',
+        // 照抄，不四捨五入掉小數（只把 100.0 寫成 100）
+        value: effNumber(r.efficiency!),
+        unit: '%',
         valueKey: const Key('report-efficiency'),
-        graphic: paintBox(
-          RingPainter(r.efficiency!, _cEff),
-          key: const Key('report-efficiency-ring'),
-        ),
-        graphicHeight: 56,
-        onTap: notes.isEmpty
-            ? null
-            : () => showModalBottomSheet<void>(
-                context: context,
-                backgroundColor: ReportColors.sheet,
-                builder: (_) => SafeArea(
-                  child: Padding(
-                    key: const Key('report-efficiency-sheet'),
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sleep efficiency · ${r.efficiency}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        for (final n in notes)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Text(
-                              n,
-                              style: const TextStyle(
-                                color: ReportColors.soft,
-                                fontSize: 13,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-        lines: [if (notes.isNotEmpty) const Text('How it is measured')],
+        fraction: r.efficiency! / 100,
+        caption: r.efficiencyLabel,
+        // 點開：這一晚怎麼算的（分子分母、哪一種）＋一週（依種類畫實心／空心）
+        onTap: () => _showEfficiency(r),
       );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 11-15 使用者定（Q3）：攝影機排最後、佔整列（它常常不在，不在時剛好六格）
         reportTileGrid([
           asleepTile,
           inBedTile,
           phoneTile,
           awakeTile,
-          effTile,
           hrTile,
+          effTile,
           camTile,
         ]),
       ],
@@ -1303,89 +1354,136 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       return [for (final h in tail) (shortDate(h.date), pick(h)!.toDouble())];
     }
 
+    // 11-15 使用者定（照參考圖 Step Counter）：圓弧＝步數÷那天的目標，超過就滿圈、不變色不打勾。
     Widget? stepsTile;
     if (y.steps != null) {
-      final hist = last7((h) => h.steps);
+      final stats = stepsStatsLine(y.distanceM, y.floorsUp);
       stepsTile = ReportTile(
         key: const Key('report-steps'),
         icon: Icons.directions_walk_rounded,
         color: _cSteps,
         title: 'Steps',
-        value: _comma(y.steps!),
-        valueKey: const Key('report-steps-value'),
+        graphic: StepsArc(
+          key: const Key('report-steps-arc'),
+          steps: y.steps!,
+          fraction: stepsFraction(y.steps, y.stepGoal),
+          color: _cSteps,
+          valueKey: const Key('report-steps-value'),
+        ),
+        graphicHeight: 118,
+        onTap: () => showStepsSheet(
+          context,
+          day: y,
+          color: _cSteps,
+          fontFamily: kReportFont,
+        ),
+        lines: [
+          // 只寫 goal，不寫 reached（紅線 2）
+          if (y.stepGoal != null)
+            Center(child: Text('Goal ${_comma(y.stepGoal!)}')),
+          if (stats != null) Center(child: Text(stats)),
+        ],
+      );
+    }
+
+    // 11-15 使用者定：活動卡路里拆出來自成一格（原本報告沒有）。只算動起來燒的，不是一整天的總消耗。
+    Widget? kcalTile;
+    if (y.activeKcal != null) {
+      final hist = last7((h) => h.activeKcal);
+      kcalTile = ReportTile(
+        key: const Key('report-kcal'),
+        icon: Icons.local_fire_department_rounded,
+        color: _cKcal,
+        title: 'Active kcal',
+        value: _comma(y.activeKcal!),
+        valueKey: const Key('report-kcal-value'),
+        valueTrailing: const Text(
+          'kcal',
+          style: TextStyle(
+            color: ReportColors.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         graphic: hist.length < 2
             ? null
             : paintBox(
-                MountainPainter([for (final h in hist) h.$2], _cSteps),
-                key: const Key('report-steps-mountain'),
+                MiniBarsPainter([for (final h in hist) h.$2], _cKcal),
+                key: const Key('report-kcal-bars'),
               ),
-        onTap: hist.length < 2
-            ? null
-            : () => showReportBarsSheet(
-                context,
-                id: 'steps',
-                title: 'Steps',
-                bars: hist,
-                format: (v) => _comma(v.round()),
-              ),
-        lines: [
-          // 只寫 goal，不寫 reached（紅線 2）
-          if (y.stepGoal != null) Text('goal ${_comma(y.stepGoal!)}'),
-          if (y.distanceM != null || y.floorsUp != null)
-            Text(
-              [
-                if (y.distanceM != null)
-                  '${(y.distanceM! / 1000).toStringAsFixed(1)} km',
-                if (y.floorsUp != null)
-                  '${y.floorsUp!.toStringAsFixed(0)} floors up',
-              ].join(' · '),
-            ),
-        ],
+        // 11-15 使用者定：點開是 Calories 頁（靜止＋活動的圓環、一週）
+        onTap: () => showKcalSheet(
+          context,
+          day: y,
+          color: _cKcal,
+          fontFamily: kReportFont,
+        ),
+        lines: const [Text('active only, not total burn')],
       );
     }
 
     Widget? activeTile;
     if (y.hasActivity) {
-      final hist = last7((h) => h.activeMinutes);
       final active = y.activeMinutes;
-      activeTile = ReportTile(
-        key: const Key('report-active'),
-        icon: Icons.bolt_rounded,
-        color: _cActive,
-        title: 'Active time',
-        value: active == null ? null : reportHm(active),
-        graphic: paintBox(
-          StackedBarPainter([
-            ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
-            ((y.activeSec ?? 0).toDouble(), _cActive.withValues(alpha: 0.55)),
-            (
-              (y.sedentarySec ?? 0).toDouble(),
-              Colors.white.withValues(alpha: 0.16),
-            ),
-          ]),
-          key: const Key('report-active-bar'),
-        ),
-        graphicHeight: 18,
-        onTap: hist.length < 2
-            ? null
-            : () => showReportBarsSheet(
-                context,
-                id: 'active',
-                title: 'Active time',
-                bars: hist,
-                format: (v) => reportHm(v),
+      // 11-15 使用者定：一座山＝一整天，漸層每一段的面積＝那段的比例（active_sheet.dart）
+      final parts = activeParts(y);
+      activeTile = parts == null
+          ? ReportTile(
+              key: const Key('report-active'),
+              icon: Icons.bolt_rounded,
+              color: _cActive,
+              title: 'Active time',
+              value: active == null ? null : reportHm(active),
+              valueKey: const Key('report-active-value'),
+              graphic: paintBox(
+                StackedBarPainter([
+                  ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
+                  (
+                    (y.activeSec ?? 0).toDouble(),
+                    _cActive.withValues(alpha: 0.55),
+                  ),
+                  (
+                    (y.sedentarySec ?? 0).toDouble(),
+                    Colors.white.withValues(alpha: 0.16),
+                  ),
+                ]),
+                key: const Key('report-active-bar'),
               ),
-        lines: [
-          Text(
-            [
-              if (y.highlyActiveSec != null)
-                'high ${_secHm(y.highlyActiveSec!)}',
-              if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
-              if (y.sedentarySec != null) 'still ${_secHm(y.sedentarySec!)}',
-            ].join(' · '),
-          ),
-        ],
-      );
+              graphicHeight: 18,
+              onTap: () =>
+                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              lines: [
+                Text(
+                  [
+                    if (y.highlyActiveSec != null)
+                      'high ${_secHm(y.highlyActiveSec!)}',
+                    if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
+                    if (y.sedentarySec != null)
+                      'still ${_secHm(y.sedentarySec!)}',
+                  ].join(' · '),
+                ),
+              ],
+            )
+          // 11-15 第三輪（參考圖）：山鋪滿整張卡、標題疊在左上、字疊在左下
+          : ReportArtTile(
+              key: const Key('report-active'),
+              icon: Icons.bolt_rounded,
+              color: _cActive,
+              title: 'Active time',
+              onTap: () =>
+                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              art: ActivityMountain(
+                key: const Key('report-active-mountain'),
+                parts: parts,
+                apexY: 0.18,
+              ),
+              text: ReportArtText(
+                value: reportHm(parts.activeMinutes),
+                valueKey: const Key('report-active-value'),
+                line: activeTileLine(parts),
+                lineKey: const Key('report-active-line'),
+              ),
+            );
     }
 
     Widget? stressTile;
@@ -1397,25 +1495,51 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ('Medium', y.stressMediumSec, _cStress.withValues(alpha: 0.8)),
         ('High', y.stressHighSec, _cStress),
       ];
-      stressTile = ReportTile(
-        key: const Key('report-stress'),
-        icon: Icons.spa_rounded,
-        color: _cStress,
-        title: 'Stress',
-        graphic: paintBox(
-          GaugePainter([for (final p in parts) ((p.$2 ?? 0).toDouble(), p.$3)]),
-          key: const Key('report-stress-gauge'),
-        ),
-        graphicHeight: 52,
-        lines: [
-          Text(
-            [
-              for (final p in parts)
-                if (p.$2 != null) '${p.$1} ${_secHm(p.$2!)}',
-            ].join(' · '),
-          ),
-        ],
-      );
+      // 11-15 使用者定（參考圖 Stress 卡）：整個半圓露出來（貼底），各段面積＝各程度的比例；
+      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在左下（stress_sheet.dart）
+      final sp = stressParts(y);
+      final avg = stressAvgOf(y);
+      stressTile = sp == null
+          ? ReportTile(
+              key: const Key('report-stress'),
+              icon: Icons.spa_rounded,
+              color: _cStress,
+              title: 'Stress',
+              graphic: paintBox(
+                GaugePainter([
+                  for (final p in parts) ((p.$2 ?? 0).toDouble(), p.$3),
+                ]),
+                key: const Key('report-stress-gauge'),
+              ),
+              graphicHeight: 52,
+              lines: [
+                Text(
+                  [
+                    for (final p in parts)
+                      if (p.$2 != null) '${p.$1} ${_secHm(p.$2!)}',
+                  ].join(' · '),
+                ),
+              ],
+            )
+          // 11-15 第六輪：半圓從底邊長出來、再大一點（左右被切），字在半圓左邊
+          : ReportArtTile(
+              key: const Key('report-stress'),
+              icon: Icons.spa_rounded,
+              color: _cStress,
+              title: 'Stress',
+              onTap: () =>
+                  showStressSheet(context, day: y, fontFamily: kReportFont),
+              art: StressDome(key: const Key('report-stress-dome'), parts: sp),
+              text: ReportArtText(
+                key: const Key('report-stress-text'),
+                value: avg == null ? null : '$avg',
+                valueKey: const Key('report-stress-value'),
+                line: avg == null
+                    ? 'high ${_secHm(sp.high)}'
+                    : stressTileLine(sp),
+                lineKey: const Key('report-stress-line'),
+              ),
+            );
     }
 
     Widget? batteryTile;
@@ -1444,7 +1568,28 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
     Widget? dayHrTile;
     final dayHr = y.dayHeartRate;
-    if (dayHr != null) {
+    final awakeHr = y.awakeHeartRate;
+    if (awakeHr != null) {
+      // 11-15 使用者定（參考 Apple Watch）：發光的愛心跟著醒著的平均心率跳；只放平均、最高、
+      // 各區間時間——不放靜止心率、最低，不寫 Normal／High、不比平常（awake_hr_sheet.dart）
+      dayHrTile = ReportArtTile(
+        key: const Key('report-awake-hr'),
+        icon: Icons.favorite_rounded,
+        color: kAwakeHr,
+        title: 'Awake HR',
+        onTap: () => showAwakeHrSheet(context, day: y, fontFamily: kReportFont),
+        art: GlowingHeart(
+          key: const Key('report-awake-hr-heart'),
+          bpm: awakeHr.avg,
+        ),
+        text: ReportArtText(
+          value: awakeHrTileValue(awakeHr),
+          valueKey: const Key('report-awake-hr-value'),
+          line: awakeHrTileLine(awakeHr),
+          lineKey: const Key('report-awake-hr-line'),
+        ),
+      );
+    } else if (dayHr != null) {
       dayHrTile = ReportTile(
         key: const Key('report-day-hr'),
         icon: Icons.monitor_heart_rounded,
@@ -1478,48 +1623,29 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     }
 
     Widget? moveTile;
-    final moves = y.moveIq;
-    if (moves != null && moves.isNotEmpty) {
-      final walks = moves.where((m) => m.type == 'walking').length;
-      final rides = moves.where((m) => m.type == 'cycling').length;
-      final others = moves.length - walks - rides;
-      moveTile = ReportTile(
+    // 11-15 使用者定：騎車不顯示（多半是機車，move_iq_sheet.dart）；剩下沒有任何一段就整格不畫
+    final moves = moveIqShown(y.moveIq);
+    if (moves.isNotEmpty) {
+      moveTile = ReportArtTile(
         key: const Key('report-moveiq'),
         icon: Icons.route_rounded,
-        color: _cMove,
+        color: kMoveIq,
         title: 'Move IQ',
-        value: [
-          if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
-          if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
-          if (others > 0) '$others other',
-        ].join(' · '),
-        graphic: paintBox(
-          SegmentStripPainter(
-            [
-              for (final m in moves)
-                if (m.startMinuteOfDay != null)
-                  (
-                    m.startMinuteOfDay! / 1440,
-                    (m.startMinuteOfDay! + m.minutes) / 1440,
-                  ),
-            ],
-            _cMove,
-            ticks: const [
-              (0, '0'),
-              (0.25, '6'),
-              (0.5, '12'),
-              (0.75, '18'),
-              (1, '24'),
-            ],
-          ),
-          key: const Key('report-moveiq-timeline'),
+        onTap: () => showMoveIqSheet(context, day: y, fontFamily: kReportFont),
+        art: MoveIqDial(key: const Key('report-moveiq-dial'), events: moves),
+        text: ReportArtText(
+          value: moveIqTileValue(moves),
+          valueKey: const Key('report-moveiq-value'),
+          line: moveIqTileLine(moves),
+          lineKey: const Key('report-moveiq-line'),
         ),
-        graphicHeight: 30,
       );
     }
 
     final tiles = [
+      // 11-15 使用者定的順序：7 格時最後一格（Move IQ 時間軸）佔整列
       stepsTile,
+      kcalTile,
       activeTile,
       stressTile,
       batteryTile,
@@ -1575,7 +1701,227 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
+  /// Time in bed 點開：這一晚往回 7 晚幾點上床、幾點起床。按鈕優先、沒按退回手錶。
+  /// 這一晚的按鈕以報告上的為準（剛按的可能還沒上傳）。
+  Future<void> _showBedWeek(MorningReport r) async {
+    var buttons = <String, (DateTime?, DateTime?)>{};
+    var watch = <String, (DateTime?, DateTime?)>{};
+    try {
+      final t = await widget.loadBedTimes!();
+      buttons = {...t.buttons};
+      watch = {...t.watch};
+    } catch (_) {}
+    if (r.bedStart != null && r.bedEnd != null) {
+      buttons[r.date] = (r.bedStart, r.bedEnd);
+    }
+    // 這一晚手錶幾點認定睡著，以報告上的為準（「躺多久才睡著」，11-15 使用者定）
+    if (r.asleepAt != null) {
+      watch[r.date] = (r.asleepAt, r.wokeAt ?? watch[r.date]?.$2);
+    }
+    if (!mounted) return;
+    await showBedWeekSheet(
+      context,
+      title: 'Time in bed',
+      icon: Icons.bed_rounded,
+      color: _cBed,
+      fontFamily: kReportFont,
+      week: bedWeek(endDate: r.date, buttons: buttons, watch: watch),
+    );
+  }
+
+  /// Efficiency 點開。這一晚的數字、種類、名字、警語都以報告上的為準（同一支 scoredEfficiency 挑的）；
+  /// 一週只有後端有，這一晚那根長條用報告上的數字蓋過去，保證跟格子一樣。
+  Future<void> _showEfficiency(MorningReport r) async {
+    Map<String, EfficiencyNight>? week;
+    try {
+      final m = await widget.loadEfficiencyNights?.call();
+      if (m != null && m.isNotEmpty) {
+        week = {
+          ...m,
+          if (r.efficiencyKind != null)
+            r.date: EfficiencyNight(
+              r.efficiency!,
+              r.efficiencyKind!,
+              r.efficiencyLabel,
+            ),
+        };
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showEfficiencySheet(
+      context,
+      color: _cEff,
+      fontFamily: kReportFont,
+      date: r.date,
+      value: r.efficiency!,
+      label: r.efficiencyLabel,
+      kind: r.efficiencyKind,
+      // 11-15 使用者定：點開不放警語（上面「asleep of counted」已經說明怎麼算的）。警語仍在 Insights 分數卡
+      asleepMinutes: r.sleepMinutes,
+      span: countedSpan(
+        r.efficiencyKind,
+        bedStart: r.bedStart,
+        bedEnd: r.bedEnd,
+        asleepAt: r.asleepAt,
+        wokeAt: r.wokeAt,
+      ),
+      week: week,
+    );
+  }
+
+  /// Movement (camera) 點開。這一晚以報告上的那一晚為準；一週只有後端有。
+  Future<void> _showMovement(MorningReport r) async {
+    List<CameraNight>? week;
+    try {
+      final m = await widget.loadCameraNights?.call();
+      if (m != null && m.isNotEmpty) {
+        week = [
+          for (final n in m)
+            if (n.date != r.date) n,
+          r.camera!,
+        ];
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showMovementSheet(
+      context,
+      color: _cCam,
+      fontFamily: kReportFont,
+      night: r.camera!,
+      date: r.date,
+      curve: r.cameraMotion,
+      stages: r.stages,
+      week: week,
+    );
+  }
+
+  /// Sleeping heart rate 點開。這一晚的曲線、平均、最低以報告上的為準；
+  /// 一週只有後端有，這一晚那一欄用報告的數字蓋過去，保證跟格子一樣。
+  Future<void> _showHeartRate(MorningReport r) async {
+    final curve = r.heartRate!;
+    Map<String, SleepHeartRate>? week;
+    try {
+      final m = await widget.loadSleepHeartRates?.call();
+      if (m != null && m.isNotEmpty) {
+        week = {...m, r.date: SleepHeartRate(curve.avg, curve.min)};
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showHeartRateSheet(
+      context,
+      // 跟外面那一格同一個靛藍（11-15 使用者：裡面的顏色不統一）
+      color: _cSleepHr,
+      fontFamily: kReportFont,
+      curve: curve,
+      date: r.date,
+      stages: r.stages,
+      restingHeartRate: r.restingHeartRate,
+      week: week,
+    );
+  }
+
+  /// Awake 點開：這一晚什麼時候醒、醒多久＋一週。一週只有後端有；連不到就只看這一晚。
+  /// 這一晚的總數以報告上的為準。
+  Future<void> _showAwake(MorningReport r) async {
+    List<NightValue>? series;
+    try {
+      final m = await widget.loadAwakeMinutes?.call();
+      if (m != null && m.isNotEmpty) {
+        series = [
+          for (final e in m.entries)
+            if (e.key != r.date) NightValue(e.key, e.value),
+          NightValue(r.date, r.wasoMinutes!.toDouble()),
+        ];
+      }
+    } catch (_) {}
+    Map<String, int>? counts;
+    try {
+      final c = await widget.loadAwakeCounts?.call();
+      if (c != null) {
+        counts = {...c, if (r.awakeCount != null) r.date: r.awakeCount!};
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    await showAwakeSheet(
+      context,
+      title: 'Awake',
+      icon: Icons.visibility_rounded,
+      color: _cAwake,
+      fontFamily: kReportFont,
+      date: r.date,
+      totalMinutes: r.wasoMinutes!.toDouble(),
+      // 醒了幾段：報告上的優先（/home 剛算好的），沒有才用一週那份
+      count: r.awakeCount ?? counts?[r.date],
+      counts: counts,
+      stages: r.stages,
+      series: series,
+    );
+  }
+
+  /// Phone down 點開：這一晚往回 7 晚幾點放下手機。這一晚的時刻以報告上的為準；
+  /// 晚不晚只照抄後端（history 裡那一晚的 is_late），這一晚 history 沒有就不算進「N of M」。
+  Future<void> _showPhoneWeek(MorningReport r) async {
+    var downs = <String, PhoneDown>{};
+    try {
+      downs = {...await widget.loadPhoneDowns!()};
+    } catch (_) {}
+    final mine = r.lightsOutAt;
+    if (mine != null) {
+      downs[r.date] = PhoneDown(
+        mine,
+        downs[r.date]?.isLate,
+        // 這一晚以報告上的為準（後端剛算好的可能比一週那份新）
+        r.phoneAfterStartMinutes ?? downs[r.date]?.inBedMinutes,
+      );
+    }
+    if (!mounted) return;
+    await showPhoneWeekSheet(
+      context,
+      title: 'Phone down',
+      icon: Icons.phone_android_rounded,
+      color: _cPhone,
+      fontFamily: kReportFont,
+      target: r.targetBedtime,
+      week: phoneWeek(endDate: r.date, downs: downs),
+      // 11-15 使用者定：這一晚「幾點按 Start Sleep → 幾點放下、隔了多久」寫在頁面最上面
+      startSleepAt: r.bedStart,
+      phoneDownAt: r.lightsOutAt,
+      afterStartMinutes: r.phoneAfterStartMinutes,
+    );
+  }
+
+  /// Time asleep 點開：這一晚往回 7 晚＋平均。這一晚的數字以報告上的為準（後端剛算好的可能比打包檔新）。
+  Future<void> _showSleepWeek(MorningReport r) async {
+    List<NightValue> series;
+    try {
+      series = await widget.loadSleepSeries!();
+    } catch (_) {
+      series = const [];
+    }
+    final mine = r.hasScore ? r.sleepMinutes : null;
+    if (mine != null) {
+      series = [
+        for (final n in series)
+          if (n.date != r.date) n,
+        NightValue(r.date, mine.toDouble()),
+      ];
+    }
+    if (!mounted) return;
+    await showSleepWeekSheet(
+      context,
+      title: 'Total sleep',
+      // 標題跟這張格子同一個圖示、同一個顏色（使用者定）
+      icon: Icons.nightlight_round,
+      color: _cAsleep,
+      fontFamily: kReportFont,
+      series: series,
+      endDate: r.date,
+      goalMinutes: r.goalMinutes,
+    );
+  }
+
   void _showDream(MorningReport r) {
+    setState(() => _dreamRead = true);
     showDreamDiary(context, text: r.dream!, date: r.date, mood: r.mood);
     widget.onDreamOpened?.call();
   }
@@ -1599,95 +1945,280 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   }
 }
 
-/// 分數圓環：深色底盤＋淡色全圈，上面依分數畫一段漸層弧（從 12 點鐘開始）。
-class _RingPainter extends CustomPainter {
+/// 經驗條（2026-11-14 使用者定，參考圖）：沒有框，「215 / 400 XP」寫在條裡。
+/// 條是**一種顏色**（白），最近幾晚之間一條細線分開（`xpBarSegments`，只排版不算 XP），
+/// 只有這份報告那一晚是金色（跟上面的 +N XP 同色）。+0 的晚上沒有格子。
+/// （第一版每晚換深淺、更早的另一色，使用者覺得顏色太多。）
+class _XpBar extends StatelessWidget {
+  final String date;
+  final int into;
+  final int? size;
+  final List<NightXp> nights;
+
+  const _XpBar({
+    required this.date,
+    required this.into,
+    required this.size,
+    required this.nights,
+  });
+
+  static const double _height = 22;
+  static const _fill = Color(0xF2FFFFFF);
+  static const _mine = ReportColors.gold;
+  static const _ink = Color(0xFF1D2860);
+
+  @override
+  Widget build(BuildContext context) {
+    final total = size;
+    final segments = total == null
+        ? const <XpSegment>[]
+        : xpBarSegments(into: into, nights: nights);
+    final text = total == null
+        ? 'Max level'
+        : '${_MorningReportScreenState._n(into)} / ${_MorningReportScreenState._n(total)} XP';
+    final progress = total == null || total <= 0
+        ? 1.0
+        : (into / total).clamp(0.0, 1.0);
+    return SizedBox(
+      height: _height,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          double x(int v) =>
+              total == null || total <= 0 ? 0 : (v / total).clamp(0.0, 1.0) * w;
+          // 字放在條的左邊；進度太短時字落在空的那段，改用白字
+          final onFill = progress * w > 120;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(_height / 2),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.white.withValues(alpha: 0.22),
+                  ),
+                ),
+                if (total == null)
+                  const Positioned.fill(child: ColoredBox(color: _fill)),
+                for (final g in segments)
+                  Positioned(
+                    key: Key('xp-seg-${g.date ?? 'earlier'}'),
+                    left: x(g.start),
+                    top: 0,
+                    bottom: 0,
+                    width: x(g.end) - x(g.start),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: g.date == date ? _mine : _fill,
+                      ),
+                    ),
+                  ),
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        text,
+                        key: const Key('report-xp-text'),
+                        style: TextStyle(
+                          color: onFill ? _ink : Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 分數：一條半圓線（彩虹形，使用者定：只有線、不墊底盤）。
+/// 淡色整條當底，上面從左端依分數畫一段漸層，弧長＝分數 / 100。
+/// 畫布 = (2(R+10), R+20)，圓心在 (R+10, R+10)：留 10 給線寬與光暈。
+class _ArcPainter extends CustomPainter {
   final double value;
-  const _RingPainter({required this.value});
+  const _ArcPainter({required this.value});
+
+  static const stroke = 12.0;
+  static const colors = [
+    Color(0xFF7FB2FF),
+    Color(0xFFB9A6FF),
+    Color(0xFFFF8AD8),
+  ];
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 16.0;
-    final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) / 2 - 18;
+    final radius = size.width / 2 - 10;
+    final center = Offset(size.width / 2, radius + 10);
     final rect = Rect.fromCircle(center: center, radius: radius);
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xBF141C46));
-    canvas.drawCircle(
-      center,
-      radius,
+    canvas.drawArc(
+      rect,
+      math.pi,
+      math.pi,
+      false,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke
-        ..color = Colors.white.withValues(alpha: 0.10),
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: 0.16),
     );
     if (value <= 0) return;
-    const colors = [Color(0xFF7FB2FF), Color(0xFFB9A6FF), Color(0xFFFF8AD8)];
-    const stops = [0.0, 0.55, 1.0];
-    final sweep = 2 * math.pi * value;
-    // ⚠️ 不用 StrokeCap.round：起點的圓頭會伸到 12 點鐘左邊一點點，
-    //    掃描漸層在那裡繞回尾端的粉紅色（實機看得到一個粉紅小點）。
-    //    改成平頭弧＋兩端各補一個同色圓點。
-    final fill = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..shader = const SweepGradient(
-        colors: colors,
-        stops: stops,
-        transform: GradientRotation(-math.pi / 2),
-      ).createShader(rect);
-    canvas.drawArc(rect, -math.pi / 2, sweep, false, fill);
-    Offset at(double a) => center + Offset(math.cos(a), math.sin(a)) * radius;
-    canvas.drawCircle(at(-math.pi / 2), stroke / 2, Paint()..color = colors[0]);
-    canvas.drawCircle(
-      at(-math.pi / 2 + sweep),
-      stroke / 2,
-      Paint()..color = _colorAt(value, colors, stops),
+    // 左→右的線性漸層：半圓不會繞回起點，可以用圓頭
+    final shader = const LinearGradient(colors: colors).createShader(rect);
+    final sweep = math.pi * value;
+    canvas.drawArc(
+      rect,
+      math.pi,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke + 6
+        ..strokeCap = StrokeCap.round
+        ..shader = shader
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+        ..color = Colors.white.withValues(alpha: 0.5),
     );
-  }
-
-  static Color _colorAt(double t, List<Color> colors, List<double> stops) {
-    for (var i = 1; i < stops.length; i++) {
-      if (t <= stops[i]) {
-        final f = (t - stops[i - 1]) / (stops[i] - stops[i - 1]);
-        return Color.lerp(colors[i - 1], colors[i], f)!;
-      }
-    }
-    return colors.last;
+    canvas.drawArc(
+      rect,
+      math.pi,
+      sweep,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round
+        ..shader = shader,
+    );
   }
 
   @override
-  bool shouldRepaint(_RingPainter old) => old.value != value;
+  bool shouldRepaint(_ArcPainter old) => old.value != value;
 }
 
-/// 等待中：虛線圓環。
-class _DashedRingPainter extends CustomPainter {
-  const _DashedRingPainter();
+/// 等待中：虛線半圓（同一道弧，沒有分數）。
+class _DashedArcPainter extends CustomPainter {
+  const _DashedArcPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) / 2 - 18;
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xBF141C46));
+    final radius = size.width / 2 - 10;
+    final center = Offset(size.width / 2, radius + 10);
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0x59B9A6FF);
+      ..color = const Color(0x8CB9A6FF);
     const dash = 6.0;
     const gap = 9.0;
-    final count = (2 * math.pi * radius / (dash + gap)).floor();
-    final step = 2 * math.pi / count;
+    final count = (math.pi * radius / (dash + gap)).floor();
+    final step = math.pi / count;
     final sweep = step * dash / (dash + gap);
     final rect = Rect.fromCircle(center: center, radius: radius);
     for (var i = 0; i < count; i++) {
-      canvas.drawArc(rect, i * step, sweep, false, paint);
+      canvas.drawArc(rect, math.pi + i * step, sweep, false, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_DashedRingPainter old) => false;
+  bool shouldRepaint(_DashedArcPainter old) => false;
 }
 
-/// 小狗坐的山丘（示意圖的曲線，依寬度縮放）。
+/// 頂端背景：使用者為這個位置生成的日出山丘（右下草坡給小狗坐），上下兩端淡進報告的深藍。
+/// 讀不到圖時退回程式畫的山丘。
+const String kReportDawnAsset = 'assets/backgrounds/report_dawn.jpg';
+
+class ReportDawnBackdrop extends StatelessWidget {
+  const ReportDawnBackdrop({super.key});
+
+  static const _hill = Align(
+    alignment: Alignment.bottomCenter,
+    child: SizedBox(
+      height: 120,
+      width: double.infinity,
+      child: CustomPaint(painter: _HillPainter()),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    // 下緣讓整張圖淡成透明、露出底下報告的漸層：直接淡成某個顏色的話，
+    // 跟背景在那個高度的顏色對不上，會多一條分界線（實機看到過）。
+    return IgnorePointer(
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.white, Colors.transparent],
+          stops: [0, 0.8, 1],
+        ).createShader(rect),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              kReportDawnAsset,
+              key: const Key('report-dawn'),
+              fit: BoxFit.cover,
+              // 不貼底：往下挪，太陽才從分數圓環下面露出來、草坡落在小狗腳下
+              alignment: const Alignment(0, 0.6),
+              errorBuilder: (_, _, _) => _hill,
+            ),
+            // 壓一層深藍，白字與圓環才看得清楚；上緣接狀態列、下緣接格子
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    ReportColors.bgTop,
+                    Color(0x590B1636),
+                    Color(0x140B1636),
+                    Color(0x260B1636),
+                  ],
+                  stops: [0, 0.18, 0.5, 1],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 角色腳下的淡影子（橢圓、邊緣模糊）。
+class _GroundShadow extends StatelessWidget {
+  final double width;
+  const _GroundShadow({required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: width,
+        height: width * 0.16,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.all(
+            Radius.elliptical(width / 2, width * 0.08),
+          ),
+          color: const Color(0x40060A20),
+          boxShadow: const [
+            BoxShadow(color: Color(0x40060A20), blurRadius: 8, spreadRadius: 2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 小狗坐的山丘（示意圖的曲線，依寬度縮放）。讀不到日出圖時用。
 class _HillPainter extends CustomPainter {
   const _HillPainter();
 

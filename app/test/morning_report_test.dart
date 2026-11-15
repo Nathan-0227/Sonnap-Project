@@ -9,6 +9,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:app/services/night_compare.dart' show NightValue;
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/morning_report_screen.dart';
@@ -412,7 +413,9 @@ void main() {
     Future<NavigatorObserver> pumpReport(WidgetTester tester, MorningReport r,
         {Size size = const Size(1200, 5000),
         bool pending = true,
-        bool canOpenInsights = false}) async {
+        bool canOpenInsights = false,
+        Future<List<NightValue>> Function()? loadSleepSeries,
+        Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights}) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = size.width > 1100 ? 3.0 : 2.625;
       addTearDown(tester.view.reset);
@@ -426,12 +429,71 @@ void main() {
             initial: r,
             pending: pending,
             canOpenInsights: canOpenInsights,
+            loadSleepSeries: loadSleepSeries,
+            loadEfficiencyNights: loadEfficiencyNights,
           ),
         ),
       );
       await settle(tester);
       return observer;
     }
+
+    testWidgets('Time asleep 點開 → 這一晚往回 7 晚＋平均；這一晚以報告的數字為準', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(
+          date: '2026-11-12',
+          home: homeWithScore('2026-11-12'),
+        ).withExtras(goalMinutes: 480),
+        loadSleepSeries: () async => const [
+          NightValue('2026-11-10', 385),
+          NightValue('2026-11-12', 100), // 打包檔舊的，報告是 7h 25m
+        ],
+      );
+      await tester.ensureVisible(find.byKey(const Key('report-asleep')));
+      await tester.tap(find.byKey(const Key('report-asleep')));
+      await settle(tester);
+      expect(find.byKey(const Key('sleep-week-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-bar-2026-11-06')), findsOneWidget);
+      expect(find.byKey(const Key('sleep-week-bar-2026-11-12')), findsOneWidget);
+      // (385 + 445) / 2 = 415 → 6h 55m
+      expect(textOf(tester, 'sleep-week-average'), '6h 55m');
+      expect(find.text('2 of 7 nights with data'), findsOneWidget);
+      expect(find.text('8h goal'), findsOneWidget);
+    });
+
+    testWidgets('Efficiency 點開：這一晚那根長條＝格子上的數字（一週資料舊的被蓋過去）', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12')),
+        loadEfficiencyNights: () async => {
+          '2026-11-11': const EfficiencyNight(95.9, EfficiencyKind.buttons, 'B'),
+          // 後端那一份這一晚是舊的／別種；報告上是 98.9（按鈕那一種）
+          '2026-11-12': const EfficiencyNight(99.5, EfficiencyKind.watchOnly, 'W'),
+        },
+      );
+      expect(textOf(tester, 'report-efficiency'), '98.9');
+      await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
+      await tester.tap(find.byKey(const Key('report-efficiency-tile')));
+      await settle(tester);
+      expect(textOf(tester, 'eff-value'), '98.9%');
+      expect(textOf(tester, 'eff-week-value-2026-11-12'), '98.9');
+      expect(find.byKey(const Key('eff-week-fill-2026-11-12-buttons')), findsOneWidget);
+      expect(textOf(tester, 'eff-week-value-2026-11-11'), '95.9');
+      // 分母是兩個按鈕（homeWithScore 是按鈕那一種）
+      expect(textOf(tester, 'eff-span'), startsWith('Start sleep 23:40 → Out of bed'));
+    });
+
+    testWidgets('沒有給一週資料 → Time asleep 不能點', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12')),
+      );
+      await tester.ensureVisible(find.byKey(const Key('report-asleep')));
+      await tester.tap(find.byKey(const Key('report-asleep')));
+      await settle(tester);
+      expect(find.byKey(const Key('sleep-week-sheet')), findsNothing);
+    });
 
     testWidgets('⚠️ 等資料：寫 Waiting…，沒有任何分數或睡眠長度，畫睡姿小狗',
         (tester) async {
@@ -569,6 +631,33 @@ void main() {
       expect(find.text('On time'), findsNothing);
     });
 
+    testWidgets('攝影機格子：大字＝一小時動幾次，「跟平常比」那句變小字；不放文獻常模', (tester) async {
+      const camera = CameraNight(
+        date: '2026-11-12',
+        usualLabel: 'SENTINEL-camera-usual',
+        usualSupported: true,
+        eventsPerHour: 18.4,
+      );
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12'))
+            .withExtras(camera: camera),
+      );
+      await tester.scrollUntilVisible(find.byKey(const Key('report-camera-rate')), 300,
+          scrollable: find.byType(Scrollable).first);
+      expect(textOf(tester, 'report-camera-rate'), '18 moves / hour');
+      expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
+      final tile = find.byKey(const Key('report-camera-tile'));
+      final all = tester
+          .widgetList<Text>(find.descendant(of: tile, matching: find.byType(Text)))
+          .map((t) => t.data ?? '')
+          .join(' | ')
+          .toLowerCase();
+      for (final w in ['typical', 'normal', 'average adult', '11 ', 'restless']) {
+        expect(all, isNot(contains(w)), reason: w);
+      }
+    });
+
     testWidgets('昨晚的格子：直接攤開（不再收合），照抄 WASO、心率、效率＋警語＋basis、攝影機',
         (tester) async {
       const camera = CameraNight(
@@ -587,20 +676,22 @@ void main() {
           scrollable: find.byType(Scrollable).first);
       expect(textOf(tester, 'report-waso'), '14m');
       expect(textOf(tester, 'report-hr'), '56 bpm avg · 51 resting');
-      expect(textOf(tester, 'report-efficiency'), '98.9%',
+      expect(textOf(tester, 'report-efficiency'), '98.9',
           reason: '照抄，不四捨五入掉小數');
       expect(textOf(tester, 'report-camera'), 'SENTINEL-camera-usual');
       expect(find.text('Camera data is not part of your score.'), findsOneWidget);
-      expect(find.byKey(const Key('report-efficiency-ring')), findsOneWidget);
+      // 2026-11-15 起照參考圖從底下往上填滿（取代圓環）
+      expect(find.descendant(of: find.byKey(const Key('report-efficiency-tile')), matching: find.byKey(const Key('report-fill'))), findsOneWidget);
       // 效率的警語與 basis 很長：點格子才跳出來（以前也是收在 More details 裡）
       expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsNothing);
       await tester.ensureVisible(find.byKey(const Key('report-efficiency-tile')));
       await tester.tap(find.byKey(const Key('report-efficiency-tile')));
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsOneWidget,
-          reason: '原文照抄，前面接項目名稱（與 Insights 頁同一個寫法）');
-      expect(find.text('Basis: SENTINEL-basis-measured'), findsOneWidget,
-          reason: 'App 裡有好幾個「效率」，只有 basis 分得開');
+      expect(find.byKey(const Key('eff-sheet')), findsOneWidget);
+      expect(find.text('Efficiency - SENTINEL-eff-caveat'), findsNothing,
+          reason: '2026-11-15 使用者定：Efficiency 點開不放警語（警語仍在 Insights 分數卡）');
+      expect(find.textContaining('Basis:'), findsNothing,
+          reason: '2026-11-15 使用者定：機器標籤看不懂，改寫那一種的名字（後端照抄）');
       expect(tester.takeException(), isNull);
     });
 
@@ -683,9 +774,9 @@ void main() {
            'total': 30, 'final_quality': 'Poor'},
         ])),
       );
-      expect(textOf(tester, 'report-level'), 'Lv6');
+      expect(textOf(tester, 'report-level'), 'Lv.6');
       expect(textOf(tester, 'report-xp-text'), '830 / 1,219 XP');
-      expect(textOf(tester, 'report-xp-to-next'), '389 to Lv7');
+      expect(textOf(tester, 'report-xp-to-next'), '389 to Lv.7');
       final pill = find.byKey(const Key('report-night-xp'));
       expect(hasText(tester, pill, '+30 XP'), isTrue,
           reason: '是那一晚的 30，不是前一晚的 50');

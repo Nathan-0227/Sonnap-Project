@@ -142,6 +142,446 @@ class ReportTile extends StatelessWidget {
   }
 }
 
+/// 圖鋪滿整張卡的格子（2026-11-15 使用者定，照參考圖 Stress／Activity 卡）：
+/// 圖一路畫到卡片邊緣（裁成圓角），標題疊在左上、字疊在左下。
+/// 底色**維持報告其他格子的半透明紫**（同日第六輪使用者定；第四輪試過近黑）。
+/// 早晨報告的 Active time（山）與 Stress（圓頂）用。
+class ReportArtTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final Widget art;
+  final Widget text;
+  final double height;
+  final VoidCallback? onTap;
+
+  /// 字置中在底邊（Stress：字在半圓裡）；預設左下。
+  final bool centerText;
+
+  /// 虛線框（手錶資料還沒到，同 [ReportTile] 的 dashed）。
+  final bool dashed;
+
+  const ReportArtTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.art,
+    required this.text,
+    this.height = 190,
+    this.onTap,
+    this.centerText = false,
+    this.dashed = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Container(
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: reportCard(dashed: dashed),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          art,
+          Positioned(
+            left: 14,
+            right: 10,
+            top: 12,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (onTap != null)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: ReportColors.dim,
+                  ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 14,
+            right: 12,
+            bottom: 12,
+            child: centerText ? Center(child: text) : text,
+          ),
+        ],
+      ),
+    );
+    return onTap == null
+        ? body
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: body,
+          );
+  }
+}
+
+/// 疊在圖上的大字＋小字（參考圖的「56%／Elevated」位置；我們只寫事實）。
+class ReportArtText extends StatelessWidget {
+  final String? value;
+  final Key? valueKey;
+  final String? line;
+  final Key? lineKey;
+  final bool center;
+
+  /// 大字右邊的小東西（跟上一晚比的箭頭）。
+  final Widget? valueTrailing;
+
+  /// [line] 底下再多幾行小字（樣式同 [line]）。
+  final List<Widget> extra;
+
+  const ReportArtText({
+    super.key,
+    required this.value,
+    this.line,
+    this.valueKey,
+    this.lineKey,
+    this.center = false,
+    this.valueTrailing,
+    this.extra = const [],
+  });
+
+  static const _shadow = [Shadow(color: Color(0x88000000), blurRadius: 10)];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: center
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      children: [
+        if (value != null)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: center ? Alignment.center : Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  value!,
+                  key: valueKey,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    shadows: _shadow,
+                  ),
+                ),
+                if (valueTrailing != null) ...[
+                  const SizedBox(width: 6),
+                  valueTrailing!,
+                ],
+              ],
+            ),
+          ),
+        DefaultTextStyle.merge(
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          style: const TextStyle(
+            color: Color(0xE6FFFFFF),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            shadows: _shadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: center
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              if (line != null) Text(line!, key: lineKey),
+              ...extra,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 一格「從底下往上填滿」的卡（2026-11-15 使用者定，照參考圖的 Battery 卡）：
+/// 填滿的高度＝[fraction]（0–1），大數字在左下、單位小一號，下面一行小字。
+/// 早晨報告的 Efficiency 用：填多高就是那一晚的效率。
+class ReportFillTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String unit;
+  final Key? valueKey;
+  final double fraction;
+  final String? caption;
+  final VoidCallback? onTap;
+
+  const ReportFillTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.fraction,
+    this.unit = '',
+    this.valueKey,
+    this.caption,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = 22.0;
+    final deep = Color.lerp(color, const Color(0xFF3D52C9), 0.55)!;
+    final body = Container(
+      // 跟全幅圖格子一樣高（190）：單獨佔整列時也量得到高度（Spacer 才撐得開）
+      height: 190,
+      decoration: reportCard(radius: radius),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          children: [
+            // 填滿的部分：不用 LayoutBuilder（格子放在 IntrinsicHeight 裡，量不到）
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: FractionallySizedBox(
+                  key: const Key('report-fill'),
+                  heightFactor: fraction.clamp(0.0, 1.0),
+                  widthFactor: 1,
+                  // 11-15 使用者：喜歡這個設計但有點靜態 → 頂端是會輕輕晃的水面、幾顆光點慢慢往上浮。
+                  // 填多高照舊＝效率（水面只在頂端上下 3 像素內晃）；減少動態效果時靜止
+                  child: LiquidFill(
+                    key: const Key('report-fill-liquid'),
+                    top: color.withValues(alpha: 0.85),
+                    bottom: deep,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 16, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (onTap != null)
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: Color(0xCCFFFFFF),
+                        ),
+                    ],
+                  ),
+                  const Spacer(),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          value,
+                          key: valueKey,
+                          softWrap: false,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (unit.isNotEmpty)
+                          Text(
+                            unit,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (caption != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      caption!,
+                      key: const Key('report-fill-caption'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xE6FFFFFF),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return onTap == null
+        ? body
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: body,
+          );
+  }
+}
+
+/// 會動的液體：頂端一道慢慢起伏的水面、裡面幾顆光點往上浮（Efficiency 的填滿）。
+/// 系統開「減少動態效果」時靜止（水面平、光點停住）。
+class LiquidFill extends StatefulWidget {
+  final Color top;
+  final Color bottom;
+  const LiquidFill({super.key, required this.top, required this.bottom});
+
+  @override
+  State<LiquidFill> createState() => _LiquidFillState();
+}
+
+class _LiquidFillState extends State<LiquidFill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      _c.stop();
+      _c.value = 0;
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => CustomPaint(
+        painter: LiquidFillPainter(_c.value, widget.top, widget.bottom),
+        size: Size.infinite,
+      ),
+    ),
+  );
+}
+
+class LiquidFillPainter extends CustomPainter {
+  /// 0–1 一個循環。
+  final double t;
+  final Color top;
+  final Color bottom;
+  LiquidFillPainter(this.t, this.top, this.bottom);
+
+  static const double amp = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    if (h <= 0 || w <= 0) return;
+    final phase = 2 * math.pi * t;
+    double surf(double x) =>
+        amp +
+        amp * 0.65 * math.sin(phase + x / w * 2 * math.pi * 1.3) +
+        amp * 0.35 * math.sin(-phase * 2 + x / w * 2 * math.pi * 2.1);
+    final body = Path()..moveTo(0, surf(0));
+    for (var x = 0.0; x <= w; x += 4) {
+      body.lineTo(x, surf(x));
+    }
+    body
+      ..lineTo(w, surf(w))
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    canvas.drawPath(
+      body,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [top, bottom],
+        ).createShader(Offset.zero & size),
+    );
+    // 水面一道亮邊
+    final edge = Path()..moveTo(0, surf(0));
+    for (var x = 0.0; x <= w; x += 4) {
+      edge.lineTo(x, surf(x));
+    }
+    canvas.drawPath(
+      edge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..color = Colors.white.withValues(alpha: 0.45),
+    );
+    // 光點：固定的 5 顆，從底下慢慢往上浮、接近水面時淡掉
+    canvas.save();
+    canvas.clipPath(body);
+    for (var i = 0; i < 5; i++) {
+      final p = (t + i / 5) % 1;
+      final x = w * (0.14 + 0.18 * i) + 4 * math.sin(phase * 2 + i);
+      final y = h - p * (h - amp * 2);
+      final fade = p < 0.15 ? p / 0.15 : (p > 0.8 ? (1 - p) / 0.2 : 1.0);
+      canvas.drawCircle(
+        Offset(x, y),
+        1.6 + (i % 3) * 0.7,
+        Paint()..color = Colors.white.withValues(alpha: 0.35 * fade),
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(LiquidFillPainter old) =>
+      old.t != t || old.top != top || old.bottom != bottom;
+}
+
 /// 兩欄排：有的才放，兩個一列、一樣高；單數的最後一個佔整列。
 Widget reportTileGrid(List<Widget?> tiles, {double gap = 12}) {
   final present = [for (final t in tiles) ?t];
@@ -504,6 +944,39 @@ class MountainPainter extends CustomPainter {
 }
 
 /// 一條橫條切成幾段（活動時間：高強度／活動／久坐）。
+/// 最近幾天的小長條（活動卡路里格）：最後一根＝那一天，亮的；其他淡。只畫數字，不畫目標線。
+class MiniBarsPainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  MiniBarsPainter(this.values, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final hi = values.fold<double>(0, (m, v) => v > m ? v : m);
+    if (hi <= 0) return;
+    final slot = size.width / values.length;
+    final w = math.min(14.0, slot * 0.6);
+    for (var i = 0; i < values.length; i++) {
+      final h = math.max(2.0, size.height * values[i] / hi);
+      final x = slot * i + (slot - w) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, size.height - h, w, h),
+          const Radius.circular(3),
+        ),
+        Paint()
+          ..color = i == values.length - 1
+              ? color
+              : color.withValues(alpha: 0.4),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MiniBarsPainter old) => true;
+}
+
 class StackedBarPainter extends CustomPainter {
   final List<(double, Color)> parts;
   StackedBarPainter(this.parts);

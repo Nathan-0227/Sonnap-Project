@@ -233,8 +233,10 @@ with tempfile.TemporaryDirectory() as d:
     names = sorted(p.name for p in Path(d).iterdir())
     ok("  沒有留下暫存檔", not any(n.endswith(".tmp") for n in names), str(names))
     # 白天資料（2026-11-13）跟著 --output 寫進同一個暫存資料夾，不碰真的 garmin/data/
-    ok("  白天資料的檔跟著 --output 走", names == ["garmin_daily_activity.json",
-                                                "garmin_standard_data.json"], str(names))
+    # 每 15 分鐘步數（2026-11-15）也跟著走：不會寫到真的 garmin/data/
+    ok("  白天資料與每 15 分鐘步數的檔都跟著 --output 走",
+       names == ["garmin_daily_activity.json", "garmin_standard_data.json",
+                 "garmin_steps_intraday.json"], str(names))
 
     write_old(out_path)
     run_fetch(out_path, "--start-date", "2026-06-05", "--end-date", "2026-06-05")

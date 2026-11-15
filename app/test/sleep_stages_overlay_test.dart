@@ -267,18 +267,22 @@ void main() {
     expect(find.byKey(const Key('stages-chip-hr')), findsNothing);
   });
 
-  testWidgets('報告：點心率格 → 打開疊好心率線的 Sleep Stages', (tester) async {
+  testWidgets('報告：點心率格（標題 Sleeping HR）→ 打開心率點開（2026-11-15 起，不再開 Sleep Stages）',
+      (tester) async {
     final r = buildMorningReport(date: '2026-11-08', home: home());
     await pumpReport(tester, r, 'tap');
     await scrollTo(tester, find.byKey(const Key('report-hr-tile')));
-    await tester.tap(find.byKey(const Key('report-hr-tile')));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byKey(const Key('report-curve-heartRate')), findsOneWidget);
     expect(
         find.descendant(
-            of: find.byKey(const Key('report-curve-heartRate')),
-            matching: find.byKey(const Key('stages-overlay-heartRate'))),
-        findsOneWidget,
-        reason: '一打開就疊好心率線');
+            of: find.byKey(const Key('report-hr-tile')),
+            matching: find.text('Sleeping HR')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('report-hr-tile')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('hr-sheet')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('hr-avg'))).data, '53',
+        reason: '跟格子同一個平均');
+    expect(find.byKey(const Key('report-curve-heartRate')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

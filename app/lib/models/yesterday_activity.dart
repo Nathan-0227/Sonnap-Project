@@ -1,3 +1,4 @@
+import 'awake_heart_rate.dart';
 import 'night_curve.dart';
 
 /// 早晨報告「Yesterday」那一塊：前一個日曆日的 Garmin 白天資料（`/home` 的 `yesterday`）。
@@ -12,16 +13,31 @@ class YesterdayActivity {
   final int? stepGoal;
   final int? distanceM;
   final int? activeKcal;
+
+  /// 靜止代謝與一整天總消耗（Garmin 估的；舊日子沒有是 null）。不給目標、不寫剩多少。
+  final int? restingKcal;
+  final int? totalKcal;
   final double? floorsUp;
 
   final int? highlyActiveSec;
   final int? activeSec;
   final int? sedentarySec;
 
+  /// 這個**日曆日**裡睡著的秒數（Garmin 的；舊日子後端用「一天 − 其他三種」補）。
+  /// ⚠️ 跟報告上方「昨晚睡多久」不是同一個數字，畫面上只當山底那段顏色、不另外寫出來。
+  final int? sleepingSec;
+
   final int? stressRestSec;
   final int? stressLowSec;
   final int? stressMediumSec;
   final int? stressHighSec;
+
+  /// 量不到壓力的時間（在動＋沒戴錶等）；舊日子沒存是 null。
+  final int? stressNotMeasuredSec;
+
+  /// 一整天的壓力線（每 3 分鐘一點，量不到的時候沒有點；avg／min／max 從讀數算）。
+  /// ⚠️ 只呈現：不寫 Elevated、不用紅黃。
+  final NightCurve? stressCurve;
 
   final int? bodyBatteryCharged;
   final int? bodyBatteryDrained;
@@ -40,8 +56,18 @@ class YesterdayActivity {
   /// 那天的靜止心率（Garmin 每天一個數字）。
   final int? restingHeartRate;
 
+  /// 醒著的心率（報告的 Awake HR；只有 /home 帶）。見 [AwakeHeartRate]。
+  final AwakeHeartRate? awakeHeartRate;
+
   /// 最近幾天的步數、活動卡路里、活動分鐘（首頁點小卡開的長條圖用）。
   final List<ActivityHistoryDay> history;
+
+  /// 每個鐘頭走幾步（24 格，null＝那小時沒戴錶）；整個沒有是 null（只有 /home 帶，打包檔刻意不帶）。
+  /// 畫面上不寫加總：大數字用官方的 [steps]（實抓 30 天兩者逐天相同）。
+  final List<int?>? stepsHourly;
+
+  /// 每 15 分鐘的活動程度（96 格，null＝沒戴錶）；整個沒有是 null（只有 /home 帶，打包檔刻意不帶）。
+  final List<ActivityQuarter?>? activityQuarters;
 
   const YesterdayActivity({
     required this.date,
@@ -49,14 +75,19 @@ class YesterdayActivity {
     this.stepGoal,
     this.distanceM,
     this.activeKcal,
+    this.restingKcal,
+    this.totalKcal,
     this.floorsUp,
     this.highlyActiveSec,
     this.activeSec,
     this.sedentarySec,
+    this.sleepingSec,
     this.stressRestSec,
     this.stressLowSec,
     this.stressMediumSec,
     this.stressHighSec,
+    this.stressNotMeasuredSec,
+    this.stressCurve,
     this.bodyBatteryCharged,
     this.bodyBatteryDrained,
     this.vo2max,
@@ -64,7 +95,10 @@ class YesterdayActivity {
     this.moveIq,
     this.dayHeartRate,
     this.restingHeartRate,
+    this.awakeHeartRate,
     this.history = const [],
+    this.stepsHourly,
+    this.activityQuarters,
   });
 
   /// 活動時間（高強度＋活動）的分鐘數。兩個都沒有是 null。
@@ -110,26 +144,65 @@ class YesterdayActivity {
       stepGoal: i(j, 'step_goal'),
       distanceM: i(j, 'distance_m'),
       activeKcal: i(j, 'active_kcal'),
+      restingKcal: i(j, 'resting_kcal'),
+      totalKcal: i(j, 'total_kcal'),
       floorsUp: (j['floors_up'] as num?)?.toDouble(),
       highlyActiveSec: i(activity, 'highly_active_sec'),
       activeSec: i(activity, 'active_sec'),
       sedentarySec: i(activity, 'sedentary_sec'),
+      sleepingSec: i(activity, 'sleeping_sec'),
       stressRestSec: i(stress, 'rest_sec'),
       stressLowSec: i(stress, 'low_sec'),
       stressMediumSec: i(stress, 'medium_sec'),
       stressHighSec: i(stress, 'high_sec'),
+      stressNotMeasuredSec: i(stress, 'not_measured_sec'),
+      stressCurve: NightCurve.fromJsonOrNull(j['stress_curve']),
       bodyBatteryCharged: i(bb, 'charged'),
       bodyBatteryDrained: i(bb, 'drained'),
       vo2max: (vo2?['value'] as num?)?.toDouble(),
       vo2maxMeasuredOn: vo2?['measured_on'] as String?,
       moveIq: moves,
       dayHeartRate: NightCurve.fromJsonOrNull(j['heart_rate']),
-      restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)?.round(),
+      restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)
+          ?.round(),
+      awakeHeartRate: AwakeHeartRate.fromJsonOrNull(j['awake_heart_rate']),
       history: [
         for (final h in (j['history'] as List?) ?? const [])
           ?ActivityHistoryDay.fromJsonOrNull(h),
       ],
+      stepsHourly: () {
+        final raw = j['steps_hourly'];
+        if (raw is! List || raw.length != 24) return null;
+        return [for (final v in raw) (v as num?)?.round()];
+      }(),
+      activityQuarters: () {
+        final raw = j['activity_quarters'];
+        if (raw is! List || raw.length != 96) return null;
+        return [for (final v in raw) ActivityQuarter.fromJsonOrNull(v)];
+      }(),
     );
+  }
+}
+
+/// 一格 15 分鐘：Garmin 標的活動程度與那 15 分鐘的步數。
+class ActivityQuarter {
+  /// sleep／still／active／high／other（other＝Garmin 標 generic，意思不明，照實標）。
+  final String level;
+  final int steps;
+
+  const ActivityQuarter(this.level, this.steps);
+
+  static const levels = {'sleep', 'still', 'active', 'high', 'other'};
+
+  /// `[程度, 步數]`；格式不對或不認得的程度 → null（畫面空著）。
+  static ActivityQuarter? fromJsonOrNull(Object? raw) {
+    if (raw is! List || raw.length != 2) return null;
+    final level = raw[0];
+    final steps = raw[1];
+    if (level is! String || !levels.contains(level) || steps is! num) {
+      return null;
+    }
+    return ActivityQuarter(level, steps.round());
   }
 }
 
@@ -174,11 +247,37 @@ class ActivityHistoryDay {
   final int? activeKcal;
   final int? activeMinutes;
 
+  /// 其中高強度的分鐘（Active time 一週圖疊在下面）；舊版後端沒有是 null。
+  final int? highlyActiveMinutes;
+
+  /// 各壓力程度幾分鐘（rest／low／medium／high）與那天的平均壓力（Stress 一週圖）。
+  final Map<String, int?>? stressMinutes;
+  final int? stressAvg;
+
+  /// 那天醒著的心率平均與最高（Awake HR 一週圖；只有 /home 帶）。
+  final int? awakeHrAvg;
+  final int? awakeHrMax;
+
+  /// 那天的 Move IQ（Move IQ 一週圖；只有 /home 帶）。null＝沒抓到／沒帶；空＝那天沒有。
+  final List<MoveIqEvent>? moveIq;
+
+  /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
+  final int? stepGoal;
+  final int? distanceM;
+
   const ActivityHistoryDay({
     required this.date,
     this.steps,
     this.activeKcal,
     this.activeMinutes,
+    this.highlyActiveMinutes,
+    this.stressMinutes,
+    this.stressAvg,
+    this.awakeHrAvg,
+    this.awakeHrMax,
+    this.moveIq,
+    this.stepGoal,
+    this.distanceM,
   });
 
   static ActivityHistoryDay? fromJsonOrNull(Object? raw) {
@@ -188,6 +287,24 @@ class ActivityHistoryDay {
       steps: (raw['steps'] as num?)?.round(),
       activeKcal: (raw['active_kcal'] as num?)?.round(),
       activeMinutes: (raw['active_minutes'] as num?)?.round(),
+      highlyActiveMinutes: (raw['highly_active_minutes'] as num?)?.round(),
+      stressMinutes: raw['stress_minutes'] is Map
+          ? {
+              for (final k in const ['rest', 'low', 'medium', 'high'])
+                k: ((raw['stress_minutes'] as Map)[k] as num?)?.round(),
+            }
+          : null,
+      stressAvg: (raw['stress_avg'] as num?)?.round(),
+      awakeHrAvg: ((raw['awake_hr'] as Map?)?['avg'] as num?)?.round(),
+      awakeHrMax: ((raw['awake_hr'] as Map?)?['max'] as num?)?.round(),
+      moveIq: raw['move_iq'] is List
+          ? [
+              for (final e in raw['move_iq'] as List)
+                ?MoveIqEvent.fromJsonOrNull(e),
+            ]
+          : null,
+      stepGoal: (raw['step_goal'] as num?)?.round(),
+      distanceM: (raw['distance_m'] as num?)?.round(),
     );
   }
 }

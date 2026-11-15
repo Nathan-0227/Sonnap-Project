@@ -136,6 +136,11 @@ ok("NOTE 說了跟自己比不是跟別人比", "your own recent nights" in cu.N
 ok("NOTE 說了常模不是切點", "norm, not a cut-point" in cu.NOTE)
 ok("NOTE 說了跨夜變動大", "3.1x" in cu.NOTE)
 
+# 早晨報告 Movement 點開的灰帶寬度照抄後端（2026-11-15）：App 不自己寫 25
+_o = cu.compare_to_usual({"date": "2026-11-14", "events_per_hour": 15.0}, [])
+ok("usual 帶 same_as_usual_pct＝SAME_AS_USUAL_PCT（基線不足時也帶）",
+   _o.get("same_as_usual_pct") == cu.SAME_AS_USUAL_PCT)
+
 print()
 print("=" * 78)
 print("結果：全部通過" if not fails else f"結果：{len(fails)} 項失敗 → {fails}")

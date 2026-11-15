@@ -127,6 +127,9 @@ def compare_to_usual(night, history):
         "baseline_nights": len(usable),
         "baseline_window_days": BASELINE_WINDOW_DAYS,
         "basis": BASIS,
+        # 「差不多」的範圍（±%）。早晨報告 Movement 點開的一週圖畫那條灰帶用（2026-11-15），
+        # App 照抄、不自己寫 25——不然兩邊漂移時灰帶跟那句話會對不上。
+        "same_as_usual_pct": SAME_AS_USUAL_PCT,
     }
     if len(usable) < BASELINE_MIN_NIGHTS:
         out.update({
