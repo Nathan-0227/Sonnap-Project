@@ -181,6 +181,7 @@ void main() {
       await tester.dragFrom(Offset(lr.left + lr.width * 0.5, lr.top + 10), Offset(lr.width * 0.1, 0));
       await tester.pump();
       expect(textOf(tester, 'chart-probe-text'), '04:30 · moving 6 sec');
+      expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep', reason: '滑動只看數字，不換播放的片段');
       // 片段照時間排：marker-0 是 03:42
       await tester.tap(find.byKey(const Key('mv-marker-0')));
       await tester.pump();
