@@ -285,6 +285,18 @@ def display_for(mood, driver, w_row):
 _STANDARD_CACHE = {"mtime": None, "records": None}
 
 
+def _owns_garmin_file(user_id):
+    """
+    電腦上那份 Garmin 原始檔是**本人（手機帳號）**的。只有手錶夜晚來源是 garmin 的帳號
+    才可以從它讀整天心率、壓力曲線、醒著的心率。
+
+    ⚠️ 2026-11-16 發現：yesterday_block 原本對任何有白天資料的帳號都去讀這份檔；
+       示範帳號有了白天資料之後，它們的「昨天」會讀到本人的心率（那時還沒有項目把它分享出去）。
+       順便也讓動態牆不用為每一位朋友掃一次 25 MB 的檔（6.3 秒 → App 3 秒就放棄）。
+    """
+    return db.has_wearable_source(user_id, "garmin")
+
+
 def _garmin_records():
     path = _payload.GARMIN_DATA / "garmin_standard_data.json"
     try:
@@ -356,7 +368,9 @@ def yesterday_block(user_id, night_date):
     row = db.get_garmin_daily(user_id, day.isoformat())
     if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
         return None
-    stress_curve = sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
+    owns_raw = _owns_garmin_file(user_id)
+    stress_curve = (sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
+                    if owns_raw else None)
     vo2 = db.latest_vo2max(
         user_id, on_or_before=day.isoformat(),
         since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
@@ -404,11 +418,12 @@ def yesterday_block(user_id, night_date):
         "activity_quarters": row.get("activity_quarters"),
         # 2026-11-14：報告的圖形格子用（步數那座「山」、點開的長條圖、整天心率線）。
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
-        "history": _yesterday_history(user_id, day),
-        "heart_rate": sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat()),
+        "history": _yesterday_history(user_id, day, owns_raw),
+        "heart_rate": (sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat())
+                       if owns_raw else None),
         # 2026-11-15 Awake HR：扣掉睡著之後的平均、最高、各區間分鐘＋整天的原始讀數。
         # 不給靜止心率、最低、Normal／High（Research-Background/心率門檻.md）。打包檔不帶（每 2 分鐘的讀數太大）
-        "awake_heart_rate": _awake_hr(user_id, day, row),
+        "awake_heart_rate": _awake_hr(user_id, day, row) if owns_raw else None,
     }
 
 
@@ -440,10 +455,12 @@ def _sleeping_sec(row):
     return 86400 - sum(parts)
 
 
-def _yesterday_history(user_id, day):
-    """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。"""
+def _yesterday_history(user_id, day, owns_raw=True):
+    """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。
+    owns_raw=False：不讀 Garmin 原始檔（那是本人的，見 _owns_garmin_file），平均壓力與醒著心率留 None。"""
     since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
-    stress_avgs = sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+    stress_avgs = (sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+                   if owns_raw else {})
     windows = db.list_sleep_windows(user_id, since, (day + timedelta(days=1)).isoformat())
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
@@ -464,7 +481,7 @@ def _yesterday_history(user_id, day):
             "stress_minutes": _payload.stress_minutes(r),
             "stress_avg": stress_avgs.get(r["date"]),
             # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
-            "awake_hr": _awake_hr_summary(user_id, r, windows),
+            "awake_hr": _awake_hr_summary(user_id, r, windows) if owns_raw else None,
             # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
             "move_iq": r.get("move_iq"),
         })

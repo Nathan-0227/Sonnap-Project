@@ -125,6 +125,7 @@ class _FakeBackend {
   final List<Map<String, dynamic>> received = [];
   int addStatus = 201;
   Map<String, dynamic> addBody = {'friend': friendJson('BOB234', 'Bob')};
+  Duration feedDelay = Duration.zero;
 
   Future<String> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -137,7 +138,15 @@ class _FakeBackend {
         'body': body.isEmpty ? null : jsonDecode(body),
       });
       request.response.headers.contentType = ContentType.json;
-      if (request.method == 'GET') {
+      if (request.method == 'GET' && request.uri.path == '/friends/feed') {
+        await Future<void>.delayed(feedDelay);
+        request.response.write(jsonEncode({
+          'cards': [
+            {'handle': 'BOB234', 'display_name': 'Bob', 'date': '2026-09-03', 'scene': 'lake',
+             'items': {'on_time': true}},
+          ],
+        }));
+      } else if (request.method == 'GET') {
         request.response.write(jsonEncode(stateJson()));
       } else if (request.method == 'POST') {
         request.response.statusCode = addStatus;
@@ -197,6 +206,19 @@ void main() {
       expect(backend.received.single['query'], {'user_id': testUserId});
       expect(r.value!.myInviteCode, 'K7QM2P');
       expect(r.value!.friends.map((f) => f.displayName), ['Bob', 'Carol']);
+    });
+
+    test('動態牆比一般逾時慢也等得到（2026-11-16 實機：後端 6.3 秒、App 3 秒就放棄，畫面說沒有動態）', () async {
+      backend.feedDelay = const Duration(milliseconds: 1500);
+      final quick = FriendsService(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        timeout: const Duration(seconds: 1),
+      );
+      final r = await quick.fetchFeed();
+      expect(r.isOk, isTrue);
+      expect(r.value!.single.scene, 'lake');
+      expect(FriendsService.feedTimeout, greaterThanOrEqualTo(const Duration(seconds: 10)));
     });
 
     test('加好友：body 帶 user_id 與去掉空白的邀請碼', () async {

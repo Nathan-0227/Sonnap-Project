@@ -1165,6 +1165,19 @@ def get_nightly_behavior(user_id, days=30, db_path=None):
 # Tier B：穿戴裝置資料（唯讀給 API，寫入只由上游 pipeline / adapter 呼叫）
 # ═══════════════════════════════════════════════════════════════════
 
+def has_wearable_source(user_id, source, db_path=None):
+    """這個帳號有沒有任何一晚是這個來源（例如 'garmin'）。"""
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM wearable_nightly WHERE user_id = ? AND source = ?",
+            (user_id, source),
+        ).fetchone()
+        return bool(dict(row)["n"])
+    finally:
+        conn.close()
+
+
 def get_wearable_source(user_id, date, db_path=None):
     """
     某帳號某一晚的 wearable_nightly 是哪個來源（'garmin' / 'health_connect'）。

@@ -302,8 +302,12 @@ class FriendsService {
   }
 
   /// 朋友們最近 7 天每一晚的卡（新的在前）。
+  /// 動態牆比別的端點慢（每位朋友每一晚都要組一次 /home），3 秒常常不夠——
+  /// 2026-11-16 實機：後端 6.3 秒、App 3 秒就放棄，畫面只說「沒有動態」，看起來像沒有朋友的資料。
+  static const feedTimeout = Duration(seconds: 15);
+
   Future<FriendsResult<List<FriendNightCard>>> fetchFeed() async {
-    final r = await _request('GET', '/friends/feed');
+    final r = await _request('GET', '/friends/feed', wait: feedTimeout);
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: [
       for (final c in ((r.value!['cards'] as List?) ?? const [])
@@ -387,7 +391,9 @@ class FriendsService {
     String method,
     String path, {
     Map<String, dynamic>? body,
+    Duration? wait,
   }) async {
+    final timeout = wait ?? this.timeout;
     if (baseUrl.trim().isEmpty) return const FriendsResult(FriendsStatus.noBackend);
     final userId = await identity.currentUserId();
     if (userId == null) return const FriendsResult(FriendsStatus.noUser);

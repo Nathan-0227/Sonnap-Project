@@ -11,6 +11,8 @@ tests/test_demo_accounts.py —— 成果展示範帳號不得污染真實資料
        API 重排的睡眠階段跟評分時同一份（demo_sleep 是決定性的）、白天資料有寫
   【7】動態牆：每張卡帶自己選的場景與寵物；只寫準時與否的人階梯圖沒有時刻；
        只開預設的人沒有階梯圖；回應裡沒有任何 user_id
+  【8】Garmin 原始檔是本人的：示範帳號（沒有 garmin 來源）的「昨天」一次都不讀它，
+       整天心率／壓力線／醒著心率是 null；有 garmin 來源的帳號照讀（反向對照）
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_demo_accounts.py
 """
@@ -157,6 +159,25 @@ all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
 check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
 seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))
 check("每一段只給第幾分鐘，不給 ISO 時刻", seg_iso, False)
+
+print("【8】Garmin 原始檔只給本人讀")
+calls = []
+real_records = main._garmin_records
+main._garmin_records = lambda: calls.append(1) or []
+try:
+    demo_uid = demo_accounts.demo_users(TMP)[0][0]
+    y = main.yesterday_block(demo_uid, date.today().isoformat())
+    check("示範帳號有白天資料（步數）", y is not None and y["steps"] is not None, True)
+    check("示範帳號的昨天一次都沒讀原始檔", len(calls), 0)
+    check("整天心率／壓力線／醒著心率都是 null",
+          [y["heart_rate"], y["stress_curve"], y["awake_heart_rate"]], [None, None, None])
+    # 反向對照：本人有一晚 garmin 來源 → 會去讀
+    db.upsert_wearable_nightly(me, "2026-11-01", "garmin", {"duration_min": 400}, db_path=TMP)
+    db.upsert_garmin_daily(me, "2026-10-31", {"steps": 5000}, db_path=TMP)
+    main.yesterday_block(me, "2026-11-01")
+    check("有 garmin 來源的帳號照讀原始檔", len(calls) > 0, True)
+finally:
+    main._garmin_records = real_records
 
 print()
 if fails:
