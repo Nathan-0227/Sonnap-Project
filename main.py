@@ -51,6 +51,7 @@ from pydantic import BaseModel, Field, StrictBool
 
 import camera_clips
 import camera_usual
+import demo_sleep
 import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine, morning_tips,
@@ -487,6 +488,9 @@ def night_stages(w_row):
        Health Connect 上傳時有逐段資料，但後端算完分數就沒存——那些晚上 App 改畫比例條。
     ⚠️ 圖例數字用手錶自己的總數，還原出來的段只畫曲線（理由同 build_app_payload.sleep_stages_block）。
     """
+    if w_row and w_row.get("source") == "demo":
+        # 🔴 示範帳號：demo_accounts 產生的假資料，用同一份種子重排一次（見 demo_sleep.py）
+        return demo_sleep.stages_block(w_row)
     if not w_row or w_row.get("source") != "garmin":
         return None
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
@@ -1723,6 +1727,7 @@ class SharingPatch(BaseModel):
     items: Optional[Dict[str, StrictBool]] = None
     time_precision: Optional[str] = None
     pet_species: Optional[str] = None
+    scene: Optional[str] = None
 
 
 def _sharing(user_id):
@@ -1773,7 +1778,8 @@ async def _cards_for(user_id, days=FEED_DAYS):
     game = game_state.build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated)
     closet = db.get_game_state(user_id) or {}
     return [
-        {"date": d, "items": await _night_card(user_id, d, settings, game, closet, evaluated)}
+        {"date": d, "scene": settings["scene"],
+         "items": await _night_card(user_id, d, settings, game, closet, evaluated)}
         for d in _recent_dates(user_id, days)
     ]
 
@@ -1794,10 +1800,10 @@ async def patch_sharing(req: SharingPatch):
     """改分享設定。不認得的項目（含永遠不給的那三個）→ 422，一個都不改。"""
     require_user(req.user_id)
     try:
-        social_sharing.validate_patch(req.items, req.time_precision, req.pet_species)
+        social_sharing.validate_patch(req.items, req.time_precision, req.pet_species, req.scene)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    db.set_friend_sharing(req.user_id, req.items, req.time_precision, req.pet_species)
+    db.set_friend_sharing(req.user_id, req.items, req.time_precision, req.pet_species, req.scene)
     return social_sharing.view(_sharing(req.user_id))
 
 

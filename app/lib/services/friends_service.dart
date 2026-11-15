@@ -127,12 +127,16 @@ class FriendNightCard {
   final String date;
   final Map<String, dynamic> items;
 
+  /// 他選的場景（social/sharing.SCENES）；null／不認得 → 畫預設那張。
+  final String? scene;
+
   const FriendNightCard({
     required this.handle,
     required this.displayName,
     required this.date,
     required this.items,
     this.petSpecies,
+    this.scene,
   });
 
   factory FriendNightCard.fromJson(Map<String, dynamic> json) => FriendNightCard(
@@ -141,6 +145,7 @@ class FriendNightCard {
         petSpecies: json['pet_species'] as String?,
         date: (json['date'] as String?) ?? '',
         items: ((json['items'] as Map?) ?? const {}).cast<String, dynamic>(),
+        scene: json['scene'] as String?,
       );
 }
 
@@ -169,6 +174,10 @@ class SharingSettings {
   final String timePrecision;
   final String petSpecies;
 
+  /// 動態卡的場景與可選的清單（後端定，Dart 不寫死有哪幾張）。
+  final String scene;
+  final List<String> scenes;
+
   /// 永遠不給的三項（只是說明，不是選項）。
   final List<String> neverShared;
 
@@ -177,6 +186,8 @@ class SharingSettings {
     required this.timePrecision,
     required this.petSpecies,
     required this.neverShared,
+    this.scene = 'campfire',
+    this.scenes = const [],
   });
 
   factory SharingSettings.fromJson(Map<String, dynamic> json) => SharingSettings(
@@ -198,6 +209,8 @@ class SharingSettings {
             ),
         ],
         timePrecision: (json['time_precision'] as String?) ?? 'exact',
+        scene: (json['scene'] as String?) ?? 'campfire',
+        scenes: [for (final x in (json['scenes'] as List?) ?? const []) if (x is String) x],
         petSpecies: (json['pet_species'] as String?) ?? 'dog',
         neverShared: [
           for (final s in ((json['never_shared'] as List?) ?? const []))
@@ -318,11 +331,13 @@ class FriendsService {
     Map<String, bool>? items,
     String? timePrecision,
     String? petSpecies,
+    String? scene,
   }) async {
     final r = await _request('PATCH', '/sharing', body: {
       'items': ?items,
       'time_precision': ?timePrecision,
       'pet_species': ?petSpecies,
+      'scene': ?scene,
     });
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: SharingSettings.fromJson(r.value!));

@@ -10,7 +10,7 @@ tests/test_friend_sharing.py —— 每個人自己選讓好友看到什麼（20
 5. 沒公開連續天數的人不上排行
 6. 別人的 user_id 永遠不出後端（動態卡、預覽也一樣）
 7. Streak 那一週：週一開始、還沒到的日子是 future、沒資料是 none（不是 late）
-8. 刪帳號連分享設定一起刪
+8. 刪帳號連分享設定一起刪；寵物與場景（2026-11-16）跟著動態卡帶出去，不認得的場景 422
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_friend_sharing.py
 """
@@ -193,6 +193,14 @@ print("\n【8】寵物跟著帶出去；刪帳號連設定一起刪")
 client.patch("/sharing", json={"user_id": bob, "pet_species": "cat"})
 check("朋友看到 Bob 是貓", client.get(f"/friends?user_id={alice}").json()["friends"][0]["pet_species"], "cat")
 check("動態卡也帶", feed()[0]["pet_species"], "cat")
+check("場景預設是營火", feed()[0]["scene"], "campfire")
+client.patch("/sharing", json={"user_id": bob, "scene": "lake"})
+check("選了湖邊，動態卡就是湖邊", feed()[0]["scene"], "lake")
+check("GET /sharing 回目前的場景與可選的清單",
+      {k: client.get(f"/sharing?user_id={bob}").json()[k] for k in ("scene", "scenes")},
+      {"scene": "lake", "scenes": list(sharing.SCENES)})
+check("不認得的場景 → 422", client.patch("/sharing", json={"user_id": bob, "scene": "beach"}).status_code, 422)
+check("422 之後場景沒被改", feed()[0]["scene"], "lake")
 client.delete(f"/users/{bob}")
 check("friend_sharing 那一列不見了", db.get_friend_sharing(bob, TMP), None)
 

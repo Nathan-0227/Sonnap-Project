@@ -65,6 +65,7 @@ Widget host(Widget child, {bool reduce = false}) => MaterialApp(
 class _Stub implements FriendsService {
   final List<Map<String, dynamic>> patches = [];
   String species;
+  String scene = 'campfire';
   final Map<String, bool> items = {
     'phone_down_time': true,
     'on_time': true,
@@ -84,6 +85,8 @@ class _Stub implements FriendsService {
     timePrecision: 'exact',
     petSpecies: species,
     neverShared: const ['Camera clips (video of your bedroom)'],
+    scene: scene,
+    scenes: const ['campfire', 'rooftop', 'lake', 'treehouse'],
   );
 
   @override
@@ -95,14 +98,17 @@ class _Stub implements FriendsService {
     Map<String, bool>? items,
     String? timePrecision,
     String? petSpecies,
+    String? scene,
   }) async {
     patches.add({
       'items': ?items,
       'time_precision': ?timePrecision,
       'pet_species': ?petSpecies,
+      'scene': ?scene,
     });
     this.items.addAll(items ?? const {});
     if (petSpecies != null) species = petSpecies;
+    if (scene != null) this.scene = scene;
     return FriendsResult(FriendsStatus.ok, value: _settings);
   }
 
@@ -312,14 +318,75 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text('Phone down 01:12'), findsOneWidget);
+      // 2026-11-16 改版：前三個有公開的項目變成大數字（標籤＋值）
+      expect(find.text('Phone down'), findsOneWidget);
+      expect(find.text('01:12'), findsOneWidget);
       expect(find.text('Late'), findsOneWidget);
-      expect(find.text('1,200 steps'), findsOneWidget);
+      expect(find.text('1,200'), findsOneWidget);
       expect(find.text('Night of Nov 14'), findsOneWidget);
       // 沒給的不出現，也不寫 0
       expect(find.byKey(const Key('card-item-score')), findsNothing);
       expect(find.textContaining('Score'), findsNothing);
-      expect(find.text('Game'), findsNothing);
+      expect(find.byKey(const Key('card-stages')), findsNothing);
+    });
+
+    const stages = {
+      'deep': 62,
+      'light': 250,
+      'rem': 100,
+      'rem_measured': true,
+      'segments': [
+        {'stage': 'light', 'from': 0, 'to': 30},
+        {'stage': 'deep', 'from': 30, 'to': 92},
+        {'stage': 'rem', 'from': 92, 'to': 192},
+        {'stage': 'awake', 'from': 192, 'to': 200},
+        {'stage': 'light', 'from': 200, 'to': 420},
+      ],
+    };
+
+    testWidgets('Sleep Stages：準確時刻的人兩端寫時刻', (tester) async {
+      await tester.pumpWidget(
+        host(
+          const FriendNightCardView(
+            card: FriendNightCard(
+              handle: 'B',
+              displayName: 'Bob',
+              date: '2026-11-14',
+              items: {
+                'stages': {...stages, 'start': '00:31', 'end': '07:38'},
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('card-stages')), findsOneWidget);
+      expect(find.text('00:31'), findsOneWidget);
+      expect(find.text('07:38'), findsOneWidget);
+      expect(find.text('Deep 1h 2m'), findsOneWidget);
+      // 有圖時分鐘數不再重複寫成一行小字
+      expect(find.byKey(const Key('card-item-stages')), findsNothing);
+    });
+
+    testWidgets('Sleep Stages：只寫準時與否的人（後端沒給時刻）兩端只寫 Fell asleep／Woke up', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          const FriendNightCardView(
+            card: FriendNightCard(
+              handle: 'B',
+              displayName: 'Bob',
+              date: '2026-11-14',
+              items: {'stages': stages},
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Fell asleep'), findsOneWidget);
+      expect(find.text('Woke up'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'\d\d:\d\d')), findsNothing);
     });
   });
 
@@ -350,6 +417,25 @@ void main() {
       });
       expect(find.byKey(const Key('sharing-never')), findsOneWidget);
       expect(find.byKey(const Key('sharing-preview')), findsOneWidget);
+    });
+
+    testWidgets('選場景：點一張 → 只送 scene；選中的那張有框', (tester) async {
+      final stub = _Stub();
+      await open(tester, stub);
+      expect(find.byKey(const Key('sharing-scenes')), findsOneWidget);
+      // 清單照後端給的
+      for (final id in ['campfire', 'rooftop', 'lake', 'treehouse']) {
+        expect(find.byKey(Key('sharing-scene-$id')), findsOneWidget);
+      }
+      await tester.tap(find.byKey(const Key('sharing-scene-lake')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(stub.patches.last, {'scene': 'lake'});
+      expect(stub.scene, 'lake');
+      // 點已經選中的那張不再送
+      final n = stub.patches.length;
+      await tester.tap(find.byKey(const Key('sharing-scene-lake')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(stub.patches.length, n);
     });
 
     testWidgets('總開關 → 整組一起送', (tester) async {

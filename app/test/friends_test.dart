@@ -66,6 +66,7 @@ class _StubFriends implements FriendsService {
   FriendsResult<FriendSummary> addResult;
   final List<String> addCalls = [];
   final List<String> removeCalls = [];
+  List<FriendNightCard> feed = const [];
 
   _StubFriends({FriendsResult<FriendsState>? result, FriendsResult<FriendSummary>? addResult})
       : result = result ?? FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(stateJson())),
@@ -90,7 +91,7 @@ class _StubFriends implements FriendsService {
   // 2026-11-15：分享設定與動態卡。這幾支畫面測試不看它們，回空的就好
   @override
   Future<FriendsResult<List<FriendNightCard>>> fetchFeed() async =>
-      const FriendsResult(FriendsStatus.ok, value: []);
+      FriendsResult(FriendsStatus.ok, value: feed);
 
   @override
   Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchFriend(String handle) async =>
@@ -102,7 +103,7 @@ class _StubFriends implements FriendsService {
 
   @override
   Future<FriendsResult<SharingSettings>> patchSharing(
-          {Map<String, bool>? items, String? timePrecision, String? petSpecies}) async =>
+          {Map<String, bool>? items, String? timePrecision, String? petSpecies, String? scene}) async =>
       const FriendsResult(FriendsStatus.failed);
 
   @override
@@ -152,13 +153,20 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-Future<void> pump(WidgetTester tester, FriendsService? service) async {
+/// 打開好友頁。2026-11-16 起預設在 Feed 分頁；名單、邀請碼、排行在 Friends 分頁，
+/// 所以預設切過去（要看 Feed 的測試傳 friendsTab: false）。
+Future<void> pump(WidgetTester tester, FriendsService? service, {bool friendsTab = true}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(home: Scaffold(body: FriendsScreen(service: service))));
   await tester.pump();
   await tester.pump();
+  final tab = find.byKey(const Key('tab-friends'));
+  if (friendsTab && tab.evaluate().isNotEmpty) {
+    await tester.tap(tab);
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -306,6 +314,43 @@ void main() {
       await tester.tap(find.byKey(const Key('remove-friend')));
       await tester.pump(const Duration(seconds: 1));
       expect(stub.removeCalls, ['BOB234']);
+    });
+
+    testWidgets('打開預設在 Feed；沒有動態時講清楚，名單在另一個分頁', (tester) async {
+      await pump(tester, _StubFriends(), friendsTab: false);
+      expect(find.byKey(const Key('feed-empty')), findsOneWidget);
+      expect(find.text('K7QM2P'), findsNothing);
+      await tester.tap(find.byKey(const Key('tab-friends')));
+      await tester.pump();
+      expect(find.text('K7QM2P'), findsOneWidget);
+      expect(find.byKey(const Key('feed-empty')), findsNothing);
+    });
+
+    testWidgets('Feed：每張卡是他選的場景；連續天數的橫幅只在他最近那一晚、3 晚以上才出現', (tester) async {
+      final stub = _StubFriends(result: FriendsResult(FriendsStatus.ok,
+          value: FriendsState.fromJson(stateJson(friends: [
+        friendJson('BOB234', 'Bob', streak: 4),
+        friendJson('CAR567', 'Carol', streak: 2),
+      ]))));
+      stub.feed = const [
+        FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-03', scene: 'lake',
+            items: {'sleep_duration': 412, 'on_time': true}),
+        FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-02', scene: 'lake',
+            items: {'on_time': true}),
+        FriendNightCard(handle: 'CAR567', displayName: 'Carol', date: '2026-09-03', items: {'on_time': false}),
+      ];
+      await pump(tester, stub, friendsTab: false);
+      expect(find.byKey(const Key('feed-card-BOB234-2026-09-03')), findsOneWidget);
+      final scenes = tester.widgetList<Image>(find.byKey(const Key('card-scene')))
+          .map((i) => (i.image as AssetImage).assetName).toList();
+      expect(scenes, [
+        'assets/backgrounds/scene_lake.jpg',
+        'assets/backgrounds/scene_lake.jpg',
+        'assets/backgrounds/scene_campfire.jpg', // 沒選 → 預設
+      ]);
+      expect(find.byKey(const Key('card-streak')), findsOneWidget);
+      expect(find.text('Bob reached a 4-night streak'), findsOneWidget);
+      expect(find.textContaining('Carol reached'), findsNothing); // 只有 2 晚
     });
 
     testWidgets('還沒有朋友 → 講清楚怎麼加', (tester) async {

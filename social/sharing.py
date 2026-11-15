@@ -28,6 +28,10 @@ NEVER_SHARED = (
 
 TIME_PRECISIONS = ("exact", "on_time_only")
 PET_SPECIES = ("dog", "cat")
+# 動態卡的場景（2026-11-16 使用者定：每個人自己選一張，像大頭貼；不依心情或好壞換）。
+# 圖是使用者生成的，在 app/assets/backgrounds/scene_<id>.jpg
+SCENES = ("campfire", "rooftop", "lake", "treehouse")
+DEFAULT_SCENE = "campfire"
 
 # 「只寫準時與否」時拿掉的項目（有時刻的）
 _TIME_ITEMS = ("phone_down_time", "bed_times")
@@ -101,6 +105,36 @@ def _efficiency(c):
     if _num(value) is None:
         return None
     return {"value": value, "label": _g(c["home"], "scoring", "composition", "efficiency_label")}
+
+
+def _stages(c):
+    """
+    深睡／淺睡／REM 的分鐘數，加上那一晚的階梯圖（2026-11-16：動態卡中間那張大圖）。
+
+    ⚠️ 每一段只給「從睡著起算第幾分鐘到第幾分鐘」，**不給 ISO 時刻**；兩端的時刻另放
+       start／end，選了「只寫準時與否」時由 night_card 拿掉（時間軸就只剩 Fell asleep／Woke up）。
+    """
+    out = {k: _num(_g(c["home"], "metrics", f"{k}_minutes")) for k in ("deep", "light", "rem")}
+    stages = _g(c["home"], "metrics", "sleep_stages")
+    segs = stages.get("segments") if isinstance(stages, dict) else None
+    timeline = []
+    t0 = None
+    for seg in segs or []:
+        if not isinstance(seg, dict):
+            continue
+        a, b = _wall(seg.get("start")), _wall(seg.get("end"))
+        if a is None or b is None or b <= a or seg.get("stage") not in ("awake", "rem", "light", "deep"):
+            continue
+        t0 = t0 or a
+        timeline.append({"stage": seg["stage"],
+                         "from": round((a - t0).total_seconds() / 60, 1),
+                         "to": round((b - t0).total_seconds() / 60, 1)})
+    if timeline:
+        out["segments"] = timeline
+        out["rem_measured"] = bool(stages.get("rem_measured", True))
+        out["start"] = _hhmm(_g(c["home"], "metrics", "sleep_start_time"))
+        out["end"] = _hhmm(_g(c["home"], "metrics", "wake_time"))
+    return _compact(out)
 
 
 def _sleeping_hr(c):
@@ -180,9 +214,7 @@ ITEMS = (
     ("awake", "sleep", False, "Awake during the night",
      lambda c: _compact({"count": _num(_g(c["home"], "metrics", "awake_count")),
                          "minutes": _num(_g(c["home"], "metrics", "waso_minutes"))})),
-    ("stages", "sleep", False, "Deep, light and REM",
-     lambda c: _compact({k: _num(_g(c["home"], "metrics", f"{k}_minutes"))
-                         for k in ("deep", "light", "rem")})),
+    ("stages", "sleep", False, "Sleep stages chart (deep, light, REM)", _stages),
     ("efficiency", "sleep", False, "Sleep efficiency", _efficiency),
     ("camera_moves", "sleep", False, "Movements per hour (camera)",
      lambda c: _num((c.get("camera") or {}).get("events_per_hour"))),
@@ -233,7 +265,7 @@ def defaults():
 
 
 def effective(stored):
-    """資料庫那一列（或 None）→ {"items": {key: bool}, "time_precision", "pet_species"}。
+    """資料庫那一列（或 None）→ {"items": {key: bool}, "time_precision", "pet_species", "scene"}。
     不認得的 key 一律忽略（舊資料裡有、後來拿掉的項目不會又冒出來）。"""
     stored = stored or {}
     items = defaults()
@@ -242,14 +274,16 @@ def effective(stored):
             items[k] = v
     precision = stored.get("time_precision")
     species = stored.get("pet_species")
+    scene = stored.get("scene")
     return {
         "items": items,
         "time_precision": precision if precision in TIME_PRECISIONS else "exact",
         "pet_species": species if species in PET_SPECIES else "dog",
+        "scene": scene if scene in SCENES else DEFAULT_SCENE,
     }
 
 
-def validate_patch(items=None, time_precision=None, pet_species=None):
+def validate_patch(items=None, time_precision=None, pet_species=None, scene=None):
     """PATCH 進來的東西；不認得的 key（含永遠不給那三個）→ ValueError，回 422。"""
     for k, v in (items or {}).items():
         if k not in ALL_KEYS:
@@ -260,6 +294,8 @@ def validate_patch(items=None, time_precision=None, pet_species=None):
         raise ValueError(f"time_precision must be one of {TIME_PRECISIONS}.")
     if pet_species is not None and pet_species not in PET_SPECIES:
         raise ValueError(f"pet_species must be one of {PET_SPECIES}.")
+    if scene is not None and scene not in SCENES:
+        raise ValueError(f"scene must be one of {SCENES}.")
 
 
 def view(settings):
@@ -277,6 +313,8 @@ def view(settings):
         "groups": groups,
         "time_precision": settings["time_precision"],
         "pet_species": settings["pet_species"],
+        "scene": settings["scene"],
+        "scenes": list(SCENES),
         "never_shared": [label for _, label in NEVER_SHARED],
     }
 
@@ -290,9 +328,16 @@ def night_card(ctx, settings):
         if not items.get(k) or k in skip:
             continue
         v = _BY_KEY[k][3](ctx)
+        if k == "stages" and isinstance(v, dict) and _hides_times(settings):
+            # 階梯圖照給，但兩端的時刻拿掉（Fell asleep／Woke up）
+            v = {kk: vv for kk, vv in v.items() if kk not in ("start", "end")}
         if v is not None:
             out[k] = v
     return out
+
+
+def _hides_times(settings):
+    return settings["time_precision"] == "on_time_only"
 
 
 def streak_week(rows, today, achieved):

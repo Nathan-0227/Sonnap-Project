@@ -30,6 +30,7 @@ import 'friend_sharing_screen.dart';
 ///
 /// 2026-11-15（使用者定，grill）：每個人自己選公開什麼（右上角 → What friends can see）；
 /// 最上面是**我的 Streak 大卡**，下面多一段朋友最近 7 天的**動態卡**（只有他公開的項目）。
+/// 2026-11-16：Streak 大卡底下分 **Feed**（動態牆，預設）與 **Friends**（邀請碼、名單、排行）兩個分頁。
 /// 朋友沒公開的值是 null，畫面就不畫那一項，不寫成 0。
 class FriendsScreen extends StatefulWidget {
   /// null = 這支 build 沒有後端，畫面會老實講要連上後端。
@@ -43,6 +44,9 @@ class FriendsScreen extends StatefulWidget {
 
 class _FriendsScreenState extends State<FriendsScreen> {
   String selectedMood = "All";
+
+  /// 2026-11-16 使用者定：好友頁分兩個分頁，打開預設在 Feed（動態牆）。
+  bool _onFeed = true;
   FriendsResult<FriendsState>? _result;
   List<FriendNightCard> _feed = const [];
 
@@ -229,43 +233,69 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
+  Widget _titleRow() => Row(
+        children: [
+          const Expanded(
+            child: Text(
+              "Friends ✨",
+              style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (widget.service != null)
+            IconButton(
+              key: const Key('open-sharing'),
+              tooltip: 'What friends can see',
+              onPressed: _openSharing,
+              icon: const Icon(Icons.visibility_rounded, color: Colors.white70),
+            ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width > 650 ? 650 : MediaQuery.of(context).size.width,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        "Friends ✨",
-                        style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
+    // 有自己的 Streak 時，樹屋場景直接當頁面背景（整個寬度、不包框，2026-11-16 使用者定），
+    // 標題疊在場景的天空上；沒有（載入中、連不到）時照舊只有標題
+    final me = _result?.value?.me;
+    final top = MediaQuery.paddingOf(context).top;
+    return Center(
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width > 650 ? 650 : MediaQuery.of(context).size.width,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (me != null)
+                StreakCard(
+                  summary: me,
+                  scene: kFriendsScene,
+                  header: Padding(
+                    padding: EdgeInsets.fromLTRB(20, top + 12, 12, 0),
+                    child: _titleRow(),
+                  ),
+                )
+              else
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, top + 20, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _titleRow(),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "See how your friends are keeping their bedtimes.",
+                        style: TextStyle(color: Colors.white70, fontSize: 15),
                       ),
-                    ),
-                    if (widget.service != null)
-                      IconButton(
-                        key: const Key('open-sharing'),
-                        tooltip: 'What friends can see',
-                        onPressed: _openSharing,
-                        icon: const Icon(Icons.visibility_rounded, color: Colors.white70),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  "See how your friends are keeping their bedtimes.",
-                  style: TextStyle(color: Colors.white70, fontSize: 15),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _body(),
                 ),
-                const SizedBox(height: 24),
-                ..._body(),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -302,7 +332,84 @@ class _FriendsScreenState extends State<FriendsScreen> {
         : state.friends.where((f) => moodLabel(f.petMood) == selectedMood).toList();
 
     return [
-      if (state.me != null) StreakCard(summary: state.me!),
+      _tabs(),
+      const SizedBox(height: 16),
+      if (_onFeed) ..._feedTab(state) else ..._friendsTab(state, visible),
+      if (state.notes['what_is_shared'] != null) ...[
+        const SizedBox(height: 12),
+        Text(state.notes['what_is_shared']!,
+            style: const TextStyle(color: Color(0xFF8498B7), fontSize: 11, height: 1.4)),
+      ],
+    ];
+  }
+
+  Widget _tabs() {
+    Widget tab(String label, bool selected, VoidCallback onTap, Key key) => InkWell(
+          key: key,
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0x99FFFFFF),
+                      fontSize: 17,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    )),
+                const SizedBox(height: 4),
+                Container(
+                  width: 22,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFF7657FF) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        tab('Feed', _onFeed, () => setState(() => _onFeed = true), const Key('tab-feed')),
+        const SizedBox(width: 20),
+        tab('Friends', !_onFeed, () => setState(() => _onFeed = false), const Key('tab-friends')),
+      ],
+    );
+  }
+
+  /// 動態牆：朋友最近 7 天每一晚一張卡（新的在前，順序照後端）。
+  List<Widget> _feedTab(FriendsState state) {
+    if (_feed.isEmpty) {
+      return [
+        _card(Text(
+          state.friends.isEmpty
+              ? "No friends yet. Open Friends to share your invite code."
+              : "No nights from your friends in the last 7 days yet.",
+          key: const Key('feed-empty'),
+          style: const TextStyle(color: Colors.white70, height: 1.4),
+        )),
+      ];
+    }
+    return [
+      for (final c in _feed)
+        Builder(builder: (context) {
+          final f = state.friends.where((x) => x.handle == c.handle).firstOrNull;
+          return FriendNightCardView(
+            card: c,
+            // 連續天數的橫幅只放在他最近那一晚的卡上
+            streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
+            onTap: f == null ? null : () => _showFriend(f),
+          );
+        }),
+    ];
+  }
+
+  List<Widget> _friendsTab(FriendsState state, List<FriendSummary> visible) {
+    return [
       _inviteCard(state.myInviteCode),
       _circleCard(state.friends),
       if (state.leaderboard.isNotEmpty)
@@ -335,26 +442,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
             style: TextStyle(color: Colors.white70)))
       else
         for (final f in visible) _friendRow(f),
-      if (_feed.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        const Text("Last 7 days",
-            key: Key('feed-title'),
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        for (final c in _feed)
-          FriendNightCardView(
-            card: c,
-            onTap: () {
-              final f = state.friends.where((x) => x.handle == c.handle).firstOrNull;
-              if (f != null) _showFriend(f);
-            },
-          ),
-      ],
-      if (state.notes['what_is_shared'] != null) ...[
-        const SizedBox(height: 12),
-        Text(state.notes['what_is_shared']!,
-            style: const TextStyle(color: Color(0xFF8498B7), fontSize: 11, height: 1.4)),
-      ],
     ];
   }
 

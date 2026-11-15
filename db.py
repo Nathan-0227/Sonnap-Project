@@ -454,11 +454,13 @@ CREATE TABLE IF NOT EXISTS camera_clips (
 -- 每個人自己選讓好友看到什麼（2026-11-15，social/sharing.py）。沒有這一列＝全部用預設。
 -- items 是 JSON {項目: true/false}，只存使用者改過的；不認得的 key 讀的時候忽略。
 -- pet_species：好友頁畫他的寵物用（狗／貓，原本只存在手機上）。
+-- scene：動態卡的場景（social/sharing.SCENES，2026-11-16），自己選一張。
 CREATE TABLE IF NOT EXISTS friend_sharing (
     user_id        TEXT NOT NULL,
     items          TEXT,
     time_precision TEXT,
     pet_species    TEXT,
+    scene          TEXT,
     updated_at     TEXT NOT NULL,
 
     PRIMARY KEY (user_id),
@@ -636,6 +638,8 @@ COLUMN_MIGRATIONS = [
     ("camera_nightly", "motion_curve", "TEXT"),
     ("camera_nightly", "motion_episodes", "TEXT"),
     ("garmin_daily", "steps_hourly", "TEXT"),
+    # 2026-11-16：動態卡的場景（自己選）
+    ("friend_sharing", "scene", "TEXT"),
     ("garmin_daily", "resting_kcal", "INTEGER"),
     ("garmin_daily", "total_kcal", "INTEGER"),
     ("garmin_daily", "sleeping_sec", "INTEGER"),
@@ -1854,7 +1858,7 @@ def get_challenge_progress(user_id, db_path=None):
 #    會過、在 MariaDB 會直接語法錯誤——而正式環境跑的是 MariaDB。
 
 def get_friend_sharing(user_id, db_path=None):
-    """friend_sharing 那一列 → {"items": {...}, "time_precision", "pet_species"}；沒有就 None。"""
+    """friend_sharing 那一列 → {"items": {...}, "time_precision", "pet_species", "scene"}；沒有就 None。"""
     conn = connect(db_path)
     try:
         rows = conn.execute(
@@ -1870,28 +1874,33 @@ def get_friend_sharing(user_id, db_path=None):
     except ValueError:
         items = {}
     return {"items": items if isinstance(items, dict) else {},
-            "time_precision": r.get("time_precision"), "pet_species": r.get("pet_species")}
+            "time_precision": r.get("time_precision"), "pet_species": r.get("pet_species"),
+            "scene": r.get("scene")}
 
 
-def set_friend_sharing(user_id, items=None, time_precision=None, pet_species=None, db_path=None):
-    """改分享設定：items 併進舊的（只改有給的 key），另外兩個有給才改。驗證由呼叫端做。"""
+def set_friend_sharing(user_id, items=None, time_precision=None, pet_species=None, scene=None,
+                       db_path=None):
+    """改分享設定：items 併進舊的（只改有給的 key），其他有給才改。驗證由呼叫端做。"""
     old = get_friend_sharing(user_id, db_path) or {}
     merged = {**(old.get("items") or {}), **(items or {})}
     conn = connect(db_path)
     try:
         conn.execute(
             """
-            INSERT INTO friend_sharing (user_id, items, time_precision, pet_species, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO friend_sharing (user_id, items, time_precision, pet_species, scene,
+                                        updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 items          = excluded.items,
                 time_precision = excluded.time_precision,
                 pet_species    = excluded.pet_species,
+                scene          = excluded.scene,
                 updated_at     = excluded.updated_at
             """,
             (user_id, json.dumps(merged, sort_keys=True),
              time_precision if time_precision is not None else old.get("time_precision"),
              pet_species if pet_species is not None else old.get("pet_species"),
+             scene if scene is not None else old.get("scene"),
              now_iso()),
         )
         conn.commit()

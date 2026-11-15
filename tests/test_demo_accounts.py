@@ -7,11 +7,16 @@ tests/test_demo_accounts.py —— 成果展示範帳號不得污染真實資料
   【3】示範帳號都加成本人的好友，好友頁看得到，且暱稱都帶 (demo)
   【4】重跑 --create 不會越長越多；--remove 清乾淨，本人的資料一筆不少
   【5】每晚的達成度跟手機上傳走同一個函式（adherence.evaluate_night）
+  【6】手錶資料（2026-11-16 起也產生）：source 一律 "demo"、分數由既有評分器算、
+       API 重排的睡眠階段跟評分時同一份（demo_sleep 是決定性的）、白天資料有寫
+  【7】動態牆：每張卡帶自己選的場景與寵物；只寫準時與否的人階梯圖沒有時刻；
+       只開預設的人沒有階梯圖；回應裡沒有任何 user_id
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_demo_accounts.py
 """
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -98,6 +103,60 @@ for r in db.get_nightly_behavior(uid, days=3650, db_path=TMP):
     mismatch += (again["adherence_minutes"], again["is_late"], again["date"]) != \
                 (r["adherence_minutes"], bool(r["is_late"]), r["date"])
 check("每一晚都對得上", mismatch, 0)
+
+print("【6】手錶資料是示範來源、分數走既有評分器")
+import demo_sleep  # noqa: E402
+conn = db.connect(TMP)
+sources = {r["source"] for r in conn.execute(
+    "SELECT DISTINCT source FROM wearable_nightly WHERE user_id IN "
+    "(SELECT user_id FROM users WHERE study_cohort = ?)", (db.DEMO_COHORT,)).fetchall()}
+daily = conn.execute(
+    "SELECT COUNT(*) AS n FROM garmin_daily WHERE user_id IN "
+    "(SELECT user_id FROM users WHERE study_cohort = ?)", (db.DEMO_COHORT,)).fetchone()["n"]
+conn.close()
+check("示範帳號的手錶資料 source 只有 demo", sources, {"demo"})
+check("白天資料每人 21 天", daily, 4 * 21)
+rows_w = db.get_wearable_nightly(uid, days=3650, db_path=TMP)
+check("每晚都有手錶資料", len(rows_w), 21)
+check("每晚都有分數與等級", all(r["final_score"] is not None and r["final_quality"] for r in rows_w), True)
+bad = 0
+for r in rows_w:
+    blk = demo_sleep.stages_block(r)
+    segs = blk["segments"] if blk else []
+    asleep = sum((datetime.fromisoformat(x["end"]) - datetime.fromisoformat(x["start"])).total_seconds() / 60
+                 for x in segs if x["stage"] != "awake")
+    bad += (not segs or round(asleep) != round(r["duration_min"])
+            or segs[0]["start"] != r["sleep_start_time"]
+            or demo_sleep.awake_count(segs) != r["awake_count"])
+check("重排的階梯跟存下來的睡眠分鐘、入睡時刻、醒來次數一致", bad, 0)
+check("同一晚重排兩次一模一樣", demo_sleep.stages_block(rows_w[-1]) == demo_sleep.stages_block(rows_w[-1]), True)
+
+print("【7】動態牆")
+import main  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+# 動態牆只看最近 7 天 → 這裡重建到今天為止
+demo_accounts.create_all(nights=21, db_path=TMP)
+client = TestClient(main.app, raise_server_exceptions=False)
+r = client.get("/friends/feed", params={"user_id": me})
+check("200", r.status_code, 200)
+cards = r.json()["cards"]
+latest = {}
+for c in cards:
+    latest.setdefault(c["display_name"], c)
+check("4 位朋友都有卡", len(latest), 4)
+check("各自的場景", {n: c["scene"] for n, c in latest.items()},
+      {"Mia (demo)": "lake", "Leo (demo)": "campfire", "Yuki (demo)": "rooftop", "Ken (demo)": "treehouse"})
+mia = latest["Mia (demo)"]["items"]
+check("Mia（只寫準時與否）：有階梯", bool(mia.get("stages", {}).get("segments")), True)
+check("Mia：階梯沒有兩端時刻", sorted(set(mia["stages"]) & {"start", "end"}), [])
+check("Mia：沒有放下手機的時刻", "phone_down_time" in mia, False)
+leo = latest["Leo (demo)"]["items"]
+check("Leo（準確時刻）：階梯兩端有時刻", all(leo["stages"].get(k) for k in ("start", "end")), True)
+check("Ken（只開預設）：沒有階梯", "stages" in latest["Ken (demo)"]["items"], False)
+all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
+check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
+seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))
+check("每一段只給第幾分鐘，不給 ISO 時刻", seg_iso, False)
 
 print()
 if fails:

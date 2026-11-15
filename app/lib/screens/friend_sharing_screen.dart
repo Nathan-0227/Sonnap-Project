@@ -6,6 +6,7 @@
 // - 最下面是「朋友看到的你」預覽（後端照設定遮過的，跟朋友實際看到的同一份）
 // - 項目、預設、遮蔽全在後端（social/sharing.py）；這裡只畫、只送改了哪幾個
 // - 對所有好友同一組設定
+// - 2026-11-16：最上面選動態卡的場景（像換大頭貼；清單由後端給，Dart 不寫死有哪幾張）
 import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
@@ -55,10 +56,15 @@ class _FriendSharingScreenState extends State<FriendSharingScreen> {
     if (mounted && p.isOk) setState(() => _preview = p.value);
   }
 
-  Future<void> _patch({Map<String, bool>? items, String? precision}) async {
+  Future<void> _patch({
+    Map<String, bool>? items,
+    String? precision,
+    String? scene,
+  }) async {
     final r = await widget.service.patchSharing(
       items: items,
       timePrecision: precision,
+      scene: scene,
     );
     if (!mounted) return;
     if (r.isOk) {
@@ -103,6 +109,10 @@ class _FriendSharingScreenState extends State<FriendSharingScreen> {
                   style: TextStyle(color: Colors.white70, height: 1.4),
                 ),
                 const SizedBox(height: 16),
+                if (s.scenes.isNotEmpty) ...[
+                  _scenes(s),
+                  const SizedBox(height: 20),
+                ],
                 for (final g in s.groups) _group(g),
                 const SizedBox(height: 8),
                 _precision(s.timePrecision),
@@ -140,6 +150,55 @@ class _FriendSharingScreenState extends State<FriendSharingScreen> {
             ),
     );
   }
+
+  Widget _scenes(SharingSettings s) => Column(
+    key: const Key('sharing-scenes'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        "Your card's scene",
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          for (final id in s.scenes)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  key: Key('sharing-scene-$id'),
+                  onTap: id == s.scene ? null : () => _patch(scene: id),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 5,
+                    child: Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: id == s.scene
+                              ? const Color(0xFF7657FF)
+                              : const Color(0x22FFFFFF),
+                          width: id == s.scene ? 3 : 1,
+                        ),
+                      ),
+                      child: Image.asset(
+                        sceneAsset(id),
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        semanticLabel: id,
+                        errorBuilder: (_, _, _) =>
+                            const ColoredBox(color: Color(0xFF10265A)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ],
+  );
 
   Widget _group(SharingGroup g) {
     final on = g.items.where((i) => i.enabled).length;

@@ -4,6 +4,8 @@
 // - 這裡一格都不算：數字照抄後端（後端從他自己的 /home 挑的，跟他的報告同一份）
 // - 沒給的項目不畫，不寫成 0
 // - 不判斷好壞：不寫 good／bad、分數不變色、晚了只寫 Late（不用紅色）
+// - 2026-11-16 改版（使用者定 B 版）：每張卡是他自己選的場景（像大頭貼，不依心情換），
+//   寵物直接站在畫面裡、不放圓框；不再是一堆小膠囊，其他項目合成一行小字
 import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
@@ -166,8 +168,14 @@ String? friendItemLine(String key, dynamic v) {
           : '${b.round()} ${b == 1 ? 'badge' : 'badges'}';
     case 'challenges':
       if (v is! List) return null;
-      final all = v.whereType<Map>().where((c) => c['title'] is String).toList();
-      final done = [for (final c in all) if (c['completed'] == true) c['title'] as String];
+      final all = v
+          .whereType<Map>()
+          .where((c) => c['title'] is String)
+          .toList();
+      final done = [
+        for (final c in all)
+          if (c['completed'] == true) c['title'] as String,
+      ];
       final open = all.length - done.length;
       return [
         if (done.isNotEmpty) 'Done: ${done.join(', ')}',
@@ -197,123 +205,433 @@ String friendCardDate(String iso) {
   return '${months[d.month - 1]} ${d.day}';
 }
 
+/// 卡片上方的三個大數字：照這個順序挑他有公開的前三個。
+const _statOrder = [
+  'sleep_duration',
+  'time_in_bed',
+  'phone_down_time',
+  'on_time',
+  'score',
+  'steps',
+];
+
+/// 一項 → 大數字（標籤, 值）；沒值 → null。
+(String, String)? friendStat(String key, dynamic v) {
+  if (v == null) return null;
+  switch (key) {
+    case 'sleep_duration':
+      return _n(v) == null ? null : ('Asleep', _m(v));
+    case 'time_in_bed':
+      return _n(v) == null ? null : ('In bed', _m(v));
+    case 'phone_down_time':
+      return v is String ? ('Phone down', v) : null;
+    case 'on_time':
+      return v is bool ? ('Bedtime', v ? 'On time' : 'Late') : null;
+    case 'score':
+      final s = v is Map ? _n(v['score']) : null;
+      return s == null ? null : ('Score', '${s.round()}');
+    case 'steps':
+      final s = v is Map ? _n(v['steps']) : null;
+      return s == null ? null : ('Steps', _int(s));
+  }
+  return null;
+}
+
+/// 每個場景的地面在圖的多高（0–1，從上往下量），寵物的腳踩在這條線上。
+/// 圖是使用者生成的（`assets/backgrounds/scene_<id>.jpg`，4:5），換圖時要重量。
+const kSceneGround = {
+  'campfire': 0.455,
+  'rooftop': 0.455,
+  'lake': 0.475,
+  'treehouse': 0.47,
+};
+const kDefaultScene = 'campfire';
+
+String sceneAsset(String? scene) =>
+    'assets/backgrounds/scene_${kSceneGround.containsKey(scene) ? scene : kDefaultScene}.jpg';
+
+const _sceneBottom = Color(0xFF061A6B); // 卡比圖長時接著圖底部的顏色
+const _shadow = [Shadow(blurRadius: 8, color: Colors.black54)];
+const _stageColors = {
+  'awake': Color(0xFFFF8AD8),
+  'rem': Color(0xFFC9A7FF),
+  'light': Color(0xFF6FA8FF),
+  'deep': Color(0xFF4FE0E0),
+};
+
+/// 動態卡（2026-11-16 使用者定 B 版）：整張卡是他選的場景，寵物站在右邊的地上，
+/// 名字在天空；下半部（圖本來就暗）放三個大數字 → 連續天數的橫幅 → Sleep Stages 階梯 → 其他一行小字。
 class FriendNightCardView extends StatelessWidget {
   final FriendNightCard card;
   final VoidCallback? onTap;
-  const FriendNightCardView({super.key, required this.card, this.onTap});
 
-  Widget _section(String title, List<String> keys) {
-    final lines = [
-      for (final k in keys)
-        if (card.items.containsKey(k))
-          if (friendItemLine(k, card.items[k]) case final l? when l.isNotEmpty)
+  /// 他現在連續幾晚準時（摘要裡的，他沒公開是 null）。3 晚以上才出現那條橫幅，只寫事實。
+  final int? streak;
+
+  const FriendNightCardView({
+    super.key,
+    required this.card,
+    this.onTap,
+    this.streak,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = card.items;
+    final stats = <(String, String, String)>[];
+    for (final k in _statOrder) {
+      if (stats.length == 3) break;
+      if (friendStat(k, items[k]) case (final label, final value)) {
+        stats.add((k, label, value));
+      }
+    }
+    final used = {for (final s in stats) s.$1};
+    final stages = items['stages'] is Map
+        ? (items['stages'] as Map).cast<String, dynamic>()
+        : null;
+    final segments = <(String, double, double)>[
+      for (final s in (stages?['segments'] as List?) ?? const [])
+        if (s is Map &&
+            _stageColors.containsKey(s['stage']) &&
+            _n(s['from']) != null &&
+            _n(s['to']) != null)
+          (
+            s['stage'] as String,
+            _n(s['from'])!.toDouble(),
+            _n(s['to'])!.toDouble(),
+          ),
+    ];
+    final footer = [
+      for (final k in [..._nightKeys, ..._dayKeys, ..._gameKeys])
+        if (!used.contains(k) &&
+            items.containsKey(k) &&
+            !(k == 'stages' && segments.isNotEmpty))
+          if (friendItemLine(k, items[k]) case final l? when l.isNotEmpty)
             (k, l),
     ];
-    if (lines.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Material(
+        color: _sceneBottom,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('feed-card-${card.handle}-${card.date}'),
+          onTap: onTap,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final w = c.maxWidth;
+              final imgH = w * 5 / 4;
+              final ground =
+                  imgH *
+                  (kSceneGround[card.scene] ?? kSceneGround[kDefaultScene]!);
+              const petSize = 120.0;
+              return Stack(
+                children: [
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: imgH,
+                    child: Image.asset(
+                      sceneAsset(card.scene),
+                      key: const Key('card-scene'),
+                      fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
+                  // 卡比圖長時，圖的底緣淡進卡片底色（不然看得到一條接縫）
+                  Positioned(
+                    top: imgH - 90,
+                    left: 0,
+                    right: 0,
+                    height: 91,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x00061A6B), _sceneBottom],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 上緣稍微壓暗，名字才看得清楚
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: imgH * 0.25,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x55000000), Color(0x00000000)],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: ground - petSize * 0.92,
+                    right: 18,
+                    width: petSize,
+                    height: petSize,
+                    child: HomePet(
+                      mood: items['pet_mood'] as String?,
+                      size: petSize,
+                      species: speciesOf(card.petSpecies),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          card.displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            shadows: _shadow,
+                          ),
+                        ),
+                        Text(
+                          'Night of ${friendCardDate(card.date)}',
+                          style: const TextStyle(
+                            color: Color(0xDDFFFFFF),
+                            fontSize: 12,
+                            shadows: _shadow,
+                          ),
+                        ),
+                        // 數字從地面下面開始（名字約 40 高）
+                        SizedBox(height: ground - 16 - 40 + 20),
+                        if (stats.isNotEmpty)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final (k, label, value) in stats)
+                                Expanded(
+                                  key: Key('card-stat-$k'),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        label,
+                                        style: const TextStyle(
+                                          color: Color(0xB3FFFFFF),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          value,
+                                          softWrap: false,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        if (streak != null && streak! >= 3) ...[
+                          const SizedBox(height: 14),
+                          Row(
+                            key: const Key('card-streak'),
+                            children: [
+                              const Icon(
+                                Icons.local_fire_department_rounded,
+                                color: Color(0xFFFF8A5C),
+                                size: 24,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${card.displayName.split(' ').first} reached a $streak-night streak',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (segments.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          _StageChart(
+                            segments: segments,
+                            remMeasured: stages?['rem_measured'] != false,
+                            start: stages?['start'] as String?,
+                            end: stages?['end'] as String?,
+                            minutes: stages ?? const {},
+                          ),
+                        ],
+                        if (footer.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              for (final (i, (k, l)) in footer.indexed)
+                                Text(
+                                  i == footer.length - 1 ? l : '$l ·',
+                                  key: Key('card-item-$k'),
+                                  style: const TextStyle(
+                                    color: Color(0xCCFFFFFF),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 4),
+        ),
+      ),
+    );
+  }
+}
+
+/// 動態卡裡的 Sleep Stages 階梯（同首頁那張的顏色，但沒有疊線、沒有點選）。
+/// ⚠️ 兩端：準確時刻的人寫時刻，只寫準時與否的人只寫 Fell asleep／Woke up（後端已經拿掉時刻）。
+class _StageChart extends StatelessWidget {
+  final List<(String, double, double)> segments;
+  final bool remMeasured;
+  final String? start;
+  final String? end;
+  final Map<String, dynamic> minutes;
+  const _StageChart({
+    required this.segments,
+    required this.remMeasured,
+    required this.start,
+    required this.end,
+    required this.minutes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const label = TextStyle(color: Color(0xB3FFFFFF), fontSize: 11);
+    final legend = [
+      for (final k in ['deep', 'light', if (remMeasured) 'rem'])
+        if (_n(minutes[k]) != null)
+          (
+            k,
+            '${k == 'rem' ? 'REM' : '${k[0].toUpperCase()}${k.substring(1)}'} ${_m(minutes[k])}',
+          ),
+    ];
+    return Column(
+      key: const Key('card-stages'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 96,
+          width: double.infinity,
+          child: CustomPaint(painter: _StagePainter(segments, remMeasured)),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Text(
+              start ?? 'Fell asleep',
+              key: const Key('card-stages-start'),
+              style: label,
+            ),
+            const Spacer(),
+            Text(
+              end ?? 'Woke up',
+              key: const Key('card-stages-end'),
+              style: label,
+            ),
+          ],
+        ),
+        if (legend.isNotEmpty) ...[
+          const SizedBox(height: 6),
           Wrap(
-            spacing: 6,
-            runSpacing: 6,
+            spacing: 12,
+            runSpacing: 4,
             children: [
-              for (final (k, l) in lines)
-                Container(
-                  key: Key('card-item-$k'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0x1AFFFFFF),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    l,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+              for (final (k, text) in legend)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _stageColors[k],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(text, style: label),
+                  ],
                 ),
             ],
           ),
         ],
-      ),
+      ],
     );
+  }
+}
+
+class _StagePainter extends CustomPainter {
+  final List<(String, double, double)> segments;
+  final bool remMeasured;
+  _StagePainter(this.segments, this.remMeasured);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final levels = ['awake', if (remMeasured) 'rem', 'light', 'deep'];
+    final total = segments
+        .map((s) => s.$3)
+        .fold<double>(0, (a, b) => b > a ? b : a);
+    if (total <= 0) return;
+    final rowH = size.height / levels.length;
+    double? prevY;
+    for (final (stage, from, to) in segments) {
+      final i = levels.indexOf(stage);
+      if (i < 0) continue;
+      final x = from / total * size.width;
+      final w = (to - from) / total * size.width;
+      final y = rowH * i + rowH / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, y - rowH * 0.32, w < 1.5 ? 1.5 : w, rowH * 0.64),
+          const Radius.circular(4),
+        ),
+        Paint()..color = _stageColors[stage]!,
+      );
+      if (prevY != null && prevY != y) {
+        canvas.drawLine(
+          Offset(x, prevY),
+          Offset(x, y),
+          Paint()
+            ..color = Colors.white24
+            ..strokeWidth = 1.5,
+        );
+      }
+      prevY = y;
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final mood = card.items['pet_mood'] as String?;
-    return InkWell(
-      key: Key('feed-card-${card.handle}-${card.date}'),
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF10265A),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                ClipOval(
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    color: const Color(0xFF233A73),
-                    child: OverflowBox(
-                      maxWidth: 70,
-                      maxHeight: 70,
-                      child: HomePet(
-                        mood: mood,
-                        size: 64,
-                        species: speciesOf(card.petSpecies),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        card.displayName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        'Night of ${friendCardDate(card.date)}',
-                        style: const TextStyle(
-                          color: Color(0x99FFFFFF),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            _section('Last night', _nightKeys),
-            _section('Yesterday', _dayKeys),
-            _section('Game', _gameKeys),
-          ],
-        ),
-      ),
-    );
-  }
+  bool shouldRepaint(_StagePainter old) => old.segments != segments;
 }

@@ -347,7 +347,7 @@ Garmin 回報那幾晚睡眠期間內零清醒），那些不是壞資料，不�
 | 功能 | 在哪 | 不能破的規則 |
 |---|---|---|
 | 遊戲化（XP／等級／衣櫃／成就） | `game/`、`GET /game`、`POST /game/claim`、`GET /closet`、`POST /closet/equip` | 紅線 4、5。一晚 XP = 行為（準時 30／容許內 15／熬夜 0）＋品質（Good 20／Normal 10／Poor・Bad 0）→ 熬夜又睡不好 = 0。行為上限大於品質上限，沒戴錶的人也升得了級。**XP 不存**，每次從 `nightly_behavior`／`wearable_nightly` 即時算；表只存使用者動作（領取、穿戴） |
-| 好友 | `social/friends.py`、`social/sharing.py`、`/friends`、`/friends/feed`、`/friends/{handle}`、`/sharing`、`/sharing/preview` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。**2026-11-15 起每個人自己選讓好友看到什麼**（使用者定，grill）：能分享的仍是**白名單**（`sharing.ITEMS`，每一項一個 picker 從那一晚的 `/home` 挑值——跟本人報告同一份）；**預設只開行為**（放下手機、準時、連續、寵物心情、衣服與徽章、挑戰），其他（分數、睡多久、心率、壓力、步數…）預設關、自己打開；**三項永遠不給**、連選項都沒有：攝影機片段、Move IQ 每段時刻、睡前用了哪些 App（PATCH 送進來 422；`items` 用 StrictBool，"yes" 不會被轉成 true）。對所有好友同一組設定；時刻可選「只寫準時與否」。沒公開的值是 null、App 不畫（不寫 0）。好友頁最上面是自己的 **Streak 大卡**（他選的狗／貓＋火：0 晚沒有、1–2 小、3+ 大，減少動態效果不動；週一→週日一排，晚了空心圈不打叉不用紅）＋最近 7 天**動態卡**。寵物狗／貓由 App 送到 `friend_sharing.pet_species`。心情用純行為版。⚠️ 夢境不能分享（後端沒有每個人一份的夢）；手機使用只給睡前 60 分鐘加總。排行榜（七個標籤＋晚／日·週·月·年）是**第二批**、還沒做 |
+| 好友 | `social/friends.py`、`social/sharing.py`、`/friends`、`/friends/feed`、`/friends/{handle}`、`/sharing`、`/sharing/preview` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。**2026-11-15 起每個人自己選讓好友看到什麼**（使用者定，grill）：能分享的仍是**白名單**（`sharing.ITEMS`，每一項一個 picker 從那一晚的 `/home` 挑值——跟本人報告同一份）；**預設只開行為**（放下手機、準時、連續、寵物心情、衣服與徽章、挑戰），其他（分數、睡多久、心率、壓力、步數…）預設關、自己打開；**三項永遠不給**、連選項都沒有：攝影機片段、Move IQ 每段時刻、睡前用了哪些 App（PATCH 送進來 422；`items` 用 StrictBool，"yes" 不會被轉成 true）。對所有好友同一組設定；時刻可選「只寫準時與否」。沒公開的值是 null、App 不畫（不寫 0）。好友頁最上面是自己的 **Streak 大卡**（他選的狗／貓＋火：0 晚沒有、1–2 小、3+ 大，減少動態效果不動；週一→週日一排，晚了空心圈不打叉不用紅）＋底下分 **Feed（動態牆，預設）／Friends（邀請碼、名單、排行）** 兩個分頁。**動態卡（2026-11-16 使用者定）**：整張卡是他自己選的場景（`friend_sharing.scene`，`sharing.SCENES` 四張使用者生成的圖；像大頭貼，**不依心情或好壞換**），寵物站在圖裡的地上、不放圓框；前三個有公開的項目寫成大數字，連續 3 晚以上在他最近那一晚的卡上出現一條只寫事實的橫幅，公開了 Sleep Stages 就畫那一晚的階梯（每一段只給「第幾分鐘」不給 ISO 時刻，選「只寫準時與否」的人兩端只寫 Fell asleep／Woke up）。寵物狗／貓由 App 送到 `friend_sharing.pet_species`。心情用純行為版。⚠️ 夢境不能分享（後端沒有每個人一份的夢）；手機使用只給睡前 60 分鐘加總。排行榜（七個標籤＋晚／日·週·月·年）是**第二批**、還沒做 |
 | 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段 |
 | 就寢提醒 | `bedtime_reminder.dart`、`sonnap/notify`（AlarmManager） | 提前 30 分鐘，**留在 Dart**。關掉開關要 cancel（不是只是不排新的）。⚠️ 手機重開機後鬧鐘會消失，要等下次開 App 才重排 |
 | 就寢守門（Accessibility） | `bedtime_guard.dart`、`sonnap/guard` | 守「目標前 30 分 → 目標後 6 小時」，判斷全在 Dart，Kotlin 只照做。`canRetrieveWindowContent="false"`（不讀畫面內容，設定頁的承諾靠它）。⚠️ **Google Play 不會讓它上架**；Android 13+ 側載要先「允許受限設定」。實機清單見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
@@ -1578,7 +1578,11 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   畫面出現時要標 Demo accounts，**不得當成 D2 結果或算進使用者數**。
   ⚠️ 任何掃過所有使用者的查詢都要排除 `DEMO_COHORT`——`resolve_phone_account()`
   靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
-  只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
+  **2026-11-16 起全部資料都產生**（使用者定，動態牆要有東西看）：行為＋按鈕時刻、手錶睡眠、白天資料、分享設定（各選一個場景）。
+  ⚠️ 手錶資料的 `source` 一律是 **`demo`**（不是 garmin／health_connect），評分與匯入只認 `garmin`；
+  睡眠階段由 `demo_sleep.night_segments()` 排（固定種子、決定性），**分數交給既有評分器**
+  （`healthconnect_adapter.to_wearable_row`），不是手寫的數字；`/home` 要畫階梯圖時用存下來的分鐘數再排一次，
+  得到同一份（`test_demo_accounts.py`【6】守著）。成果展前一天重跑 `--create`，日期才會是最新的。
 - **`camera_clips.py`（2026-11-07 新增）— 攝影機動作片段。** 一晚挑動作最大的 10 段（11-15 使用者定，原本 3 段；一段約 1.8 MB）、
   每段 10 秒，做成 GIF（**原始畫面**＋暖色外框框住在動的地方＋「02:41 · moved for 6 s」），
   App 的 Insights 攝影機卡跟著趨勢圖點選的那一晚顯示。早上匯入會自動跑；
@@ -1654,14 +1658,14 @@ python tests/test_db_show.py
 python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
-python tests/test_friend_sharing.py      # 2026-11-15 新增：預設只給行為、沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪
+python tests/test_friend_sharing.py      # 2026-11-15 新增：預設只給行為、沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪、場景跟著動態卡帶出去且不認得的 422
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_advice_fallback.py     # 2026-11-06 新增：API 失敗（如金鑰 401）時夢境退回規則式文字、不整批中斷；fallback 下次會重生
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉
 python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫；【1b】守錄影中間斷掉（三條擋法缺一不可）；評分前要先匯出按鈕、匯出失敗要停
 python tests/test_garmin_fetch_merge.py  # 2026-10-03 新增：重抓時視窗外逐筆不變、切點不落在睡眠中間、沒抓到的來源留舊的
 python tests/test_garmin_daily_tz.py     # 2026-10-04 新增：每日心率／壓力是當地時間、睡眠那幾段沒被多加 8 小時、舊檔轉換可重複執行
-python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料
+python tests/test_demo_accounts.py       # 2026-11-06 新增：示範帳號夜數比本人多時，手機帳號仍認得本人；刪除不傷本人資料；手錶資料 source 只有 demo、重排的階梯跟評分時同一份；動態牆各自的場景與時刻規則
 python tests/test_camera_clips.py        # 2026-11-07 新增：門檻呼叫時才讀、刪帳號連檔案一起刪、網址不含 user_id、只留 14 晚
 python tests/test_camera_usual.py        # 2026-11-09 新增：基線只取同一把尺（basis+roi）、不足時說「還需要幾晚」不給 0%、28 天窗格、門檻邊界、同一天不進自己的基線
 python tests/test_steps_intraday.py     # 2026-11-15 新增：每 15 分鐘步數 GMT 換當地（不差 8 小時）、沒戴錶的鐘頭是 null 不是 0、只增不減、429 就停、存白天資料時不會蓋掉每小時、只收本人、不進版控（打包檔也不帶）

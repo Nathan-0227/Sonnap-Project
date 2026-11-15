@@ -6,6 +6,9 @@
 // - 那一排：準時打勾、晚了空心圈（**不打叉、不用紅色**）、沒資料淡灰「—」、還沒到只寫日期
 // - 底下一行只寫事實「4 of 7 nights on time this week」；參考圖的「Rise and Good」那種評語不照做
 // - 沒公開連續天數（null）→ 不畫大字與火；沒公開準時（streakWeek null）→ 不畫那一排
+// - 2026-11-16 使用者定：自己那張（好友頁最上面）寵物站在場景圖裡（`scene`，使用者生成的樹屋），
+//   不包框、字直接排在頁面上；讀不到圖退回漸層。朋友的卡（底部面板、預覽）照舊有框
+// - 那一排改成一條紫色軌道：連續準時的晚上之間連起來（參考圖），火維持橘色
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,6 +18,8 @@ import '../services/pet_choice.dart';
 import 'home_pet.dart';
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const kStreakTrackColor = Color(0xFF7657FF);
+const kFriendsScene = 'assets/backgrounds/friends_treehouse.jpg';
 
 /// 連續幾晚 → 火的大小：0 沒有、1 小、2 大。
 int flameLevel(int? streak) {
@@ -41,51 +46,144 @@ class StreakCard extends StatelessWidget {
   final PetSpecies? species;
   final Color color;
 
+  /// 場景圖：給了就是好友頁最上面那種——圖直接當頁面背景（整個寬度、沒有框），
+  /// 底部淡進頁面底色，寵物站在圖裡的草地上。
+  final String? scene;
+
+  /// 疊在場景上方的東西（好友頁的標題列）。只有 scene 模式用。
+  final Widget? header;
+
+  /// 場景底部要淡進去的顏色＝頁面底色。
+  final Color pageColor;
+
   const StreakCard({
     super.key,
     required this.summary,
     this.species,
     this.color = const Color(0xFFFF8A5C),
+    this.scene,
+    this.header,
+    this.pageColor = const Color(0xFF081326),
   });
+
+  Widget _petWithFlames(int? streak, double size) => SizedBox(
+    width: size * 1.25,
+    height: size * 1.25,
+    child: Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        if (flameLevel(streak) > 0)
+          Positioned.fill(
+            // 邊緣淡出成一圈光，不留平平的底邊（放在場景裡時像一塊橘色方塊）
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (r) => const RadialGradient(
+                center: Alignment(0, -0.1),
+                radius: 0.5,
+                colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
+                stops: [0, 0.4, 1],
+              ).createShader(r),
+              // 火舌會畫出框外，框外的部分遮罩管不到，先裁掉
+              child: ClipRect(
+                child: StreakFlames(
+                  key: Key('streak-flames-${flameLevel(streak)}'),
+                  level: flameLevel(streak),
+                  color: color,
+                ),
+              ),
+            ),
+          ),
+        HomePet(mood: summary.petMood, size: size, species: species),
+      ],
+    ),
+  );
+
+  Widget _sceneHeader(int? streak) => AspectRatio(
+    key: const Key('streak-scene'),
+    aspectRatio: 1.4,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        // 圖提早 2 像素結束：高度不是整數時，最底下一列像素會露在淡出外面變成一條線
+        Positioned.fill(
+          bottom: 2,
+          child: Image.asset(
+            scene!,
+            fit: BoxFit.cover,
+            alignment: Alignment.bottomCenter,
+            errorBuilder: (_, _, _) => const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF2A2F6E), Color(0xFF1A1F4A)],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // 上緣稍微壓暗（標題要看得清楚），下緣淡進頁面底色（沒有框線）
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                pageColor.withValues(alpha: 0.55),
+                pageColor.withValues(alpha: 0),
+                pageColor.withValues(alpha: 0),
+                pageColor,
+              ],
+              stops: const [0, 0.3, 0.7, 0.97],
+            ),
+          ),
+        ),
+        // 寵物站在草地正中間（圖的地面約在 65% 以下）
+        LayoutBuilder(
+          builder: (context, c) => Align(
+            alignment: const Alignment(0.12, 0.82),
+            child: _petWithFlames(streak, c.maxHeight * 0.42),
+          ),
+        ),
+        if (header != null)
+          Positioned(top: 0, left: 0, right: 0, child: header!),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final streak = summary.currentStreak;
     final week = summary.streakWeek;
+    final framed = scene == null;
     return Container(
       key: const Key('streak-card'),
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF2A2F6E), Color(0xFF1A1F4A)],
-        ),
-        border: Border.all(color: const Color(0x22FFFFFF)),
-      ),
+      padding: framed
+          ? const EdgeInsets.fromLTRB(16, 18, 16, 18)
+          : EdgeInsets.zero,
+      decoration: framed
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF2A2F6E), Color(0xFF1A1F4A)],
+              ),
+              border: Border.all(color: const Color(0x22FFFFFF)),
+            )
+          : null,
       child: Column(
         children: [
-          SizedBox(
-            height: 150,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (flameLevel(streak) > 0)
-                  Positioned.fill(
-                    child: StreakFlames(
-                      key: Key('streak-flames-${flameLevel(streak)}'),
-                      level: flameLevel(streak),
-                      color: color,
-                    ),
-                  ),
-                HomePet(mood: summary.petMood, size: 120, species: species),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
+          if (framed)
+            SizedBox(
+              height: 150,
+              child: Center(child: _petWithFlames(streak, 120)),
+            )
+          else
+            _sceneHeader(streak),
+          SizedBox(height: framed ? 8 : 0),
           if (streak != null) ...[
             Text(
               streakTitle(streak),
@@ -105,7 +203,10 @@ class StreakCard extends StatelessWidget {
           ],
           if (week != null && week.length == 7) ...[
             const SizedBox(height: 14),
-            StreakWeekRow(week: week, color: color),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: framed ? 0 : 20),
+              child: StreakWeekRow(week: week),
+            ),
             const SizedBox(height: 10),
             Text(
               streakWeekLine(week),
@@ -123,7 +224,13 @@ class StreakCard extends StatelessWidget {
 class StreakWeekRow extends StatelessWidget {
   final List<StreakDay> week;
   final Color color;
-  const StreakWeekRow({super.key, required this.week, required this.color});
+  const StreakWeekRow({
+    super.key,
+    required this.week,
+    this.color = kStreakTrackColor,
+  });
+
+  bool _on(int i) => i >= 0 && i < week.length && week[i].status == 'on_time';
 
   @override
   Widget build(BuildContext context) {
@@ -160,13 +267,37 @@ class StreakWeekRow extends StatelessWidget {
             children: [
               for (var i = 0; i < 7; i++)
                 Expanded(
-                  child: Center(
-                    child: _Day(
-                      key: Key('streak-day-${week[i].date}'),
-                      day: week[i],
-                      color: color,
-                      isToday: i == todayIndex,
-                    ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 連續準時的晚上之間連成一段亮的軌道
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 12,
+                              color: _on(i) && _on(i - 1)
+                                  ? color.withValues(alpha: 0.45)
+                                  : null,
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              height: 12,
+                              color: _on(i) && _on(i + 1)
+                                  ? color.withValues(alpha: 0.45)
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      _Day(
+                        key: Key('streak-day-${week[i].date}'),
+                        day: week[i],
+                        color: color,
+                        isToday: i == todayIndex,
+                      ),
+                    ],
                   ),
                 ),
             ],
