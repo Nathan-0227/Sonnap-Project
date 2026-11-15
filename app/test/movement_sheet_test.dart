@@ -181,7 +181,18 @@ void main() {
       await tester.dragFrom(Offset(lr.left + lr.width * 0.5, lr.top + 10), Offset(lr.width * 0.1, 0));
       await tester.pump();
       expect(textOf(tester, 'chart-probe-text'), '04:30 · moving 6 sec');
-      expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep', reason: '滑動只看數字，不換播放的片段');
+      expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep', reason: '附近 3 分鐘沒有動作 → 不換片段');
+      // 滑到 03:42 那段附近 → 泡泡吸到那段（寫那段動作，不是 5 分鐘讀數），影片跟著換（11-15 使用者）
+      await tester.dragFrom(Offset(lr.left + lr.width * 0.5, lr.top + 10), Offset(-lr.width * 0.375, 0));
+      await tester.pump();
+      expect(textOf(tester, 'mv-clip-label'), '03:42 · moved for 5 s · Light');
+      expect(textOf(tester, 'chart-probe-text'), '03:42 · moved for 5 s · Light', reason: '泡泡與播放器是同一個點');
+      // 再滑回 04:10 → 影片跟著換回來
+      await tester.dragFrom(Offset(lr.left + lr.width * 0.12, lr.top + 10), Offset(lr.width * 0.28, 0));
+      await tester.pump();
+      expect(textOf(tester, 'mv-clip-label'), '04:10 · moved for 9 s · Deep');
+      expect(find.byKey(const Key('mv-viewfinder')), findsOneWidget, reason: '影片有觀景窗框');
+      expect(find.byKey(const Key('mv-controls')), findsOneWidget);
       // 片段照時間排：marker-0 是 03:42
       await tester.tap(find.byKey(const Key('mv-marker-0')));
       await tester.pump();

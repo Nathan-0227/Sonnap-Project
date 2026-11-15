@@ -250,7 +250,11 @@ class _MovementViewState extends State<MovementView> {
     final from = n.bedStartAt == null ? null : DateTime.tryParse(n.bedStartAt!);
     final to = n.bedEndAt == null ? null : DateTime.tryParse(n.bedEndAt!);
     final hasTimeline =
-        eps != null && eps.isNotEmpty && from != null && to != null && to.isAfter(from);
+        eps != null &&
+        eps.isNotEmpty &&
+        from != null &&
+        to != null &&
+        to.isAfter(from);
     final w = widget.week;
     final showWeek = w != null && w.any((e) => e.$2?.usualDeltaPct != null);
     final clip = _selClip;
@@ -332,7 +336,11 @@ class _MovementViewState extends State<MovementView> {
                 Text(
                   n.clipsNote!,
                   key: const Key('mv-clips-note'),
-                  style: const TextStyle(color: _soft, fontSize: 13, height: 1.4),
+                  style: const TextStyle(
+                    color: _soft,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 )
               else if (_sel != null) ...[
                 ClipRRect(
@@ -355,26 +363,47 @@ class _MovementViewState extends State<MovementView> {
                                   SizedBox(height: 6),
                                   Text(
                                     'No clip for this movement',
-                                    style: TextStyle(color: _soft, fontSize: 13),
+                                    style: TextStyle(
+                                      color: _soft,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
                             )
-                          : GestureDetector(
-                              key: const Key('mv-clip-enlarge'),
-                              onTap: () => _fullScreen(clip),
-                              child: Image.network(
-                                clip.url,
-                                key: const Key('mv-clip-player'),
-                                fit: BoxFit.contain,
-                                gaplessPlayback: true,
-                                errorBuilder: (_, _, _) => const Center(
-                                  child: Text(
-                                    'Clip could not be loaded',
-                                    style: TextStyle(color: _soft, fontSize: 12),
+                          : Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                GestureDetector(
+                                  key: const Key('mv-clip-enlarge'),
+                                  onTap: () => _fullScreen(clip),
+                                  child: Image.network(
+                                    clip.url,
+                                    key: const Key('mv-clip-player'),
+                                    fit: BoxFit.contain,
+                                    gaplessPlayback: true,
+                                    errorBuilder: (_, _, _) => const Center(
+                                      child: Text(
+                                        'Clip could not be loaded',
+                                        style: TextStyle(
+                                          color: _soft,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                // 觀景窗框（11-15 使用者：影片要有 frame）：四角括號＋左上時刻、右上第幾段
+                                IgnorePointer(
+                                  child: _Viewfinder(
+                                    key: const Key('mv-viewfinder'),
+                                    time: _clock(clip.startAt!),
+                                    index:
+                                        '${_clips.indexOf(clip) + 1} / ${_clips.length}',
+                                    color: color,
+                                  ),
+                                ),
+                              ],
                             ),
                     ),
                   ),
@@ -392,28 +421,82 @@ class _MovementViewState extends State<MovementView> {
                   ),
                 if (_clips.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _RoundButton(
-                        key: const Key('mv-prev'),
-                        icon: Icons.skip_previous_rounded,
-                        onTap: () => _step(-1),
-                      ),
-                      const SizedBox(width: 22),
-                      _RoundButton(
-                        key: const Key('mv-full'),
-                        icon: Icons.open_in_full_rounded,
-                        big: true,
-                        onTap: clip == null ? null : () => _fullScreen(clip),
-                      ),
-                      const SizedBox(width: 22),
-                      _RoundButton(
-                        key: const Key('mv-next'),
-                        icon: Icons.skip_next_rounded,
-                        onTap: () => _step(1),
-                      ),
-                    ],
+                  // 控制列（11-15 使用者給的參考圖：一條圓角長條、圖示鈕＋一顆主色的大鈕）
+                  Container(
+                    key: const Key('mv-controls'),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x14FFFFFF),
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: const Color(0x1FFFFFFF)),
+                    ),
+                    child: Row(
+                      children: [
+                        _RoundButton(
+                          key: const Key('mv-prev'),
+                          icon: Icons.skip_previous_rounded,
+                          onTap: () => _step(-1),
+                        ),
+                        const SizedBox(width: 6),
+                        _RoundButton(
+                          key: const Key('mv-next'),
+                          icon: Icons.skip_next_rounded,
+                          onTap: () => _step(1),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Material(
+                              color: clip == null
+                                  ? const Color(0x22FFFFFF)
+                                  : color,
+                              borderRadius: BorderRadius.circular(26),
+                              child: InkWell(
+                                key: const Key('mv-full'),
+                                borderRadius: BorderRadius.circular(26),
+                                onTap: clip == null
+                                    ? null
+                                    : () => _fullScreen(clip),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.open_in_full_rounded,
+                                        size: 18,
+                                        color: clip == null
+                                            ? const Color(0x55FFFFFF)
+                                            : const Color(0xFF151A3C),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'Full screen',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: clip == null
+                                                ? const Color(0x55FFFFFF)
+                                                : const Color(0xFF151A3C),
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],
@@ -573,12 +656,17 @@ class _MotionLineState extends State<_MotionLine> {
 
   @override
   Widget build(BuildContext context) {
-    final curve = widget.curve, clips = widget.clips, selected = widget.selected;
+    final curve = widget.curve,
+        clips = widget.clips,
+        selected = widget.selected;
     final color = widget.color;
     final t0 = _wall(curve.points.first.time);
     final t1 = _wall(curve.points.last.time);
     final span = math.max(1, t1.difference(t0).inSeconds);
-    final hi = math.max(0.05, curve.points.map((p) => p.value).reduce(math.max));
+    final hi = math.max(
+      0.05,
+      curve.points.map((p) => p.value).reduce(math.max),
+    );
     bool inRange(DateTime t) => !_wall(t).isBefore(t0) && !_wall(t).isAfter(t1);
     return LayoutBuilder(
       builder: (context, box) {
@@ -588,7 +676,8 @@ class _MotionLineState extends State<_MotionLine> {
         DateTime timeAt(double x) =>
             t0.add(Duration(seconds: (span * (x / w).clamp(0.0, 1.0)).round()));
 
-        void selectNear(double x) {
+        /// 離 x 那一刻最近的動作（3 分鐘內；沒有每段資料就只找片段），沒有回 null。
+        DateTime? nearMovement(double x) {
           final t = timeAt(x);
           final starts = [
             for (final e in widget.episodes) e.start,
@@ -604,25 +693,52 @@ class _MotionLineState extends State<_MotionLine> {
               bestD = dd;
             }
           }
-          if (best != null && bestD! <= const Duration(minutes: 3)) {
-            widget.onSelect(best);
+          return best != null && bestD! <= const Duration(minutes: 3)
+              ? best
+              : null;
+        }
+
+        // 點或滑到某段動作附近 → 播那一段（11-15 使用者：滑的時候影片沒跟著動，像兩個不同的點）
+        void selectNear(double x) {
+          final best = nearMovement(x);
+          if (best != null && best != widget.selected) widget.onSelect(best);
+        }
+
+        String movementText(DateTime at) {
+          for (final e in widget.episodes) {
+            if (e.start == at) {
+              return withStage(e.label, e.start, widget.stages);
+            }
           }
+          for (final c in clips) {
+            if (c.startAt == at) return clipLabel(c, widget.stages);
+          }
+          return _clock(at);
         }
 
         Widget? probe;
         if (_probeX != null) {
-          final t = timeAt(_probeX!);
-          final p = nearestPoint(curve.points, t);
-          final at = p?.time ?? t;
-          probe = ProbeLayer(
-            dot: Offset(xOf(at), p == null ? h : yOf(p.value)),
-            text: probeText(
-              time: at,
-              kind: ProbeKind.camera,
-              point: p,
-              stage: _stageAt(widget.stages, at),
-            ),
-          );
+          final snap = nearMovement(_probeX!);
+          if (snap != null) {
+            // 吸到那段動作：泡泡的點＝片段的點＝白線，寫那段動作（同播放器底下那行）
+            probe = ProbeLayer(
+              dot: Offset(xOf(snap), yOf(_valueAt(snap))),
+              text: movementText(snap),
+            );
+          } else {
+            final t = timeAt(_probeX!);
+            final p = nearestPoint(curve.points, t);
+            final at = p?.time ?? t;
+            probe = ProbeLayer(
+              dot: Offset(xOf(at), p == null ? h : yOf(p.value)),
+              text: probeText(
+                time: at,
+                kind: ProbeKind.camera,
+                point: p,
+                stage: _stageAt(widget.stages, at),
+              ),
+            );
+          }
         }
 
         return TapRegion(
@@ -644,10 +760,14 @@ class _MotionLineState extends State<_MotionLine> {
                     setState(() => _probeX = d.localPosition.dx.clamp(0.0, w));
                     selectNear(d.localPosition.dx);
                   },
-                  onHorizontalDragStart: (d) =>
-                      setState(() => _probeX = d.localPosition.dx.clamp(0.0, w)),
-                  onHorizontalDragUpdate: (d) =>
-                      setState(() => _probeX = d.localPosition.dx.clamp(0.0, w)),
+                  onHorizontalDragStart: (d) {
+                    setState(() => _probeX = d.localPosition.dx.clamp(0.0, w));
+                    selectNear(d.localPosition.dx);
+                  },
+                  onHorizontalDragUpdate: (d) {
+                    setState(() => _probeX = d.localPosition.dx.clamp(0.0, w));
+                    selectNear(d.localPosition.dx);
+                  },
                   child: CustomPaint(
                     painter: _LinePainter(curve, color, xOf, yOf, h),
                   ),
@@ -686,8 +806,13 @@ class _MotionLineState extends State<_MotionLine> {
                           height: clips[i].startAt == selected ? 14 : 10,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: clips[i].startAt == selected ? Colors.white : color,
-                            border: Border.all(color: const Color(0xFF1B1F48), width: 2),
+                            color: clips[i].startAt == selected
+                                ? Colors.white
+                                : color,
+                            border: Border.all(
+                              color: const Color(0xFF1B1F48),
+                              width: 2,
+                            ),
                           ),
                         ),
                       ),
@@ -700,7 +825,10 @@ class _MotionLineState extends State<_MotionLine> {
                 child: IgnorePointer(
                   child: Text(
                     _clock(t0),
-                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                    style: const TextStyle(
+                      color: Color(0x99FFFFFF),
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ),
@@ -710,7 +838,10 @@ class _MotionLineState extends State<_MotionLine> {
                 child: IgnorePointer(
                   child: Text(
                     _clock(t1),
-                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                    style: const TextStyle(
+                      color: Color(0x99FFFFFF),
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ),
@@ -734,7 +865,9 @@ class _LinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pts = [for (final p in curve.points) Offset(xOf(p.time), yOf(p.value))];
+    final pts = [
+      for (final p in curve.points) Offset(xOf(p.time), yOf(p.value)),
+    ];
     final line = Path()..moveTo(pts.first.dx, pts.first.dy);
     for (final p in pts.skip(1)) {
       line.lineTo(p.dx, p.dy);
@@ -773,22 +906,98 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(_LinePainter old) => old.curve != curve || old.h != h;
 }
 
-class _RoundButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  final bool big;
-  const _RoundButton({
+/// 影片上的觀景窗：四角括號、左上「● 04:10」、右上「2 / 10」。只是外框，不接手勢。
+/// 不寫 REC——這是錄好的片段，不是正在錄。
+class _Viewfinder extends StatelessWidget {
+  final String time;
+  final String index;
+  final Color color;
+  const _Viewfinder({
     super.key,
-    required this.icon,
-    required this.onTap,
-    this.big = false,
+    required this.time,
+    required this.index,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final size = big ? 58.0 : 44.0;
+    const shadow = [Shadow(color: Color(0xAA000000), blurRadius: 4)];
+    return CustomPaint(
+      painter: _CornerPainter(),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                time,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  shadows: shadow,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                index,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  shadows: shadow,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CornerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = 10.0, len = 18.0;
+    final p = Paint()
+      ..color = const Color(0xCCFFFFFF)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final l = inset, t = inset, r = size.width - inset, b = size.height - inset;
+    for (final (x, y, dx, dy) in [
+      (l, t, 1.0, 1.0),
+      (r, t, -1.0, 1.0),
+      (l, b, 1.0, -1.0),
+      (r, b, -1.0, -1.0),
+    ]) {
+      canvas.drawLine(Offset(x, y), Offset(x + dx * len, y), p);
+      canvas.drawLine(Offset(x, y), Offset(x, y + dy * len), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CornerPainter old) => false;
+}
+
+class _RoundButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  const _RoundButton({super.key, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 44.0;
     return Material(
-      color: big ? const Color(0x26FFFFFF) : const Color(0x14FFFFFF),
+      color: const Color(0x14FFFFFF),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -799,7 +1008,7 @@ class _RoundButton extends StatelessWidget {
           child: Icon(
             icon,
             color: onTap == null ? const Color(0x55FFFFFF) : Colors.white,
-            size: big ? 26 : 24,
+            size: 24,
           ),
         ),
       ),
@@ -852,11 +1061,19 @@ class _Timeline extends StatelessWidget {
                   var bestD = double.infinity;
                   for (final e in episodes) {
                     final x0 = xOf(e.start);
-                    final x1 = math.max(x0 + 4, xOf(e.start.add(
-                        Duration(milliseconds: (e.seconds * 1000).round()))));
+                    final x1 = math.max(
+                      x0 + 4,
+                      xOf(
+                        e.start.add(
+                          Duration(milliseconds: (e.seconds * 1000).round()),
+                        ),
+                      ),
+                    );
                     final dx = d.localPosition.dx < x0
                         ? x0 - d.localPosition.dx
-                        : (d.localPosition.dx > x1 ? d.localPosition.dx - x1 : 0.0);
+                        : (d.localPosition.dx > x1
+                              ? d.localPosition.dx - x1
+                              : 0.0);
                     if (dx < bestD) {
                       bestD = dx;
                       best = e;
@@ -879,8 +1096,13 @@ class _Timeline extends StatelessWidget {
                           bottom: 7,
                           width: math.max(
                             4,
-                            xOf(e.start.add(Duration(
-                                milliseconds: (e.seconds * 1000).round()))) -
+                            xOf(
+                                  e.start.add(
+                                    Duration(
+                                      milliseconds: (e.seconds * 1000).round(),
+                                    ),
+                                  ),
+                                ) -
                                 xOf(e.start),
                           ),
                           child: DecoratedBox(
@@ -963,22 +1185,24 @@ class _HourBars extends StatelessWidget {
                       SizedBox(
                         height: _valueH,
                         child: Text(
-                        '$n',
-                        key: Key('mv-hour-count-${start.hour}'),
-                        style: TextStyle(
-                          color: minutes < 60
-                              ? const Color(0x99FFFFFF)
-                              : Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
+                          '$n',
+                          key: Key('mv-hour-count-${start.hour}'),
+                          style: TextStyle(
+                            color: minutes < 60
+                                ? const Color(0x99FFFFFF)
+                                : Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
                       ),
                       const SizedBox(height: 2),
                       Container(
                         height: math.max(3, barH * n / maxN),
                         decoration: BoxDecoration(
-                          color: color.withValues(alpha: minutes < 60 ? 0.35 : 0.85),
+                          color: color.withValues(
+                            alpha: minutes < 60 ? 0.35 : 0.85,
+                          ),
                           borderRadius: BorderRadius.circular(5),
                         ),
                       ),
@@ -1108,8 +1332,12 @@ class _WeekBars extends StatelessWidget {
                                       height: math.max(3, bh),
                                       child: DecoratedBox(
                                         decoration: BoxDecoration(
-                                          color: color.withValues(alpha: strong),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: color.withValues(
+                                            alpha: strong,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1251,13 +1479,18 @@ class _ClipRow extends StatelessWidget {
                       key: const Key('mv-clip-row-text'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                      style: const TextStyle(
+                        color: Color(0xB3FFFFFF),
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
               ),
               Icon(
-                selected ? Icons.graphic_eq_rounded : Icons.play_circle_fill_rounded,
+                selected
+                    ? Icons.graphic_eq_rounded
+                    : Icons.play_circle_fill_rounded,
                 color: color,
                 size: 26,
               ),
@@ -1305,7 +1538,11 @@ class _FullScreenClip extends StatelessWidget {
               child: IconButton(
                 key: const Key('mv-clip-fullscreen-close'),
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
             ),
             Positioned(
