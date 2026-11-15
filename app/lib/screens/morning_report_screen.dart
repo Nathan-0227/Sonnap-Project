@@ -15,6 +15,7 @@ import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/awake_hr_sheet.dart';
 import '../widgets/day_heart_rate_chart.dart';
+import '../widgets/last_night_art.dart';
 import '../widgets/move_iq_sheet.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
@@ -966,10 +967,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
 
   static const _cAsleep = Color(0xFFB9A6FF);
   static const _cBed = Color(0xFF8FA8FF);
-  static const _cPhone = Color(0xFFFFC97A);
+  static const _cPhone = Color(0xFF6FE3D0);
   static const _cEff = Color(0xFF7EC8FF);
-  static const _cAwake = Color(0xFFFF8AD8);
+  static const _cAwake = Color(0xFFFFC27A);
   static const _cHr = Color(0xFFFF8AB8);
+  static const _cSleepHr = Color(0xFF8C9BFF);
   static const _cCam = Color(0xFFFFD96A);
   static const _cSteps = Color(0xFFFFB37A);
   static const _cKcal = Color(0xFFFF8A6B);
@@ -998,71 +1000,71 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     final start = r.bedStart;
     final end = r.bedEnd;
 
-    final asleepTile = ReportTile(
+    // 11-15 使用者定（Q1–Q7）：整張是圖、標題左上、字左下（last_night_art.dart）
+    final asleepTile = ReportArtTile(
       key: const Key('report-asleep'),
       icon: Icons.nightlight_round,
       color: _cAsleep,
       title: 'Total sleep',
-      value: asleep == null ? '—' : reportHm(asleep),
-      valueKey: const Key('report-duration'),
-      valueTrailing: _badge(
-        asleep == null ? null : changeOf(asleep, r.previousSleepMinutes),
-        'report-duration-change',
-      ),
       dashed: asleep == null,
-      // 光帶長度＝睡了多久÷目標；**不依達標與否變色**（使用者定）
-      graphic: asleep != null && goal != null && goal > 0
-          ? paintBox(
-              WaveBarPainter(asleep / goal, _cAsleep),
-              key: const Key('report-goal-bar'),
-            )
-          : null,
-      graphicHeight: 30,
       onTap: widget.loadSleepSeries == null ? null : () => _showSleepWeek(r),
-      lines: [
-        if (asleep == null)
-          const Text('From your watch')
-        else if (goal != null)
-          Text(
-            'of your ${reportHm(goal)} goal',
-            key: const Key('report-goal-line'),
-          ),
-      ],
+      // 光帶長度＝睡了多久÷目標；**不依達標與否變色**（使用者定）；手錶還沒到只畫暗的光帶
+      art: lastNightArt(
+        AuroraFillPainter(
+          asleep != null && goal != null && goal > 0 ? asleep / goal : null,
+          _cAsleep,
+        ),
+        key: const Key('report-goal-bar'),
+      ),
+      text: ReportArtText(
+        value: asleep == null ? '—' : reportHm(asleep),
+        valueKey: const Key('report-duration'),
+        valueTrailing: _badge(
+          asleep == null ? null : changeOf(asleep, r.previousSleepMinutes),
+          'report-duration-change',
+        ),
+        extra: [
+          if (asleep == null)
+            const Text('From your watch')
+          else if (goal != null)
+            Text(
+              'of your ${reportHm(goal)} goal',
+              key: const Key('report-goal-line'),
+            ),
+        ],
+      ),
     );
 
-    final inBedTile = ReportTile(
+    final inBedTile = ReportArtTile(
       key: const Key('report-in-bed'),
       icon: Icons.bed_rounded,
       color: _cBed,
       title: 'Time in bed',
-      onTap: widget.loadBedTimes == null ? null : () => _showBedWeek(r),
-      value: inBed == null ? '—' : reportHm(inBed),
-      valueKey: const Key('report-in-bed-value'),
-      valueTrailing: _badge(
-        inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
-        'report-in-bed-change',
-      ),
       dashed: inBed == null,
-      graphic: start == null
-          ? null
-          : paintBox(
-              NightTimelinePainter(
-                nightMinute(start.hour, start.minute),
-                end == null ? null : nightMinute(end.hour, end.minute),
-                _cBed,
-              ),
-              key: const Key('report-bed-timeline'),
-            ),
-      graphicHeight: 30,
-      lines: [
-        // 沒按按鈕：不拿手錶的入睡冒充上床
-        Text(
-          start == null
-              ? 'No bedtime recorded'
-              : '${reportClock(start)} → ${end == null ? '—' : reportClock(end)}',
-          key: const Key('report-times'),
+      onTap: widget.loadBedTimes == null ? null : () => _showBedWeek(r),
+      art: lastNightArt(
+        NightArcPainter(
+          start == null ? null : nightMinute(start.hour, start.minute),
+          start == null || end == null
+              ? null
+              : nightMinute(end.hour, end.minute),
+          _cBed,
         ),
-      ],
+        key: const Key('report-bed-timeline'),
+      ),
+      text: ReportArtText(
+        value: inBed == null ? '—' : reportHm(inBed),
+        valueKey: const Key('report-in-bed-value'),
+        valueTrailing: _badge(
+          inBed == null ? null : changeOf(inBed, r.previousTimeInBed),
+          'report-in-bed-change',
+        ),
+        // 沒按按鈕：不拿手錶的入睡冒充上床
+        line: start == null
+            ? 'No bedtime recorded'
+            : '${reportClock(start)} → ${end == null ? '—' : reportClock(end)}',
+        lineKey: const Key('report-times'),
+      ),
     );
 
     Widget? phoneTile;
@@ -1074,44 +1076,49 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       final th = ok ? int.tryParse(tParts[0]) : null;
       final tm = ok ? int.tryParse(tParts[1]) : null;
       final line = adherenceLine(r.adherenceMinutes);
-      phoneTile = ReportTile(
+      phoneTile = ReportArtTile(
         key: const Key('report-phone-down'),
         icon: Icons.phone_android_rounded,
         color: _cPhone,
         title: 'Phone down',
-        value: reportClock(lightsOut),
-        valueKey: const Key('report-phone-down-at'),
         onTap: widget.loadPhoneDowns == null ? null : () => _showPhoneWeek(r),
-        graphic: th == null || tm == null
-            ? null
-            : paintBox(
-                ClockArcPainter(
-                  nightMinute(th, tm),
-                  nightMinute(lightsOut.hour, lightsOut.minute),
-                  _cPhone,
+        art: lastNightArt(
+          PhoneDialPainter(
+            th == null || tm == null ? null : nightMinute(th, tm),
+            nightMinute(lightsOut.hour, lightsOut.minute),
+            _cPhone,
+          ),
+          key: const Key('report-phone-arc'),
+        ),
+        text: ReportArtText(
+          value: reportClock(lightsOut),
+          valueKey: const Key('report-phone-down-at'),
+          extra: [
+            if (target != null)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: 'Your target '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: Text(
+                        target,
+                        key: const Key('report-target'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                key: const Key('report-phone-arc'),
               ),
-        graphicHeight: 40,
-        lines: [
-          if (target != null)
-            // Wrap：半格放不下時換行，不溢出
-            Wrap(
-              children: [
-                const Text('Your target '),
-                Text(
-                  target,
-                  key: const Key('report-target'),
-                  style: const TextStyle(
-                    color: ReportColors.accent,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
-          if (line != null) Text(line, key: const Key('report-adherence')),
-        ],
+            // 達成度只照抄後端（跨午夜在 behavior/adherence.py 算）
+            if (line != null) Text(line, key: const Key('report-adherence')),
+          ],
+        ),
       );
     }
 
@@ -1132,98 +1139,86 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ];
         }
       }
-      awakeTile = ReportTile(
+      awakeTile = ReportArtTile(
         key: const Key('report-awake'),
         icon: Icons.visibility_rounded,
         color: _cAwake,
         title: 'Awake',
-        value: reportHm(r.wasoMinutes!),
-        valueKey: const Key('report-waso'),
         onTap: () => _showAwake(r),
-        graphic: segs == null
-            ? null
-            : paintBox(
-                SegmentStripPainter(segs, _cAwake),
-                key: const Key('report-awake-strip'),
-              ),
-        graphicHeight: 20,
-        lines: const [Text('during the night')],
+        art: lastNightArt(
+          StarRiverPainter(segs, _cAwake),
+          key: const Key('report-awake-strip'),
+        ),
+        text: ReportArtText(
+          value: reportHm(r.wasoMinutes!),
+          valueKey: const Key('report-waso'),
+          line: 'during the night',
+        ),
       );
     }
 
     // 心率：有曲線就用曲線那一段的平均（跟 Sleep Stages 點 Heart rate 同一個數）；
     // 沒有曲線才用 metrics 的平均。⚠️ 同一頁不得出現兩個不同的「平均心率」。
+    // 11-15：靛藍、月亮、慢線、**不跳**——跟 Yesterday 會跳的珊瑚紅 Awake HR 分開
     Widget? hrTile;
     final hrCurve = r.heartRate;
     final hrAvg = hrCurve?.avg ?? r.avgHeartRate;
     if (r.hasScore && (hrAvg != null || r.restingHeartRate != null)) {
-      hrTile = ReportTile(
+      hrTile = ReportArtTile(
         key: const Key('report-hr-tile'),
         icon: Icons.favorite_rounded,
-        color: _cHr,
-        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）；格子窄，寫縮寫，點開才寫全名
+        color: _cSleepHr,
+        // 2026-11-15 使用者定：標題講清楚是睡著那一段（不是整天的心率）
         title: 'Sleeping HR',
-        value: hrAvg == null ? null : '${hrAvg.round()} bpm',
-        graphic: hrCurve == null
-            ? null
-            : paintBox(
-                SparklinePainter(_curvePoints(hrCurve), _cHr),
-                key: const Key('report-hr-line'),
-              ),
         // 點開：這一晚依階段上色的線＋各階段平均＋一週（2026-11-15）
         onTap: hrCurve == null ? null : () => _showHeartRate(r),
-        lines: [
-          Text(
-            [
-              if (hrAvg != null) '${hrAvg.round()} bpm avg',
-              if (r.restingHeartRate != null)
-                '${r.restingHeartRate!.round()} resting',
-            ].join(' · '),
-            key: const Key('report-hr'),
+        art: lastNightArt(
+          SleepHrWavePainter(
+            hrCurve == null ? const [] : _curvePoints(hrCurve),
+            _cSleepHr,
           ),
-        ],
+          // 沒有曲線就只有月亮，不掛「線」的鍵
+          key: hrCurve == null ? null : const Key('report-hr-line'),
+        ),
+        text: ReportArtText(
+          value: hrAvg == null ? null : '${hrAvg.round()} bpm',
+          line: [
+            if (hrAvg != null) '${hrAvg.round()} bpm avg',
+            if (r.restingHeartRate != null)
+              '${r.restingHeartRate!.round()} resting',
+          ].join(' · '),
+          lineKey: const Key('report-hr'),
+        ),
       );
     }
 
     Widget? camTile;
     if (r.camera?.usualLabel != null) {
       final cam = r.cameraMotion;
-      camTile = ReportTile(
+      camTile = ReportArtTile(
         key: const Key('report-camera-tile'),
         icon: Icons.videocam_rounded,
         color: _cCam,
         title: 'Movement (camera)',
-        graphic: cam == null
-            ? null
-            : paintBox(
-                SparklinePainter(_curvePoints(cam), _cCam, lo: 0),
-                key: const Key('report-camera-line'),
-              ),
         // 點開：片段（影片）＋動作線＋一週跟平常比（2026-11-15）
         onTap: () => _showMovement(r),
-        lines: [
-          // 後端寫好的那句「跟你平常比」，照抄
-          Text(
-            r.camera!.usualLabel!,
-            key: const Key('report-camera'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const Text(
-            'Camera data is not part of your score.',
-            style: TextStyle(color: ReportColors.faint, fontSize: 11),
-          ),
-        ],
+        art: lastNightArt(
+          BedRipplePainter(cam == null ? const [] : _curvePoints(cam), _cCam),
+          key: const Key('report-camera-line'),
+        ),
+        // 後端寫好的那句「跟你平常比」，照抄當大字
+        text: ReportArtText(
+          value: r.camera!.usualLabel!,
+          valueKey: const Key('report-camera'),
+          line: 'Camera data is not part of your score.',
+        ),
       );
     }
 
-    // 效率：圓環＝百分比。警語與 basis 很長，點格子才跳出來（以前也是收在 More details 裡）
+    // 效率：使用者喜歡的「從底下往上填滿」（11-15 照參考圖 Battery 卡），只加了水面的動態。
+    // 警語與 basis 很長，點格子才跳出來
     Widget? effTile;
     if (r.hasScore && r.efficiency != null) {
-      // 2026-11-15 使用者定：照參考圖（Battery 卡）從底下往上填滿，填多高就是效率；
-      // 數字在左下、% 小一號，下面一行是那一種的名字（後端照抄）
       effTile = ReportFillTile(
         key: const Key('report-efficiency-tile'),
         icon: Icons.speed_rounded,
@@ -1243,13 +1238,14 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 11-15 使用者定（Q3）：攝影機排最後、佔整列（它常常不在，不在時剛好六格）
         reportTileGrid([
           asleepTile,
           inBedTile,
           phoneTile,
           awakeTile,
-          effTile,
           hrTile,
+          effTile,
           camTile,
         ]),
       ],
