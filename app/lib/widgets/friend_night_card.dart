@@ -237,6 +237,168 @@ const _statOrder = [
   return null;
 }
 
+/// 大數字底下那排小格：照這個順序挑他有公開、而且沒變成大數字的前三個（2026-11-16 使用者定 B 版）。
+/// 其他的不畫在卡上，點卡片（See all）看全部。
+const _tileOrder = [
+  'awake',
+  'sleeping_hr',
+  'steps',
+  'stress',
+  'score',
+  'fell_asleep',
+  'efficiency',
+  'resting_hr',
+  'body_battery',
+  'active_time',
+  'calories',
+  'move_iq',
+  'prebed_phone',
+  'phone_after_start',
+  'level',
+  'outfit',
+  'challenges',
+];
+const kMaxTiles = 3;
+
+/// 一項 → 小格（圖示, 數字, 小標籤）；沒值 → null。不判斷好壞、不變色。
+(IconData, String, String)? friendTile(String key, dynamic v) {
+  if (v == null) return null;
+  Map<String, dynamic> m() => v is Map ? v.cast<String, dynamic>() : const {};
+  switch (key) {
+    case 'awake':
+      final c = _n(m()['count']);
+      final mins = _n(m()['minutes']);
+      if (c != null) return (Icons.bedtime_rounded, '${c.round()}×', 'woke up');
+      return mins == null ? null : (Icons.bedtime_rounded, _m(mins), 'awake');
+    case 'sleeping_hr':
+      final a = _n(m()['avg']);
+      return a == null
+          ? null
+          : (Icons.favorite_rounded, '${a.round()}', 'sleeping bpm');
+    case 'steps':
+      final st = _n(m()['steps']);
+      return st == null
+          ? null
+          : (Icons.directions_walk_rounded, _int(st), 'steps');
+    case 'stress':
+      final hi = _n(m()['high']);
+      return hi == null
+          ? null
+          : (Icons.waves_rounded, _m(hi / 60), 'high stress');
+    case 'score':
+      final sc = _n(m()['score']);
+      return sc == null ? null : (Icons.star_rounded, '${sc.round()}', 'score');
+    case 'fell_asleep':
+      return _n(v) == null
+          ? null
+          : (Icons.hourglass_bottom_rounded, _m(v), 'to fall asleep');
+    case 'efficiency':
+      final e = _n(m()['value']);
+      return e == null
+          ? null
+          : (Icons.pie_chart_rounded, '${e.round()}%', 'efficiency');
+    case 'resting_hr':
+      return _n(v) == null
+          ? null
+          : (Icons.favorite_border_rounded, '${_n(v)!.round()}', 'resting bpm');
+    case 'body_battery':
+      final c = _n(m()['charged']);
+      return c == null
+          ? null
+          : (
+              Icons.battery_charging_full_rounded,
+              '+${c.round()}',
+              'body battery',
+            );
+    case 'active_time':
+      final hi = _n(m()['highly_active']) ?? 0;
+      final ac = _n(m()['active']);
+      return ac == null
+          ? null
+          : (Icons.bolt_rounded, _m((hi + ac) / 60), 'active');
+    case 'calories':
+      final a = _n(m()['active']);
+      return a == null
+          ? null
+          : (Icons.local_fire_department_outlined, _int(a), 'active kcal');
+    case 'move_iq':
+      final c = _n(m()['count']);
+      return c == null
+          ? null
+          : (Icons.hiking_rounded, '${c.round()}', c == 1 ? 'walk' : 'walks');
+    case 'prebed_phone':
+      return _n(v) == null
+          ? null
+          : (Icons.phone_iphone_rounded, _m(v), 'phone before bed');
+    case 'phone_after_start':
+      return _n(v) == null
+          ? null
+          : (Icons.phone_iphone_rounded, _m(v), 'phone in bed');
+    case 'level':
+      final l = _n(m()['level']);
+      return l == null
+          ? null
+          : (Icons.military_tech_rounded, 'Lv ${l.round()}', 'level');
+    case 'outfit':
+      final b = _n(m()['badges']);
+      return b == null || b == 0
+          ? null
+          : (
+              Icons.workspace_premium_rounded,
+              '${b.round()}',
+              b == 1 ? 'badge' : 'badges',
+            );
+    case 'challenges':
+      if (v is! List) return null;
+      final all = v
+          .whereType<Map>()
+          .where((c) => c['title'] is String)
+          .toList();
+      if (all.isEmpty) return null;
+      final done = all.where((c) => c['completed'] == true).length;
+      return (Icons.flag_rounded, '$done/${all.length}', 'challenges');
+  }
+  return null;
+}
+
+/// 卡片上的大數字、小格、還沒畫出來的項目。卡片與「See all」共用同一份挑法。
+({
+  List<(String, String, String)> stats,
+  List<(String, IconData, String, String)> tiles,
+  int more,
+})
+friendCardLayout(Map<String, dynamic> items, {bool hasChart = false}) {
+  final stats = <(String, String, String)>[];
+  for (final k in _statOrder) {
+    if (stats.length == 3) break;
+    if (friendStat(k, items[k]) case (final label, final value)) {
+      stats.add((k, label, value));
+    }
+  }
+  final used = {for (final s in stats) s.$1};
+  final tiles = <(String, IconData, String, String)>[];
+  for (final k in _tileOrder) {
+    if (tiles.length == kMaxTiles) break;
+    if (used.contains(k)) continue;
+    if (friendTile(k, items[k]) case (final icon, final value, final label)) {
+      tiles.add((k, icon, value, label));
+    }
+  }
+  final shown = {
+    ...used,
+    for (final t in tiles) t.$1,
+    if (hasChart) 'stages',
+    'pet_mood',
+  };
+  final more = [
+    for (final k in [..._nightKeys, ..._dayKeys, ..._gameKeys])
+      if (!shown.contains(k) &&
+          (friendItemLine(k, items[k])?.isNotEmpty ?? false))
+        k,
+  ].length;
+  return (stats: stats, tiles: tiles, more: more);
+}
+
 /// 每個場景的地面在圖的多高（0–1，從上往下量），寵物的腳踩在這條線上。
 /// 圖是使用者生成的（`assets/backgrounds/scene_<id>.jpg`，4:5），換圖時要重量。
 const kSceneGround = {
@@ -278,14 +440,6 @@ class FriendNightCardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = card.items;
-    final stats = <(String, String, String)>[];
-    for (final k in _statOrder) {
-      if (stats.length == 3) break;
-      if (friendStat(k, items[k]) case (final label, final value)) {
-        stats.add((k, label, value));
-      }
-    }
-    final used = {for (final s in stats) s.$1};
     final stages = items['stages'] is Map
         ? (items['stages'] as Map).cast<String, dynamic>()
         : null;
@@ -301,14 +455,8 @@ class FriendNightCardView extends StatelessWidget {
             _n(s['to'])!.toDouble(),
           ),
     ];
-    final footer = [
-      for (final k in [..._nightKeys, ..._dayKeys, ..._gameKeys])
-        if (!used.contains(k) &&
-            items.containsKey(k) &&
-            !(k == 'stages' && segments.isNotEmpty))
-          if (friendItemLine(k, items[k]) case final l? when l.isNotEmpty)
-            (k, l),
-    ];
+    final layout = friendCardLayout(items, hasChart: segments.isNotEmpty);
+    final stats = layout.stats;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -479,21 +627,56 @@ class FriendNightCardView extends StatelessWidget {
                             minutes: stages ?? const {},
                           ),
                         ],
-                        if (footer.isNotEmpty) ...[
+                        if (layout.tiles.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
+                          Row(
                             children: [
-                              for (final (i, (k, l)) in footer.indexed)
-                                Text(
-                                  i == footer.length - 1 ? l : '$l ·',
-                                  key: Key('card-item-$k'),
-                                  style: const TextStyle(
-                                    color: Color(0xCCFFFFFF),
-                                    fontSize: 13,
+                              for (final (i, (k, icon, value, label))
+                                  in layout.tiles.indexed)
+                                Expanded(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(
+                                      right: i == kMaxTiles - 1 ? 0 : 8,
+                                    ),
+                                    child: _Tile(
+                                      key: Key('card-tile-$k'),
+                                      icon: icon,
+                                      value: value,
+                                      label: label,
+                                    ),
                                   ),
                                 ),
+                              // 不滿三格也照三格的寬度排（每張卡長得一樣）
+                              for (
+                                var i = layout.tiles.length;
+                                i < kMaxTiles;
+                                i++
+                              )
+                                const Expanded(child: SizedBox.shrink()),
+                            ],
+                          ),
+                        ],
+                        if (layout.more > 0) ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            key: const Key('card-more'),
+                            children: [
+                              Text(
+                                '+${layout.more} more',
+                                style: const TextStyle(
+                                  color: Color(0xB3FFFFFF),
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const Spacer(),
+                              const Text(
+                                'See all  ›',
+                                style: TextStyle(
+                                  color: Color(0xFFC9B8FF),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -508,6 +691,132 @@ class FriendNightCardView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Tile extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  const _Tile({
+    super.key,
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+    decoration: BoxDecoration(
+      color: const Color(0x1AFFFFFF),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFFC9B8FF)),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            softWrap: false,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 10),
+        ),
+      ],
+    ),
+  );
+}
+
+/// 「See all」：那一晚他公開的每一項，一項一行（字跟以前卡片上那行小字一樣，照抄後端的值）。
+Future<void> showFriendNightSheet(
+  BuildContext context,
+  FriendNightCard card, {
+  VoidCallback? onOpenFriend,
+}) {
+  final sections = [
+    ('Last night', _nightKeys),
+    ('Yesterday', _dayKeys),
+    ('Game', _gameKeys),
+  ];
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xFF10265A),
+    builder: (context) => SafeArea(
+      child: SingleChildScrollView(
+        key: const Key('night-sheet'),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              card.displayName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              'Night of ${friendCardDate(card.date)}',
+              style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
+            ),
+            for (final (title, keys) in sections)
+              if ([
+                    for (final k in keys)
+                      if (friendItemLine(k, card.items[k])?.isNotEmpty ?? false)
+                        k,
+                  ]
+                  case final shown when shown.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0x99FFFFFF),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final k in shown)
+                  Padding(
+                    key: Key('sheet-item-$k'),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      friendItemLine(k, card.items[k])!,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+              ],
+            if (onOpenFriend != null) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                key: const Key('sheet-open-friend'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onOpenFriend();
+                },
+                child: Text(
+                  "${card.displayName.split(' ').first}'s streak and settings",
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// 動態卡裡的 Sleep Stages 階梯（同首頁那張的顏色，但沒有疊線、沒有點選）。
@@ -529,14 +838,6 @@ class _StageChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const label = TextStyle(color: Color(0xB3FFFFFF), fontSize: 11);
-    final legend = [
-      for (final k in ['deep', 'light', if (remMeasured) 'rem'])
-        if (_n(minutes[k]) != null)
-          (
-            k,
-            '${k == 'rem' ? 'REM' : '${k[0].toUpperCase()}${k.substring(1)}'} ${_m(minutes[k])}',
-          ),
-    ];
     return Column(
       key: const Key('card-stages'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,31 +863,6 @@ class _StageChart extends StatelessWidget {
             ),
           ],
         ),
-        if (legend.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              for (final (k, text) in legend)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _stageColors[k],
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(text, style: label),
-                  ],
-                ),
-            ],
-          ),
-        ],
       ],
     );
   }

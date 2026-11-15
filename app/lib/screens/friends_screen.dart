@@ -402,7 +402,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
             card: c,
             // 連續天數的橫幅只放在他最近那一晚的卡上
             streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
-            onTap: f == null ? null : () => _showFriend(f),
+            // 點卡片＝See all：這一晚他公開的每一項；面板下面可以再看他的 Streak 與解除好友
+            onTap: () => showFriendNightSheet(context, c,
+                onOpenFriend: f == null ? null : () => _showFriend(f)),
           );
         }),
     ];

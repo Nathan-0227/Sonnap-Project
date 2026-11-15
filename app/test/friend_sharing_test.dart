@@ -344,6 +344,107 @@ void main() {
       ],
     };
 
+    testWidgets('小格：照固定順序挑前三個（變成大數字的不重複），其他算進 +N more', (tester) async {
+      await tester.pumpWidget(
+        host(
+          const FriendNightCardView(
+            card: FriendNightCard(
+              handle: 'B',
+              displayName: 'Bob',
+              date: '2026-11-14',
+              items: {
+                'sleep_duration': 412,
+                'time_in_bed': 435,
+                'phone_down_time': '23:42', // 三個大數字
+                'steps': {'steps': 8432}, // 小格 2（醒來次數排第一但這裡沒有）
+                'sleeping_hr': {'avg': 56, 'min': 49}, // 小格 1
+                'level': {'level': 4, 'xp_total': 1260},
+                'stress': {'high': 1980}, // 小格 3
+                'outfit': {'badges': 3},
+                'on_time': true,
+                'pet_mood': 'happy',
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final tiles = tester
+          .widgetList(
+            find.byWidgetPredicate(
+              (w) =>
+                  w.key is ValueKey<String> &&
+                  (w.key as ValueKey<String>).value.startsWith('card-tile-'),
+            ),
+          )
+          .map((w) => (w.key as ValueKey<String>).value)
+          .toList();
+      expect(tiles, [
+        'card-tile-sleeping_hr',
+        'card-tile-steps',
+        'card-tile-stress',
+      ]);
+      expect(find.text('56'), findsOneWidget);
+      expect(find.text('8,432'), findsOneWidget);
+      expect(find.text('33m'), findsOneWidget);
+      // 剩下 level、outfit、on_time（pet_mood 畫成寵物，不算）
+      expect(find.text('+3 more'), findsOneWidget);
+    });
+
+    testWidgets('全部都畫在卡上了就沒有 See all', (tester) async {
+      await tester.pumpWidget(
+        host(
+          const FriendNightCardView(
+            card: FriendNightCard(
+              handle: 'B',
+              displayName: 'Bob',
+              date: '2026-11-14',
+              items: {
+                'phone_down_time': '23:42',
+                'on_time': true,
+                'pet_mood': 'happy',
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('card-more')), findsNothing);
+    });
+
+    testWidgets('See all：每一項一行，含卡上已經畫的', (tester) async {
+      const card = FriendNightCard(
+        handle: 'B',
+        displayName: 'Bob',
+        date: '2026-11-14',
+        items: {
+          'phone_down_time': '23:42',
+          'level': {'level': 4, 'xp_total': 1260},
+          'steps': {'steps': 8432},
+        },
+      );
+      await tester.pumpWidget(
+        host(
+          Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showFriendNightSheet(context, card),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('night-sheet')), findsOneWidget);
+      expect(find.text('Phone down 23:42'), findsOneWidget);
+      expect(find.text('8,432 steps'), findsOneWidget);
+      expect(find.text('Lv 4 · 1,260 XP'), findsOneWidget);
+      // 沒給的不出現
+      expect(find.byKey(const Key('sheet-item-score')), findsNothing);
+    });
+
     testWidgets('Sleep Stages：準確時刻的人兩端寫時刻', (tester) async {
       await tester.pumpWidget(
         host(
@@ -363,7 +464,8 @@ void main() {
       expect(find.byKey(const Key('card-stages')), findsOneWidget);
       expect(find.text('00:31'), findsOneWidget);
       expect(find.text('07:38'), findsOneWidget);
-      expect(find.text('Deep 1h 2m'), findsOneWidget);
+      // 圖例拿掉了（B 版）；分鐘數在 See all 裡
+      expect(find.text('Deep 1h 2m'), findsNothing);
       // 有圖時分鐘數不再重複寫成一行小字
       expect(find.byKey(const Key('card-item-stages')), findsNothing);
     });
