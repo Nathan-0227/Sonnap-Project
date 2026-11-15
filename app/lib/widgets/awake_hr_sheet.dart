@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/awake_heart_rate.dart';
 import '../models/yesterday_activity.dart';
 import 'chart_probe.dart' show ProbeLayer;
+import 'move_iq_sheet.dart' show moveIqShown;
 import 'report_sheet.dart';
 
 // 早晨報告 Yesterday 的 **Awake HR**（2026-11-15 使用者定，參考 Apple Watch 的心率圖示）：
@@ -369,7 +370,7 @@ class AwakeHrView extends StatelessWidget {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 170,
-                  child: _DayLine(hr: a, moves: day.moveIq),
+                  child: _DayLine(hr: a, moves: moveIqShown(day.moveIq)),
                 ),
                 const SizedBox(height: 6),
                 Wrap(
@@ -381,7 +382,7 @@ class AwakeHrView extends StatelessWidget {
                         swatch: const Color(0x1FFFFFFF),
                         text: 'Asleep · see Sleeping HR',
                       ),
-                    if (day.moveIq?.isNotEmpty ?? false)
+                    if (moveIqShown(day.moveIq).isNotEmpty)
                       _Key(
                         swatch: kAwakeHrLight.withValues(alpha: 0.6),
                         text: 'Move IQ',

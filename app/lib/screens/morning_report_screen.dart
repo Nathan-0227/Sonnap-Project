@@ -15,6 +15,7 @@ import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/awake_hr_sheet.dart';
 import '../widgets/day_heart_rate_chart.dart';
+import '../widgets/move_iq_sheet.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
@@ -975,7 +976,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   static const _cActive = Color(0xFFFFD96A);
   static const _cStress = Color(0xFFA996FF);
   static const _cBattery = Color(0xFF6FE3C1);
-  static const _cMove = Color(0xFF7ED957);
 
   Widget? _badge(ChangeDirection? d, String key) =>
       d == null || d == ChangeDirection.same ? null : _changeBadge(d, key);
@@ -1556,43 +1556,22 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     }
 
     Widget? moveTile;
-    final moves = y.moveIq;
-    if (moves != null && moves.isNotEmpty) {
-      final walks = moves.where((m) => m.type == 'walking').length;
-      final rides = moves.where((m) => m.type == 'cycling').length;
-      final others = moves.length - walks - rides;
-      moveTile = ReportTile(
+    // 11-15 使用者定：騎車不顯示（多半是機車，move_iq_sheet.dart）；剩下沒有任何一段就整格不畫
+    final moves = moveIqShown(y.moveIq);
+    if (moves.isNotEmpty) {
+      moveTile = ReportArtTile(
         key: const Key('report-moveiq'),
         icon: Icons.route_rounded,
-        color: _cMove,
+        color: kMoveIq,
         title: 'Move IQ',
-        value: [
-          if (walks > 0) '$walks walk${walks == 1 ? '' : 's'}',
-          if (rides > 0) '$rides ride${rides == 1 ? '' : 's'}',
-          if (others > 0) '$others other',
-        ].join(' · '),
-        graphic: paintBox(
-          SegmentStripPainter(
-            [
-              for (final m in moves)
-                if (m.startMinuteOfDay != null)
-                  (
-                    m.startMinuteOfDay! / 1440,
-                    (m.startMinuteOfDay! + m.minutes) / 1440,
-                  ),
-            ],
-            _cMove,
-            ticks: const [
-              (0, '0'),
-              (0.25, '6'),
-              (0.5, '12'),
-              (0.75, '18'),
-              (1, '24'),
-            ],
-          ),
-          key: const Key('report-moveiq-timeline'),
+        onTap: () => showMoveIqSheet(context, day: y, fontFamily: kReportFont),
+        art: MoveIqDial(key: const Key('report-moveiq-dial'), events: moves),
+        text: ReportArtText(
+          value: moveIqTileValue(moves),
+          valueKey: const Key('report-moveiq-value'),
+          line: moveIqTileLine(moves),
+          lineKey: const Key('report-moveiq-line'),
         ),
-        graphicHeight: 30,
       );
     }
 

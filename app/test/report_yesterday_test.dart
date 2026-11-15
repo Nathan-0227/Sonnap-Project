@@ -188,7 +188,9 @@ void main() {
         endsWith('high 35m'),
       );
       expect(find.text('+48 / −61'), findsOneWidget);
-      expect(find.text('1 walk · 1 ride'), findsOneWidget);
+      // 11-15 使用者定：騎車不顯示（多半是機車），所以只剩走路那一段
+      expect(find.text('1 walk'), findsOneWidget);
+      expect(find.textContaining('ride'), findsNothing);
       expect(
         find.byKey(const Key('report-vo2')),
         findsNothing,
@@ -205,7 +207,7 @@ void main() {
         'report-active-mountain',
         'report-stress-dome',
         'report-body-battery-bars',
-        'report-moveiq-timeline',
+        'report-moveiq-dial',
       ]) {
         final size = tester.getSize(find.byKey(Key(k)));
         expect(size.height, greaterThan(8), reason: k);

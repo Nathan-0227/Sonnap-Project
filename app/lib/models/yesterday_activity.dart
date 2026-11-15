@@ -258,6 +258,9 @@ class ActivityHistoryDay {
   final int? awakeHrAvg;
   final int? awakeHrMax;
 
+  /// 那天的 Move IQ（Move IQ 一週圖；只有 /home 帶）。null＝沒抓到／沒帶；空＝那天沒有。
+  final List<MoveIqEvent>? moveIq;
+
   /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
   final int? stepGoal;
   final int? distanceM;
@@ -272,6 +275,7 @@ class ActivityHistoryDay {
     this.stressAvg,
     this.awakeHrAvg,
     this.awakeHrMax,
+    this.moveIq,
     this.stepGoal,
     this.distanceM,
   });
@@ -293,6 +297,12 @@ class ActivityHistoryDay {
       stressAvg: (raw['stress_avg'] as num?)?.round(),
       awakeHrAvg: ((raw['awake_hr'] as Map?)?['avg'] as num?)?.round(),
       awakeHrMax: ((raw['awake_hr'] as Map?)?['max'] as num?)?.round(),
+      moveIq: raw['move_iq'] is List
+          ? [
+              for (final e in raw['move_iq'] as List)
+                ?MoveIqEvent.fromJsonOrNull(e),
+            ]
+          : null,
       stepGoal: (raw['step_goal'] as num?)?.round(),
       distanceM: (raw['distance_m'] as num?)?.round(),
     );

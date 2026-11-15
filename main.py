@@ -460,6 +460,8 @@ def _yesterday_history(user_id, day):
             "stress_avg": stress_avgs.get(r["date"]),
             # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
             "awake_hr": _awake_hr_summary(user_id, r, windows),
+            # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
+            "move_iq": r.get("move_iq"),
         })
     return out
 
