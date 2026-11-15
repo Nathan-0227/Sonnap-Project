@@ -324,6 +324,16 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-stress')));
       expect(find.byKey(const Key('report-stress-dome')), findsOneWidget);
       expect(find.byKey(const Key('report-stress-gauge')), findsNothing);
+      // 字在圓心上：跟半圓同一條中線、貼著底邊、整塊落在半圓裡
+      final dome = tester.getRect(find.byKey(const Key('report-stress-dome')));
+      final text = tester.getRect(find.byKey(const Key('report-stress-text')));
+      expect(text.center.dx, closeTo(dome.center.dx, 1));
+      expect(text.bottom, closeTo(dome.bottom, 1));
+      expect(
+        text.top,
+        greaterThan(dome.bottom - dome.width / 2),
+        reason: '在半圓裡',
+      );
       final line = tester
           .widget<Text>(find.byKey(const Key('report-stress-line')))
           .data!;

@@ -1466,7 +1466,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         ('High', y.stressHighSec, _cStress),
       ];
       // 11-15 使用者定（參考圖 Stress 卡）：整個半圓露出來（貼底），各段面積＝各程度的比例；
-      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在左上（stress_sheet.dart）
+      // 紫色系、大字＝平均壓力（不加 %、不寫 Elevated）、字在圓心上（stress_sheet.dart）
       final sp = stressParts(y);
       final avg = stressAvgOf(y);
       stressTile = sp == null
@@ -1504,10 +1504,12 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 children: [
                   StressDome(key: const Key('report-stress-dome'), parts: sp),
                   Align(
-                    alignment: Alignment.topLeft,
+                    // 字在圓心上（同日第三輪使用者定）：底邊正中間、置中，壓在半圓裡
+                    alignment: Alignment.bottomCenter,
                     child: Column(
+                      key: const Key('report-stress-text'),
                       mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         if (avg != null)
                           Text(
