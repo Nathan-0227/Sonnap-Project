@@ -200,7 +200,11 @@ class NightlyUploader {
     for (final night in stored) {
       // ⚠️ 補送要帶著**那一晚自己的**上床標記，不是現在手機裡的那一組。
       //    拿今天的標記去補三天前那一晚，算出來的臥床時間是假的。
-      final result = await _post(night.lightsOutIso, night.marks);
+      final result = await _post(
+        night.lightsOutIso,
+        night.marks,
+        bridgedUnlocks: night.bridgedUnlocks,
+      );
       if (result.status == NightlyUploadStatus.ok) {
         replayed.add(result);
       } else if (_worthKeeping(result.status)) {
@@ -213,7 +217,13 @@ class NightlyUploader {
     final current = await upload(lightsOut, marks: usable);
     final queuedToday = todayIso != null && _worthKeeping(current.status);
     if (queuedToday) {
-      remaining.add(PendingNight(todayIso, marks: usable));
+      remaining.add(
+        PendingNight(
+          todayIso,
+          marks: usable,
+          bridgedUnlocks: lightsOut.bridgedUnlocks,
+        ),
+      );
     }
 
     await queue.save(remaining);
@@ -292,13 +302,21 @@ class NightlyUploader {
       return const NightlyUploadResult(NightlyUploadStatus.nothingDetected);
     }
 
-    return _post(iso, _usableMarks(lightsOut, marks));
+    return _post(
+      iso,
+      _usableMarks(lightsOut, marks),
+      bridgedUnlocks: lightsOut.bridgedUnlocks,
+    );
   }
 
   /// 真正發出請求的那一段。吃 ISO8601 字串而不是 [LightsOutResult]，
   /// 因為補送時手上只剩存下來的那一筆 [PendingNight]——達成度那三個欄位
   /// 刻意不存（理由見 [PendingNightlyStore]）。
-  Future<NightlyUploadResult> _post(String iso, BedMarks marks) async {
+  Future<NightlyUploadResult> _post(
+    String iso,
+    BedMarks marks, {
+    int? bridgedUnlocks,
+  }) async {
     final userId = await identity.currentUserId();
     if (userId == null) {
       return const NightlyUploadResult(NightlyUploadStatus.noUser);
@@ -323,6 +341,8 @@ class NightlyUploader {
         // ⚠️ 刻意**不傳** target_bedtime。後端會用使用者當下的設定並存成
         //    當晚的快照——那個欄位是留給「補填歷史夜晚」的，當晚的目標
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
+        // 偵測時跨過幾次半夜的短解鎖（就寢偵測第 4 條規則）。只供分析；不知道就不送（後端存 NULL）。
+        'bridged_unlocks': ?bridgedUnlocks,
         'source': 'phone',
       }));
 

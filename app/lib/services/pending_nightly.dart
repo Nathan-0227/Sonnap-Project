@@ -50,7 +50,15 @@ class PendingNight {
   /// 使用者自己按的上床／下床時刻。沒按就是 [BedMarks.none]。
   final BedMarks marks;
 
-  const PendingNight(this.lightsOutIso, {this.marks = BedMarks.none});
+  /// 偵測時跨過幾次短解鎖（`LightsOutResult.bridgedUnlocks`）。舊格式讀回來是 null
+  /// ＝不知道（送出時就不帶這個欄位，後端存 NULL，不是 0）。
+  final int? bridgedUnlocks;
+
+  const PendingNight(
+    this.lightsOutIso, {
+    this.marks = BedMarks.none,
+    this.bridgedUnlocks,
+  });
 
   Map<String, dynamic> toJson() => {
         'lights_out_at': lightsOutIso,
@@ -60,6 +68,7 @@ class PendingNight {
         if (marks.endIso != null) 'bed_end_at': marks.endIso,
         if (marks.startRecalled) 'bed_start_kind': 'recalled',
         if (marks.endRecalled) 'bed_end_kind': 'recalled',
+        if (bridgedUnlocks != null) 'bridged_unlocks': bridgedUnlocks,
       };
 
   static PendingNight? fromJson(Object? raw) {
@@ -79,6 +88,10 @@ class PendingNight {
         startRecalled: raw['bed_start_kind'] == 'recalled',
         endRecalled: raw['bed_end_kind'] == 'recalled',
       ),
+      bridgedUnlocks: switch (raw['bridged_unlocks']) {
+        final int v when v >= 0 => v,
+        _ => null,
+      },
     );
   }
 
