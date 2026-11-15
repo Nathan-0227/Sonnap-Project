@@ -184,7 +184,18 @@ void main() {
         tester.widget<Text>(find.byKey(const Key('steps-week-usual'))).data,
         'Usually 6,010 steps',
       );
-      expect(find.byKey(const Key('steps-week-goal-6')), findsOneWidget);
+      // 目標＝淡色空長條（不是一條線）；走了多少從底下填，沒走到目標就比空條矮
+      final goal = tester.getRect(find.byKey(const Key('steps-week-goal-6')));
+      final bar = tester.getRect(find.byKey(const Key('steps-week-bar-6')));
+      expect(goal.height, greaterThan(20), reason: '是一根長條，不是 2 px 的線');
+      expect(bar.height, lessThan(goal.height));
+      expect(bar.bottom, goal.bottom, reason: '從同一條底線往上');
+      expect(
+        find.byKey(const Key('steps-week-goal-3')),
+        findsOneWidget,
+        reason: '沒資料的那天也有空條，不會空一格',
+      );
+      expect(find.byKey(const Key('steps-week-bar-3')), findsNothing);
       expect(
         find.descendant(
           of: find.byKey(const Key('steps-week-3')),

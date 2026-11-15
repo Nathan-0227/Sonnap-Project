@@ -386,7 +386,15 @@ class StepsView extends StatelessWidget {
                 Row(
                   key: const Key('steps-week-legend'),
                   children: [
-                    Container(width: 12, height: 2, color: Colors.white),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: const Color(0x14FFFFFF),
+                        border: Border.all(color: const Color(0x33FFFFFF)),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
                     const SizedBox(width: 5),
                     const Text(
                       "that day's goal",
@@ -644,25 +652,31 @@ class _WeekBars extends StatelessWidget {
                       child: Stack(
                         alignment: Alignment.bottomCenter,
                         children: [
+                          // 那天的目標＝一根淡色的空長條（11-15 使用者：只有一條線太空），
+                          // 走了多少從底下往上填；超過目標就長出空條上緣，不變色
+                          if (d.goal != null)
+                            Container(
+                              key: Key('steps-week-goal-$i'),
+                              width: 24,
+                              height: h * d.goal! / hi,
+                              decoration: BoxDecoration(
+                                color: const Color(0x14FFFFFF),
+                                border: Border.all(
+                                  color: const Color(0x33FFFFFF),
+                                ),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                            ),
                           if (d.steps != null)
                             Container(
-                              width: 18,
+                              key: Key('steps-week-bar-$i'),
+                              width: 24,
                               height: math.max(2, h * d.steps! / hi),
                               decoration: BoxDecoration(
                                 color: i == days.length - 1
                                     ? color
                                     : color.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(5),
-                              ),
-                            ),
-                          if (d.goal != null)
-                            Positioned(
-                              bottom: h * d.goal! / hi - 1,
-                              child: Container(
-                                key: Key('steps-week-goal-$i'),
-                                width: 26,
-                                height: 2,
-                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(7),
                               ),
                             ),
                         ],
