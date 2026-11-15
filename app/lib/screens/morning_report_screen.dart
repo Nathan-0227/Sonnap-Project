@@ -1358,19 +1358,15 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       final active = y.activeMinutes;
       // 11-15 使用者定：一座山＝一整天，漸層每一段的面積＝那段的比例（active_sheet.dart）
       final parts = activeParts(y);
-      activeTile = ReportTile(
-        key: const Key('report-active'),
-        icon: Icons.bolt_rounded,
-        color: _cActive,
-        title: 'Active time',
-        value: active == null ? null : reportHm(active),
-        valueKey: const Key('report-active-value'),
-        graphic: parts != null
-            ? ActivityMountain(
-                key: const Key('report-active-mountain'),
-                parts: parts,
-              )
-            : paintBox(
+      activeTile = parts == null
+          ? ReportTile(
+              key: const Key('report-active'),
+              icon: Icons.bolt_rounded,
+              color: _cActive,
+              title: 'Active time',
+              value: active == null ? null : reportHm(active),
+              valueKey: const Key('report-active-value'),
+              graphic: paintBox(
                 StackedBarPainter([
                   ((y.highlyActiveSec ?? 0).toDouble(), _cActive),
                   (
@@ -1384,22 +1380,79 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 ]),
                 key: const Key('report-active-bar'),
               ),
-        graphicHeight: parts != null ? 110 : 18,
-        onTap: () => showActiveSheet(context, day: y, fontFamily: kReportFont),
-        lines: [
-          if (parts != null)
-            Text(activeTileLine(parts))
-          else
-            Text(
-              [
-                if (y.highlyActiveSec != null)
-                  'high ${_secHm(y.highlyActiveSec!)}',
-                if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
-                if (y.sedentarySec != null) 'still ${_secHm(y.sedentarySec!)}',
-              ].join(' · '),
-            ),
-        ],
-      );
+              graphicHeight: 18,
+              onTap: () =>
+                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              lines: [
+                Text(
+                  [
+                    if (y.highlyActiveSec != null)
+                      'high ${_secHm(y.highlyActiveSec!)}',
+                    if (y.activeSec != null) 'active ${_secHm(y.activeSec!)}',
+                    if (y.sedentarySec != null)
+                      'still ${_secHm(y.sedentarySec!)}',
+                  ].join(' · '),
+                ),
+              ],
+            )
+          // 11-15 第二輪（參考圖）：大字小字疊在山的中間，山佔滿整格
+          : ReportTile(
+              key: const Key('report-active'),
+              icon: Icons.bolt_rounded,
+              color: _cActive,
+              title: 'Active time',
+              graphicHeight: 150,
+              onTap: () =>
+                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              graphic: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ActivityMountain(
+                    key: const Key('report-active-mountain'),
+                    parts: parts,
+                  ),
+                  Align(
+                    alignment: const Alignment(-1, 0.25),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            reportHm(parts.activeMinutes),
+                            key: const Key('report-active-value'),
+                            softWrap: false,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(color: Color(0x66000000), blurRadius: 8),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Text(
+                          activeTileLine(parts),
+                          key: const Key('report-active-line'),
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(color: Color(0x66000000), blurRadius: 6),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
     }
 
     Widget? stressTile;

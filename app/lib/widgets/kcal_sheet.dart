@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show kDeltaUp, kDeltaDown, kDeltaFlat;
 import 'steps_sheet.dart' show stepsComma;
@@ -92,10 +94,8 @@ Future<void> showKcalSheet(
   required Color color,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: KcalView(day: day, color: color),

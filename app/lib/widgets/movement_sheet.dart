@@ -19,6 +19,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../models/night_curve.dart';
 import '../models/sleep_stages.dart';
 import '../services/camera_insights.dart'
@@ -128,10 +130,8 @@ Future<void> showMovementSheet(
   List<CameraNight>? week,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: MovementView(

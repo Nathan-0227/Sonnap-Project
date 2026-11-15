@@ -13,6 +13,8 @@
 //       標題改成各種各幾晚。連不到後端整段不出現。
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../services/camera_insights.dart' show EfficiencyNight;
 import '../services/morning_report.dart' show EfficiencyKind;
 import '../services/night_compare.dart' show formatMinutes;
@@ -119,10 +121,8 @@ Future<void> showEfficiencySheet(
   Map<String, EfficiencyNight>? week,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: EfficiencyView(
@@ -317,20 +317,20 @@ class EfficiencyView extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     for (final (label, k) in _groups([for (final n in w) n.$2]))
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _Swatch(kind: k, color: color),
-                            const SizedBox(width: 5),
-                            Text(
-                              label,
-                              style: const TextStyle(
-                                color: Color(0x99FFFFFF),
-                                fontSize: 11,
-                              ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _Swatch(kind: k, color: color),
+                          const SizedBox(width: 5),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              color: Color(0x99FFFFFF),
+                              fontSize: 11,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ],

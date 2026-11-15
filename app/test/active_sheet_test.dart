@@ -64,23 +64,52 @@ String textOf(WidgetTester t, String k) =>
 
 void main() {
   group('山', () {
-    test('照面積切：分界在 √(累積比例)，順序高強度 → 活動 → 坐 → 睡', () {
+    test('照面積切：每一段在（不規則的）山裡佔的面積＝那段的比例；順序高強度 → 活動 → 坐 → 睡', () {
       final b = mountainBands(activeParts(day())!);
       expect(b.map((e) => e.$1), ['high', 'active', 'still', 'sleep']);
       expect(b.first.$2, 0);
       expect(b.last.$3, closeTo(1, 1e-9));
-      // 活動＋高強度＝4902／86400＝5.7% → 分界在 √0.0567 ≈ 0.238（照高度切只會是 0.057）
-      expect(b[1].$3, closeTo(math.sqrt(4902 / 86400), 1e-9));
-      expect(b[1].$3, greaterThan(0.2), reason: '5% 的活動要看得到，不是山尖一個點');
-      // 每一段的面積（下緣² − 上緣²）＝那段的比例
+      // 直接對輪廓積分驗算（不重用程式裡那張表）
+      double area(double t0, double t1) {
+        const n = 2000;
+        var sum = 0.0;
+        for (var i = 0; i < n; i++) {
+          sum += mountainWidth(t0 + (t1 - t0) * (i + 0.5) / n);
+        }
+        return sum * (t1 - t0) / n;
+      }
+
+      final whole = area(0, 1);
+      const shares = {
+        'high': 690,
+        'active': 4212,
+        'still': 58818,
+        'sleep': 22680,
+      };
       for (final (level, top, bottom) in b) {
-        final share = {
-          'high': 690,
-          'active': 4212,
-          'still': 58818,
-          'sleep': 22680,
-        }[level]!;
-        expect(bottom * bottom - top * top, closeTo(share / 86400, 1e-9));
+        expect(
+          area(top, bottom) / whole,
+          closeTo(shares[level]! / 86400, 0.002),
+          reason: level,
+        );
+      }
+      expect(b[1].$3, greaterThan(0.2), reason: '6% 的活動要看得到，不是山尖一個點');
+    });
+
+    test('輪廓不規則：兩邊不是直線（但每個高度只有一段）', () {
+      final mids = [
+        for (final t in [0.25, 0.5, 0.75]) mountainWidth(t) / t,
+      ];
+      expect(
+        mids.reduce(math.max) - mids.reduce(math.min),
+        greaterThan(0.05),
+        reason: '直邊三角形的話寬度÷高度是常數',
+      );
+      var prev = 0.0;
+      for (var i = 1; i <= 100; i++) {
+        final w = mountainWidth(i / 100);
+        expect(w, greaterThanOrEqualTo(prev), reason: '往下只會變寬');
+        prev = w;
       }
     });
 

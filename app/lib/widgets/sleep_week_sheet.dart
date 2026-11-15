@@ -13,6 +13,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../services/night_compare.dart';
 
 /// 日曆上的一個晚上。[minutes] 是 null＝那一晚沒資料。
@@ -103,10 +105,8 @@ Future<void> showSleepWeekSheet(
   String? fontFamily,
 }) {
   final week = sleepWeek(series, endDate);
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     // 彈窗掛在最外層，不會繼承報告的字型——外面那張卡用什麼字，這裡就用什麼字
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),

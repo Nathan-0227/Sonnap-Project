@@ -14,6 +14,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../models/night_curve.dart';
 import '../models/sleep_stages.dart';
 import '../services/camera_insights.dart' show SleepHeartRate;
@@ -109,12 +111,17 @@ String _iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 /// [endDate] 往回 7 晚（日曆上的 7 個晚上）。純函式。
-HeartRateWeek heartRateWeek(Map<String, SleepHeartRate> byDate, String endDate) {
+HeartRateWeek heartRateWeek(
+  Map<String, SleepHeartRate> byDate,
+  String endDate,
+) {
   final end = DateTime.parse(endDate);
   List<HeartRateNight> window(int offset) => [
     for (var i = 6; i >= 0; i--)
       () {
-        final key = _iso(DateTime.utc(end.year, end.month, end.day - offset - i));
+        final key = _iso(
+          DateTime.utc(end.year, end.month, end.day - offset - i),
+        );
         return HeartRateNight(key, byDate[key]);
       }(),
   ];
@@ -130,7 +137,8 @@ HeartRateWeek heartRateWeek(Map<String, SleepHeartRate> byDate, String endDate) 
 String heartRateUsualLine(HeartRateWeek w) => 'Usually ${w.usual!.round()} bpm';
 
 /// 幾晚有資料（同其他一週圖）。
-String heartRateCountLine(HeartRateWeek w) => w.nightsWithData == w.nights.length
+String heartRateCountLine(HeartRateWeek w) =>
+    w.nightsWithData == w.nights.length
     ? 'all ${w.nights.length} nights'
     : '${w.nightsWithData} of ${w.nights.length} nights with data';
 
@@ -155,10 +163,8 @@ Future<void> showHeartRateSheet(
   Map<String, SleepHeartRate>? week,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: HeartRateView(
@@ -403,8 +409,10 @@ class _StageRows extends StatelessWidget {
                     ),
                     alignment: Alignment.centerLeft,
                     child: FractionallySizedBox(
-                      widthFactor:
-                          (0.08 + 0.92 * ((v - lo) / (hi - lo))).clamp(0.08, 1.0),
+                      widthFactor: (0.08 + 0.92 * ((v - lo) / (hi - lo))).clamp(
+                        0.08,
+                        1.0,
+                      ),
                       child: Container(
                         decoration: BoxDecoration(
                           color: kStageColors[st],
@@ -517,7 +525,10 @@ class _NightHeartRateChartState extends State<NightHeartRateChart> {
                 top: yOf(v) - 7,
                 child: Text(
                   '${v.round()}',
-                  style: const TextStyle(color: Color(0x66FFFFFF), fontSize: 10),
+                  style: const TextStyle(
+                    color: Color(0x66FFFFFF),
+                    fontSize: 10,
+                  ),
                 ),
               ),
             Positioned(
@@ -568,7 +579,8 @@ class _NightHeartRateChartState extends State<NightHeartRateChart> {
                 style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
               ),
             ),
-            if (probe != null) Positioned(left: 0, top: 0, width: w, height: h, child: probe),
+            if (probe != null)
+              Positioned(left: 0, top: 0, width: w, height: h, child: probe),
           ],
         );
       },
@@ -680,130 +692,136 @@ class _WeekDots extends StatelessWidget {
                 child: CustomPaint(painter: _DashPainter(color)),
               ),
             Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < week.nights.length; i++)
-              Expanded(
-                child: () {
-                  final n = week.nights[i];
-                  final isLast = i == week.nights.length - 1;
-                  final d = DateTime.parse(n.date);
-                  final hr = n.hr;
-                  final strong = isLast ? 1.0 : 0.7;
-                  return Semantics(
-                    label:
-                        '${_weekdays[d.weekday - 1]} ${d.day}: '
-                        '${hr == null ? 'no data' : 'average ${hr.avg.round()}, lowest ${hr.min.round()}'}',
-                    child: Column(
-                      key: Key('hr-week-col-${n.date}'),
-                      children: [
-                        SizedBox(
-                          height: _valueH + plotH,
-                          child: LayoutBuilder(
-                            builder: (context, col) {
-                              final cx = col.maxWidth / 2;
-                              if (hr == null) {
-                                return Center(
-                                  child: Text(
-                                    '—',
-                                    key: Key('hr-week-value-${n.date}'),
-                                    style: const TextStyle(
-                                      color: Color(0x66FFFFFF),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                );
-                              }
-                              final ya = yOf(hr.avg), yl = yOf(hr.min);
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Positioned(
-                                    left: cx - 1,
-                                    width: 2,
-                                    top: ya,
-                                    height: math.max(0, yl - ya),
-                                    child: ColoredBox(
-                                      color: color.withValues(alpha: 0.35 * strong),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    key: Key('hr-week-min-${n.date}'),
-                                    left: cx - 4,
-                                    top: yl - 4,
-                                    child: Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: const Color(0xFF1B1F48),
-                                        border: Border.all(
-                                          color: color.withValues(alpha: strong),
-                                          width: 1.6,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    key: Key('hr-week-avg-${n.date}'),
-                                    left: cx - 6,
-                                    top: ya - 6,
-                                    child: Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: color.withValues(alpha: strong),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    left: 0,
-                                    right: 0,
-                                    top: ya - 6 - _valueH,
-                                    height: _valueH,
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < week.nights.length; i++)
+                  Expanded(
+                    child: () {
+                      final n = week.nights[i];
+                      final isLast = i == week.nights.length - 1;
+                      final d = DateTime.parse(n.date);
+                      final hr = n.hr;
+                      final strong = isLast ? 1.0 : 0.7;
+                      return Semantics(
+                        label:
+                            '${_weekdays[d.weekday - 1]} ${d.day}: '
+                            '${hr == null ? 'no data' : 'average ${hr.avg.round()}, lowest ${hr.min.round()}'}',
+                        child: Column(
+                          key: Key('hr-week-col-${n.date}'),
+                          children: [
+                            SizedBox(
+                              height: _valueH + plotH,
+                              child: LayoutBuilder(
+                                builder: (context, col) {
+                                  final cx = col.maxWidth / 2;
+                                  if (hr == null) {
+                                    return Center(
                                       child: Text(
-                                        '${hr.avg.round()}',
+                                        '—',
                                         key: Key('hr-week-value-${n.date}'),
-                                        style: TextStyle(
-                                          color: isLast
-                                              ? Colors.white
-                                              : const Color(0xCCFFFFFF),
+                                        style: const TextStyle(
+                                          color: Color(0x66FFFFFF),
                                           fontSize: 11,
-                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                        SizedBox(
-                          height: _labelH,
-                          child: Center(
-                            child: Text(
-                              _weekdays[d.weekday - 1],
-                              style: TextStyle(
-                                color: isLast
-                                    ? Colors.white
-                                    : const Color(0x99FFFFFF),
-                                fontSize: 11,
-                                fontWeight: isLast ? FontWeight.w800 : null,
+                                    );
+                                  }
+                                  final ya = yOf(hr.avg), yl = yOf(hr.min);
+                                  return Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Positioned(
+                                        left: cx - 1,
+                                        width: 2,
+                                        top: ya,
+                                        height: math.max(0, yl - ya),
+                                        child: ColoredBox(
+                                          color: color.withValues(
+                                            alpha: 0.35 * strong,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        key: Key('hr-week-min-${n.date}'),
+                                        left: cx - 4,
+                                        top: yl - 4,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFF1B1F48),
+                                            border: Border.all(
+                                              color: color.withValues(
+                                                alpha: strong,
+                                              ),
+                                              width: 1.6,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        key: Key('hr-week-avg-${n.date}'),
+                                        left: cx - 6,
+                                        top: ya - 6,
+                                        child: Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: color.withValues(
+                                              alpha: strong,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        top: ya - 6 - _valueH,
+                                        height: _valueH,
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            '${hr.avg.round()}',
+                                            key: Key('hr-week-value-${n.date}'),
+                                            style: TextStyle(
+                                              color: isLast
+                                                  ? Colors.white
+                                                  : const Color(0xCCFFFFFF),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                             ),
-                          ),
+                            SizedBox(
+                              height: _labelH,
+                              child: Center(
+                                child: Text(
+                                  _weekdays[d.weekday - 1],
+                                  style: TextStyle(
+                                    color: isLast
+                                        ? Colors.white
+                                        : const Color(0x99FFFFFF),
+                                    fontSize: 11,
+                                    fontWeight: isLast ? FontWeight.w800 : null,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                }(),
-              ),
-          ],
-        ),
+                      );
+                    }(),
+                  ),
+              ],
+            ),
           ],
         );
       },

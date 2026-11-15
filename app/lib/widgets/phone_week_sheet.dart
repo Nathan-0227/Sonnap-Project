@@ -25,6 +25,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../services/night_compare.dart'
     show formatMinutes, kDeltaUp, kDeltaDown, kDeltaFlat;
 import 'bed_week_sheet.dart' show minutesFromEvening, clockOf;
@@ -160,10 +162,8 @@ Future<void> showPhoneWeekSheet(
   String? target,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: PhoneWeekView(

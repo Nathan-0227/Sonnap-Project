@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'report_sheet.dart';
+
 import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show kDeltaUp, kDeltaDown, kDeltaFlat;
 import '../theme/report_style.dart' show reportHm;
@@ -10,8 +12,9 @@ import 'steps_sheet.dart' show stepsComma;
 
 // 早晨報告 Active time（2026-11-15 使用者定）：
 // - 報告上那一格是一座山（參考圖 Activity / Perfect day）：山＝一整天 24 小時，漸層由下往上
-//   睡（深藍）→ 坐（淺藍）→ 活動（橘）→ 高強度（山尖）。**每一段佔的面積＝那天的比例**
-//   （照面積切不照高度切：山越往上越尖，照高度切的話活動 5% 只剩一個點）。段與段之間只留很短的過渡。
+//   睡（藍）→ 坐（淡紫藍）→ 活動（桃橘）→ 高強度（山尖，珊瑚橘）。**每一段佔的面積＝那天的比例**
+//   （照面積切不照高度切：山越往上越尖，照高度切的話活動 5% 只剩一個點）。
+//   同日第二輪（照參考圖）：輪廓不規則、邊緣一圈淡淡的亮光、大字小字疊在山的中間、過渡柔一點。
 //   太陽只是裝飾。參考圖的「Perfect day」不照做（那是評好壞），小字只寫事實。
 // - 點開：24 小時圓環（四段）＋左邊四行時間；一整天的時間軸（每 15 分鐘一格，Move IQ 標在上面，
 //   點一下看那 15 分鐘）；一週（高強度疊在下面、活動在上面，Usually＝中間值，比前一週只代表方向）。
@@ -20,10 +23,10 @@ import 'steps_sheet.dart' show stepsComma;
 // ⚠️ 不放強度分鐘與 150 分鐘週目標：這支錶給 0，而且那是 WHO 對中高強度運動的建議，
 //    Garmin 的「活動時間」不是同一個量（拿錯尺）。久坐只寫時間，不寫坐太久、不提醒。
 
-const kActiveHigh = Color(0xFFFF6B4A);
-const kActiveActive = Color(0xFFFFA24C);
-const kActiveStill = Color(0xFF7FB2E5);
-const kActiveSleep = Color(0xFF2E4A9E);
+const kActiveHigh = Color(0xFFFF8A5C);
+const kActiveActive = Color(0xFFFFB46B);
+const kActiveStill = Color(0xFF6F8EF0);
+const kActiveSleep = Color(0xFF2D50C8);
 const kActiveOther = Color(0x66FFFFFF);
 
 Color activeLevelColor(String level) => switch (level) {
@@ -58,8 +61,60 @@ ActiveParts? activeParts(YesterdayActivity y) {
   return p.total > 0 ? p : null;
 }
 
-/// 山的分段：從山尖往下，每一段的下緣在山高的哪裡（0＝山尖、1＝山腳）。
-/// 照**面積**切：三角形從山尖往下 t 的面積是全部的 t²，所以累積面積 A 的分界在 √A。
+/// 山的輪廓（2026-11-15 使用者定照參考圖：不規則，不是直邊三角形）。
+/// t＝從山尖往下的比例（0＝山尖、1＝山腳），回傳那個高度左右兩邊的 x（0–1，佔寬度的比例）。
+/// 兩邊都單調往外，所以每個高度只有一段。
+const double kMountainApexX = 0.58;
+
+(double, double) mountainEdges(double t) {
+  final l =
+      kMountainApexX -
+      kMountainApexX *
+          (t -
+              0.07 * math.sin(2 * math.pi * t) +
+              0.015 * math.sin(7 * math.pi * t));
+  final r =
+      kMountainApexX +
+      (1 - kMountainApexX) * (t + 0.06 * math.sin(3 * math.pi * t));
+  return (l.clamp(0.0, 1.0), r.clamp(0.0, 1.0));
+}
+
+double mountainWidth(double t) {
+  final (l, r) = mountainEdges(t);
+  return r - l;
+}
+
+/// 從山尖往下到 t 的面積佔全部的比例（數值積分）。
+List<double> _cumulativeArea() {
+  const n = 400;
+  final out = List<double>.filled(n + 1, 0);
+  for (var i = 1; i <= n; i++) {
+    final a = mountainWidth((i - 1) / n), b = mountainWidth(i / n);
+    out[i] = out[i - 1] + (a + b) / 2 / n;
+  }
+  final total = out[n];
+  return [for (final v in out) v / total];
+}
+
+final List<double> _areaTable = _cumulativeArea();
+
+/// 面積比例 [share]（0–1）的分界在山高的哪裡。
+double _heightForArea(double share) {
+  if (share <= 0) return 0;
+  if (share >= 1) return 1;
+  final n = _areaTable.length - 1;
+  for (var i = 1; i <= n; i++) {
+    if (_areaTable[i] >= share) {
+      final a = _areaTable[i - 1], b = _areaTable[i];
+      final f = b == a ? 0.0 : (share - a) / (b - a);
+      return (i - 1 + f) / n;
+    }
+  }
+  return 1;
+}
+
+/// 山的分段：從山尖往下，每一段的上緣、下緣在山高的哪裡（0＝山尖、1＝山腳）。
+/// 照**面積**切：每一段在山裡佔的面積＝那段佔一天的比例（輪廓不規則，用數值積分找分界）。
 /// 回傳 [(程度, 上緣, 下緣)]，順序高強度 → 活動 → 坐 → 睡；佔 0 的段不回。純函式。
 List<(String, double, double)> mountainBands(ActiveParts p) {
   final total = p.total.toDouble();
@@ -73,9 +128,9 @@ List<(String, double, double)> mountainBands(ActiveParts p) {
     ('sleep', p.sleep),
   ]) {
     if (v <= 0) continue;
-    final top = math.sqrt(cum / total);
+    final top = _heightForArea(cum / total);
     cum += v;
-    out.add((level, top, math.sqrt(math.min(1, cum / total))));
+    out.add((level, top, _heightForArea(math.min(1, cum / total))));
   }
   return out;
 }
@@ -177,49 +232,58 @@ class MountainPainter extends CustomPainter {
   final ActiveParts parts;
   MountainPainter(this.parts);
 
-  /// 段與段之間的過渡（山高的比例）：很短，不要整片糊在一起。
-  static const blend = 0.02;
+  /// 段與段之間的過渡（山高的比例）：柔一點像參考圖，但不糊到讀不出每段多大。
+  static const blend = 0.05;
+
+  /// 山尖在畫面高度的哪裡。
+  static const apexY = 0.06;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final apex = Offset(w * 0.44, h * 0.04);
-    final left = Offset(w * 0.02, h), right = Offset(w * 0.98, h);
+    final top = h * apexY;
+    Offset at(double t, bool left) {
+      final (l, r) = mountainEdges(t);
+      return Offset((left ? l : r) * w, top + t * (h - top));
+    }
 
     // 太陽：只是裝飾
-    final sun = Offset(w * 0.8, h * 0.2);
-    final sr = math.min(w, h) * 0.1;
+    final sun = Offset(w * 0.86, h * 0.2);
+    final sr = math.min(w, h) * 0.09;
     canvas.drawCircle(
       sun,
-      sr * 1.9,
+      sr * 2.6,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.12)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, sr * 0.8),
+        ..color = Colors.white.withValues(alpha: 0.18)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, sr * 1.2),
     );
-    canvas.drawCircle(sun, sr, Paint()..color = const Color(0xFFFFF6E0));
+    canvas.drawCircle(sun, sr, Paint()..color = const Color(0xFFFFFBF2));
 
-    // 山：直邊三角形，山尖稍微圓一點（面積比例照三角形算，圓角只吃掉山尖一點點）
-    final path = Path()
-      ..moveTo(left.dx, left.dy)
-      ..lineTo(apex.dx - w * 0.03, apex.dy + h * 0.05)
-      ..quadraticBezierTo(
-        apex.dx,
-        apex.dy,
-        apex.dx + w * 0.03,
-        apex.dy + h * 0.05,
-      )
-      ..lineTo(right.dx, right.dy)
-      ..close();
+    // 不規則的輪廓：左邊從山腳往上、山尖稍微圓、右邊往下
+    const n = 60;
+    final path = Path()..moveTo(at(1, true).dx, h);
+    for (var i = n; i >= 2; i--) {
+      final p = at(i / n, true);
+      path.lineTo(p.dx, p.dy);
+    }
+    final apex = Offset(kMountainApexX * w, top);
+    final r1 = at(1 / n, false);
+    path.quadraticBezierTo(apex.dx, apex.dy - h * 0.01, r1.dx, r1.dy);
+    for (var i = 2; i <= n; i++) {
+      final p = at(i / n, false);
+      path.lineTo(p.dx, p.dy);
+    }
+    path.close();
 
     final bands = mountainBands(parts);
     if (bands.isEmpty) return;
     final colors = <Color>[];
     final stops = <double>[];
-    for (final (i, (level, top, bottom)) in bands.indexed) {
+    for (final (i, (level, t0, t1)) in bands.indexed) {
       final c = activeLevelColor(level);
       final isFirst = i == 0, isLast = i == bands.length - 1;
-      final a = isFirst ? 0.0 : math.min(top + blend / 2, bottom);
-      final b = isLast ? 1.0 : math.max(bottom - blend / 2, a);
+      final a = isFirst ? 0.0 : math.min(t0 + blend / 2, t1);
+      final b = isLast ? 1.0 : math.max(t1 - blend / 2, a);
       colors
         ..add(c)
         ..add(c);
@@ -235,8 +299,21 @@ class MountainPainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: colors,
           stops: stops,
-        ).createShader(Rect.fromLTRB(0, apex.dy, w, h)),
+        ).createShader(Rect.fromLTRB(0, top, w, h)),
     );
+
+    // 邊緣亮一點、透一點（參考圖）：沿輪廓往內一圈柔光，只畫在山裡面
+    canvas.save();
+    canvas.clipPath(path);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w * 0.07
+        ..color = Colors.white.withValues(alpha: 0.38)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.035),
+    );
+    canvas.restore();
   }
 
   @override
@@ -254,10 +331,8 @@ Future<void> showActiveSheet(
   required YesterdayActivity day,
   String? fontFamily,
 }) {
-  return showModalBottomSheet<void>(
+  return showReportSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (context) => DefaultTextStyle.merge(
       style: TextStyle(fontFamily: fontFamily),
       child: ActiveView(day: day),
