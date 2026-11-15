@@ -391,12 +391,19 @@ void main() {
       expect(find.byKey(const Key('pet-accessory')), findsNothing);
     });
 
-    test('衣櫃 item_id 對得上隊友的三件圖', () {
+    test('衣櫃 item_id 對得上隊友的四件圖', () {
       expect(layeredAccessoryFor('cap')?.id, 'sleep_hat');
       expect(layeredAccessoryFor('glasses')?.id, 'round_glasses');
       expect(layeredAccessoryFor('scarf')?.id, 'night_scarf');
-      for (final none in ['bow', 'top_hat', 'crown', null]) {
+      expect(layeredAccessoryFor('bow')?.id, 'pink_bow');
+      // ⚠️ 反面：還沒有圖的那兩件必須回 null（會改疊 emoji）。
+      //    少了這一條，哪天隨便對應一個不存在的 id 也不會被抓到。
+      for (final none in ['top_hat', 'crown', null]) {
         expect(layeredAccessoryFor(none), isNull, reason: '$none');
+      }
+      // 每一個對應得到的 id 都必須真的在 accessories 裡（打錯字就會回 null）。
+      for (final itemId in kLayeredAccessoryFor.keys) {
+        expect(layeredAccessoryFor(itemId), isNotNull, reason: itemId);
       }
     });
   });

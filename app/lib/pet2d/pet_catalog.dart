@@ -591,4 +591,12 @@ const accessories = <AccessoryDefinition>[
     slot: AccessorySlot.neck,
     assetPath: 'assets/accessories/neck/night_scarf.png',
   ),
+  // 隊友 2026-11-15 交來的第四件真圖，補上後端 Lv4 的 bow（原本只有 emoji）。
+  // 與圍巾同一個 neck 插槽，所以共用那三種心情的 neck 錨點，不必另外對位。
+  AccessoryDefinition(
+    id: 'pink_bow',
+    label: 'Pink Ribbon Bow',
+    slot: AccessorySlot.neck,
+    assetPath: 'assets/accessories/neck/pink_bow.png',
+  ),
 ];
