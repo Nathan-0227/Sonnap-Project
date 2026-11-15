@@ -103,10 +103,15 @@ void main() {
       const [],
       Colors.indigo,
     ).paint(canvas, const Size(170, 190));
-    BedRipplePainter(
-      const [],
-      Colors.yellow,
-    ).paint(canvas, const Size(350, 190));
+    CameraBarsPainter(const []).paint(canvas, const Size(350, 210));
+    final t0 = DateTime(2026, 11, 14, 3, 15);
+    CameraBarsPainter([
+      for (var i = 0; i < 60; i++)
+        (t0.add(Duration(minutes: 5 * i)), i % 7 == 0 ? 0.4 : 0.0),
+    ]).paint(canvas, const Size(350, 210));
+    CameraBarsPainter([
+      for (var i = 0; i < 10; i++) (t0.add(Duration(minutes: 5 * i)), 0.0),
+    ]).paint(canvas, const Size(350, 210));
     recorder.endRecording();
   });
 

@@ -1251,10 +1251,16 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         icon: Icons.videocam_rounded,
         color: _cCam,
         title: 'Movement (camera)',
+        // 光柱＋時間軸＋大字＋小字，比別格多一點高度
+        height: 210,
         // 點開：片段（影片）＋動作線＋一週跟平常比（2026-11-15）
         onTap: () => _showMovement(r),
         art: lastNightArt(
-          BedRipplePainter(cam == null ? const [] : _curvePoints(cam), _cCam),
+          CameraBarsPainter(
+            cam == null
+                ? const []
+                : [for (final p in cam.points) (p.time, p.value)],
+          ),
           key: const Key('report-camera-line'),
         ),
         // 後端寫好的那句「跟你平常比」，照抄當大字

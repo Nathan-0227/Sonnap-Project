@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 // - Phone down：半圓鐘面，空心圈＝目標、亮點＝實際放下手機，中間一道淡光（不分好壞，同一色）
 // - Awake：一條星河，醒著的那幾段亮起琥珀色光點（位置＝整晚的哪裡）
 // - Sleeping HR：靛藍色的慢線，**不跳、不用紅**（跟會跳的珊瑚紅 Awake HR 分開）；不放月亮（使用者定）
-// - Movement (camera)：床的輪廓＋動作曲線，動得多的那幾刻泛出漣漪（只呈現、不算分）
+// - Movement (camera)：光柱（使用者給參考圖），每 5 分鐘一根、高度＝那 5 分鐘有幾成在動，高的轉金色（只呈現、不算分）
 // （Efficiency 維持使用者喜歡的「從底下填滿」，另外加了水面的動態：report_tiles.dart LiquidFill。）
 // 字寫在底下，所以圖都放在中間偏上、底下 40% 留給字。
 
@@ -475,84 +475,142 @@ class SleepHrWavePainter extends CustomPainter {
       old.points != points || old.color != color;
 }
 
-// ── Movement (camera)：床＋動作曲線＋漣漪 ──
+// ── Movement (camera)：光柱（11-15 使用者給參考圖）──
+// 每 5 分鐘一根柱子，高度＝那 5 分鐘裡有幾成時間在動（後端的 motion_curve，照抄不平滑）；
+// 越高越從淡紫轉成金色、帶光暈。底下一條時間軸（整點刻度），兩個下角淡淡的雲。
+// 0＝那 5 分鐘沒動（是真的值）：畫成很淡的短柱，不是空著。只呈現、不算分。
 
-class BedRipplePainter extends CustomPainter {
-  /// (x 0–1, 那 5 分鐘有幾成時間在動 0–1)；空的＝沒有曲線。
-  final List<(double, double)> points;
-  final Color color;
-  BedRipplePainter(this.points, this.color);
+class CameraBarsPainter extends CustomPainter {
+  /// (時刻, 0–1)；空的＝沒有曲線（只畫星星與雲）。
+  final List<(DateTime, double)> points;
+  CameraBarsPainter(this.points);
+
+  static const lavender = Color(0xFF8C7BEA);
+  static const gold = Color(0xFFFFD96A);
+
+  /// 柱子底線的位置（相對高度）；時刻標在它下面。
+  static const double baseY = 0.56;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    // 床（從上往下看）：右半邊淡淡的輪廓＋枕頭
-    final bed = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.58, h * 0.12, w * 0.34, h * 0.56),
-      const Radius.circular(14),
+    _drawStars(
+      canvas,
+      Rect.fromLTWH(w * 0.3, h * 0.08, w * 0.68, h * 0.4),
+      22,
+      13,
+      0.6,
     );
-    final outline = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..color = const Color(0x33FFFFFF);
-    canvas.drawRRect(bed, outline);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.63, h * 0.16, w * 0.24, h * 0.1),
-        const Radius.circular(8),
-      ),
-      outline,
-    );
+    // 兩個下角的雲
+    final cloud = Paint()
+      ..color = const Color(0xFF7B6CE0).withValues(alpha: 0.35)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, h * 0.06);
+    for (final (x, y, r) in [
+      (0.02, 0.96, 0.2),
+      (0.1, 1.02, 0.16),
+      (0.86, 0.94, 0.2),
+      (0.96, 0.86, 0.16),
+      (0.75, 1.02, 0.18),
+    ]) {
+      canvas.drawCircle(Offset(w * x, h * y), h * r, cloud);
+    }
     if (points.length < 2) return;
+
+    final x0 = w * 0.06, x1 = w * 0.94;
+    final base = h * baseY;
+    final maxH = h * 0.3;
+    final t0 = points.first.$1, t1 = points.last.$1;
+    final span = t1.difference(t0).inSeconds.toDouble();
+    if (span <= 0) return;
+    double xOf(DateTime t) =>
+        x0 + (x1 - x0) * t.difference(t0).inSeconds / span;
     var hi = 0.0;
     for (final p in points) {
       hi = math.max(hi, p.$2);
     }
-    if (hi <= 0) hi = 1;
-    final base = h * 0.6, top = h * 0.24;
-    Offset at((double, double) p) =>
-        Offset(w * 0.04 + w * 0.92 * p.$1, base - (base - top) * p.$2 / hi);
-    final pts = [for (final p in points) at(p)];
-    final line = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (final p in pts.skip(1)) {
-      line.lineTo(p.dx, p.dy);
-    }
-    final area = Path.from(line)
-      ..lineTo(pts.last.dx, base)
-      ..lineTo(pts.first.dx, base)
-      ..close();
-    canvas.drawPath(
-      area,
+    final step = (x1 - x0) / (points.length - 1);
+    final barW = (step * 0.62).clamp(1.5, 7.0);
+
+    // 時間軸＋整點刻度（夜長 ≥ 4 小時每 3 小時一格，不然每小時）
+    canvas.drawLine(
+      Offset(x0, base + 6),
+      Offset(x1, base + 6),
       Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: 0.4), color.withValues(alpha: 0.02)],
-        ).createShader(Rect.fromLTRB(0, top, w, base)),
+        ..color = lavender.withValues(alpha: 0.55)
+        ..strokeWidth = 1.2,
     );
-    canvas.drawPath(line, _line(color, 1.6)..strokeJoin = StrokeJoin.round);
-    // 動得最多的三刻：漣漪
-    final ranked = [...pts.indexed]
-      ..sort((a, b) => points[b.$1].$2.compareTo(points[a.$1].$2));
-    for (final (i, p) in ranked.take(3)) {
-      if (points[i].$2 <= 0) continue;
-      for (var k = 1; k <= 3; k++) {
-        canvas.drawCircle(
-          p,
-          4.0 * k,
+    final every = span >= 4 * 3600 ? 3 : 1;
+    var tick = DateTime(
+      t0.year,
+      t0.month,
+      t0.day,
+      t0.hour,
+    ).add(const Duration(hours: 1));
+    while (!tick.isAfter(t1)) {
+      if (tick.hour % every == 0) {
+        final x = xOf(tick);
+        canvas.drawLine(
+          Offset(x, base + 3),
+          Offset(x, base + 10),
           Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1
-            ..color = color.withValues(alpha: 0.5 / k),
+            ..color = lavender.withValues(alpha: 0.7)
+            ..strokeWidth = 1.2,
+        );
+        final tp = TextPainter(
+          text: TextSpan(
+            text: tick.hour.toString().padLeft(2, '0'),
+            style: const TextStyle(
+              color: Color(0xB3C9C0FF),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x - tp.width / 2, base + 12));
+      }
+      tick = tick.add(const Duration(hours: 1));
+    }
+
+    // 柱子
+    for (final (t, v) in points) {
+      final f = hi <= 0 ? 0.0 : (v / hi).clamp(0.0, 1.0);
+      final x = xOf(t);
+      final bh = math.max(3.0, maxH * f);
+      final color = Color.lerp(
+        lavender,
+        gold,
+        ((f - 0.35) / 0.5).clamp(0.0, 1.0),
+      )!;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - barW / 2, base - bh, barW, bh),
+        Radius.circular(barW / 2),
+      );
+      if (f > 0.5) {
+        canvas.drawRRect(
+          rect.inflate(barW * 0.8),
+          Paint()
+            ..color = gold.withValues(alpha: 0.35 * f)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, barW * 1.6),
         );
       }
-      canvas.drawCircle(p, 2.5, Paint()..color = Colors.white);
+      canvas.drawRRect(
+        rect,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              color.withValues(alpha: v <= 0 ? 0.25 : 0.55),
+              color.withValues(alpha: v <= 0 ? 0.3 : 0.6 + 0.4 * f),
+            ],
+          ).createShader(rect.outerRect),
+      );
     }
   }
 
   @override
-  bool shouldRepaint(BedRipplePainter old) =>
-      old.points != points || old.color != color;
+  bool shouldRepaint(CameraBarsPainter old) => old.points != points;
 }
 
 /// 鋪滿整張卡的 CustomPaint。
