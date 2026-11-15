@@ -24,7 +24,8 @@ import '../models/sleep_stages.dart';
 import '../services/camera_insights.dart'
     show CameraClip, CameraEpisode, CameraNight;
 import '../services/night_compare.dart' show formatMinutes;
-import 'chart_probe.dart' show stageNames;
+import 'chart_probe.dart'
+    show ProbeKind, ProbeLayer, nearestPoint, probeText, stageNames;
 
 /// 換成 isUtc 的牆鐘（Sleep Stages、片段、動作三種時間基準不同，混著比會差 8 小時）。
 DateTime _wall(DateTime t) => t.isUtc
@@ -430,6 +431,7 @@ class _MovementViewState extends State<MovementView> {
                     episodes: eps ?? const [],
                     clips: _clips,
                     selected: _sel,
+                    stages: widget.stages,
                     color: color,
                     onSelect: (at) => _select(at),
                   ),
@@ -522,12 +524,16 @@ Widget _divider() => Padding(
 );
 
 /// 最上面那條動作線（每 5 分鐘有幾成在動）＋片段時刻的點＋白色直線＝正在看的那段。
-/// 點線上任一處 → 選離那一刻最近的動作（3 分鐘內；沒有每段資料就只找片段）。
-class _MotionLine extends StatelessWidget {
+/// - 片段的點**畫在線上**那一刻的位置（11-15 使用者：原本貼在底線上看不出是哪一段）。
+/// - 按住左右滑 → 泡泡跟著走：「03:42 · moving 12 sec · Light」（同 Sleep Stages 卡的點線看那一刻，
+///   規則在 chart_probe.dart：吸到最近的真實讀數、不內插；附近沒讀數寫 no reading）。
+/// - 點一下 → 也選離那一刻最近的動作來播（3 分鐘內；沒有每段資料就只找片段）。點圖外面泡泡收起來。
+class _MotionLine extends StatefulWidget {
   final NightCurve curve;
   final List<CameraEpisode> episodes;
   final List<CameraClip> clips;
   final DateTime? selected;
+  final SleepStages? stages;
   final Color color;
   final ValueChanged<DateTime> onSelect;
   const _MotionLine({
@@ -535,14 +541,40 @@ class _MotionLine extends StatelessWidget {
     required this.episodes,
     required this.clips,
     required this.selected,
+    required this.stages,
     required this.color,
     required this.onSelect,
   });
 
+  @override
+  State<_MotionLine> createState() => _MotionLineState();
+}
+
+class _MotionLineState extends State<_MotionLine> {
   static const double _timeH = 16;
+  double? _probeX;
+
+  /// 線上那一刻的值（兩個點之間直線內插，只用來把片段的點放在線上，不拿來顯示數字）。
+  double _valueAt(DateTime t) {
+    final pts = widget.curve.points;
+    final w = _wall(t);
+    if (!w.isAfter(_wall(pts.first.time))) return pts.first.value;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = _wall(pts[i].time), b = _wall(pts[i + 1].time);
+      if (!w.isBefore(a) && !w.isAfter(b)) {
+        final span = b.difference(a).inSeconds;
+        if (span <= 0) return pts[i].value;
+        final f = w.difference(a).inSeconds / span;
+        return pts[i].value + (pts[i + 1].value - pts[i].value) * f;
+      }
+    }
+    return pts.last.value;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final curve = widget.curve, clips = widget.clips, selected = widget.selected;
+    final color = widget.color;
     final t0 = _wall(curve.points.first.time);
     final t1 = _wall(curve.points.last.time);
     final span = math.max(1, t1.difference(t0).inSeconds);
@@ -553,105 +585,139 @@ class _MotionLine extends StatelessWidget {
         final w = box.maxWidth, h = box.maxHeight - _timeH;
         double xOf(DateTime t) => w * _wall(t).difference(t0).inSeconds / span;
         double yOf(double v) => h * (1 - (v / hi).clamp(0.0, 1.0));
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: h,
-              child: GestureDetector(
-                key: const Key('mv-line'),
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (d) {
-                  final t = t0.add(Duration(
-                      seconds: (span * (d.localPosition.dx / w).clamp(0.0, 1.0)).round()));
-                  final starts = [
-                    for (final e in episodes) e.start,
-                    if (episodes.isEmpty)
-                      for (final c in clips) c.startAt!,
-                  ];
-                  DateTime? best;
-                  Duration? bestD;
-                  for (final s in starts) {
-                    final dd = _wall(s).difference(t).abs();
-                    if (bestD == null || dd < bestD) {
-                      best = s;
-                      bestD = dd;
-                    }
-                  }
-                  if (best != null && bestD! <= const Duration(minutes: 3)) {
-                    onSelect(best);
-                  }
-                },
-                child: CustomPaint(
-                  painter: _LinePainter(curve, color, xOf, yOf, h),
-                ),
-              ),
+        DateTime timeAt(double x) =>
+            t0.add(Duration(seconds: (span * (x / w).clamp(0.0, 1.0)).round()));
+
+        void selectNear(double x) {
+          final t = timeAt(x);
+          final starts = [
+            for (final e in widget.episodes) e.start,
+            if (widget.episodes.isEmpty)
+              for (final c in clips) c.startAt!,
+          ];
+          DateTime? best;
+          Duration? bestD;
+          for (final s in starts) {
+            final dd = _wall(s).difference(t).abs();
+            if (bestD == null || dd < bestD) {
+              best = s;
+              bestD = dd;
+            }
+          }
+          if (best != null && bestD! <= const Duration(minutes: 3)) {
+            widget.onSelect(best);
+          }
+        }
+
+        Widget? probe;
+        if (_probeX != null) {
+          final t = timeAt(_probeX!);
+          final p = nearestPoint(curve.points, t);
+          final at = p?.time ?? t;
+          probe = ProbeLayer(
+            dot: Offset(xOf(at), p == null ? h : yOf(p.value)),
+            text: probeText(
+              time: at,
+              kind: ProbeKind.camera,
+              point: p,
+              stage: _stageAt(widget.stages, at),
             ),
-            if (selected != null && inRange(selected!))
+          );
+        }
+
+        return TapRegion(
+          onTapOutside: (_) {
+            if (_probeX != null) setState(() => _probeX = null);
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
               Positioned(
-                key: const Key('mv-playhead'),
-                left: xOf(selected!) - 1.5,
+                left: 0,
+                right: 0,
                 top: 0,
                 height: h,
-                width: 3,
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                child: GestureDetector(
+                  key: const Key('mv-line'),
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (d) {
+                    setState(() => _probeX = d.localPosition.dx.clamp(0.0, w));
+                    selectNear(d.localPosition.dx);
+                  },
+                  onHorizontalDragStart: (d) =>
+                      setState(() => _probeX = d.localPosition.dx.clamp(0.0, w)),
+                  onHorizontalDragUpdate: (d) =>
+                      setState(() => _probeX = d.localPosition.dx.clamp(0.0, w)),
+                  child: CustomPaint(
+                    painter: _LinePainter(curve, color, xOf, yOf, h),
                   ),
                 ),
               ),
-            for (var i = 0; i < clips.length; i++)
-              if (inRange(clips[i].startAt!))
+              if (selected != null && inRange(selected))
                 Positioned(
-                  left: xOf(clips[i].startAt!) - 12,
-                  top: h - 12,
-                  width: 24,
-                  height: 24,
-                  child: GestureDetector(
-                    key: Key('mv-marker-$i'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelect(clips[i].startAt!),
-                    child: Center(
-                      child: Container(
-                        width: clips[i].startAt == selected ? 13 : 9,
-                        height: clips[i].startAt == selected ? 13 : 9,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: clips[i].startAt == selected ? Colors.white : color,
-                          border: Border.all(color: const Color(0xFF1B1F48), width: 2),
-                        ),
+                  key: const Key('mv-playhead'),
+                  left: xOf(selected) - 1.5,
+                  top: 0,
+                  height: h,
+                  width: 3,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                 ),
-            // 時刻字不接手勢：不然會擋住剛好在頭尾的片段點（11-15 測試抓到）
-            Positioned(
-              left: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Text(
-                  _clock(t0),
-                  style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+              for (var i = 0; i < clips.length; i++)
+                if (inRange(clips[i].startAt!))
+                  Positioned(
+                    left: xOf(clips[i].startAt!) - 12,
+                    top: yOf(_valueAt(clips[i].startAt!)) - 12,
+                    width: 24,
+                    height: 24,
+                    child: GestureDetector(
+                      key: Key('mv-marker-$i'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => widget.onSelect(clips[i].startAt!),
+                      child: Center(
+                        child: Container(
+                          width: clips[i].startAt == selected ? 14 : 10,
+                          height: clips[i].startAt == selected ? 14 : 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: clips[i].startAt == selected ? Colors.white : color,
+                            border: Border.all(color: const Color(0xFF1B1F48), width: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              // 時刻字不接手勢：不然會擋住剛好在頭尾的片段點（11-15 測試抓到）
+              Positioned(
+                left: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Text(
+                    _clock(t0),
+                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Text(
-                  _clock(t1),
-                  style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Text(
+                    _clock(t1),
+                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
+                  ),
                 ),
               ),
-            ),
-          ],
+              if (probe != null)
+                Positioned(left: 0, top: 0, width: w, height: h, child: probe),
+            ],
+          ),
         );
       },
     );

@@ -173,6 +173,14 @@ void main() {
       expect(find.byKey(const Key('mv-line')), findsOneWidget);
       expect(find.byKey(const Key('mv-timeline')), findsNothing);
       expect(find.byKey(const Key('mv-playhead')), findsOneWidget);
+      // 片段的點畫在線上那一刻（不是貼在底線）：03:42 線上的值約 0.052、最高 0.1 → 圖高的一半附近
+      final lr = tester.getRect(find.byKey(const Key('mv-line')));
+      final my = tester.getCenter(find.byKey(const Key('mv-marker-0'))).dy;
+      expect(my, inInclusiveRange(lr.top + lr.height * 0.35, lr.top + lr.height * 0.65));
+      // 按住滑 → 泡泡跟著走，寫那一刻的讀數（04:30 那點是 0.02 → 6 秒）
+      await tester.dragFrom(Offset(lr.left + lr.width * 0.5, lr.top + 10), Offset(lr.width * 0.1, 0));
+      await tester.pump();
+      expect(textOf(tester, 'chart-probe-text'), '04:30 · moving 6 sec');
       // 片段照時間排：marker-0 是 03:42
       await tester.tap(find.byKey(const Key('mv-marker-0')));
       await tester.pump();
