@@ -995,6 +995,11 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
     efficiency：behavior.sleep_efficiency.evaluate_efficiency() 的回傳值，
     可以是 None（使用者沒按開始／結束睡覺）。⚠️ 沒給的時候寫進去的是
     NULL 不是 0 —— 「沒測到」與「效率 0%」是兩件事。
+
+    is_late：True／False／**None**。None＝「沒判」（沒有達成度可判），存成 NULL。
+    ⚠️ 2026-11-15 以前寫成 `1 if is_late else 0`，None 會被存成 0＝「準時」，
+    那一晚就被算進準時挑戰與熬夜比率的分母，看起來比實際好。App 上傳不會遇到
+    （後端拒收沒有 lights_out_at 的上傳），手動或腳本補資料才會——11-07 就是這樣中的。
     """
     eff = efficiency or {}
     conn = connect(db_path)
@@ -1026,7 +1031,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                 bed_end_kind          = excluded.bed_end_kind
             """,
             (user_id, date, target_bedtime, lights_out_at,
-             adherence_minutes, 1 if is_late else 0, source, now_iso(),
+             adherence_minutes, None if is_late is None else (1 if is_late else 0),
+             source, now_iso(),
              eff.get("bed_start_at"), eff.get("bed_end_at"),
              eff.get("time_in_bed_minutes"), eff.get("phone_in_bed_minutes"),
              eff.get("assumed_sleep_minutes"), eff.get("sleep_efficiency"),

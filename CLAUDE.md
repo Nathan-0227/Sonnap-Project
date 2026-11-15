@@ -1665,6 +1665,7 @@ python tests/test_scored_efficiency.py   # 2026-11-13 新增：首頁效率顯�
 python tests/test_home_activity.py       # 2026-11-13 新增：首頁 Activity 是前一個日曆日、沒資料整塊 None、VO2 max 90 天內、整天心率只取那個日曆日（終點不含隔天 00:00）
 python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
+python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 三種狀態，「沒判」存成 NULL 不是 0（準時）；原本 None 會被存成準時、算進熬夜比率分母（手動補資料才會遇到，11-07 中過）
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
