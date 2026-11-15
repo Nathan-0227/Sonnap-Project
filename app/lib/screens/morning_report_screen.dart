@@ -26,6 +26,7 @@ import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
+import '../widgets/steps_sheet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -80,7 +81,7 @@ class MorningReportScreen extends StatefulWidget {
   loadBedTimes;
 
   /// 每晚放下手機的時刻＋後端判的晚不晚（後端 /insights）。Phone down 點開的一週圖用；沒給就不能點。
-    final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
+  final Future<Map<String, PhoneDown>> Function()? loadPhoneDowns;
 
   /// 每晚清醒幾分鐘（後端 /insights）。Awake 點開的一週圖用；沒給、或連不到（null）就只看這一晚。
   final Future<Map<String, double>?> Function()? loadAwakeMinutes;
@@ -94,7 +95,6 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚的攝影機資料（後端 /insights 的 camera.history）。Movement 點開的一週用；沒給或連不到就只看這一晚。
   final Future<List<CameraNight>?> Function()? loadCameraNights;
 
-
   const MorningReportScreen({
     super.key,
     required this.initial,
@@ -106,7 +106,7 @@ class MorningReportScreen extends StatefulWidget {
     this.isDreamRead,
     this.loadSleepSeries,
     this.loadBedTimes,
-        this.loadPhoneDowns,
+    this.loadPhoneDowns,
     this.loadAwakeMinutes,
     this.loadEfficiencyNights,
     this.loadSleepHeartRates,
@@ -967,6 +967,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   static const _cHr = Color(0xFFFF8AB8);
   static const _cCam = Color(0xFFFFD96A);
   static const _cSteps = Color(0xFFFFB37A);
+  static const _cKcal = Color(0xFFFF8A6B);
   static const _cActive = Color(0xFFFFD96A);
   static const _cStress = Color(0xFFA996FF);
   static const _cBattery = Color(0xFF6FE3C1);
@@ -1133,7 +1134,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         color: _cAwake,
         title: 'Awake',
         value: reportHm(r.wasoMinutes!),
-                valueKey: const Key('report-waso'),
+        valueKey: const Key('report-waso'),
         onTap: () => _showAwake(r),
         graphic: segs == null
             ? null
@@ -1282,44 +1283,73 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       return [for (final h in tail) (shortDate(h.date), pick(h)!.toDouble())];
     }
 
+    // 11-15 使用者定（照參考圖 Step Counter）：圓弧＝步數÷那天的目標，超過就滿圈、不變色不打勾。
     Widget? stepsTile;
     if (y.steps != null) {
-      final hist = last7((h) => h.steps);
+      final stats = stepsStatsLine(y.distanceM, y.floorsUp);
       stepsTile = ReportTile(
         key: const Key('report-steps'),
         icon: Icons.directions_walk_rounded,
         color: _cSteps,
         title: 'Steps',
-        value: _comma(y.steps!),
-        valueKey: const Key('report-steps-value'),
+        graphic: StepsArc(
+          key: const Key('report-steps-arc'),
+          steps: y.steps!,
+          fraction: stepsFraction(y.steps, y.stepGoal),
+          color: _cSteps,
+          valueKey: const Key('report-steps-value'),
+        ),
+        graphicHeight: 118,
+        onTap: () => showStepsSheet(
+          context,
+          day: y,
+          color: _cSteps,
+          fontFamily: kReportFont,
+        ),
+        lines: [
+          // 只寫 goal，不寫 reached（紅線 2）
+          if (y.stepGoal != null)
+            Center(child: Text('Goal ${_comma(y.stepGoal!)}')),
+          if (stats != null) Center(child: Text(stats)),
+        ],
+      );
+    }
+
+    // 11-15 使用者定：活動卡路里拆出來自成一格（原本報告沒有）。只算動起來燒的，不是一整天的總消耗。
+    Widget? kcalTile;
+    if (y.activeKcal != null) {
+      final hist = last7((h) => h.activeKcal);
+      kcalTile = ReportTile(
+        key: const Key('report-kcal'),
+        icon: Icons.local_fire_department_rounded,
+        color: _cKcal,
+        title: 'Active kcal',
+        value: _comma(y.activeKcal!),
+        valueKey: const Key('report-kcal-value'),
+        valueTrailing: const Text(
+          'kcal',
+          style: TextStyle(
+            color: ReportColors.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         graphic: hist.length < 2
             ? null
             : paintBox(
-                MountainPainter([for (final h in hist) h.$2], _cSteps),
-                key: const Key('report-steps-mountain'),
+                MiniBarsPainter([for (final h in hist) h.$2], _cKcal),
+                key: const Key('report-kcal-bars'),
               ),
         onTap: hist.length < 2
             ? null
             : () => showReportBarsSheet(
                 context,
-                id: 'steps',
-                title: 'Steps',
+                id: 'kcal',
+                title: 'Active energy',
                 bars: hist,
-                format: (v) => _comma(v.round()),
+                format: (v) => '${_comma(v.round())} kcal',
               ),
-        lines: [
-          // 只寫 goal，不寫 reached（紅線 2）
-          if (y.stepGoal != null) Text('goal ${_comma(y.stepGoal!)}'),
-          if (y.distanceM != null || y.floorsUp != null)
-            Text(
-              [
-                if (y.distanceM != null)
-                  '${(y.distanceM! / 1000).toStringAsFixed(1)} km',
-                if (y.floorsUp != null)
-                  '${y.floorsUp!.toStringAsFixed(0)} floors up',
-              ].join(' · '),
-            ),
-        ],
+        lines: const [Text('active only, not total burn')],
       );
     }
 
@@ -1498,7 +1528,9 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     }
 
     final tiles = [
+      // 11-15 使用者定的順序：7 格時最後一格（Move IQ 時間軸）佔整列
       stepsTile,
+      kcalTile,
       activeTile,
       stressTile,
       batteryTile,
@@ -1578,7 +1610,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-    /// Efficiency 點開。這一晚的數字、種類、名字、警語都以報告上的為準（同一支 scoredEfficiency 挑的）；
+  /// Efficiency 點開。這一晚的數字、種類、名字、警語都以報告上的為準（同一支 scoredEfficiency 挑的）；
   /// 一週只有後端有，這一晚那根長條用報告上的數字蓋過去，保證跟格子一樣。
   Future<void> _showEfficiency(MorningReport r) async {
     Map<String, EfficiencyNight>? week;

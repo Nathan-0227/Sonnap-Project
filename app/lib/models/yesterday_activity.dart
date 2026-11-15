@@ -43,6 +43,10 @@ class YesterdayActivity {
   /// 最近幾天的步數、活動卡路里、活動分鐘（首頁點小卡開的長條圖用）。
   final List<ActivityHistoryDay> history;
 
+  /// 每個鐘頭走幾步（24 格，null＝那小時沒戴錶）；整個沒有是 null（只有 /home 帶，打包檔刻意不帶）。
+  /// ⚠️ 加起來不等於 [steps]（那是官方總數），畫面上不寫加總。
+  final List<int?>? stepsHourly;
+
   const YesterdayActivity({
     required this.date,
     this.steps,
@@ -65,6 +69,7 @@ class YesterdayActivity {
     this.dayHeartRate,
     this.restingHeartRate,
     this.history = const [],
+    this.stepsHourly,
   });
 
   /// 活動時間（高強度＋活動）的分鐘數。兩個都沒有是 null。
@@ -124,11 +129,17 @@ class YesterdayActivity {
       vo2maxMeasuredOn: vo2?['measured_on'] as String?,
       moveIq: moves,
       dayHeartRate: NightCurve.fromJsonOrNull(j['heart_rate']),
-      restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)?.round(),
+      restingHeartRate: ((j['heart_rate'] as Map?)?['resting'] as num?)
+          ?.round(),
       history: [
         for (final h in (j['history'] as List?) ?? const [])
           ?ActivityHistoryDay.fromJsonOrNull(h),
       ],
+      stepsHourly: () {
+        final raw = j['steps_hourly'];
+        if (raw is! List || raw.length != 24) return null;
+        return [for (final v in raw) (v as num?)?.round()];
+      }(),
     );
   }
 }
@@ -174,11 +185,17 @@ class ActivityHistoryDay {
   final int? activeKcal;
   final int? activeMinutes;
 
+  /// 那天自己的目標（Garmin 每天調）與距離；舊版後端沒有是 null。
+  final int? stepGoal;
+  final int? distanceM;
+
   const ActivityHistoryDay({
     required this.date,
     this.steps,
     this.activeKcal,
     this.activeMinutes,
+    this.stepGoal,
+    this.distanceM,
   });
 
   static ActivityHistoryDay? fromJsonOrNull(Object? raw) {
@@ -188,6 +205,8 @@ class ActivityHistoryDay {
       steps: (raw['steps'] as num?)?.round(),
       activeKcal: (raw['active_kcal'] as num?)?.round(),
       activeMinutes: (raw['active_minutes'] as num?)?.round(),
+      stepGoal: (raw['step_goal'] as num?)?.round(),
+      distanceM: (raw['distance_m'] as num?)?.round(),
     );
   }
 }

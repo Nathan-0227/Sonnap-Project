@@ -652,6 +652,39 @@ class MountainPainter extends CustomPainter {
 }
 
 /// 一條橫條切成幾段（活動時間：高強度／活動／久坐）。
+/// 最近幾天的小長條（活動卡路里格）：最後一根＝那一天，亮的；其他淡。只畫數字，不畫目標線。
+class MiniBarsPainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  MiniBarsPainter(this.values, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final hi = values.fold<double>(0, (m, v) => v > m ? v : m);
+    if (hi <= 0) return;
+    final slot = size.width / values.length;
+    final w = math.min(14.0, slot * 0.6);
+    for (var i = 0; i < values.length; i++) {
+      final h = math.max(2.0, size.height * values[i] / hi);
+      final x = slot * i + (slot - w) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, size.height - h, w, h),
+          const Radius.circular(3),
+        ),
+        Paint()
+          ..color = i == values.length - 1
+              ? color
+              : color.withValues(alpha: 0.4),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MiniBarsPainter old) => true;
+}
+
 class StackedBarPainter extends CustomPainter {
   final List<(double, Color)> parts;
   StackedBarPainter(this.parts);

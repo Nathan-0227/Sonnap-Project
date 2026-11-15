@@ -9,48 +9,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> fullJson() => {
-      'date': '2026-11-12',
-      'steps': 9955,
-      'step_goal': 9430,
-      'distance_m': 6720,
-      'active_kcal': 377,
-      'floors_up': 9.4,
-      'activity': {
-        'highly_active_sec': 1747,
-        'active_sec': 9691,
-        'sedentary_sec': 62062,
-      },
-      'stress': {
-        'rest_sec': 27660,
-        'low_sec': 11340,
-        'medium_sec': 14880,
-        'high_sec': 2100,
-      },
-      'body_battery': {'charged': 48, 'drained': 61},
-      'vo2max': {'value': 45.7, 'measured_on': '2026-10-09'},
-      'move_iq': [
-        {'type': 'walking', 'start': '12:58', 'minutes': 10},
-        {'type': 'cycling', 'start': '20:55', 'minutes': 31},
-      ],
-    };
+  'date': '2026-11-12',
+  'steps': 9955,
+  'step_goal': 9430,
+  'distance_m': 6720,
+  'active_kcal': 377,
+  'floors_up': 9.4,
+  'activity': {
+    'highly_active_sec': 1747,
+    'active_sec': 9691,
+    'sedentary_sec': 62062,
+  },
+  'stress': {
+    'rest_sec': 27660,
+    'low_sec': 11340,
+    'medium_sec': 14880,
+    'high_sec': 2100,
+  },
+  'body_battery': {'charged': 48, 'drained': 61},
+  'vo2max': {'value': 45.7, 'measured_on': '2026-10-09'},
+  'move_iq': [
+    {'type': 'walking', 'start': '12:58', 'minutes': 10},
+    {'type': 'cycling', 'start': '20:55', 'minutes': 31},
+  ],
+};
 
-Map<String, dynamic> home(String date, {Object? yesterday, bool scored = false}) => {
-      'date': date,
-      'behavior': null,
-      'metrics': null,
-      'scoring': scored ? {'final_score': 70.0, 'final_quality': 'Normal'} : null,
-      'yesterday': yesterday,
-    };
+Map<String, dynamic> home(
+  String date, {
+  Object? yesterday,
+  bool scored = false,
+}) => {
+  'date': date,
+  'behavior': null,
+  'metrics': null,
+  'scoring': scored ? {'final_score': 70.0, 'final_quality': 'Normal'} : null,
+  'yesterday': yesterday,
+};
 
-Future<void> pumpReport(WidgetTester tester, Map<String, dynamic>? yesterday,
-    {String key = 'r'}) async {
+Future<void> pumpReport(
+  WidgetTester tester,
+  Map<String, dynamic>? yesterday, {
+  String key = 'r',
+}) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 2.625;
   addTearDown(tester.view.reset);
   final r = buildMorningReport(
-      date: '2026-11-13', home: home('2026-11-13', yesterday: yesterday));
+    date: '2026-11-13',
+    home: home('2026-11-13', yesterday: yesterday),
+  );
   await tester.pumpWidget(
-      MaterialApp(home: MorningReportScreen(key: ValueKey(key), initial: r)));
+    MaterialApp(
+      home: MorningReportScreen(key: ValueKey(key), initial: r),
+    ),
+  );
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 80));
   }
@@ -58,8 +70,11 @@ Future<void> pumpReport(WidgetTester tester, Map<String, dynamic>? yesterday,
 
 /// 捲到「Yesterday」那一段的最後一格（清單是懶建的，畫面外的還沒建出來）。
 Future<void> scrollTo(WidgetTester tester, Finder f) async {
-  await tester.scrollUntilVisible(f, 300,
-      scrollable: find.byType(Scrollable).first);
+  await tester.scrollUntilVisible(
+    f,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
   await tester.pump();
 }
 
@@ -76,44 +91,67 @@ void main() {
       expect(y.stressHighSec, 2100);
       expect(y.vo2max, 45.7);
       expect(y.vo2maxMeasuredOn, '2026-10-09');
-      expect(y.moveIq!.map((m) => '${m.start} ${m.type} ${m.minutes}'),
-          ['12:58 walking 10', '20:55 cycling 31']);
+      expect(y.moveIq!.map((m) => '${m.start} ${m.type} ${m.minutes}'), [
+        '12:58 walking 10',
+        '20:55 cycling 31',
+      ]);
       expect(y.moveIq!.first.startMinuteOfDay, 12 * 60 + 58);
     });
 
     test('後端是 null 或格式不對 → null', () {
       expect(YesterdayActivity.fromJsonOrNull(null), isNull);
-      expect(YesterdayActivity.fromJsonOrNull({'steps': 1}), isNull, reason: '沒有日期');
+      expect(
+        YesterdayActivity.fromJsonOrNull({'steps': 1}),
+        isNull,
+        reason: '沒有日期',
+      );
     });
 
     test('Move IQ：沒抓到是 null，那天沒有是空的', () {
-      expect(YesterdayActivity.fromJsonOrNull({'date': '2026-11-12'})!.moveIq, isNull);
       expect(
-          YesterdayActivity.fromJsonOrNull({'date': '2026-11-12', 'move_iq': []})!.moveIq,
-          isEmpty);
+        YesterdayActivity.fromJsonOrNull({'date': '2026-11-12'})!.moveIq,
+        isNull,
+      );
+      expect(
+        YesterdayActivity.fromJsonOrNull({
+          'date': '2026-11-12',
+          'move_iq': [],
+        })!.moveIq,
+        isEmpty,
+      );
     });
   });
 
   group('報告模型', () {
     test('後端有給 → 報告帶著；沒給 → null', () {
       final r = buildMorningReport(
-          date: '2026-11-13', home: home('2026-11-13', yesterday: fullJson()));
+        date: '2026-11-13',
+        home: home('2026-11-13', yesterday: fullJson()),
+      );
       expect(r.yesterday?.steps, 9955);
       expect(
-          buildMorningReport(date: '2026-11-13', home: home('2026-11-13')).yesterday,
-          isNull);
+        buildMorningReport(
+          date: '2026-11-13',
+          home: home('2026-11-13'),
+        ).yesterday,
+        isNull,
+      );
     });
 
     test('⚠️ 手錶睡眠還沒到（沒分數）也照樣帶著——白天資料跟睡眠分數無關', () {
       final r = buildMorningReport(
-          date: '2026-11-13', home: home('2026-11-13', yesterday: fullJson()));
+        date: '2026-11-13',
+        home: home('2026-11-13', yesterday: fullJson()),
+      );
       expect(r.hasScore, isFalse);
       expect(r.yesterday, isNotNull);
     });
 
     test('後端回的是別晚 → 不採用', () {
       final r = buildMorningReport(
-          date: '2026-11-13', home: home('2026-11-12', yesterday: fullJson()));
+        date: '2026-11-13',
+        home: home('2026-11-12', yesterday: fullJson()),
+      );
       expect(r.yesterday, isNull);
     });
   });
@@ -125,15 +163,34 @@ void main() {
       expect(find.text('Yesterday · Thu, Nov 12'), findsOneWidget);
       await scrollTo(tester, find.byKey(const Key('report-steps')));
       expect(textOf(tester, 'report-steps-value'), '9,955');
-      expect(find.text('goal 9,430'), findsOneWidget);
-      expect(find.text('6.7 km · 9 floors up'), findsOneWidget);
+      expect(find.text('Goal 9,430'), findsOneWidget);
+      expect(find.text('6.7 km · 9 floors'), findsOneWidget);
+      // 11-15：活動卡路里自成一格，緊接在 Steps 右邊（同一列）
+      expect(textOf(tester, 'report-kcal-value'), '377');
+      expect(find.text('active only, not total burn'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('report-kcal'))).dy,
+        tester.getTopLeft(find.byKey(const Key('report-steps'))).dy,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const Key('report-kcal'))).dx,
+        greaterThan(
+          tester.getTopLeft(find.byKey(const Key('report-steps'))).dx,
+        ),
+      );
       await scrollTo(tester, find.byKey(const Key('report-moveiq')));
       expect(find.text('3h 11m'), findsOneWidget, reason: '活動時間＝高強度＋活動');
-      expect(find.text('Rest 7h 41m · Low 3h 9m · Medium 4h 8m · High 35m'),
-          findsOneWidget);
+      expect(
+        find.text('Rest 7h 41m · Low 3h 9m · Medium 4h 8m · High 35m'),
+        findsOneWidget,
+      );
       expect(find.text('+48 / −61'), findsOneWidget);
       expect(find.text('1 walk · 1 ride'), findsOneWidget);
-      expect(find.byKey(const Key('report-vo2')), findsNothing, reason: '同首頁拿掉 VO2 max');
+      expect(
+        find.byKey(const Key('report-vo2')),
+        findsNothing,
+        reason: '同首頁拿掉 VO2 max',
+      );
       expect(find.textContaining('45.7'), findsNothing);
       expect(tester.takeException(), isNull, reason: '實機大小不溢出');
     });
@@ -158,18 +215,36 @@ void main() {
       await scrollTo(tester, find.byKey(const Key('report-moveiq')));
       final texts = [
         for (final k in [
-          'report-steps', 'report-active', 'report-stress',
-          'report-body-battery', 'report-moveiq',
+          'report-steps',
+          'report-kcal',
+          'report-active',
+          'report-stress',
+          'report-body-battery',
+          'report-moveiq',
         ])
           ...tester
-              .widgetList<Text>(find.descendant(
-                  of: find.byKey(Key(k)), matching: find.byType(Text)))
+              .widgetList<Text>(
+                find.descendant(
+                  of: find.byKey(Key(k)),
+                  matching: find.byType(Text),
+                ),
+              )
               .map((t) => (t.data ?? '').toLowerCase()),
       ].join(' | ');
       expect(texts, contains('9,955'), reason: '反向對照：真的讀到字');
       for (final w in [
-        'reached', 'achieved', 'good', 'normal', 'poor', 'great', 'excellent',
-        'warning', 'too much', 'high stress', 'elevated', 'perfect',
+        'reached',
+        'achieved',
+        'good',
+        'normal',
+        'poor',
+        'great',
+        'excellent',
+        'warning',
+        'too much',
+        'high stress',
+        'elevated',
+        'perfect',
       ]) {
         expect(texts.contains(w), isFalse, reason: w);
       }
@@ -179,14 +254,40 @@ void main() {
       await pumpReport(tester, {'date': '2026-11-12', 'steps': 4210});
       await scrollTo(tester, find.byKey(const Key('report-steps')));
       expect(textOf(tester, 'report-steps-value'), '4,210');
-      expect(find.textContaining('goal'), findsNothing, reason: '沒有目標就不寫 goal');
+      expect(find.textContaining('Goal'), findsNothing, reason: '沒有目標就不寫 goal');
       for (final k in [
-        'report-active', 'report-stress', 'report-body-battery',
-        'report-day-hr', 'report-moveiq',
+        'report-kcal',
+        'report-active',
+        'report-stress',
+        'report-body-battery',
+        'report-day-hr',
+        'report-moveiq',
       ]) {
         expect(find.byKey(Key(k)), findsNothing, reason: k);
       }
       expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('單數格：Move IQ 排最後、佔整列（Steps、kcal、活動、壓力、Move IQ）', (
+      tester,
+    ) async {
+      await pumpReport(tester, {...fullJson()}..remove('body_battery'));
+      await scrollTo(tester, find.byKey(const Key('report-moveiq')));
+      final mv = tester.getRect(find.byKey(const Key('report-moveiq')));
+      final st = tester.getRect(find.byKey(const Key('report-stress')));
+      expect(mv.top, greaterThan(st.bottom));
+      expect(mv.width, greaterThan(st.width * 1.8));
+    });
+
+    testWidgets('點 Steps → 開 Steps 頁', (tester) async {
+      await pumpReport(tester, fullJson());
+      await scrollTo(tester, find.byKey(const Key('report-steps')));
+      await tester.tap(find.byKey(const Key('report-steps')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('steps-sheet')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('那天沒有 Move IQ（空的）→ 不畫那一格', (tester) async {
