@@ -314,6 +314,11 @@ void main() {
       for (final k in [
         'sleep_duration_minutes',
         'sleep_efficiency',
+        // ⚠️ 效率小卡讀的是 scoredEfficiency ?? sleepEfficiency，
+        // 少清這個的話沒戴錶的夜晚還是會畫出一個數字。
+        'scored_efficiency',
+        'scored_efficiency_basis',
+        'scored_efficiency_label',
         'deep_minutes',
       ]) {
         metrics[k] = null;
