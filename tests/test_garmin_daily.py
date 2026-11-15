@@ -68,6 +68,7 @@ STATS = {
     "sedentarySeconds": 62062, "floorsAscended": 9.42651,
     "restStressDuration": 27660, "lowStressDuration": 11340,
     "mediumStressDuration": 14880, "highStressDuration": 2100,
+    "bmrKilocalories": 1927.0, "totalKilocalories": 2304.0,
 }
 # 2026-10-09 實際抓到的形狀
 MAX_METRICS = [{"generic": {"vo2MaxPreciseValue": 45.7, "vo2MaxValue": 46.0, "fitnessAge": 20}}]
@@ -223,6 +224,9 @@ h = client.get("/home", params={"user_id": uid, "date": "2026-11-13"}).json()
 y = h.get("yesterday")
 check("前一個日曆日", y and y["date"], "2026-11-12")
 check("步數與目標照實給（不判斷達標）", (y["steps"], y["step_goal"]), (9955, 9430))
+check("靜止代謝、總消耗照實給（同一個 get_stats，不多打請求）",
+      (y["resting_kcal"], y["total_kcal"], y["active_kcal"]), (1927, 2304, 377))
+ok("不給熱量目標、不寫剩多少", not any(k in y for k in ("kcal_goal", "kcal_left", "remaining_kcal")))
 check("壓力只給秒數", y["stress"], {"rest_sec": 27660, "low_sec": 11340,
                                      "medium_sec": 14880, "high_sec": 2100})
 check("VO2 max：最近一次＋量到的日期", y["vo2max"], {"value": 45.7, "measured_on": "2026-10-09"})

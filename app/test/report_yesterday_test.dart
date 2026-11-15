@@ -290,6 +290,17 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('點 Active kcal → 開 Calories 頁', (tester) async {
+      await pumpReport(tester, fullJson());
+      await scrollTo(tester, find.byKey(const Key('report-kcal')));
+      await tester.tap(find.byKey(const Key('report-kcal')));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('kcal-sheet')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('那天沒有 Move IQ（空的）→ 不畫那一格', (tester) async {
       await pumpReport(tester, {...fullJson(), 'move_iq': <Object>[]});
       await scrollTo(tester, find.byKey(const Key('report-body-battery')));

@@ -563,6 +563,8 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     body_battery_drained INTEGER,
     vo2max               REAL,
     move_iq              TEXT,                 -- JSON 陣列 [{type, start, minutes}]；NULL = 沒抓到
+    resting_kcal         INTEGER,              -- 靜止代謝（Garmin 估的，2026-11-15）
+    total_kcal           INTEGER,              -- 一整天總消耗＝靜止＋活動（Garmin 估的）
     -- 每個鐘頭走幾步：JSON 24 格（null＝那小時沒戴錶）；NULL＝沒抓到。來源 garmin_steps_intraday.json，
     -- 另一支 set_garmin_steps_hourly 寫（不在 GARMIN_DAILY_FIELDS 裡，存白天資料時不會被蓋掉）
     steps_hourly         TEXT,
@@ -608,6 +610,8 @@ COLUMN_MIGRATIONS = [
     ("camera_nightly", "motion_curve", "TEXT"),
     ("camera_nightly", "motion_episodes", "TEXT"),
     ("garmin_daily", "steps_hourly", "TEXT"),
+    ("garmin_daily", "resting_kcal", "INTEGER"),
+    ("garmin_daily", "total_kcal", "INTEGER"),
     # 2026-08-26：Health Connect 能給臥床時間（Garmin 不能），
     #             以及把 final_score 存起來不讓 API 層自己算。
     ("wearable_nightly", "time_in_bed_min", "REAL"),
@@ -2046,6 +2050,7 @@ GARMIN_DAILY_FIELDS = (
     "highly_active_sec", "active_sec", "sedentary_sec", "floors_up",
     "stress_rest_sec", "stress_low_sec", "stress_medium_sec", "stress_high_sec",
     "body_battery_charged", "body_battery_drained", "vo2max", "move_iq",
+    "resting_kcal", "total_kcal",
 )
 
 

@@ -465,6 +465,8 @@ def activity_block(night_iso):
         "step_goal": row.get("step_goal"),
         "distance_m": row.get("distance_m"),
         "active_kcal": row.get("active_kcal"),
+        "resting_kcal": row.get("resting_kcal"),
+        "total_kcal": row.get("total_kcal"),
         "floors_up": row.get("floors_up"),
         "activity": group(
             highly_active_sec=row.get("highly_active_sec"),

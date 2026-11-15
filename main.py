@@ -364,6 +364,9 @@ def yesterday_block(user_id, night_date):
         "step_goal": row.get("step_goal"),
         "distance_m": row.get("distance_m"),
         "active_kcal": row.get("active_kcal"),
+        # 靜止代謝與一整天總消耗（Garmin 估的；舊日子沒有是 null）。不給目標、不寫剩多少
+        "resting_kcal": row.get("resting_kcal"),
+        "total_kcal": row.get("total_kcal"),
         "floors_up": row.get("floors_up"),
         "activity": group(
             highly_active_sec=row.get("highly_active_sec"),

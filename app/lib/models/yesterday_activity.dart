@@ -12,6 +12,10 @@ class YesterdayActivity {
   final int? stepGoal;
   final int? distanceM;
   final int? activeKcal;
+
+  /// 靜止代謝與一整天總消耗（Garmin 估的；舊日子沒有是 null）。不給目標、不寫剩多少。
+  final int? restingKcal;
+  final int? totalKcal;
   final double? floorsUp;
 
   final int? highlyActiveSec;
@@ -53,6 +57,8 @@ class YesterdayActivity {
     this.stepGoal,
     this.distanceM,
     this.activeKcal,
+    this.restingKcal,
+    this.totalKcal,
     this.floorsUp,
     this.highlyActiveSec,
     this.activeSec,
@@ -115,6 +121,8 @@ class YesterdayActivity {
       stepGoal: i(j, 'step_goal'),
       distanceM: i(j, 'distance_m'),
       activeKcal: i(j, 'active_kcal'),
+      restingKcal: i(j, 'resting_kcal'),
+      totalKcal: i(j, 'total_kcal'),
       floorsUp: (j['floors_up'] as num?)?.toDouble(),
       highlyActiveSec: i(activity, 'highly_active_sec'),
       activeSec: i(activity, 'active_sec'),

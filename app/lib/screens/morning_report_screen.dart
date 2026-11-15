@@ -27,6 +27,7 @@ import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 import '../widgets/steps_sheet.dart';
+import '../widgets/kcal_sheet.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -1340,15 +1341,13 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 MiniBarsPainter([for (final h in hist) h.$2], _cKcal),
                 key: const Key('report-kcal-bars'),
               ),
-        onTap: hist.length < 2
-            ? null
-            : () => showReportBarsSheet(
-                context,
-                id: 'kcal',
-                title: 'Active energy',
-                bars: hist,
-                format: (v) => '${_comma(v.round())} kcal',
-              ),
+        // 11-15 使用者定：點開是 Calories 頁（靜止＋活動的圓環、一週）
+        onTap: () => showKcalSheet(
+          context,
+          day: y,
+          color: _cKcal,
+          fontFamily: kReportFont,
+        ),
         lines: const [Text('active only, not total burn')],
       );
     }

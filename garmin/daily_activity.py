@@ -42,6 +42,11 @@ FIELDS = (
     "body_battery_drained",  # get_body_battery()[0].drained
     "vo2max",                # get_max_metrics()[0].generic.vo2MaxPreciseValue（只有量到的那天有）
     "move_iq",               # [{"type", "start", "minutes"}, …]；沒有事件是 []，沒抓到是 None
+    # 2026-11-15 使用者定（Calories 點開的圓環）：同一個 get_stats 回應，不多打請求。
+    # ⚠️ 兩個都是 Garmin **估的**：靜止代謝用使用者填的年齡身高體重算；總消耗＝靜止＋活動。
+    #    舊日子要重抓才有，所以多半是 None（不特地重抓）。
+    "resting_kcal",          # bmrKilocalories
+    "total_kcal",            # totalKilocalories
 )
 
 _STATS_MAP = {
@@ -57,6 +62,8 @@ _STATS_MAP = {
     "stress_low_sec": "lowStressDuration",
     "stress_medium_sec": "mediumStressDuration",
     "stress_high_sec": "highStressDuration",
+    "resting_kcal": "bmrKilocalories",
+    "total_kcal": "totalKilocalories",
 }
 
 # Garmin 用負數表示「沒有這個值」（例如沒戴錶的那天壓力是 -1、-2）
