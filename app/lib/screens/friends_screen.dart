@@ -412,11 +412,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             // 點卡片＝See all：同一張卡的完整版（每一項一個小格）；下面可以再看他的 Streak 與解除好友
             onTap: () => openFriendNight(context, c,
                 streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
-                week: f != null && f.lastNightDate == c.date ? f.streakWeek : null,
-                onOpenFriend: c.mine
-                    ? _openSharing
-                    : (f == null ? null : () => _showFriend(f)),
-                settingsLabel: c.mine ? 'Sharing settings' : 'Friend settings'),
+                week: f != null && f.lastNightDate == c.date ? f.streakWeek : null),
           );
         }),
       ],

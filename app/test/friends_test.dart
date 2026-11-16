@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
+import 'package:app/widgets/friend_night_card.dart' show FriendNightPage;
 import 'package:app/widgets/mood_filter_bar.dart';
 import 'package:app/widgets/top_streak_card.dart';
 
@@ -362,8 +363,12 @@ void main() {
         friendJson('CAR567', 'Carol', streak: 2),
       ]))));
       stub.feed = const [
+        // 項目多到資訊卡要捲（才驗得到最底下那一排有沒有被系統按鍵列蓋住）
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-03', scene: 'lake',
-            items: {'sleep_duration': 412, 'on_time': true}),
+            items: {'sleep_duration': 412, 'on_time': true, 'awake': {'count': 2},
+              'sleeping_hr': {'avg': 56}, 'stress': {'high': 1980}, 'steps': {'steps': 8000},
+              'calories': {'active': 420}, 'level': {'level': 4}, 'outfit': {'badges': 3},
+              'phone_down_time': '23:10', 'time_in_bed': 440, 'resting_hr': 55}),
         FriendNightCard(handle: 'CAR567', displayName: 'Carol', date: '2026-09-03', items: {'on_time': false}),
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-02', scene: 'lake',
             items: {'on_time': true}),
@@ -424,23 +429,34 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('night-detail')),
-          matching: find.byKey(const Key('streak-flames-2')),
-        ),
-        findsOneWidget,
-      );
+      // Strava 式（2026-11-16 使用者定）：上面是場景＋寵物（火在後面），下面一張資訊卡
+      final page = find.byType(FriendNightPage);
+      expect(find.descendant(of: page, matching: find.byKey(const Key('night-scene'))), findsOneWidget);
+      expect(find.descendant(of: page, matching: find.byKey(const Key('streak-flames-2'))), findsOneWidget);
       expect(find.byKey(const Key('night-streak')), findsNothing);
-      // 滑到最底：最後那顆按鈕不能被系統按鍵列蓋住（2026-11-16 實機抓到）
-      await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
-      for (var i = 0; i < 5; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
+      // 不連到好友頁
+      expect(find.byKey(const Key('night-open-friend')), findsNothing);
+      expect(find.text('Friend settings'), findsNothing);
+      // 一開始資訊卡停在寵物腳下：場景（寵物）沒被蓋住
+      final sheetTop0 = tester.getTopLeft(find.byKey(const Key('night-detail'))).dy;
+      final pet = tester.getRect(find.descendant(of: page, matching: find.byKey(const Key('streak-flames-2'))));
+      expect(pet.bottom, lessThanOrEqualTo(sheetTop0 + 1));
+      // 往上拉到底：卡最多拉到返回鍵下面（名字不被蓋住），最後一格不被系統按鍵列蓋住
+      for (var k = 0; k < 3; k++) {
+        await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
       }
+      final back = tester.getRect(find.byKey(const Key('night-back')));
+      // 拉到最上面時，資訊卡上緣仍在返回鍵下面（名字不會被它蓋住、不頂到狀態列）
+      final sheetTop = tester.getTopLeft(find.byKey(const Key('night-detail'))).dy;
+      expect(sheetTop, greaterThanOrEqualTo(back.bottom));
       final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
       final navBar = tester.view.padding.bottom / tester.view.devicePixelRatio;
-      final btn = tester.getRect(find.byKey(const Key('night-open-friend')));
-      expect(btn.bottom, lessThanOrEqualTo(screenH - navBar));
+      // 最底下那一格（照順序最後一個是 outfit）
+      final last = tester.getRect(find.byKey(const Key('card-tile-outfit')));
+      expect(last.bottom, lessThanOrEqualTo(screenH - navBar));
     });
 
     testWidgets('自己的卡也在動態牆上：寫 You、用自己的連續天數，點開最下面是分享設定；睡眠圖有標題與圖例', (tester) async {
@@ -486,7 +502,11 @@ void main() {
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(find.text('Sharing settings'), findsOneWidget);
+      // 完整頁一樣寫 You＋What friends see；不放任何設定按鈕（使用者定：不連到別處）
+      expect(find.descendant(of: find.byKey(const Key('night-detail')), matching: find.text('You')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('night-detail')), matching: find.text('What friends see')),
+          findsOneWidget);
+      expect(find.text('Sharing settings'), findsNothing);
       expect(find.text('Friend settings'), findsNothing);
     });
 

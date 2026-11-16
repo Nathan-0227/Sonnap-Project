@@ -423,6 +423,10 @@ void main() {
     });
 
     testWidgets('See all：一整頁、同一張卡的樣子（場景＋寵物），每一項都是小格、不收起來', (tester) async {
+      // 夠高的畫面，資訊卡裡的小格一次全部排得出來
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       const card = FriendNightCard(
         handle: 'B',
         displayName: 'Bob',
@@ -455,7 +459,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('night-detail')), findsOneWidget);
-      expect(find.byKey(const Key('card-scene')), findsOneWidget); // 上面一樣是場景
+      expect(find.byKey(const Key('night-scene')), findsOneWidget); // 上面是場景（像 Strava 的地圖）
       // 三個大數字之外的 7 項全部是小格（卡片上只會有 3 格）
       for (final k in ['on_time', 'awake', 'sleeping_hr', 'steps', 'stress', 'level', 'outfit']) {
         expect(find.byKey(Key('card-tile-$k')), findsOneWidget, reason: k);
