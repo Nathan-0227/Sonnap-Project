@@ -395,7 +395,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ];
     }
     return [
-      for (final c in _feed)
+      for (final (i, c) in _feed.indexed) ...[
+        // 換一天就插一條分隔線（2026-11-16 使用者要求）：──── Last night ────
+        if (i == 0 || _feed[i - 1].date != c.date)
+          feedDayDivider(c.date, key: Key('feed-day-$i')),
         Builder(builder: (context) {
           // 我自己的卡：連續天數與這週用我自己的摘要；點開最下面是分享設定
           final f = c.mine
@@ -416,6 +419,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 settingsLabel: c.mine ? 'Sharing settings' : 'Friend settings'),
           );
         }),
+      ],
     ];
   }
 

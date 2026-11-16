@@ -106,14 +106,23 @@ print("【1】預設：行為開、其他關")
 v = client.get(f"/sharing?user_id={bob}").json()
 items = {i["key"]: i["enabled"] for g in v["groups"] for i in g["items"]}
 check("四組", [g["id"] for g in v["groups"]], ["sleep", "heart", "day", "game"])
-check("放下手機、準時、連續、寵物心情、衣服、挑戰 預設開",
+check("放下手機、準時、連續、寵物心情、衣服、挑戰＋卡上三個大數字 預設開",
       sorted(k for k, on in items.items() if on),
-      sorted(["phone_down_time", "on_time", "streak", "pet_mood", "outfit", "challenges"]))
+      sorted(["phone_down_time", "on_time", "streak", "pet_mood", "outfit", "challenges",
+              "sleep_duration", "camera_moves", "score"]))
 check("永遠不給的三項有說明、但不是選項", (len(v["never_shared"]),
       any(k in items for k in ("camera_clips", "move_iq_times", "prebed_apps"))), (3, False))
 cards = feed()
 check("動態卡有 Bob 那一晚", [(c["display_name"], c["date"]) for c in cards], [("Bob", NIGHT)])
-check("卡上只有預設開的那幾項（行為＋遊戲）", sorted(cards[0]["items"]),
+check("卡上只有預設開的那幾項（行為＋遊戲＋睡多久、分數；Bob 沒有攝影機 → 沒有每小時動作）",
+      sorted(cards[0]["items"]),
+      sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges",
+              "sleep_duration", "score"]))
+# 預設開的三個大數字可以關掉，關了就一個字都不出後端
+client.patch("/sharing", json={"user_id": bob, "items": {
+    "sleep_duration": False, "score": False, "camera_moves": False}})
+cards = feed()
+check("關掉那三個 → 卡上只剩行為＋遊戲", sorted(cards[0]["items"]),
       sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges"]))
 check("放下手機時刻 01:12、晚了", (cards[0]["items"]["phone_down_time"], cards[0]["items"]["on_time"]),
       ("01:12", False))

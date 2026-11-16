@@ -156,6 +156,10 @@ check("Mia：沒有放下手機的時刻", "phone_down_time" in mia, False)
 leo = latest["Leo (demo)"]["items"]
 check("Leo（準確時刻）：階梯兩端有時刻", all(leo["stages"].get(k) for k in ("start", "end")), True)
 check("Ken（只開預設）：沒有階梯", "stages" in latest["Ken (demo)"]["items"], False)
+moves = {n: c["items"].get("camera_moves") for n, c in latest.items()}
+check("Mia／Leo／Yuki 有每小時動幾次（預設分享）、Ken 沒有攝影機", 
+      ({n: isinstance(v, (int, float)) for n, v in moves.items()}),
+      {"Mia (demo)": True, "Leo (demo)": True, "Yuki (demo)": True, "Ken (demo)": False})
 all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
 check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
 seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))

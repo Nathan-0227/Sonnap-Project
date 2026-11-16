@@ -364,9 +364,9 @@ void main() {
       stub.feed = const [
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-03', scene: 'lake',
             items: {'sleep_duration': 412, 'on_time': true}),
+        FriendNightCard(handle: 'CAR567', displayName: 'Carol', date: '2026-09-03', items: {'on_time': false}),
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-02', scene: 'lake',
             items: {'on_time': true}),
-        FriendNightCard(handle: 'CAR567', displayName: 'Carol', date: '2026-09-03', items: {'on_time': false}),
       ];
       await pump(tester, stub, friendsTab: false);
       // 手機大小（內容要長到會捲）＋底部的系統按鍵列
@@ -378,9 +378,15 @@ void main() {
           .map((i) => (i.image as AssetImage).assetName).toList();
       expect(scenes, [
         'assets/backgrounds/scene_lake.jpg',
-        'assets/backgrounds/scene_lake.jpg',
         'assets/backgrounds/scene_campfire.jpg', // 沒選 → 預設
+        'assets/backgrounds/scene_lake.jpg',
       ]);
+      // 換一天才插分隔線：兩條（9/3、9/2），同一天的兩張卡之間沒有
+      expect(find.text('Thu, Sep 3'), findsOneWidget);
+      expect(find.text('Wed, Sep 2'), findsOneWidget);
+      expect(find.byKey(const Key('feed-day-0')), findsOneWidget);
+      expect(find.byKey(const Key('feed-day-1')), findsNothing);
+      expect(find.byKey(const Key('feed-day-2')), findsOneWidget);
       expect(find.byKey(const Key('card-streak')), findsOneWidget);
       expect(find.text('Bob reached a 4-night streak'), findsOneWidget);
       expect(find.textContaining('Carol reached'), findsNothing); // 只有 2 晚
@@ -461,6 +467,10 @@ void main() {
       expect(mine, findsOneWidget);
       expect(find.descendant(of: mine, matching: find.text('You')), findsOneWidget);
       expect(find.descendant(of: mine, matching: find.text('Nathan')), findsNothing);
+      // 自己的卡要一眼認得：紫框＋「What friends see」；朋友的卡沒有
+      expect(find.byKey(const Key('card-mine-glow')), findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.text('What friends see')), findsOneWidget);
+      expect(find.text('What friends see'), findsOneWidget);
       expect(find.text('You reached a 5-night streak'), findsOneWidget);
       expect(find.descendant(of: mine, matching: find.byKey(const Key('card-week'))), findsOneWidget);
       // 睡眠圖：標題＋圖例；沒量到 REM 照實寫

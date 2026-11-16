@@ -153,6 +153,13 @@ class _Stub implements FriendsService {
 
 void main() {
   group('Streak 卡', () {
+    test('分隔線：今天的日期＝Last night，其他寫星期＋日期', () {
+      final now = DateTime(2026, 11, 16, 9);
+      expect(feedDayLabel('2026-11-16', now: now), 'Last night');
+      expect(feedDayLabel('2026-11-15', now: now), 'Sun, Nov 15');
+      expect(feedDayLabel('2026-11-09', now: now), 'Mon, Nov 9');
+    });
+
     test('火：0 晚沒有、1–2 小、3 以上大；字', () {
       expect([null, 0, 1, 2, 3, 12].map(flameLevel), [0, 0, 1, 1, 2, 2]);
       expect(streakTitle(1), '1 Day Streak');
@@ -300,7 +307,7 @@ void main() {
       expect(friendItemLine('morning_rating', {'rested': 3}), isNull);
     });
 
-    testWidgets('只畫後端給的項目', (tester) async {
+    testWidgets('三個大數字都沒公開 → 退回放下手機＋準時；其他不畫在卡上', (tester) async {
       await tester.pumpWidget(
         host(
           const FriendNightCardView(
@@ -318,14 +325,15 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
-      // 2026-11-16 改版：前三個有公開的項目變成大數字（標籤＋值）
       expect(find.text('Phone down'), findsOneWidget);
       expect(find.text('01:12'), findsOneWidget);
       expect(find.text('Late'), findsOneWidget);
-      expect(find.text('1,200'), findsOneWidget);
-      expect(find.text('Night of Nov 14'), findsOneWidget);
+      // 步數不畫在卡上（點 See all 看），也沒有小格
+      expect(find.text('1,200'), findsNothing);
+      expect(find.text('+1 more'), findsOneWidget);
+      // 動態牆上有分隔線寫日期，卡上不再寫
+      expect(find.text('Night of Nov 14'), findsNothing);
       // 沒給的不出現，也不寫 0
-      expect(find.byKey(const Key('card-item-score')), findsNothing);
       expect(find.textContaining('Score'), findsNothing);
       expect(find.byKey(const Key('card-stages')), findsNothing);
     });
@@ -344,7 +352,7 @@ void main() {
       ],
     };
 
-    testWidgets('小格：照固定順序挑前三個（變成大數字的不重複），其他算進 +N more', (tester) async {
+    testWidgets('卡上只有三個大數字：睡多久、每小時動幾次、分數（2026-11-16 使用者定）；其他算進 +N more', (tester) async {
       await tester.pumpWidget(
         host(
           const FriendNightCardView(
@@ -353,14 +361,12 @@ void main() {
               displayName: 'Bob',
               date: '2026-11-14',
               items: {
+                'score': {'score': 84.2},
+                'camera_moves': 18.4,
                 'sleep_duration': 412,
-                'time_in_bed': 435,
-                'phone_down_time': '23:42', // 三個大數字
-                'steps': {'steps': 8432}, // 小格 2（醒來次數排第一但這裡沒有）
-                'sleeping_hr': {'avg': 56, 'min': 49}, // 小格 1
-                'level': {'level': 4, 'xp_total': 1260},
-                'stress': {'high': 1980}, // 小格 3
-                'outfit': {'badges': 3},
+                'efficiency': {'value': 91.4},
+                'steps': {'steps': 8432},
+                'phone_down_time': '23:42',
                 'on_time': true,
                 'pet_mood': 'happy',
               },
@@ -369,26 +375,30 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
-      final tiles = tester
+      List<String> keysStarting(String prefix) => tester
           .widgetList(
             find.byWidgetPredicate(
               (w) =>
                   w.key is ValueKey<String> &&
-                  (w.key as ValueKey<String>).value.startsWith('card-tile-'),
+                  (w.key as ValueKey<String>).value.startsWith(prefix),
             ),
           )
           .map((w) => (w.key as ValueKey<String>).value)
           .toList();
-      expect(tiles, [
-        'card-tile-sleeping_hr',
-        'card-tile-steps',
-        'card-tile-stress',
+      expect(keysStarting('card-stat-'), [
+        'card-stat-sleep_duration',
+        'card-stat-camera_moves',
+        'card-stat-score',
       ]);
-      expect(find.text('56'), findsOneWidget);
-      expect(find.text('8,432'), findsOneWidget);
-      expect(find.text('33m'), findsOneWidget);
-      // 剩下 level、outfit、on_time（pet_mood 畫成寵物，不算）
-      expect(find.text('+3 more'), findsOneWidget);
+      expect(find.text('6h 52m'), findsOneWidget);
+      expect(find.text('Moves/hr'), findsOneWidget);
+      expect(find.text('18'), findsOneWidget);
+      expect(find.text('84'), findsOneWidget);
+      // 效率太擠拿掉了；卡上沒有小格
+      expect(find.text('Efficiency'), findsNothing);
+      expect(keysStarting('card-tile-'), isEmpty);
+      // 剩下效率、步數、放下手機、準時（pet_mood 畫成寵物，不算）
+      expect(find.text('+4 more'), findsOneWidget);
     });
 
     testWidgets('全部都畫在卡上了就沒有 See all', (tester) async {

@@ -69,6 +69,7 @@ def _improving(i, n, rng):
 # sleep：(睡著分鐘數的平均, 標準差)、深睡比例、REM 比例、半夜醒著幾分鐘 (平均, 標準差)
 # day：步數平均、壓力（高的時間）多寡 0–1、有沒有 VO2 max
 # share：除了預設之外多打開哪些項目；precision：時刻要不要準確
+# camera：每小時動幾次 (平均, 標準差)；None＝沒有攝影機（卡上就沒有 Moves/hr）
 PERSONAS = [
     {   # 每晚都準時 → 排行第一、連續紀錄最長。只寫準時與否（示範時間軸不寫時刻）
         "name": "Mia (demo)", "target": "23:30",
@@ -76,6 +77,7 @@ PERSONAS = [
         "species": "cat", "scene": "lake", "precision": "on_time_only",
         "sleep": ((455, 20), 0.19, 0.23, (12, 5)), "day": (9500, 0.2, None),
         "share": ("stages", "sleep_duration", "score", "awake", "steps"),
+        "camera": (12, 3),
     },
     {   # 一開始常熬夜，後來收斂 → 最近幾晚開始有連續紀錄
         "name": "Leo (demo)", "target": "00:00",
@@ -84,6 +86,7 @@ PERSONAS = [
         "sleep": ((410, 30), 0.16, 0.21, (20, 8)), "day": (7200, 0.35, 44),
         "share": ("stages", "sleep_duration", "time_in_bed", "awake", "sleeping_hr",
                   "level", "steps", "stress"),
+        "camera": (19, 5),
     },
     {   # 夜貓子，常常晚一兩個小時 → 寵物是 tired
         "name": "Yuki (demo)", "target": "01:00",
@@ -91,6 +94,7 @@ PERSONAS = [
         "species": "cat", "scene": "rooftop", "precision": "exact",
         "sleep": ((375, 40), 0.14, 0.20, (28, 10)), "day": (5200, 0.5, None),
         "share": ("stages", "sleep_duration", "bed_times", "awake", "stress", "body_battery"),
+        "camera": (27, 6),
     },
     {   # 不規律，每 4 晚有 1 晚沒開 App → 缺晚會中斷連續紀錄（紅線 5）。只公開預設那幾項
         "name": "Ken (demo)", "target": "23:00",
@@ -98,6 +102,7 @@ PERSONAS = [
         "species": "dog", "scene": "treehouse", "precision": "exact",
         "sleep": ((420, 50), 0.17, 0.21, (22, 12)), "day": (11000, 0.3, 47),
         "share": (),
+        "camera": None,
     },
 ]
 
@@ -186,6 +191,21 @@ def write_watch_night(uid, wake_day, p, lights_out, rng, db_path=None):
     return bed_start, bed_end
 
 
+def write_camera_night(uid, wake_day, p, bed_start, bed_end, rng, db_path=None):
+    """那一晚的攝影機摘要：只有臥床時間與動作次數（沒有錄影、沒有片段、沒有曲線）。"""
+    if not p.get("camera"):
+        return
+    mu, sd = p["camera"]
+    hours = (bed_end - bed_start).total_seconds() / 3600
+    per_hour = round(max(4.0, rng.gauss(mu, sd)), 1)
+    db.upsert_camera_nightly(uid, wake_day.isoformat(), {
+        "bed_start_at": _naive(bed_start), "bed_end_at": _naive(bed_end),
+        "time_in_bed_minutes": round(hours * 60, 1),
+        "events_total": round(per_hour * hours), "events_per_hour": per_hour,
+        "bed_times_provenance": "demo", "csv": None,
+    }, db_path=db_path)
+
+
 def write_day(uid, day, p, rng, db_path=None):
     """那一個日曆日的白天資料（給隔天早上那張卡的 Yesterday）。"""
     steps_mu, stress, vo2 = p["day"]
@@ -236,6 +256,7 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
                                         off if off is not None else rng.gauss(20, 30))
             bed_start, bed_end = write_watch_night(uid, wake_day, p, lights_out, rng, db_path)
             write_day(uid, wake_day - timedelta(days=1), p, rng, db_path)
+            write_camera_night(uid, wake_day, p, bed_start, bed_end, rng, db_path)
             if off is None:
                 continue  # 沒開 App：沒有行為資料
             night = adherence.evaluate_night(lights_out, p["target"], source="phone")

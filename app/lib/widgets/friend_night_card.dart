@@ -205,14 +205,12 @@ String friendCardDate(String iso) {
 }
 
 /// 卡片上方的三個大數字：照這個順序挑他有公開的前三個。
-const _statOrder = [
-  'sleep_duration',
-  'time_in_bed',
-  'phone_down_time',
-  'on_time',
-  'score',
-  'steps',
-];
+/// 卡上的大數字（2026-11-16 使用者定）：只放這三個（預設分享、可以關），有公開哪個放哪個，
+/// 其他的點進去看。效率試過放第四個，太擠，拿掉了。
+const _statOrder = ['sleep_duration', 'camera_moves', 'score'];
+
+/// 三個都被關掉時，卡上不能一個數字都沒有 → 退回行為那兩項（也是預設分享的）。
+const _statFallback = ['phone_down_time', 'on_time'];
 
 /// 一項 → 大數字（標籤, 值）；沒值 → null。
 (String, String)? friendStat(String key, dynamic v) {
@@ -229,6 +227,8 @@ const _statOrder = [
     case 'score':
       final s = v is Map ? _n(v['score']) : null;
       return s == null ? null : ('Score', '${s.round()}');
+    case 'camera_moves':
+      return _n(v) == null ? null : ('Moves/hr', '${_n(v)!.round()}');
     case 'steps':
       final s = v is Map ? _n(v['steps']) : null;
       return s == null ? null : ('Steps', _int(s));
@@ -413,9 +413,15 @@ friendCardLayout(
 }) {
   final stats = <(String, String, String)>[];
   for (final k in _statOrder) {
-    if (stats.length == 3) break;
     if (friendStat(k, items[k]) case (final label, final value)) {
       stats.add((k, label, value));
+    }
+  }
+  if (stats.isEmpty) {
+    for (final k in _statFallback) {
+      if (friendStat(k, items[k]) case (final label, final value)) {
+        stats.add((k, label, value));
+      }
     }
   }
   final used = {for (final s in stats) s.$1};
@@ -424,7 +430,7 @@ friendCardLayout(
       ? [..._nightKeys, ..._dayKeys, ..._gameKeys]
       : _tileOrder;
   for (final k in order) {
-    if (!expanded && tiles.length == kMaxTiles) break;
+    if (!expanded) break;
     if (k == 'stages' && hasChart) {
       // 完整頁：圖上看不出幾分鐘，深睡／淺睡／REM 各一格（卡片上不放，避免太擠）
       if (expanded && items['stages'] is Map) {
@@ -537,12 +543,29 @@ class FriendNightCardView extends StatelessWidget {
     );
     final stats = layout.stats;
 
+    // 自己的卡在動態牆上要一眼認得出來（2026-11-16 使用者要求）：紫色外框＋一圈光
+    final glow = card.mine && !expanded;
     // 完整頁（2026-11-16 使用者定）：整頁就是場景，不是一張卡放在頁面中間——不留邊、不圓角
     return Padding(
       padding: EdgeInsets.only(bottom: expanded ? 0 : 20),
-      child: Material(
+      child: Container(
+        key: glow ? const Key('card-mine-glow') : null,
+        decoration: glow
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x887657FF), blurRadius: 22, spreadRadius: 1),
+                ],
+              )
+            : null,
+        child: Material(
         color: _sceneBottom,
-        borderRadius: BorderRadius.circular(expanded ? 0 : 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(expanded ? 0 : 24),
+          side: glow
+              ? const BorderSide(color: Color(0xFFA48BFF), width: 2)
+              : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           key: Key(
@@ -621,15 +644,43 @@ class FriendNightCardView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          card.mine ? 'You' : card.displayName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            shadows: _shadow,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              card.mine ? 'You' : card.displayName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                shadows: _shadow,
+                              ),
+                            ),
+                            if (card.mine) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                key: const Key('card-mine-pill'),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF7657FF),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'What friends see',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                        // 動態牆上換一天有分隔線寫日期，卡上不再寫；完整頁沒有分隔線，照寫
+                        if (expanded)
                         Text(
                           'Night of ${friendCardDate(card.date)}',
                           style: const TextStyle(
@@ -638,8 +689,10 @@ class FriendNightCardView extends StatelessWidget {
                             shadows: _shadow,
                           ),
                         ),
-                        // 數字從地面下面開始（名字約 40 高）
-                        SizedBox(height: ground - 16 - topInset - 40 + 20),
+                        // 數字從地面下面開始（名字＋日期約 40 高，只有名字約 24）
+                        SizedBox(
+                          height: ground - 16 - topInset - (expanded ? 40 : 24) + 20,
+                        ),
                         if (stats.isNotEmpty)
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,10 +833,47 @@ class FriendNightCardView extends StatelessWidget {
             },
           ),
         ),
+        ),
       ),
     );
   }
 }
+
+/// 動態牆上換一天的分隔線：「──── Last night ────」「──── Sat, Nov 14 ────」。
+/// 卡片的日期是起床那天（同後端 night_date），所以今天的日期＝昨晚。
+String feedDayLabel(String iso, {DateTime? now}) {
+  final d = DateTime.tryParse(iso);
+  if (d == null) return iso;
+  final t = now ?? DateTime.now();
+  final today = DateTime(t.year, t.month, t.day);
+  final day = DateTime(d.year, d.month, d.day);
+  if (day == today) return 'Last night';
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return '${wd[day.weekday - 1]}, ${friendCardDate(iso)}';
+}
+
+Widget feedDayDivider(String iso, {Key? key, DateTime? now}) => Padding(
+  key: key,
+  padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
+  child: Row(
+    children: [
+      const Expanded(child: Divider(color: Color(0x40FFFFFF), thickness: 1)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text(
+          feedDayLabel(iso, now: now),
+          style: const TextStyle(
+            color: Color(0xCCFFFFFF),
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ),
+      const Expanded(child: Divider(color: Color(0x40FFFFFF), thickness: 1)),
+    ],
+  ),
+);
 
 class _Tile extends StatelessWidget {
   final IconData icon;
