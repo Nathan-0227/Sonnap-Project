@@ -53,7 +53,8 @@ import camera_clips
 import camera_usual
 import db
 import score_claim
-from behavior import (adherence, challenges as challenge_engine, morning_tips,
+from behavior import (adherence, challenges as challenge_engine,
+                      lights_out_resolve, morning_tips,
                       pet_state, sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
@@ -214,6 +215,17 @@ class NightlyRequest(BaseModel):
     # 2026-11-15：App 偵測這一晚時跨過了幾次半夜的短解鎖（規則在 app/lib/services/lights_out.dart）。
     # 沒送（舊版 App）存 NULL，不是 0——「沒跨」與「不知道」要分得開。只存、不顯示、不進任何計算。
     bridged_unlocks: Optional[int] = Field(None, ge=0)
+    # 2026-11-16：那一晚**所有** ≥60 分鐘的安靜期。手機端的規則是「挑最長的
+    # 那一段」，半夜起來用幾分鐘手機就會挑錯（11-16 挑到晚 88 分鐘的那段）。
+    # 早晨匯入寫完手錶之後，resolve_lights_out.py 會拿手錶認定的入睡時刻當裁判
+    # 重挑一次（behavior/lights_out_resolve.py）。
+    # ⚠️ 沒送（舊版 App）存 NULL，**不是空陣列**——「不知道有沒有別的候選」
+    #    與「確定只有這一段」是兩件事，後者會讓那一晚被判成 unresolved。
+    quiet_candidates: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="All quiet periods >= 60 min, as detected on the phone. "
+                    "The backend re-picks using the watch's sleep onset.",
+    )
 
 
 class WearableRequest(BaseModel):
@@ -922,6 +934,12 @@ async def post_nightly(req: NightlyRequest):
         bed_start_kind=start_kind,
         bed_end_kind=end_kind,
         bridged_unlocks=req.bridged_unlocks,
+        # ⚠️ 原樣存起來、這裡**不挑**：上傳是早上你開 App 的時候，
+        #    那時候手錶那一晚還沒進資料庫（要等 morning_import.py），
+        #    裁判不在場。挑選在 resolve_lights_out.py，匯入手錶之後才跑。
+        quiet_candidates=(None if req.quiet_candidates is None
+                          else json.dumps(req.quiet_candidates, ensure_ascii=False)),
+        lights_out_pick=lights_out_resolve.PICK_PHONE,
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。

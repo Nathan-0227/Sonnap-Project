@@ -383,10 +383,14 @@ with tempfile.TemporaryDirectory() as d:
     runner = FakeRunner(paths, AFTER)
     rc, out = quiet(mi.run, args(), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
     ok("exit code 0", rc == 0, str(rc))
-    ok("順序：抓 → 匯出按鈕 → 評分 → 手錶入庫 → 攝影機入庫 → 動作片段 → 夢境 → App 資料檔",
+    # ⚠️ resolve_lights_out.py 一定要在 migrate_garmin_to_db.py **之後**
+    #    （裁判是手錶，手錶沒寫進去就沒得挑）、build_app_payload.py **之前**
+    #    （不然打包檔帶出去的還是沒校正的值）。
+    ok("順序：抓 → 匯出按鈕 → 評分 → 手錶入庫 → 重挑就寢時刻 → 攝影機入庫 → 動作片段 → 夢境 → App 資料檔",
        runner.scripts() == ["garmin/garmin_connect_fetch.py", "export_bed_marks.py",
                             "garmin/run_pipeline.py",
-                            "migrate_garmin_to_db.py", "migrate_camera_to_db.py",
+                            "migrate_garmin_to_db.py", "resolve_lights_out.py",
+                            "migrate_camera_to_db.py",
                             "camera_clips.py",
                             "ai/generate_advice.py", "build_app_payload.py"],
        str(runner.scripts()))
@@ -397,10 +401,10 @@ with tempfile.TemporaryDirectory() as d:
     ok("  --end-date 是今天", "--end-date" in fetch and fetch[fetch.index("--end-date") + 1] == "2026-09-14")
     ok("  沒有 --replace（那會把整份歷史換成這幾天）", "--replace" not in fetch)
     ok("任何一步都沒有 --fetch", all("--fetch" not in c for c in runner.calls))
-    cam = runner.calls[4]
+    cam = runner.calls[5]
     ok("攝影機只匯入挑中的那一份", cam == ["migrate_camera_to_db.py", "--csv", str(csv_path)], str(cam))
-    ok("動作片段做的也是同一份", runner.calls[5] == ["camera_clips.py", "--csv", str(csv_path)],
-       str(runner.calls[5]))
+    ok("動作片段做的也是同一份", runner.calls[6] == ["camera_clips.py", "--csv", str(csv_path)],
+       str(runner.calls[6]))
     ok("有列出新增的夜晚", "2026-09-14" in out)
 
 

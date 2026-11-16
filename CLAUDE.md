@@ -78,6 +78,32 @@ NightlyUpload: ok date=2026-09-02 adherence=189m late=true
 | **只認兩段使用之間的空隙，頭尾都不算** | 視窗結尾是「現在」，那段安靜還沒結束卻幾乎一定最長，會蓋掉真的那一段 |
 | **（2026-11-15 加）找不到 ≥3 小時的安靜期時，可以跨過半夜 < 30 秒的短解鎖**——只在原本的規則失敗時才用；相隔 < 10 秒的紀錄先併成一次使用（一次解鎖＝screen_off＋0.7 秒後 keyguard_shown）；可跨任意次、跨完仍要 ≥3 小時；有好幾段時挑**跨最少次**的、同次數挑最長；只用在 unlock 模式；跨了幾次存在 `nightly_behavior.bridged_unlocks`（NULL＝舊資料，只供分析不顯示）。⚠️ **30 秒是設計決策、沒有文獻**（同 3 小時） | 半夜解鎖 4 秒看時間就讓整晚偵測不到。實例 11-12：05:43 放下、07:20 看 4 秒、09:28 起床 → 97＋128 分鐘，兩段都不到 3 小時。挑最長而不是跨最少次的話，睡前 5 秒看鬧鐘也會被跨過去、就寢時刻往前移 |
 
+### ⚠️ 第 5 條：**手機挑錯的時候由後端用手錶改正**（2026-11-16 使用者定）
+
+前四條都在手機裡，而手機挑的是**最長**的那一段安靜期——半夜起來用幾分鐘手機
+就會把一晚切成兩段，後面那段通常比較長。11-16 實例：00:49 放下（手錶 00:56 入睡）、
+02:18 醒來用 5 分 3 秒、02:23 再睡 → 兩段是 88.4 與 218.8 分鐘 → 挑到 02:23，
+記成**熬夜 98.6 分鐘**（實際晚 4.9 分鐘）。清點：44 個同時有兩種訊號的夜晚裡
+**17 晚**的 `lights_out_at` 晚於手錶入睡，8 晚晚超過 30 分鐘，**全部被記成熬夜**。
+
+**放下手機不可能發生在睡著之後**，但裁判（手錶的入睡時刻）只有後端拿得到。
+所以手機把**所有** >=60 分鐘的安靜期一起送上來（`quiet_candidates`，最多 10 段），
+後端在**早晨匯入寫完手錶之後**重挑（`resolve_lights_out.py`，判準在
+`behavior/lights_out_resolve.py`）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| **手機端的挑選規則一個字都不改**，候選是額外附上的材料 | 手機身上沒有裁判，在那裡加判斷就是第二套沒有依據的規則 |
+| 刷掉「起點晚於手錶入睡 + **30 分鐘**」的候選，剩下的挑**最晚**那一段 | 就寢時刻是「睡前最後一次使用」；挑最早的話，睡前 5 秒看鬧鐘也會被當成就寢（同規則 4 挑「跨最少次」的理由） |
+| ⚠️ **30 分鐘是設計決策、沒有文獻**（同 3 小時、30 秒，屬偵測層）。取 30 是**刻意放過「滑手機滑到睡著」**那個不同的現象（09-11 +12、11-08 +9.1） | 那個現象使用者 10-22 已決定改用 `USER_INTERACTION` 解。一條規則同時修兩個現象，兩個都查不清楚 |
+| **沒有手錶、沒有候選（舊版 App）、挑中的落在別的 `night_date`** → 三種都原樣不動 | 沒有證據就不要動；夜晚日期由 `lights_out_at` 決定，換了日期連上床按鈕都配錯 |
+| 有手錶但**一段都沒過關** → `adherence_minutes` 與 `is_late` 存 **NULL**，`lights_out_at` 留著 | 繼續顯示「熬夜 461 分鐘」是假話。時刻本身仍是「最後一次碰手機」這個量測事實 |
+| **可以重複執行**：每次都從候選重挑，不是在改過的值上再改 | App 重送同一晚會把時刻覆寫回手機挑的那個，隔天早上要能再挑一次 |
+
+⚠️ **救不回來的夜晚**：Android 只保留約 24 小時的事件，所以 11-16 以外那幾晚的
+候選早就沒了，只能標成「不知道」。11-16 的原始事件存在
+`sonnap-data/lights-out-evidence/`，也是 `app/test/fixtures/` 那份測資的來源。
+
 ⚠️ **事件量比想像大：實機 24 小時 4057 筆**（三星 One UI）。原生端的 `limit`
 訂太小會把視窗砍掉一半，而且丟的是**舊的**那半——正好是昨晚睡覺那段。
 
@@ -1624,7 +1650,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 夢境日記與睡眠助理（`chat.py`），都走 Claude API。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 28 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 38 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1633,7 +1659,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 28 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 38 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1673,6 +1699,7 @@ python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發�
 python tests/test_awake_count.py         # 2026-11-15 新增：醒來次數＝時間軸的清醒段數（不是 summary 那個多 1 的）、回填只補這一欄、只改 Garmin、舊資料庫補欄位、/home 與 /insights 帶出來
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 三種狀態，「沒判」存成 NULL 不是 0（準時）；原本 None 會被存成準時、算進熬夜比率分母（手動補資料才會遇到，11-07 中過）
+python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
 ```
 
@@ -1684,7 +1711,7 @@ python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**633 條全過**，2026-11-13 實測）：
+Flutter（在 `app/` 底下跑，**915 條全過**，2026-11-16 實測）：
 
 ```bash
 flutter test

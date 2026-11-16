@@ -121,6 +121,44 @@ enum LightsOutStatus {
 }
 
 @immutable
+/// 一段「已經結束」的安靜期，當成就寢時刻的候選。
+///
+/// ⚠️ 手機**不判斷**哪一段才對——它照舊送出自己挑的那一個
+/// （[LightsOutResult.at]），候選只是額外附上的材料。判斷在後端，
+/// 因為裁判（手錶認定的入睡時刻）只有後端拿得到。
+class QuietCandidate {
+  /// 這一段安靜的起點＝候選的就寢時刻（前一次使用結束的那一刻）。
+  final DateTime at;
+
+  /// 這一段安靜多久（分鐘）。
+  final int quietMinutes;
+
+  /// 是哪一種事件標記了起點（同 [LightsOutResult.sourceType]）。
+  final String sourceType;
+
+  /// 這一段跨過了幾次半夜的短解鎖（見 [kBriefUnlockSeconds]）。
+  /// 一般的候選是 0；只有第 4 條規則產生的那一段才會 > 0。
+  final int bridgedUnlocks;
+
+  const QuietCandidate({
+    required this.at,
+    required this.quietMinutes,
+    required this.sourceType,
+    this.bridgedUnlocks = 0,
+  });
+
+  /// `POST /nightly` 的 `quiet_candidates` 陣列元素。
+  ///
+  /// ⚠️ 時刻一律 `toIso8601String()`、**不要 `.toUtc()`**——後端
+  /// `night_date()` 與達成度都是拿牆鐘時間比，送 UTC 會整整差一個時區。
+  Map<String, dynamic> toJson() => {
+        'at': at.toIso8601String(),
+        'quiet_minutes': quietMinutes,
+        'source_type': sourceType,
+        'bridged_unlocks': bridgedUnlocks,
+      };
+}
+
 class LightsOutResult {
   final LightsOutStatus status;
 
@@ -148,6 +186,12 @@ class LightsOutResult {
   /// 0＝照原本的規則就偵測到了。會跟著上傳（`bridged_unlocks`），只供分析、不顯示。
   final int bridgedUnlocks;
 
+  /// 所有 ≥ [kCandidateMinMinutes] 的安靜期，依時間排序（見 [QuietCandidate]）。
+  ///
+  /// ⚠️ [at] 那一段**一定在裡面**——後端挑不到更好的候選時會退回它，
+  /// 不在裡面的話那一晚會莫名其妙變成「不知道」。
+  final List<QuietCandidate> candidates;
+
   const LightsOutResult(
     this.status, {
     this.at,
@@ -157,6 +201,7 @@ class LightsOutResult {
     this.mode = LightsOutMode.unlock,
     this.error,
     this.bridgedUnlocks = 0,
+    this.candidates = const [],
   });
 
   /// 後端 `POST /nightly` 要的 ISO8601 字串（含 +08:00 之類的位移）。
@@ -204,6 +249,27 @@ const int kBriefUnlockSeconds = 30;
 
 /// 相隔幾秒以內的使用紀錄併成同一次解鎖（見 [kBriefUnlockSeconds]）。
 const int kUnlockCoalesceSeconds = 10;
+
+/// 候選安靜期的下限（2026-11-16 使用者定）。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// ⚠️ 這**不是**挑選門檻，是「要不要把這一段附在上傳裡」的門檻
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 現行規則挑**最長**的那一段，而半夜起來用幾分鐘手機會把一晚切成兩段。
+/// 11-16 實例：00:49 放下（手錶 00:56 入睡），02:18 醒來用 5 分 3 秒，02:23 再睡。
+/// 兩段是 88.4 與 218.8 分鐘 → 挑到後面那段 → 記成熬夜 98.6 分鐘。
+/// 真正那一段**不可能晚於手錶認定的入睡**，但只有後端拿得到手錶資料，
+/// 而後端收到的只有一個時刻——所以手機要把**所有**候選都附上去，
+/// 由後端用手錶當裁判刷掉不可能的那些（`behavior/lights_out_resolve.py`）。
+///
+/// 下限取 60 分鐘：11-16 真正那段是 88 分，訂 90 就會漏掉
+/// 「上床後 70 分鐘被叫起來」那種夜晚。⚠️ 設計決策，沒有文獻（屬偵測層）。
+const int kCandidateMinMinutes = 60;
+
+/// 最多附幾段候選。超過就留最長的幾段（**當選的那段一定留著**）。
+/// 11-16 全天 ≥60 分鐘的只有 2 段，10 是上限不是常態。
+const int kMaxCandidates = 10;
 
 /// 往回看多久。一天，這樣不管在早上還是深夜查，上一段睡眠都在視窗裡。
 const Duration kLightsOutWindow = Duration(hours: 24);
@@ -356,8 +422,20 @@ LightsOutResult detectLightsOut(
   _Interval? best;
   int bestMinutes = 0;
 
+  // 候選（2026-11-16）：同一個迴圈順便把每一段 ≥ kCandidateMinMinutes 的
+  // 空隙都記下來。⚠️ 判準與 best 完全一樣（都是兩段使用之間的空隙），
+  // 只差在門檻——分開寫兩個迴圈就會有第二份「什麼算安靜期」的定義。
+  final candidates = <QuietCandidate>[];
+
   for (var i = 0; i + 1 < merged.length; i++) {
     final minutes = merged[i + 1].start.difference(merged[i].end).inMinutes;
+    if (minutes >= kCandidateMinMinutes) {
+      candidates.add(QuietCandidate(
+        at: merged[i].end,
+        quietMinutes: minutes,
+        sourceType: merged[i].endType,
+      ));
+    }
     if (minutes > bestMinutes) {
       bestMinutes = minutes;
       best = merged[i];
@@ -370,6 +448,12 @@ LightsOutResult detectLightsOut(
         ? _bridgeBriefUnlocks(merged, minQuietMinutes)
         : null;
     if (bridged != null) {
+      final chosen = QuietCandidate(
+        at: bridged.at,
+        quietMinutes: bridged.minutes,
+        sourceType: bridged.endType,
+        bridgedUnlocks: bridged.count,
+      );
       return LightsOutResult(
         LightsOutStatus.ok,
         at: bridged.at,
@@ -378,16 +462,25 @@ LightsOutResult detectLightsOut(
         eventCount: relevant.length,
         mode: mode,
         bridgedUnlocks: bridged.count,
+        candidates: _capCandidates(candidates, chosen),
       );
     }
+    // 偵測不到的夜晚**照樣附候選**：後端可能拿手錶刷掉之後，剩下的那段
+    // 正好是對的（候選只要 60 分鐘，不必 3 小時）。
     return LightsOutResult(
       LightsOutStatus.noQuietGap,
       eventCount: relevant.length,
       quietMinutes: bestMinutes,
       mode: mode,
+      candidates: _capCandidates(candidates, null),
     );
   }
 
+  final chosen = QuietCandidate(
+    at: best.end,
+    quietMinutes: bestMinutes,
+    sourceType: best.endType,
+  );
   return LightsOutResult(
     LightsOutStatus.ok,
     at: best.end,
@@ -395,7 +488,34 @@ LightsOutResult detectLightsOut(
     sourceType: best.endType,
     eventCount: relevant.length,
     mode: mode,
+    candidates: _capCandidates(candidates, chosen),
   );
+}
+
+/// 最多留 [kMaxCandidates] 段：留最長的幾段，但 [chosen]（手機挑的那一段）
+/// **一定留著**。
+///
+/// ⚠️ 少了這個保證，候選多到爆表的夜晚後端會找不到手機挑的那一段，
+/// 而那正是「挑不到更好的就退回原值」的退路。
+List<QuietCandidate> _capCandidates(
+  List<QuietCandidate> all,
+  QuietCandidate? chosen,
+) {
+  final kept = <QuietCandidate>[];
+  // 跨短解鎖產生的那一段不在 all 裡（它橫跨了好幾段），要另外補進來。
+  final bool chosenInAll =
+      chosen != null && all.any((c) => c.at == chosen.at && c.bridgedUnlocks == chosen.bridgedUnlocks);
+  if (chosen != null && !chosenInAll) kept.add(chosen);
+
+  final rest = [...all]
+    ..sort((a, b) => b.quietMinutes.compareTo(a.quietMinutes));
+  for (final c in rest) {
+    if (kept.length >= kMaxCandidates) break;
+    kept.add(c);
+  }
+  // 留著的那幾段依時間排序後送出（後端挑「最晚」的那一段，順序只是方便讀）。
+  kept.sort((a, b) => a.at.compareTo(b.at));
+  return kept;
 }
 
 /// 第 4 條規則的實作（見 [kBriefUnlockSeconds]）。找不到 ≥ [minQuietMinutes] 的段落 → null。
