@@ -6,11 +6,15 @@
 // - 不判斷好壞：不寫 good／bad、分數不變色、晚了只寫 Late（不用紅色）
 // - 2026-11-16 改版（使用者定 B 版）：每張卡是他自己選的場景（像大頭貼，不依心情換），
 //   寵物直接站在畫面裡、不放圓框；不再是一堆小膠囊，其他項目合成一行小字
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
 import '../services/night_compare.dart' show formatMinutes;
 import 'streak_card.dart' show PetWithFlames, StreakWeekRow, speciesOf;
+
+part 'friend_night_sections.dart';
 
 const _nightKeys = [
   'phone_down_time',
@@ -459,11 +463,10 @@ friendCardLayout(
     if (hasChart) 'stages',
     'pet_mood',
   };
+  // 只算完整頁真的會畫出來的（白天那些不放進完整頁，算進來就變成點進去找不到，2026-11-16）
   final more = [
-    for (final k in [..._nightKeys, ..._dayKeys, ..._gameKeys])
-      if (!shown.contains(k) &&
-          (friendItemLine(k, items[k])?.isNotEmpty ?? false))
-        k,
+    for (final k in kDetailKeys)
+      if (!shown.contains(k) && _hasValue(items[k])) k,
   ].length;
   return (stats: stats, tiles: tiles, more: more);
 }
@@ -509,6 +512,19 @@ List<(String, double, double)> _segmentsOf(Map<String, dynamic>? stages) => [
         _n(s['to'])!.toDouble(),
       ),
 ];
+
+/// 完整頁那幾個區塊會畫的項目（見 friend_night_sections.dart）。
+const kDetailKeys = [
+  'stages', 'awake', 'sleeping_hr', 'resting_hr', 'camera_moves', 'camera_timeline',
+  'target_bedtime', 'phone_down_time', 'on_time', 'bed_times', 'fell_asleep',
+  'time_in_bed', 'phone_after_start', 'prebed_phone', 'efficiency',
+  'morning_rating', 'level', 'outfit', 'challenges',
+];
+
+bool _hasValue(dynamic v) =>
+    v != null &&
+    !(v is Map && v.values.every((x) => x == null)) &&
+    !(v is List && v.isEmpty);
 
 class FriendNightCardView extends StatelessWidget {
   final FriendNightCard card;
@@ -1039,8 +1055,13 @@ class FriendNightPage extends StatelessWidget {
               child: ListView(
                 key: const Key('night-detail'),
                 controller: controller,
-                padding: EdgeInsets.fromLTRB(20, 10, 20, inset.bottom + 32),
+                padding: EdgeInsets.only(top: 10, bottom: inset.bottom + 32),
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                   Center(
                     child: Container(
                       width: 40,
@@ -1185,45 +1206,11 @@ class FriendNightPage extends StatelessWidget {
                     const SizedBox(height: 4),
                     StreakWeekRow(key: const Key('card-week'), week: week!),
                   ],
-                  if (segments.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    _StageChart(
-                      segments: segments,
-                      remMeasured: stages?['rem_measured'] != false,
-                      start: stages?['start'] as String?,
-                      end: stages?['end'] as String?,
-                      minutes: stages ?? const {},
+                      ],
                     ),
-                  ],
-                  if (layout.tiles.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    for (var r = 0; r < layout.tiles.length; r += kMaxTiles)
-                      Padding(
-                        padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
-                        child: Row(
-                          children: [
-                            for (var i = 0; i < kMaxTiles; i++)
-                              Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.only(
-                                    right: i == kMaxTiles - 1 ? 0 : 8,
-                                  ),
-                                  child: r + i < layout.tiles.length
-                                      ? _Tile(
-                                          key: Key(
-                                            'card-tile-${layout.tiles[r + i].$1}',
-                                          ),
-                                          icon: layout.tiles[r + i].$2,
-                                          value: layout.tiles[r + i].$3,
-                                          label: layout.tiles[r + i].$4,
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                  ],
+                  ),
+                  // 往下捲：Strava 式的一段一段（睡眠圖、心率、攝影機、就寢、早上、遊戲）
+                  ...friendNightSections(items),
                 ],
               ),
             ),
@@ -1256,12 +1243,16 @@ class _StageChart extends StatelessWidget {
   final String? start;
   final String? end;
   final Map<String, dynamic> minutes;
+
+  /// 完整頁的區塊自己有大標題，圖上就不再寫一次
+  final bool showTitle;
   const _StageChart({
     required this.segments,
     required this.remMeasured,
     required this.start,
     required this.end,
     required this.minutes,
+    this.showTitle = true,
   });
 
   @override
@@ -1271,6 +1262,7 @@ class _StageChart extends StatelessWidget {
       key: const Key('card-stages'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (showTitle) ...[
         const Text(
           'Sleep stages',
           key: Key('card-stages-title'),
@@ -1281,6 +1273,7 @@ class _StageChart extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        ],
         SizedBox(
           height: 96,
           width: double.infinity,

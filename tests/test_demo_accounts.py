@@ -160,6 +160,19 @@ moves = {n: c["items"].get("camera_moves") for n, c in latest.items()}
 check("Mia／Leo／Yuki 有每小時動幾次（預設分享）、Ken 沒有攝影機", 
       ({n: isinstance(v, (int, float)) for n, v in moves.items()}),
       {"Mia (demo)": True, "Leo (demo)": True, "Yuki (demo)": True, "Ken (demo)": False})
+# 完整頁的區塊（2026-11-16）：整晚的心率線、攝影機時間軸（自己一個開關、預設關）
+mia_hr = latest["Mia (demo)"]["items"].get("sleeping_hr") or {}
+check("Mia：心率有整晚的線（≥ 30 點）", len(mia_hr.get("curve") or []) >= 30, True)
+check("Mia：心率線只給第幾分鐘，不給時刻",
+      all(set(p) == {"m", "v"} and isinstance(p["m"], (int, float)) for p in mia_hr.get("curve") or []), True)
+tl = latest["Mia (demo)"]["items"].get("camera_timeline") or {}
+check("Mia：攝影機時間軸有光柱、總次數、動了多久、跟平常比",
+      (len(tl.get("points") or []) >= 30, isinstance(tl.get("total"), int),
+       isinstance(tl.get("moving_sec"), int), isinstance(tl.get("usual"), str)),
+      (True, True, True, True))
+check("攝影機時間軸只給第幾分鐘，不給時刻",
+      any("T" in str(p.get("m")) for p in tl.get("points") or []), False)
+check("Ken（只開預設）：沒有攝影機時間軸（預設關）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
 all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
 check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
 seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))

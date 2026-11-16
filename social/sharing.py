@@ -10,6 +10,7 @@ social/sharing.py —— 每個人自己選要讓好友看到什麼（2026-11-15
 ⚠️ 數字一律從那一晚的 `/home` 挑——跟本人自己的早晨報告**同一份**，好友看到的不會跟本人不一樣。
 ⚠️ 只讀。這裡不寫回評分、不給 XP（紅線 4）。
 """
+import json
 from datetime import datetime
 
 GROUPS = (
@@ -137,12 +138,55 @@ def _stages(c):
     return _compact(out)
 
 
+def _offsets(points):
+    """曲線 [{t: ISO, value}] → [{m: 從第一點起算第幾分鐘, v}]。
+    ⚠️ 不給 ISO 時刻（同 _stages）：兩端的時刻由 stages 的 start／end 決定要不要給。"""
+    out, t0 = [], None
+    for p in points or []:
+        if not isinstance(p, dict):
+            continue
+        t, v = _wall(p.get("t")), _num(p.get("value"))
+        if t is None or v is None:
+            continue
+        t0 = t0 or t
+        out.append({"m": round((t - t0).total_seconds() / 60, 1), "v": v})
+    return out
+
+
 def _sleeping_hr(c):
     curve = _g(c["home"], "metrics", "heart_rate_curve")
     if isinstance(curve, dict) and _num(curve.get("avg")) is not None:
-        return {"avg": round(curve["avg"]), "min": _num(curve.get("min"))}
+        # 完整頁的 Heart rate 區塊（2026-11-16）：整晚的線跟著同一個開關
+        return {"avg": round(curve["avg"]), "min": _num(curve.get("min")),
+                "curve": _offsets(curve.get("points")) or None}
     avg = _num(_g(c["home"], "metrics", "avg_heart_rate"))
     return None if avg is None else {"avg": round(avg), "min": None}
+
+
+def _camera_timeline(c):
+    """
+    完整頁的 Movement (camera) 區塊（2026-11-16 使用者定）：整晚每 5 分鐘動多少的光柱、
+    總共動幾次、動了多久、「跟他自己平常比」那一句。
+
+    ⚠️ 自己一個開關、**預設關**：每小時幾次只是一個數字，時間軸細到「半夜幾點在動」。
+    ⚠️ 片段影像永遠不給（NEVER_SHARED）。只留睡著那段（/home 的 camera_curve 已經剪好）。
+    """
+    curve = _g(c["home"], "metrics", "camera_curve")
+    cam = c.get("camera") or {}
+    moving = None
+    try:
+        eps = json.loads(cam["motion_episodes"]) if cam.get("motion_episodes") else None
+        if isinstance(eps, list):
+            moving = round(sum(_num(e.get("seconds")) or 0 for e in eps if isinstance(e, dict)))
+    except (TypeError, ValueError):
+        moving = None
+    usual = cam.get("usual")
+    return _compact({
+        "points": _offsets(curve.get("points")) or None if isinstance(curve, dict) else None,
+        "total": _num(cam.get("events_total")),
+        "moving_sec": moving,
+        "usual": usual.get("label") if isinstance(usual, dict) else None,
+    })
 
 
 def _stress(c):
@@ -219,6 +263,8 @@ ITEMS = (
     ("efficiency", "sleep", False, "Sleep efficiency", _efficiency),
     ("camera_moves", "sleep", True, "Movements per hour (camera)",
      lambda c: _num((c.get("camera") or {}).get("events_per_hour"))),
+    ("camera_timeline", "sleep", False, "Movement through the night (camera timeline)",
+     _camera_timeline),
     ("morning_rating", "sleep", False, "How rested you felt",
      lambda c: _compact({"rested": _num(_g(c["home"], "morning_rating", "rested")),
                          "label": _g(c["home"], "morning_rating", "label")})),

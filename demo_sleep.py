@@ -103,3 +103,40 @@ def stages_block(w_row):
         "minutes": {"awake": awake, "rem": rem, "light": light, "deep": deep},
         "rem_measured": True,
     }
+
+
+# 每個階段的心率比整晚平均高或低多少（只為了畫出有起伏的假線，不是任何生理常模）
+_HR_SHIFT = {"deep": -5.0, "light": -1.0, "rem": 3.0, "awake": 8.0}
+
+
+def heart_rate_block(w_row, bucket_minutes=5):
+    """
+    API 用：示範帳號那一晚睡著期間的心率線，形狀同 sleep_heart_rate.heart_rate_curve
+    （points／avg／min／max／min_at／bucket_minutes）。跟階梯同一份種子，所以同一晚每次都一樣。
+    """
+    block = stages_block(w_row)
+    base = w_row.get("avg_hr") if w_row else None
+    if not block or not isinstance(base, (int, float)):
+        return None
+    segs = block["segments"]
+    rng = random.Random(night_seed(w_row) + ":hr")
+    start = datetime.fromisoformat(segs[0]["start"])
+    end = datetime.fromisoformat(segs[-1]["end"])
+    points = []
+    t = start
+    while t <= end:
+        stage = next((sg["stage"] for sg in segs
+                      if datetime.fromisoformat(sg["start"]) <= t < datetime.fromisoformat(sg["end"])),
+                     segs[-1]["stage"])
+        points.append({"t": t.isoformat(), "value": round(base + _HR_SHIFT[stage] + rng.gauss(0, 1.5))})
+        t += timedelta(minutes=bucket_minutes)
+    values = [p["value"] for p in points]
+    low = min(values)
+    return {
+        "points": points,
+        "avg": round(sum(values) / len(values), 1),
+        "min": low,
+        "max": max(values),
+        "min_at": next(p["t"] for p in points if p["value"] == low),
+        "bucket_minutes": bucket_minutes,
+    }

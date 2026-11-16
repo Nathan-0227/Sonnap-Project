@@ -76,7 +76,8 @@ PERSONAS = [
         "offset": lambda i, n, rng: min(-1.0, rng.gauss(-20, 8)),
         "species": "cat", "scene": "lake", "precision": "on_time_only",
         "sleep": ((455, 20), 0.19, 0.23, (12, 5)), "day": (9500, 0.2, None),
-        "share": ("stages", "sleep_duration", "score", "awake", "steps"),
+        "share": ("stages", "sleep_duration", "score", "awake", "steps", "sleeping_hr",
+                  "camera_timeline", "morning_rating", "level"),
         "camera": (12, 3),
     },
     {   # 一開始常熬夜，後來收斂 → 最近幾晚開始有連續紀錄
@@ -85,7 +86,7 @@ PERSONAS = [
         "species": "dog", "scene": "campfire", "precision": "exact",
         "sleep": ((410, 30), 0.16, 0.21, (20, 8)), "day": (7200, 0.35, 44),
         "share": ("stages", "sleep_duration", "time_in_bed", "awake", "sleeping_hr",
-                  "level", "steps", "stress"),
+                  "level", "steps", "stress", "camera_timeline", "target_bedtime", "fell_asleep"),
         "camera": (19, 5),
     },
     {   # 夜貓子，常常晚一兩個小時 → 寵物是 tired
@@ -93,7 +94,8 @@ PERSONAS = [
         "offset": lambda i, n, rng: rng.gauss(75, 30),
         "species": "cat", "scene": "rooftop", "precision": "exact",
         "sleep": ((375, 40), 0.14, 0.20, (28, 10)), "day": (5200, 0.5, None),
-        "share": ("stages", "sleep_duration", "bed_times", "awake", "stress", "body_battery"),
+        "share": ("stages", "sleep_duration", "bed_times", "awake", "stress", "body_battery",
+                  "sleeping_hr", "camera_timeline", "efficiency", "time_in_bed"),
         "camera": (27, 6),
     },
     {   # 不規律，每 4 晚有 1 晚沒開 App → 缺晚會中斷連續紀錄（紅線 5）。只公開預設那幾項
@@ -198,11 +200,30 @@ def write_camera_night(uid, wake_day, p, bed_start, bed_end, rng, db_path=None):
     mu, sd = p["camera"]
     hours = (bed_end - bed_start).total_seconds() / 3600
     per_hour = round(max(4.0, rng.gauss(mu, sd)), 1)
+    total = round(per_hour * hours)
+    # 整晚每 5 分鐘一格：把 total 段動作隨機撒在臥床期間，那一格的值＝動了幾成時間
+    start = bed_start.replace(tzinfo=None, second=0, microsecond=0)
+    n = max(1, int(hours * 12))
+    moving = [0.0] * n
+    episodes = []
+    for _ in range(total):
+        k = rng.randrange(n)
+        sec = round(rng.uniform(3, 25), 1)
+        moving[k] = min(300.0, moving[k] + sec)
+        at = start + timedelta(minutes=5 * k, seconds=rng.randint(0, 299))
+        episodes.append({"start_at": at.isoformat(timespec="seconds"), "seconds": sec})
+    curve = {"points": [{"t": (start + timedelta(minutes=5 * k)).isoformat(),
+                         "value": round(moving[k] / 300, 3)} for k in range(n)],
+             "bucket_minutes": 5}
     db.upsert_camera_nightly(uid, wake_day.isoformat(), {
         "bed_start_at": _naive(bed_start), "bed_end_at": _naive(bed_end),
         "time_in_bed_minutes": round(hours * 60, 1),
-        "events_total": round(per_hour * hours), "events_per_hour": per_hour,
+        "events_total": total, "events_per_hour": per_hour,
         "bed_times_provenance": "demo", "csv": None,
+        # 同一把尺（basis＋roi）才進「跟平常比」的基線
+        "roi": (0, 0, 1, 1), "motion_threshold_pct_of_roi": 0.75,
+        "motion_curve": curve,
+        "motion_episodes": sorted(episodes, key=lambda e: e["start_at"]),
     }, db_path=db_path)
 
 

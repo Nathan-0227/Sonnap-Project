@@ -454,8 +454,8 @@ void main() {
       expect(sheetTop, greaterThanOrEqualTo(back.bottom));
       final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
       final navBar = tester.view.padding.bottom / tester.view.devicePixelRatio;
-      // 最底下那一格（照順序最後一個是 outfit）
-      final last = tester.getRect(find.byKey(const Key('card-tile-outfit')));
+      // 最底下那一段（Game）
+      final last = tester.getRect(find.byKey(const Key('section-game')));
       expect(last.bottom, lessThanOrEqualTo(screenH - navBar));
     });
 

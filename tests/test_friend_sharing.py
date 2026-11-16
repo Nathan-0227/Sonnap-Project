@@ -110,6 +110,8 @@ check("放下手機、準時、連續、寵物心情、衣服、挑戰＋卡上�
       sorted(k for k, on in items.items() if on),
       sorted(["phone_down_time", "on_time", "streak", "pet_mood", "outfit", "challenges",
               "sleep_duration", "camera_moves", "score"]))
+check("攝影機時間軸是選項、預設關（每小時幾次預設開）", (items.get("camera_timeline"), items.get("camera_moves")),
+      (False, True))
 check("永遠不給的三項有說明、但不是選項", (len(v["never_shared"]),
       any(k in items for k in ("camera_clips", "move_iq_times", "prebed_apps"))), (3, False))
 cards = feed()

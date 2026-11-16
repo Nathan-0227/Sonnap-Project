@@ -328,9 +328,9 @@ void main() {
       expect(find.text('Phone down'), findsOneWidget);
       expect(find.text('01:12'), findsOneWidget);
       expect(find.text('Late'), findsOneWidget);
-      // 步數不畫在卡上（點 See all 看），也沒有小格
+      // 步數不畫在卡上，完整頁也不放（白天的資料跟睡眠無關）→ 不算進 +N more
       expect(find.text('1,200'), findsNothing);
-      expect(find.text('+1 more'), findsOneWidget);
+      expect(find.byKey(const Key('card-more')), findsNothing);
       // 動態牆上有分隔線寫日期，卡上不再寫
       expect(find.text('Night of Nov 14'), findsNothing);
       // 沒給的不出現，也不寫 0
@@ -397,8 +397,8 @@ void main() {
       // 效率太擠拿掉了；卡上沒有小格
       expect(find.text('Efficiency'), findsNothing);
       expect(keysStarting('card-tile-'), isEmpty);
-      // 剩下效率、步數、放下手機、準時（pet_mood 畫成寵物，不算）
-      expect(find.text('+4 more'), findsOneWidget);
+      // 剩下效率、放下手機、準時（pet_mood 畫成寵物、步數完整頁不放，都不算）
+      expect(find.text('+3 more'), findsOneWidget);
     });
 
     testWidgets('全部都畫在卡上了就沒有 See all', (tester) async {
@@ -461,14 +461,87 @@ void main() {
       expect(find.byKey(const Key('night-detail')), findsOneWidget);
       expect(find.byKey(const Key('night-scene')), findsOneWidget); // 上面是場景（像 Strava 的地圖）
       // 三個大數字之外的 7 項全部是小格（卡片上只會有 3 格）
-      for (final k in ['on_time', 'awake', 'sleeping_hr', 'steps', 'stress', 'level', 'outfit']) {
-        expect(find.byKey(Key('card-tile-$k')), findsOneWidget, reason: k);
+      // Strava 式的區塊（2026-11-16 使用者定）：他有公開的才出現
+      for (final k in ['stages', 'hr', 'bedtime', 'game']) {
+        expect(find.byKey(Key('section-$k')), findsOneWidget, reason: k);
       }
+      expect(find.byKey(const Key('stage-row-awake')), findsOneWidget);
+      expect(find.text('2 times · 10m'), findsOneWidget);
+      expect(find.text('56 bpm'), findsOneWidget);
+      expect(find.text('Lv 4'), findsOneWidget);
+      // 沒公開的整段不出現、不畫成 0
+      expect(find.byKey(const Key('section-camera')), findsNothing);
+      expect(find.byKey(const Key('section-morning')), findsNothing);
+      expect(find.byKey(const Key('hr-chart')), findsNothing); // 沒有整晚的線就只有數字
+      // 白天的資料（步數、壓力）跟睡眠無關，完整頁不放（使用者定）
+      expect(find.text('8,432'), findsNothing);
+      expect(find.textContaining('stress'), findsNothing);
+      // 不再有小格
+      expect(find.byKey(const Key('card-tile-on_time')), findsNothing);
       expect(find.byKey(const Key('card-more')), findsNothing);
-      // 沒給的不出現
-      expect(find.byKey(const Key('card-tile-score')), findsNothing);
-      // 沒公開 Sleep Stages → 沒有深睡那幾格
-      expect(find.byKey(const Key('card-tile-stages-deep')), findsNothing);
+    });
+
+    testWidgets('完整頁的區塊：階段表、心率線、攝影機光柱、就寢時間軸照時間排、早上、遊戲', (tester) async {
+      tester.view.physicalSize = const Size(400, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final card = FriendNightCard(handle: 'B', displayName: 'Bob', date: '2026-11-14', items: {
+        'stages': {
+          'deep': 60, 'light': 240, 'rem': 0, 'rem_measured': false, 'start': '23:28', 'end': '07:41',
+          'segments': [{'stage': 'light', 'from': 0, 'to': 60}, {'stage': 'deep', 'from': 60, 'to': 120}],
+        },
+        'awake': {'count': 1, 'minutes': 6},
+        'sleeping_hr': {'avg': 56, 'min': 48, 'curve': [for (var i = 0; i < 20; i++) {'m': i * 5, 'v': 50 + i % 7}]},
+        'resting_hr': 54,
+        'camera_moves': 14,
+        'camera_timeline': {'points': [for (var i = 0; i < 20; i++) {'m': i * 5, 'v': i % 3 == 0 ? 0.2 : 0.0}],
+          'total': 105, 'moving_sec': 1500, 'usual': 'About the same as usual'},
+        'target_bedtime': '23:30', 'phone_down_time': '23:12', 'on_time': true,
+        'bed_times': {'start': '23:16', 'end': '07:52'}, 'fell_asleep': 12,
+        'efficiency': {'value': 93.4, 'label': 'Sleep button'},
+        'morning_rating': {'rested': 4, 'label': 'Rested'},
+        'challenges': [{'title': 'Steady bedtime', 'completed': true}],
+      });
+      await tester.pumpWidget(MaterialApp(home: FriendNightPage(card: card)));
+      await tester.pump(const Duration(milliseconds: 100));
+      for (final k in ['stages', 'hr', 'camera', 'bedtime', 'morning', 'game']) {
+        expect(find.byKey(Key('section-$k')), findsOneWidget, reason: k);
+      }
+      // 階段表：比例照抄分鐘數；沒量到 REM 寫 not measured、不畫成 0%
+      expect(find.text('20%'), findsOneWidget); // 60 / 300
+      expect(find.text('80%'), findsOneWidget);
+      expect(find.text('not measured'), findsOneWidget);
+      expect(find.text('0%'), findsNothing);
+      // 心率：有線就畫圖；不寫 Normal／High
+      expect(find.byKey(const Key('hr-chart')), findsOneWidget);
+      expect(find.text('48 bpm'), findsOneWidget);
+      expect(find.textContaining('Normal'), findsNothing);
+      expect(find.textContaining('High'), findsNothing);
+      // 攝影機：光柱、跟平常比照抄、不進分數
+      expect(find.byKey(const Key('camera-chart')), findsOneWidget);
+      expect(find.text('About the same as usual'), findsOneWidget);
+      expect(find.text('25m'), findsOneWidget);
+      expect(find.textContaining('Not part of the sleep score'), findsOneWidget);
+      // 就寢時間軸照時間排（目標 23:30 排在睡著 23:28 之後；過了午夜的排最後）
+      final labels = [
+        for (var i = 0; i < 6; i++)
+          (tester.widget<Text>(find.descendant(
+            of: find.byKey(Key('bed-step-$i')),
+            matching: find.byType(Text),
+          ).at(1))).data,
+      ];
+      expect(labels, [
+        'Phone down · On time',
+        'Start Sleep',
+        'Fell asleep · 12m after Start Sleep',
+        'Target bedtime',
+        'Woke up',
+        'Out of bed',
+      ]);
+      expect(find.text('93%'), findsOneWidget);
+      expect(find.text('Sleep button'), findsOneWidget);
+      expect(find.text('Rested'), findsOneWidget);
+      expect(find.text('Steady bedtime'), findsOneWidget);
     });
 
     testWidgets('See all：有睡眠圖時，深睡／淺睡／REM 各一格（卡片上不放）', (tester) async {

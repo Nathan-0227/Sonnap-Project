@@ -545,6 +545,9 @@ def night_heart_rate(w_row):
     ⚠️ 平均與最低從曲線那一段自己算，不用 w_row["avg_hr"]（那個混了清醒時段）。
     ⚠️ 不判斷 Normal／High（紅線 2）。資料不夠 → None，App 整張卡不畫。
     """
+    if w_row and w_row.get("source") == "demo":
+        # 🔴 示範帳號：用那一晚的階梯排出一條假的心率線（見 demo_sleep.py）
+        return demo_sleep.heart_rate_block(w_row)
     if not w_row or w_row.get("source") != "garmin":
         return None
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
@@ -1766,7 +1769,9 @@ async def _night_card(user_id, date, settings, game=None, closet=None, challenge
     home = await get_home(user_id=user_id, date=date)
     latest = (home.get("behavior") or {})
     mood, _ = social_friends.pet_state.mood_for_adherence(latest.get("adherence_minutes"))
-    cam = next((r for r in db.get_camera_nightly(user_id, days=60) if r.get("date") == date), None)
+    # 「跟他自己平常比」要看這一晚之前的夜晚 → 整串一起標（同 /insights）
+    cam_rows = camera_usual.annotate(db.get_camera_nightly(user_id, days=60))
+    cam = next((r for r in cam_rows if r.get("date") == date), None)
     ctx = {
         "home": home,
         "game": game,
