@@ -204,6 +204,7 @@ class NightlyUploader {
         night.lightsOutIso,
         night.marks,
         bridgedUnlocks: night.bridgedUnlocks,
+        candidates: night.candidates,
       );
       if (result.status == NightlyUploadStatus.ok) {
         replayed.add(result);
@@ -222,6 +223,7 @@ class NightlyUploader {
           todayIso,
           marks: usable,
           bridgedUnlocks: lightsOut.bridgedUnlocks,
+          candidates: [for (final c in lightsOut.candidates) c.toJson()],
         ),
       );
     }
@@ -306,6 +308,7 @@ class NightlyUploader {
       iso,
       _usableMarks(lightsOut, marks),
       bridgedUnlocks: lightsOut.bridgedUnlocks,
+      candidates: [for (final c in lightsOut.candidates) c.toJson()],
     );
   }
 
@@ -316,6 +319,7 @@ class NightlyUploader {
     String iso,
     BedMarks marks, {
     int? bridgedUnlocks,
+    List<Map<String, dynamic>> candidates = const [],
   }) async {
     final userId = await identity.currentUserId();
     if (userId == null) {
@@ -343,6 +347,12 @@ class NightlyUploader {
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
         // 偵測時跨過幾次半夜的短解鎖（就寢偵測第 4 條規則）。只供分析；不知道就不送（後端存 NULL）。
         'bridged_unlocks': ?bridgedUnlocks,
+        // 那一晚所有 ≥ 60 分鐘的安靜期（2026-11-16）。後端拿手錶認定的入睡
+        // 時刻當裁判，刷掉「晚於入睡」那種不可能的候選，挑出正確的那一段
+        // （behavior/lights_out_resolve.py）。
+        // ⚠️ 空的就不送：舊版 App 送不出這個欄位，而後端把「沒有候選」當成
+        //    「照手機挑的那個，不要動」。送一個空陣列會變成另一種意思。
+        if (candidates.isNotEmpty) 'quiet_candidates': candidates,
         'source': 'phone',
       }));
 

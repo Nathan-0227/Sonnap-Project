@@ -167,6 +167,18 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     bed_start_kind    TEXT,
     bed_end_kind      TEXT,
     bridged_unlocks   INTEGER,                -- 偵測時跨過幾次半夜的短解鎖（<30 秒）；0＝正常偵測，NULL＝舊資料／舊版 App
+
+    -- ── 候選安靜期（2026-11-16）────────────────────────────────────
+    -- App 送上來的**所有** ≥60 分鐘的安靜期（JSON 陣列）。手機端的規則是
+    -- 「挑最長的那一段」，半夜起來用幾分鐘手機就會挑錯（11-16 差 88 分鐘）；
+    -- 真正的那一段不可能晚於手錶認定的入睡，而只有後端拿得到手錶資料。
+    -- NULL＝舊版 App 沒送（≠ 空陣列）。判準只在 behavior/lights_out_resolve.py。
+    quiet_candidates  TEXT,
+    -- 這一晚的 lights_out_at 是誰挑的：'phone'（手機挑的，或沒有裁判可用）／
+    -- 'watch'（用手錶刷掉之後換過）／'unresolved'（一段都沒過關，達成度存 NULL）。
+    -- ⚠️ 存「誰挑的」而不是「有沒有改過」，是為了**可以重複執行**——
+    --    每次都從 quiet_candidates 重挑，不是在改過的值上再改一次。
+    lights_out_pick   TEXT,
     time_in_bed_minutes   REAL,             -- bed_end − bed_start
     phone_in_bed_minutes  REAL,             -- lights_out − bed_start（下界，見下）
     assumed_sleep_minutes REAL,             -- 臥床 − 滑手機 − WASO(=0)
@@ -671,6 +683,9 @@ COLUMN_MIGRATIONS = [
     # 2026-11-15：就寢偵測第 4 條規則（半夜看一下時間的短解鎖可以跨過去）。
     #             記這一晚跨過了幾次；0＝正常偵測，NULL＝舊資料／舊版 App 沒送。只供分析、不顯示
     ("nightly_behavior", "bridged_unlocks", "INTEGER"),
+    # 2026-11-16：候選安靜期與「誰挑的」（見 behavior/lights_out_resolve.py）。
+    ("nightly_behavior", "quiet_candidates", "TEXT"),
+    ("nightly_behavior", "lights_out_pick", "TEXT"),
     # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
@@ -1017,7 +1032,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
                             db_path=None, efficiency=None,
                             bed_start_kind=None, bed_end_kind=None,
-                            bridged_unlocks=None):
+                            bridged_unlocks=None, quiet_candidates=None,
+                            lights_out_pick=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -1044,8 +1060,9 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                  bed_start_at, bed_end_at, time_in_bed_minutes,
                  phone_in_bed_minutes, assumed_sleep_minutes,
                  sleep_efficiency, efficiency_basis,
-                 bed_start_kind, bed_end_kind, bridged_unlocks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 bed_start_kind, bed_end_kind, bridged_unlocks,
+                 quiet_candidates, lights_out_pick)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 target_bedtime    = excluded.target_bedtime,
                 lights_out_at     = excluded.lights_out_at,
@@ -1061,7 +1078,12 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                 efficiency_basis      = excluded.efficiency_basis,
                 bed_start_kind        = excluded.bed_start_kind,
                 bed_end_kind          = excluded.bed_end_kind,
-                bridged_unlocks       = excluded.bridged_unlocks
+                bridged_unlocks       = excluded.bridged_unlocks,
+                -- ⚠️ 舊版 App 不送候選，送上來的是 NULL。這裡仍然整欄覆寫，
+                --    因為同一晚重送時「手機這次給不出候選」就是現況，
+                --    留著上一次的候選會讓挑選結果對不上那個時刻。
+                quiet_candidates      = excluded.quiet_candidates,
+                lights_out_pick       = excluded.lights_out_pick
             """,
             (user_id, date, target_bedtime, lights_out_at,
              adherence_minutes, None if is_late is None else (1 if is_late else 0),
@@ -1072,7 +1094,7 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
              eff.get("efficiency_basis"),
              bed_start_kind if eff.get("bed_start_at") else None,
              bed_end_kind if eff.get("bed_end_at") else None,
-             bridged_unlocks),
+             bridged_unlocks, quiet_candidates, lights_out_pick),
         )
         conn.commit()
     finally:

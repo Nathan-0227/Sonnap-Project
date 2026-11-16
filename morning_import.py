@@ -569,6 +569,14 @@ def _run(args, paths, now, runner, db_check, env, analyse):
     if runner(["migrate_garmin_to_db.py"]) != 0:
         raise Stop("手錶資料寫入資料庫失敗（上面有錯誤訊息）。攝影機、夢境都還沒跑。\n"
                    "  修好之後整支重跑就好，兩支匯入腳本都可以重複執行。")
+    # 手錶寫完之後才有裁判：用手錶認定的入睡時刻重挑就寢時刻
+    # （手機端挑最長的那一段，半夜起來用幾分鐘手機就會挑錯）。
+    # ⚠️ 一定要排在 migrate_garmin_to_db.py 之後、build_app_payload.py 之前，
+    #    不然打包檔帶出去的還是沒校正的值。
+    # 失敗不讓已經寫好的手錶資料作廢（比照下面的攝影機片段與夢境）。
+    if runner(["resolve_lights_out.py"]) != 0:
+        print("  ⚠ 就寢時刻重挑失敗（上面有錯誤訊息），其餘不受影響。"
+              "之後可以單獨跑 resolve_lights_out.py 補")
     if camera_csv is not None:
         if runner(["migrate_camera_to_db.py", "--csv", str(camera_csv)]) != 0:
             raise Stop("攝影機寫入資料庫失敗（上面有錯誤訊息）。手錶那份已經寫進去了。\n"
