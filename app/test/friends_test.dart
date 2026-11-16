@@ -31,6 +31,7 @@ Map<String, dynamic> friendJson(
   bool? late = false,
   int streak = 2,
   int best = 3,
+  List<String>? week,
 }) =>
     {
       'handle': handle,
@@ -44,6 +45,11 @@ Map<String, dynamic> friendJson(
       'late_night_ratio': 0.25,
       'late_nights': 1,
       'recorded_nights': 4,
+      if (week != null)
+        'streak_week': [
+          for (final (i, st) in week.indexed)
+            {'date': '2026-09-${(i + 1).toString().padLeft(2, '0')}', 'status': st},
+        ],
     };
 
 Map<String, dynamic> stateJson({List<Map<String, dynamic>>? friends, List<Map<String, dynamic>>? board}) => {
@@ -351,7 +357,8 @@ void main() {
     testWidgets('Feed：每張卡是他選的場景；連續天數的橫幅只在他最近那一晚、3 晚以上才出現', (tester) async {
       final stub = _StubFriends(result: FriendsResult(FriendsStatus.ok,
           value: FriendsState.fromJson(stateJson(friends: [
-        friendJson('BOB234', 'Bob', streak: 4),
+        friendJson('BOB234', 'Bob', streak: 4,
+            week: ['late', 'on_time', 'on_time', 'on_time', 'on_time', 'future', 'future']),
         friendJson('CAR567', 'Carol', streak: 2),
       ]))));
       stub.feed = const [
@@ -377,15 +384,48 @@ void main() {
       expect(find.byKey(const Key('card-streak')), findsOneWidget);
       expect(find.text('Bob reached a 4-night streak'), findsOneWidget);
       expect(find.textContaining('Carol reached'), findsNothing); // 只有 2 晚
+      // 火焰在場景裡寵物後面：Bob 4 晚＝大火、Carol 2 晚＝小火，只在各自最近那一晚的卡上
+      expect(find.byKey(const Key('streak-flames-2')), findsOneWidget);
+      expect(find.byKey(const Key('streak-flames-1')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('feed-card-BOB234-2026-09-03')),
+          matching: find.byKey(const Key('streak-flames-2')),
+        ),
+        findsOneWidget,
+      );
+      // 這週的軌道也在外面的卡上（只有 Bob 有給、只在最近那一晚）
+      expect(find.byKey(const Key('card-week')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('feed-card-BOB234-2026-09-03')),
+          matching: find.byKey(const Key('card-week')),
+        ),
+        findsOneWidget,
+      );
 
-      // 點卡片＝See all：同一張卡的完整版，再往下可以看他的 Streak
+      // 點卡片＝See all：同一張卡的完整版
       await tester.tap(find.byKey(const Key('feed-card-BOB234-2026-09-03')));
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('night-detail')), findsOneWidget);
-      // 他的 Streak 卡直接在這一頁（不用再點）
-      expect(find.byKey(const Key('night-streak')), findsOneWidget);
+      // 火和這週的軌道都在完整頁的卡上，不再另外放一張 Streak 卡
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-detail')),
+          matching: find.byKey(const Key('card-week')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-detail')),
+          matching: find.byKey(const Key('streak-flames-2')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('night-streak')), findsNothing);
       // 滑到最底：最後那顆按鈕不能被系統按鍵列蓋住（2026-11-16 實機抓到）
       await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
       for (var i = 0; i < 5; i++) {

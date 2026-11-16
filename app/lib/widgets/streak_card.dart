@@ -66,36 +66,12 @@ class StreakCard extends StatelessWidget {
     this.pageColor = const Color(0xFF081326),
   });
 
-  Widget _petWithFlames(int? streak, double size) => SizedBox(
-    width: size * 1.25,
-    height: size * 1.25,
-    child: Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        if (flameLevel(streak) > 0)
-          Positioned.fill(
-            // 邊緣淡出成一圈光，不留平平的底邊（放在場景裡時像一塊橘色方塊）
-            child: ShaderMask(
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (r) => const RadialGradient(
-                center: Alignment(0, -0.1),
-                radius: 0.5,
-                colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
-                stops: [0, 0.4, 1],
-              ).createShader(r),
-              // 火舌會畫出框外，框外的部分遮罩管不到，先裁掉
-              child: ClipRect(
-                child: StreakFlames(
-                  key: Key('streak-flames-${flameLevel(streak)}'),
-                  level: flameLevel(streak),
-                  color: color,
-                ),
-              ),
-            ),
-          ),
-        HomePet(mood: summary.petMood, size: size, species: species),
-      ],
-    ),
+  Widget _petWithFlames(int? streak, double size) => PetWithFlames(
+    mood: summary.petMood,
+    species: species,
+    streak: streak,
+    size: size,
+    color: color,
   );
 
   Widget _sceneHeader(int? streak) => AspectRatio(
@@ -474,4 +450,55 @@ class FlamePainter extends CustomPainter {
   @override
   bool shouldRepaint(FlamePainter old) =>
       old.t != t || old.level != level || old.color != color;
+}
+
+/// 背景－火焰－寵物：火焰在寵物正後面（連續天數 0 就沒有火）。好友頁最上面與動態卡共用。
+/// 外框是寵物的 1.25 倍，寵物貼著底邊站，所以腳的位置跟單獨畫寵物一樣。
+class PetWithFlames extends StatelessWidget {
+  final String? mood;
+  final PetSpecies? species;
+  final int? streak;
+  final double size;
+  final Color color;
+  const PetWithFlames({
+    super.key,
+    required this.mood,
+    required this.species,
+    required this.streak,
+    required this.size,
+    this.color = const Color(0xFFFF8A5C),
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size * 1.25,
+    height: size * 1.25,
+    child: Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        if (flameLevel(streak) > 0)
+          Positioned.fill(
+            // 邊緣淡出成一圈光，不留平平的底邊（放在場景裡時像一塊橘色方塊）
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (r) => const RadialGradient(
+                center: Alignment(0, -0.1),
+                radius: 0.5,
+                colors: [Colors.white, Colors.white, Color(0x00FFFFFF)],
+                stops: [0, 0.4, 1],
+              ).createShader(r),
+              // 火舌會畫出框外，框外的部分遮罩管不到，先裁掉
+              child: ClipRect(
+                child: StreakFlames(
+                  key: Key('streak-flames-${flameLevel(streak)}'),
+                  level: flameLevel(streak),
+                  color: color,
+                ),
+              ),
+            ),
+          ),
+        HomePet(mood: mood, size: size, species: species),
+      ],
+    ),
+  );
 }
