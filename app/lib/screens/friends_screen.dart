@@ -405,6 +405,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             // 點卡片＝See all：同一張卡的完整版（每一項一個小格）；下面可以再看他的 Streak 與解除好友
             onTap: () => openFriendNight(context, c,
                 streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
+                friend: f,
                 onOpenFriend: f == null ? null : () => _showFriend(f)),
           );
         }),

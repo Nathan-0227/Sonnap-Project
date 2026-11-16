@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import '../services/friends_service.dart';
 import '../services/night_compare.dart' show formatMinutes;
 import 'home_pet.dart';
-import 'streak_card.dart' show speciesOf;
+import 'streak_card.dart' show StreakCard, speciesOf;
 
 const _nightKeys = [
   'phone_down_time',
@@ -497,12 +497,16 @@ class FriendNightCardView extends StatelessWidget {
   /// See all 那一頁：同一張卡，但他公開的每一項都排成小格（一排三個），不收起來。
   final bool expanded;
 
+  /// 完整頁用：場景鋪到狀態列底下，名字要往下讓出狀態列＋返回鍵的高度。
+  final double topInset;
+
   const FriendNightCardView({
     super.key,
     required this.card,
     this.onTap,
     this.streak,
     this.expanded = false,
+    this.topInset = 0,
   });
 
   @override
@@ -530,11 +534,12 @@ class FriendNightCardView extends StatelessWidget {
     );
     final stats = layout.stats;
 
+    // 完整頁（2026-11-16 使用者定）：整頁就是場景，不是一張卡放在頁面中間——不留邊、不圓角
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: expanded ? 0 : 20),
       child: Material(
         color: _sceneBottom,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(expanded ? 0 : 24),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           key: Key(
@@ -608,7 +613,7 @@ class FriendNightCardView extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                    padding: EdgeInsets.fromLTRB(18, 16 + topInset, 18, 18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -630,7 +635,7 @@ class FriendNightCardView extends StatelessWidget {
                           ),
                         ),
                         // 數字從地面下面開始（名字約 40 高）
-                        SizedBox(height: ground - 16 - 40 + 20),
+                        SizedBox(height: ground - 16 - topInset - 40 + 20),
                         if (stats.isNotEmpty)
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -817,42 +822,67 @@ class _Tile extends StatelessWidget {
   );
 }
 
-/// 「See all」（2026-11-16 使用者定）：打開一整頁，**跟卡片同一個樣子**——上面是他的場景與寵物，
-/// 下面他公開的每一項都是一個小格（一排三個），不收起來。最下面可以再看他的 Streak 與解除好友。
+/// 「See all」（2026-11-16 使用者定）：打開一整頁，**整頁就是他的場景**（鋪到狀態列底下、不包框，
+/// 返回鍵疊在場景上），寵物站在地上；下面他公開的每一項都是一個小格（一排三個），不收起來。
+/// 最下面直接放他的 Streak 卡（不用再點），再下面是好友設定（解除好友）。
+/// ⚠️ 最底下要留系統按鍵列的高度——實機上那一列會蓋住最後一顆按鈕。
 Future<void> openFriendNight(
   BuildContext context,
   FriendNightCard card, {
   int? streak,
+  FriendSummary? friend,
   VoidCallback? onOpenFriend,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (context) => Scaffold(
-        backgroundColor: const Color(0xFF081326),
-        appBar: AppBar(
+      builder: (context) {
+        final inset = MediaQuery.paddingOf(context);
+        return Scaffold(
           backgroundColor: const Color(0xFF081326),
-          foregroundColor: Colors.white,
-          title: Text(card.displayName),
-        ),
-        body: ListView(
-          key: const Key('night-detail'),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          children: [
-            FriendNightCardView(card: card, streak: streak, expanded: true),
-            if (onOpenFriend != null)
-              TextButton(
-                key: const Key('night-open-friend'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onOpenFriend();
-                },
-                child: Text(
-                  "${card.displayName.split(' ').first}'s streak and settings",
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.white,
+          ),
+          body: SingleChildScrollView(
+            key: const Key('night-detail'),
+            padding: EdgeInsets.only(bottom: inset.bottom + 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FriendNightCardView(
+                  card: card,
+                  streak: streak,
+                  expanded: true,
+                  topInset: inset.top + kToolbarHeight - 12,
                 ),
-              ),
-          ],
-        ),
-      ),
+                if (friend != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                    child: StreakCard(
+                      key: const Key('night-streak'),
+                      summary: friend,
+                      species: speciesOf(friend.petSpecies),
+                    ),
+                  ),
+                if (onOpenFriend != null)
+                  Center(
+                    child: TextButton(
+                      key: const Key('night-open-friend'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onOpenFriend();
+                      },
+                      child: const Text('Friend settings'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     ),
   );
 }

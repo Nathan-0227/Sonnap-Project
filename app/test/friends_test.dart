@@ -362,6 +362,10 @@ void main() {
         FriendNightCard(handle: 'CAR567', displayName: 'Carol', date: '2026-09-03', items: {'on_time': false}),
       ];
       await pump(tester, stub, friendsTab: false);
+      // 手機大小（內容要長到會捲）＋底部的系統按鍵列
+      tester.view.physicalSize = const Size(400, 560);
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      await tester.pump();
       expect(find.byKey(const Key('feed-card-BOB234-2026-09-03')), findsOneWidget);
       final scenes = tester.widgetList<Image>(find.byKey(const Key('card-scene')))
           .map((i) => (i.image as AssetImage).assetName).toList();
@@ -380,7 +384,17 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('night-detail')), findsOneWidget);
-      expect(find.byKey(const Key('night-open-friend')), findsOneWidget);
+      // 他的 Streak 卡直接在這一頁（不用再點）
+      expect(find.byKey(const Key('night-streak')), findsOneWidget);
+      // 滑到最底：最後那顆按鈕不能被系統按鍵列蓋住（2026-11-16 實機抓到）
+      await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final navBar = tester.view.padding.bottom / tester.view.devicePixelRatio;
+      final btn = tester.getRect(find.byKey(const Key('night-open-friend')));
+      expect(btn.bottom, lessThanOrEqualTo(screenH - navBar));
     });
 
     testWidgets('還沒有朋友 → 講清楚怎麼加', (tester) async {
