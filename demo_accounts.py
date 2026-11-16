@@ -264,6 +264,9 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
     """
     end = end or date.today()
     rng = random.Random(seed)
+    # 先補齊新欄位（後端還沒重開時資料庫可能少欄位）——要在刪掉舊帳號**之前**，
+    # 不然寫到一半失敗會留下一半的示範帳號（2026-11-17 踩過）
+    db.init_db(db_path)
     remove_all(db_path)
 
     if friend_of is None:
