@@ -174,9 +174,10 @@ check("攝影機時間軸只給第幾分鐘，不給時刻",
       any("T" in str(p.get("m")) for p in tl.get("points") or []), False)
 check("Ken（只開預設）：沒有攝影機時間軸（預設關）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
 devs = {n: [d["name"] for d in (c["items"].get("devices") or [])] for n, c in latest.items()}
-check("設備（預設分享）：手錶型號；有攝影機的多一台攝影機；有就寢紀錄的有手機",
-      (devs["Mia (demo)"][:2], devs["Ken (demo)"][0], "Camera" in devs["Ken (demo)"]),
-      (["Garmin Forerunner 265", "Camera"], "Garmin Vivoactive 5", False))
+check("設備（預設分享）：手錶、攝影機、手機都寫型號；沒有攝影機的就沒有那一台",
+      (devs["Mia (demo)"], devs["Ken (demo)"]),
+      (["Garmin Forerunner 265", "Tapo C210", "Google Pixel 8"],
+       ["Garmin Vivoactive 5", "Samsung Galaxy A54"]))
 all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
 check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
 seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))

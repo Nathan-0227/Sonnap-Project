@@ -158,11 +158,15 @@ class NightlyUploader {
   /// 隔天再開一次 App 是救不回來的。
   final PendingNightlyStore? pending;
 
+  /// 這支手機叫什麼（好友頁的設備清單）。null／讀不到 → 不送，後端留著之前的。
+  final Future<String?> Function()? phoneModel;
+
   const NightlyUploader({
     required this.baseUrl,
     required this.identity,
     this.pending,
     this.timeout = const Duration(seconds: 3),
+    this.phoneModel,
   });
 
   /// 送這一晚，順便把之前沒送成功的補送掉。
@@ -318,6 +322,7 @@ class NightlyUploader {
     int? bridgedUnlocks,
   }) async {
     final userId = await identity.currentUserId();
+    final model = await phoneModel?.call();
     if (userId == null) {
       return const NightlyUploadResult(NightlyUploadStatus.noUser);
     }
@@ -343,6 +348,7 @@ class NightlyUploader {
         //    可能與現在不同。從 App 每天傳等於天天覆寫快照。
         // 偵測時跨過幾次半夜的短解鎖（就寢偵測第 4 條規則）。只供分析；不知道就不送（後端存 NULL）。
         'bridged_unlocks': ?bridgedUnlocks,
+        'phone_model': ?model,
         'source': 'phone',
       }));
 

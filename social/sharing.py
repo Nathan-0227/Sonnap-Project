@@ -201,11 +201,12 @@ def _devices(c):
         brand = _g(home, "scoring", "device_brand")
         out.append({"kind": "watch",
                      "name": brand if isinstance(brand, str) and brand and brand != "demo" else "Watch"})
-    if c.get("camera"):
-        out.append({"kind": "camera", "name": "Camera"})
+    cam = c.get("camera")
+    if cam:
+        out.append({"kind": "camera", "name": cam.get("camera_model") or "Camera"})
     b = _g(home, "behavior") or {}
     if b.get("lights_out_at") or b.get("bed_start_at"):
-        out.append({"kind": "phone", "name": "Phone"})
+        out.append({"kind": "phone", "name": c.get("phone_model") or "Phone"})
     return out or None
 
 

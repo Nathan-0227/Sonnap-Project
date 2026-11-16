@@ -128,6 +128,20 @@ check("關掉那三個 → 卡上只剩行為＋遊戲＋設備", sorted(cards[0
       sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges", "devices"]))
 check("Bob 的設備：手錶型號＋手機（沒有攝影機）", [d["kind"] for d in cards[0]["items"]["devices"]],
       ["watch", "phone"])
+check("舊版 App 沒送手機型號 → 只寫 Phone", cards[0]["items"]["devices"][1]["name"], "Phone")
+# App 上傳時帶手機型號（2026-11-16）→ 那一晚就寫型號；之後重送沒帶型號，不能被洗回 Phone
+r = client.post("/nightly", json={
+    "user_id": bob, "lights_out_at": f"{NIGHT}T01:12:00",
+    "bed_start_at": f"{NIGHT}T00:50:00", "bed_end_at": f"{NIGHT}T08:30:00",
+    "phone_model": "Samsung Galaxy S24+",
+})
+check("帶型號上傳 201", r.status_code, 201)
+check("帶了型號 → 設備寫型號", feed()[0]["items"]["devices"][1]["name"], "Samsung Galaxy S24+")
+client.post("/nightly", json={"user_id": bob, "lights_out_at": f"{NIGHT}T01:12:00",
+                              "bed_start_at": f"{NIGHT}T00:50:00", "bed_end_at": f"{NIGHT}T08:30:00"})
+check("重送沒帶型號 → 留著之前的", feed()[0]["items"]["devices"][1]["name"], "Samsung Galaxy S24+")
+check("型號太長 → 422", client.post("/nightly", json={
+    "user_id": bob, "lights_out_at": f"{NIGHT}T01:12:00", "phone_model": "x" * 61}).status_code, 422)
 check("放下手機時刻 01:12、晚了", (cards[0]["items"]["phone_down_time"], cards[0]["items"]["on_time"]),
       ("01:12", False))
 check("⚠️ 沒打開的值一個字都不出後端（動態卡）", leaked(client.get(f"/friends/feed?user_id={alice}").json()), [])
@@ -136,7 +150,7 @@ check("⚠️ 摘要與單一朋友也一樣", leaked(client.get(f"/friends?user
 
 own = [c for c in client.get(f"/friends/feed?user_id={bob}").json()["cards"] if c["mine"]]
 check("Bob 自己的動態牆也有自己那一晚（mine）", [(c["display_name"], c["date"]) for c in own], [("Bob", NIGHT)])
-check("自己的卡＝朋友看到的那張（照分享設定，不多給）", own[0]["items"], cards[0]["items"])
+check("自己的卡＝朋友看到的那張（照分享設定，不多給）", own[0]["items"], feed()[0]["items"])
 check("Alice 沒有夜晚 → 沒有自己的卡",
       [c for c in client.get(f"/friends/feed?user_id={alice}").json()["cards"] if c["mine"]], [])
 

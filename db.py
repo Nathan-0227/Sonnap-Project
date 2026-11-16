@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     bed_start_kind    TEXT,
     bed_end_kind      TEXT,
     bridged_unlocks   INTEGER,                -- 偵測時跨過幾次半夜的短解鎖（<30 秒）；0＝正常偵測，NULL＝舊資料／舊版 App
+    phone_model       TEXT,                   -- 那一晚用的手機（App 給的顯示名稱，例如 Samsung Galaxy S24+）；NULL＝舊資料
     time_in_bed_minutes   REAL,             -- bed_end − bed_start
     phone_in_bed_minutes  REAL,             -- lights_out − bed_start（下界，見下）
     assumed_sleep_minutes REAL,             -- 臥床 − 滑手機 − WASO(=0)
@@ -404,6 +405,7 @@ CREATE TABLE IF NOT EXISTS camera_nightly (
     csv_name       TEXT,                     -- 哪一份錄影算出來的
     motion_curve   TEXT,                     -- JSON：每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線）
     motion_episodes TEXT,                    -- JSON：每一段動作的開始與秒數（早晨報告 Movement 點開，2026-11-15）
+    camera_model   TEXT,                     -- 哪一台攝影機（匯入時的 CAMERA_MODEL，例如 Tapo C200）；NULL＝舊資料
     created_at     TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -689,6 +691,8 @@ COLUMN_MIGRATIONS = [
     # 2026-11-15：就寢偵測第 4 條規則（半夜看一下時間的短解鎖可以跨過去）。
     #             記這一晚跨過了幾次；0＝正常偵測，NULL＝舊資料／舊版 App 沒送。只供分析、不顯示
     ("nightly_behavior", "bridged_unlocks", "INTEGER"),
+    ("nightly_behavior", "phone_model", "TEXT"),
+    ("camera_nightly", "camera_model", "TEXT"),
     # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
@@ -1035,7 +1039,7 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
                             db_path=None, efficiency=None,
                             bed_start_kind=None, bed_end_kind=None,
-                            bridged_unlocks=None):
+                            bridged_unlocks=None, phone_model=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -1092,6 +1096,12 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
              bed_end_kind if eff.get("bed_end_at") else None,
              bridged_unlocks),
         )
+        # 手機型號：有給才寫，沒給（舊版 App、補送）就留著之前的，不洗成 NULL
+        if phone_model:
+            conn.execute(
+                "UPDATE nightly_behavior SET phone_model = ? WHERE user_id = ? AND date = ?",
+                (phone_model, user_id, date),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1387,6 +1397,12 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
              json.dumps(result["motion_episodes"]) if result.get("motion_episodes") is not None else None,
              now_iso()),
         )
+        # 哪一台攝影機（2026-11-16）：另一道 UPDATE，上面那句 upsert 的欄位清單不動
+        if result.get("camera_model"):
+            conn.execute(
+                "UPDATE camera_nightly SET camera_model = ? WHERE user_id = ? AND date = ?",
+                (result["camera_model"], user_id, date),
+            )
         conn.commit()
     finally:
         conn.close()

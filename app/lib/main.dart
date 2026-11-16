@@ -30,6 +30,7 @@ import 'services/key_value_store.dart';
 import 'services/nightly_uploader.dart';
 import 'services/notification_service.dart';
 import 'services/pending_nightly.dart';
+import 'services/phone_model.dart';
 import 'services/sleep_repository.dart';
 import 'services/user_settings.dart';
 
@@ -167,6 +168,7 @@ class _MainPageState extends State<MainPage> {
     return NightlyUploader(
       baseUrl: baseUrl,
       identity: ResolvedUserIdentity(_account?.userId),
+      phoneModel: readPhoneModel,
       // ⚠️ 有了這個，連不到後端的那一晚才不會永久消失（偵測視窗是往回
       //    24 小時的滑動視窗，隔天就算不出來了）。理由見 PendingNightlyStore。
       pending: PendingNightlyStore(

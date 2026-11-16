@@ -216,6 +216,8 @@ class NightlyRequest(BaseModel):
     # 2026-11-15：App 偵測這一晚時跨過了幾次半夜的短解鎖（規則在 app/lib/services/lights_out.dart）。
     # 沒送（舊版 App）存 NULL，不是 0——「沒跨」與「不知道」要分得開。只存、不顯示、不進任何計算。
     bridged_unlocks: Optional[int] = Field(None, ge=0)
+    # 那一晚用的手機（App 給的顯示名稱）；好友頁「用了哪些設備」用
+    phone_model: Optional[str] = Field(None, max_length=60)
 
 
 class WearableRequest(BaseModel):
@@ -947,6 +949,7 @@ async def post_nightly(req: NightlyRequest):
         bed_start_kind=start_kind,
         bed_end_kind=end_kind,
         bridged_unlocks=req.bridged_unlocks,
+        phone_model=(req.phone_model or "").strip() or None,
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
@@ -1778,6 +1781,8 @@ async def _night_card(user_id, date, settings, game=None, closet=None, challenge
         "closet": closet,
         "challenges": challenges,
         "camera": cam,
+        "phone_model": next((r.get("phone_model") for r in db.get_nightly_behavior(user_id, days=60)
+                             if r.get("date") == date), None),
         "prebed_minutes": db.prebed_phone_minutes(user_id, date),
         "behavior_mood": mood if latest.get("lights_out_at") else None,
     }

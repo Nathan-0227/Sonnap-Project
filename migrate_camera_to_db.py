@@ -59,6 +59,10 @@ SKIP_MARKERS = ("_selftest", "_truth", "_waso", "_netwatch", "unblinded")
 # 那種資料算出來的「臥床時間」會是錯的，而且錯得很合理。
 MIN_NIGHT_MINUTES = 120
 
+
+# 錄影的連線不會告訴我們攝影機型號；影像組的程式視窗標題寫的是 Tapo C200。
+# 換了攝影機就在 .env 設 CAMERA_MODEL。
+DEFAULT_CAMERA_MODEL = "Tapo C200"
 
 def mask(user_id):
     """user_id 是憑證，只印前 8 碼。"""
@@ -189,6 +193,8 @@ def main():
                 db.set_camera_motion_episodes(
                     user_id, date, r.get("motion_episodes"), db_path=args.db_path)
         elif not args.dry_run:
+            # 哪一台攝影機：錄影本身不知道型號，由 .env 的 CAMERA_MODEL 告訴我們（2026-11-16）
+            r["camera_model"] = os.environ.get("CAMERA_MODEL") or DEFAULT_CAMERA_MODEL
             db.upsert_camera_nightly(user_id, date, r, db_path=args.db_path)
             written += 1
 
