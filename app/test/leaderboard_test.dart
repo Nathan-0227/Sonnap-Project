@@ -61,7 +61,9 @@ Map<String, dynamic> boardJson({
     'share_label': 'On time or late',
   },
   int need = 3,
+  String? unit,
 }) => {
+  'unit': ?unit,
   'metric': metric,
   'period': period,
   'label': 'On time',
@@ -73,8 +75,8 @@ Map<String, dynamic> boardJson({
     {'key': 'sleep', 'label': 'Sleep'},
   ],
   'periods': [
-    {'key': 'week', 'label': 'Week'},
-    {'key': 'month', 'label': 'Month'},
+    {'key': 'week', 'label': '7 days'},
+    {'key': 'month', 'label': '30 days'},
   ],
   'entries': entries,
   'below': below,
@@ -228,12 +230,69 @@ void main() {
     expect(find.text('Share “Time asleep” to join this board'), findsOneWidget);
   });
 
+  testWidgets('手機字放大（1.3 倍）時，最矮那一階的名次＋箭頭不溢出', (tester) async {
+    // 2026-11-17 實機：第三名那一階 BOTTOM OVERFLOWED BY 1.00 PIXELS
+    final svc = FakeLeaderboardService(
+      (m, p) => boardJson(
+        entries: [
+          person('A', rank: 1, display: '7 / 7 nights', change: 0),
+          person('B', rank: 2, display: '5 / 7 nights', change: 2),
+          person('C', rank: 3, display: '0 / 5 nights', change: -1),
+        ],
+      ),
+    );
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pump(tester, svc);
+    expect(find.byKey(const Key('lb-podium-C')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('步數、壓力的榜數「天」：不寫成 nights（照抄後端的 unit）', (tester) async {
+    // 2026-11-17 實機：Chill 單日榜寫「You have 0 of 1 nights」
+    final svc = FakeLeaderboardService(
+      (m, p) => boardJson(
+        unit: 'day',
+        entries: [person('Ann', rank: 1, display: '34 avg')],
+        below: [person('Me', nights: 2, mine: true), person('Bo', nights: 1)],
+        me: {'status': 'below', ...person('Me', nights: 2, mine: true)},
+      ),
+    );
+    await pump(tester, svc);
+    expect(find.text('Not ranked yet · needs 3 days'), findsOneWidget);
+    expect(find.text('2 days so far'), findsOneWidget);
+    expect(find.text('1 day so far'), findsOneWidget);
+    expect(
+      find.text('You have 2 of 3 days — 1 more to be ranked'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('night'), findsNothing);
+  });
+
+  testWidgets('門檻只有 1（單晚／單日）：不寫「0 of 1」', (tester) async {
+    final svc = FakeLeaderboardService(
+      (m, p) => boardJson(
+        unit: 'day',
+        need: 1,
+        entries: [person('Ann', rank: 1, display: '34 avg')],
+        below: [person('Me', nights: 0, mine: true)],
+        me: {'status': 'below', ...person('Me', nights: 0, mine: true)},
+      ),
+    );
+    await pump(tester, svc);
+    expect(find.text('No day recorded for you yet'), findsOneWidget);
+    expect(find.textContaining('0 of 1'), findsNothing);
+  });
+
   testWidgets('沒有人上榜：講清楚還要幾晚，不畫空的頒獎台', (tester) async {
     final svc = FakeLeaderboardService(
       (m, p) => boardJson(below: [person('Ann', nights: 2)]),
     );
     await pump(tester, svc);
-    expect(find.text('No one has 3 nights yet this week.'), findsOneWidget);
+    expect(
+      find.text('No one has 3 nights in the last 7 days yet.'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('lb-title')), findsNothing);
   });
 }

@@ -47,6 +47,14 @@ METRICS = {
     "chill": {"share": "stress", "periods": ("day", "week", "month", "year"),
               "higher": False, "title": "Most chill", "label": "Chill"},
 }
+# 數的是「晚」還是「天」：步數與壓力是白天的資料（畫面上「0 nights so far」會講錯）
+DAY_METRICS = {"steps", "chill"}
+
+
+def unit(metric):
+    return "day" if metric in DAY_METRICS else "night"
+
+
 METRIC_ORDER = ("on_time", "streak", "steady", "steps", "sleep", "score", "chill")
 
 

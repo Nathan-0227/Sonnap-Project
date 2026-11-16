@@ -340,6 +340,9 @@ class LeaderboardBoard {
   final String label;
   final String title;
   final int need;
+
+  /// 'night' 或 'day'（步數、壓力數天）。照抄後端，舊版後端沒給就當 night。
+  final String unit;
   final List<(String, String)> metrics;
   final List<(String, String)> periods;
   final List<RankedFriend> entries;
@@ -356,6 +359,7 @@ class LeaderboardBoard {
     required this.label,
     required this.title,
     required this.need,
+    this.unit = 'night',
     required this.metrics,
     required this.periods,
     required this.entries,
@@ -382,6 +386,7 @@ class LeaderboardBoard {
       label: (j['label'] as String?) ?? '',
       title: (j['title'] as String?) ?? '',
       need: (j['need'] as num?)?.toInt() ?? 1,
+      unit: (j['unit'] as String?) == 'day' ? 'day' : 'night',
       metrics: pairs(j['metrics']),
       periods: pairs(j['periods']),
       entries: people(j['entries']),

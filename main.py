@@ -1989,6 +1989,7 @@ async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query
         "label": spec["label"],
         "title": spec["title"],
         "need": b["need"],
+        "unit": social_leaderboard.unit(metric),
         "window": {"from": b["window"][0], "to": b["window"][1]},
         "metrics": [{"key": k, "label": social_leaderboard.METRICS[k]["label"]}
                     for k in social_leaderboard.METRIC_ORDER],

@@ -105,6 +105,8 @@ check("calm 只有 2 天 → 不到 7 天榜的門檻 3", below, [("calm", 2)])
 ranked, _, _ = lb.rank([tense, calm], "chill", "day", nov[0], nov[0])
 check("單日：越低越前", [(k, s) for k, _, _, s, _ in ranked], [("calm", "20 avg"), ("tense", "50 avg")])
 check("第一名稱號", lb.METRICS["chill"]["title"], "Most chill")
+check("步數、壓力數「天」，其他數「晚」", [lb.unit(m) for m in ("steps", "chill", "sleep", "on_time", "streak")],
+      ["day", "day", "night", "night", "night"])
 
 print("\n【6】API")
 tmp = tempfile.mkdtemp()
@@ -141,6 +143,7 @@ check("我的卡：第 3 名", (j["me"]["status"], j["me"]["rank"]), ("ranked", 
 check("名次變化跟昨晚比（昨晚 Me 第 1 → 今天第 3 ＝ −2）",
       [e["change"] for e in j["entries"]], [2, 0, -2])
 check("第一名稱號", j["title"], "Sleepyhead")
+check("回應帶單位：睡眠數晚", j["unit"], "night")
 check("回應裡沒有任何 user_id", any(u in r.text for u in (me, pal, shy, demo)), False)
 db.set_friend_sharing(me, items={"sleep_duration": False})
 j = client.get("/friends/leaderboard", params={"user_id": me, "metric": "sleep", "period": "night"}).json()

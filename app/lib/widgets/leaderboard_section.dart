@@ -196,7 +196,7 @@ class _BoardBody extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               board.need > 1
-                  ? 'No one has ${board.need} nights yet this ${board.period}.'
+                  ? 'No one has ${_count(board.need, board.unit)} in the last ${_periodLabel(board)} yet.'
                   : 'No one on this board yet.',
               key: const Key('lb-empty'),
               textAlign: TextAlign.center,
@@ -210,7 +210,7 @@ class _BoardBody extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             board.need > 1
-                ? 'Not ranked yet · needs ${board.need} nights'
+                ? 'Not ranked yet · needs ${_count(board.need, board.unit)}'
                 : 'Not ranked yet',
             style: const TextStyle(
               color: Color(0x99FFFFFF),
@@ -218,7 +218,8 @@ class _BoardBody extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          for (final e in board.below) _Row(entry: e, below: true),
+          for (final e in board.below)
+            _Row(entry: e, below: true, unit: board.unit),
         ],
         const SizedBox(height: 12),
         _MeCard(board: board),
@@ -264,6 +265,14 @@ String _nameOf(RankedFriend e) =>
     e.mine ? 'You' : e.displayName.replaceAll(' (demo)', '');
 
 /// 名次變化：只代表方向（往上紅、往下綠），0 是一條短橫線，上個時段沒上榜就不畫。
+/// 「3 nights」「1 day」
+String _count(int n, String unit) => '$n ${n == 1 ? unit : '${unit}s'}';
+
+/// 時段的名字（後端給的，例如 7 days）
+String _periodLabel(LeaderboardBoard b) => b.periods
+    .firstWhere((p) => p.$1 == b.period, orElse: () => (b.period, b.period))
+    .$2;
+
 Widget _changeMark(int? change) {
   if (change == null) return const SizedBox(width: 34);
   if (change == 0) {
@@ -411,18 +420,24 @@ class _Podium extends StatelessWidget {
                         ),
                         alignment: Alignment.topCenter,
                         padding: const EdgeInsets.only(top: 6),
-                        child: Column(
-                          children: [
-                            Text(
-                              '${e.rank}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
+                        // 最矮那一階只有 56 高：手機字放大時名次＋箭頭塞不下 → 整個縮小，不溢出
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.topCenter,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${e.rank}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
-                            ),
-                            _changeMark(e.change),
-                          ],
+                              _changeMark(e.change),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -436,7 +451,8 @@ class _Podium extends StatelessWidget {
 class _Row extends StatelessWidget {
   final RankedFriend entry;
   final bool below;
-  const _Row({required this.entry, this.below = false});
+  final String unit;
+  const _Row({required this.entry, this.below = false, this.unit = 'night'});
 
   @override
   Widget build(BuildContext context) {
@@ -483,9 +499,7 @@ class _Row extends StatelessWidget {
             ),
           ),
           Text(
-            below
-                ? '${e.nights} ${e.nights == 1 ? 'night' : 'nights'} so far'
-                : (e.display ?? ''),
+            below ? '${_count(e.nights, unit)} so far' : (e.display ?? ''),
             style: TextStyle(
               color: below ? const Color(0x99FFFFFF) : Colors.white,
               fontSize: 13,
@@ -511,9 +525,11 @@ class _MeCard extends StatelessWidget {
       case 'ranked':
         text = 'You · #${me!.rank} · ${me.display ?? ''}';
       case 'below':
-        final left = board.need - (me?.nights ?? 0);
-        text =
-            'You have ${me?.nights ?? 0} of ${board.need} nights — $left more to be ranked';
+        final have = me?.nights ?? 0;
+        final left = board.need - have;
+        text = board.need > 1
+            ? 'You have $have of ${_count(board.need, board.unit)} — $left more to be ranked'
+            : 'No ${board.unit} recorded for you yet';
       default:
         text = 'Share “${board.shareLabel ?? board.label}” to join this board';
     }
