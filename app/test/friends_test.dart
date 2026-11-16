@@ -374,13 +374,13 @@ void main() {
       expect(find.text('Bob reached a 4-night streak'), findsOneWidget);
       expect(find.textContaining('Carol reached'), findsNothing); // 只有 2 晚
 
-      // 點卡片＝See all：打開那一晚的完整內容，再往下可以看他的 Streak
+      // 點卡片＝See all：同一張卡的完整版，再往下可以看他的 Streak
       await tester.tap(find.byKey(const Key('feed-card-BOB234-2026-09-03')));
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(find.byKey(const Key('night-sheet')), findsOneWidget);
-      expect(find.byKey(const Key('sheet-open-friend')), findsOneWidget);
+      expect(find.byKey(const Key('night-detail')), findsOneWidget);
+      expect(find.byKey(const Key('night-open-friend')), findsOneWidget);
     });
 
     testWidgets('還沒有朋友 → 講清楚怎麼加', (tester) async {

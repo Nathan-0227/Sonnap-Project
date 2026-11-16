@@ -265,6 +265,46 @@ const kMaxTiles = 3;
   if (v == null) return null;
   Map<String, dynamic> m() => v is Map ? v.cast<String, dynamic>() : const {};
   switch (key) {
+    case 'phone_down_time':
+      return v is String
+          ? (Icons.phone_android_rounded, v, 'phone down')
+          : null;
+    case 'on_time':
+      return v is bool
+          ? (Icons.schedule_rounded, v ? 'On time' : 'Late', 'bedtime')
+          : null;
+    case 'target_bedtime':
+      return v is String ? (Icons.flag_outlined, v, 'target bedtime') : null;
+    case 'sleep_duration':
+      return _n(v) == null ? null : (Icons.nightlight_round, _m(v), 'asleep');
+    case 'time_in_bed':
+      return _n(v) == null ? null : (Icons.bed_rounded, _m(v), 'in bed');
+    case 'bed_times':
+      final a = m()['start'], b = m()['end'];
+      return a is! String && b is! String
+          ? null
+          : (Icons.bed_rounded, '${a ?? '—'}–${b ?? '—'}', 'in bed');
+    case 'stages':
+      final d = _n(m()['deep']);
+      return d == null ? null : (Icons.water_drop_rounded, _m(d), 'deep sleep');
+    case 'awake_hr':
+      final a = _n(m()['avg']);
+      return a == null
+          ? null
+          : (Icons.monitor_heart_rounded, '${a.round()}', 'awake bpm');
+    case 'vo2max':
+      return _n(v) == null
+          ? null
+          : (Icons.air_rounded, '${_n(v)!.round()}', 'VO2 max');
+    case 'camera_moves':
+      return _n(v) == null
+          ? null
+          : (Icons.videocam_rounded, '${_n(v)!.round()}', 'moves / hour');
+    case 'morning_rating':
+      final l = m()['label'];
+      return l is String
+          ? (Icons.sentiment_satisfied_rounded, l, 'felt')
+          : null;
     case 'awake':
       final c = _n(m()['count']);
       final mins = _n(m()['minutes']);
@@ -367,7 +407,11 @@ const kMaxTiles = 3;
   List<(String, IconData, String, String)> tiles,
   int more,
 })
-friendCardLayout(Map<String, dynamic> items, {bool hasChart = false}) {
+friendCardLayout(
+  Map<String, dynamic> items, {
+  bool hasChart = false,
+  bool expanded = false,
+}) {
   final stats = <(String, String, String)>[];
   for (final k in _statOrder) {
     if (stats.length == 3) break;
@@ -377,8 +421,28 @@ friendCardLayout(Map<String, dynamic> items, {bool hasChart = false}) {
   }
   final used = {for (final s in stats) s.$1};
   final tiles = <(String, IconData, String, String)>[];
-  for (final k in _tileOrder) {
-    if (tiles.length == kMaxTiles) break;
+  final order = expanded
+      ? [..._nightKeys, ..._dayKeys, ..._gameKeys]
+      : _tileOrder;
+  for (final k in order) {
+    if (!expanded && tiles.length == kMaxTiles) break;
+    if (k == 'stages' && hasChart) {
+      // 完整頁：圖上看不出幾分鐘，深睡／淺睡／REM 各一格（卡片上不放，避免太擠）
+      if (expanded && items['stages'] is Map) {
+        final st = (items['stages'] as Map).cast<String, dynamic>();
+        for (final (part, icon, label) in [
+          ('deep', Icons.water_drop_rounded, 'deep sleep'),
+          ('light', Icons.cloud_rounded, 'light sleep'),
+          if (st['rem_measured'] != false)
+            ('rem', Icons.auto_awesome_rounded, 'REM'),
+        ]) {
+          if (_n(st[part]) != null) {
+            tiles.add(('stages-$part', icon, _m(st[part]), label));
+          }
+        }
+      }
+      continue;
+    }
     if (used.contains(k)) continue;
     if (friendTile(k, items[k]) case (final icon, final value, final label)) {
       tiles.add((k, icon, value, label));
@@ -430,11 +494,15 @@ class FriendNightCardView extends StatelessWidget {
   /// 他現在連續幾晚準時（摘要裡的，他沒公開是 null）。3 晚以上才出現那條橫幅，只寫事實。
   final int? streak;
 
+  /// See all 那一頁：同一張卡，但他公開的每一項都排成小格（一排三個），不收起來。
+  final bool expanded;
+
   const FriendNightCardView({
     super.key,
     required this.card,
     this.onTap,
     this.streak,
+    this.expanded = false,
   });
 
   @override
@@ -455,7 +523,11 @@ class FriendNightCardView extends StatelessWidget {
             _n(s['to'])!.toDouble(),
           ),
     ];
-    final layout = friendCardLayout(items, hasChart: segments.isNotEmpty);
+    final layout = friendCardLayout(
+      items,
+      hasChart: segments.isNotEmpty,
+      expanded: expanded,
+    );
     final stats = layout.stats;
 
     return Padding(
@@ -465,7 +537,9 @@ class FriendNightCardView extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          key: Key('feed-card-${card.handle}-${card.date}'),
+          key: Key(
+            '${expanded ? 'night-detail' : 'feed-card'}-${card.handle}-${card.date}',
+          ),
           onTap: onTap,
           child: LayoutBuilder(
             builder: (context, c) {
@@ -629,34 +703,39 @@ class FriendNightCardView extends StatelessWidget {
                         ],
                         if (layout.tiles.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              for (final (i, (k, icon, value, label))
-                                  in layout.tiles.indexed)
-                                Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(
-                                      right: i == kMaxTiles - 1 ? 0 : 8,
+                          for (
+                            var r = 0;
+                            r < layout.tiles.length;
+                            r += kMaxTiles
+                          )
+                            Padding(
+                              padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
+                              child: Row(
+                                children: [
+                                  for (var i = 0; i < kMaxTiles; i++)
+                                    Expanded(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(
+                                          right: i == kMaxTiles - 1 ? 0 : 8,
+                                        ),
+                                        // 不滿三格也照三格的寬度排（每張卡長得一樣）
+                                        child: r + i < layout.tiles.length
+                                            ? _Tile(
+                                                key: Key(
+                                                  'card-tile-${layout.tiles[r + i].$1}',
+                                                ),
+                                                icon: layout.tiles[r + i].$2,
+                                                value: layout.tiles[r + i].$3,
+                                                label: layout.tiles[r + i].$4,
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
                                     ),
-                                    child: _Tile(
-                                      key: Key('card-tile-$k'),
-                                      icon: icon,
-                                      value: value,
-                                      label: label,
-                                    ),
-                                  ),
-                                ),
-                              // 不滿三格也照三格的寬度排（每張卡長得一樣）
-                              for (
-                                var i = layout.tiles.length;
-                                i < kMaxTiles;
-                                i++
-                              )
-                                const Expanded(child: SizedBox.shrink()),
-                            ],
-                          ),
+                                ],
+                              ),
+                            ),
                         ],
-                        if (layout.more > 0) ...[
+                        if (!expanded && layout.more > 0) ...[
                           const SizedBox(height: 10),
                           Row(
                             key: const Key('card-more'),
@@ -738,71 +817,31 @@ class _Tile extends StatelessWidget {
   );
 }
 
-/// 「See all」：那一晚他公開的每一項，一項一行（字跟以前卡片上那行小字一樣，照抄後端的值）。
-Future<void> showFriendNightSheet(
+/// 「See all」（2026-11-16 使用者定）：打開一整頁，**跟卡片同一個樣子**——上面是他的場景與寵物，
+/// 下面他公開的每一項都是一個小格（一排三個），不收起來。最下面可以再看他的 Streak 與解除好友。
+Future<void> openFriendNight(
   BuildContext context,
   FriendNightCard card, {
+  int? streak,
   VoidCallback? onOpenFriend,
 }) {
-  final sections = [
-    ('Last night', _nightKeys),
-    ('Yesterday', _dayKeys),
-    ('Game', _gameKeys),
-  ];
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: const Color(0xFF10265A),
-    builder: (context) => SafeArea(
-      child: SingleChildScrollView(
-        key: const Key('night-sheet'),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) => Scaffold(
+        backgroundColor: const Color(0xFF081326),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF081326),
+          foregroundColor: Colors.white,
+          title: Text(card.displayName),
+        ),
+        body: ListView(
+          key: const Key('night-detail'),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Text(
-              card.displayName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Text(
-              'Night of ${friendCardDate(card.date)}',
-              style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
-            ),
-            for (final (title, keys) in sections)
-              if ([
-                    for (final k in keys)
-                      if (friendItemLine(k, card.items[k])?.isNotEmpty ?? false)
-                        k,
-                  ]
-                  case final shown when shown.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0x99FFFFFF),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                for (final k in shown)
-                  Padding(
-                    key: Key('sheet-item-$k'),
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      friendItemLine(k, card.items[k])!,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ),
-              ],
-            if (onOpenFriend != null) ...[
-              const SizedBox(height: 16),
+            FriendNightCardView(card: card, streak: streak, expanded: true),
+            if (onOpenFriend != null)
               TextButton(
-                key: const Key('sheet-open-friend'),
+                key: const Key('night-open-friend'),
                 onPressed: () {
                   Navigator.of(context).pop();
                   onOpenFriend();
@@ -811,7 +850,6 @@ Future<void> showFriendNightSheet(
                   "${card.displayName.split(' ').first}'s streak and settings",
                 ),
               ),
-            ],
           ],
         ),
       ),

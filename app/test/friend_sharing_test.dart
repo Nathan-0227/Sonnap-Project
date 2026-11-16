@@ -412,22 +412,29 @@ void main() {
       expect(find.byKey(const Key('card-more')), findsNothing);
     });
 
-    testWidgets('See all：每一項一行，含卡上已經畫的', (tester) async {
+    testWidgets('See all：一整頁、同一張卡的樣子（場景＋寵物），每一項都是小格、不收起來', (tester) async {
       const card = FriendNightCard(
         handle: 'B',
         displayName: 'Bob',
         date: '2026-11-14',
         items: {
+          'sleep_duration': 412,
+          'time_in_bed': 435,
           'phone_down_time': '23:42',
-          'level': {'level': 4, 'xp_total': 1260},
+          'on_time': true,
+          'awake': {'count': 2, 'minutes': 10},
+          'sleeping_hr': {'avg': 56, 'min': 49},
           'steps': {'steps': 8432},
+          'stress': {'high': 1980},
+          'level': {'level': 4, 'xp_total': 1260},
+          'outfit': {'badges': 3},
         },
       );
       await tester.pumpWidget(
         host(
           Builder(
             builder: (context) => TextButton(
-              onPressed: () => showFriendNightSheet(context, card),
+              onPressed: () => openFriendNight(context, card),
               child: const Text('open'),
             ),
           ),
@@ -437,12 +444,32 @@ void main() {
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(find.byKey(const Key('night-sheet')), findsOneWidget);
-      expect(find.text('Phone down 23:42'), findsOneWidget);
-      expect(find.text('8,432 steps'), findsOneWidget);
-      expect(find.text('Lv 4 · 1,260 XP'), findsOneWidget);
+      expect(find.byKey(const Key('night-detail')), findsOneWidget);
+      expect(find.byKey(const Key('card-scene')), findsOneWidget); // 上面一樣是場景
+      // 三個大數字之外的 7 項全部是小格（卡片上只會有 3 格）
+      for (final k in ['on_time', 'awake', 'sleeping_hr', 'steps', 'stress', 'level', 'outfit']) {
+        expect(find.byKey(Key('card-tile-$k')), findsOneWidget, reason: k);
+      }
+      expect(find.byKey(const Key('card-more')), findsNothing);
       // 沒給的不出現
-      expect(find.byKey(const Key('sheet-item-score')), findsNothing);
+      expect(find.byKey(const Key('card-tile-score')), findsNothing);
+      // 沒公開 Sleep Stages → 沒有深睡那幾格
+      expect(find.byKey(const Key('card-tile-stages-deep')), findsNothing);
+    });
+
+    testWidgets('See all：有睡眠圖時，深睡／淺睡／REM 各一格（卡片上不放）', (tester) async {
+      const card = FriendNightCard(handle: 'B', displayName: 'Bob', date: '2026-11-14', items: {
+        'stages': {'deep': 82, 'light': 215, 'rem': 103, 'rem_measured': true,
+          'segments': [{'stage': 'light', 'from': 0, 'to': 60}, {'stage': 'deep', 'from': 60, 'to': 120}]},
+      });
+      await tester.pumpWidget(host(const FriendNightCardView(card: card)));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('card-tile-stages-deep')), findsNothing);
+      await tester.pumpWidget(host(const FriendNightCardView(card: card, expanded: true)));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('1h 22m'), findsOneWidget);
+      expect(find.text('3h 35m'), findsOneWidget);
+      expect(find.text('1h 43m'), findsOneWidget);
     });
 
     testWidgets('Sleep Stages：準確時刻的人兩端寫時刻', (tester) async {
