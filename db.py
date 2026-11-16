@@ -526,6 +526,22 @@ CREATE TABLE IF NOT EXISTS friendships (
     FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- ── 好友小鎮的拜訪（2026-11-17）─────────────────────────────────
+-- 摸摸或一句預設的話（social/town.KINDS）。同一個人對同一個朋友一天（起床日）一次 → 主鍵。
+-- ⚠️ 不給 XP、不影響分數、不推播。存 social/town.VISIT_KEEP_DAYS 天（寫入時順手刪舊的）。
+-- ⚠️ 兩邊都掛 CASCADE（退出即刪除）；解除好友時 remove_friendship 另外刪兩個方向的拜訪。
+CREATE TABLE IF NOT EXISTS friend_visits (
+    sender_id   TEXT NOT NULL,
+    receiver_id TEXT NOT NULL,
+    day         TEXT NOT NULL,                -- 起床日（social/town.visit_day）
+    kind        TEXT NOT NULL,                -- social/town.KINDS 的 key
+    created_at  TEXT NOT NULL,
+
+    PRIMARY KEY (sender_id, receiver_id, day),
+    FOREIGN KEY (sender_id)   REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (receiver_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- ── 起床自評（2026-11-12）──────────────────────────────────────
 -- 題目照抄 Consensus Sleep Diary-M 第 10 題（Carney 2012），出處與取捨見
 -- Research-Background/起床小建議與自評.md。
@@ -2171,8 +2187,59 @@ def remove_friendship(user_id, friend_id, db_path=None):
             "OR (user_id = ? AND friend_id = ?)",
             (user_id, friend_id, friend_id, user_id),
         )
+        # 小鎮的拜訪也一起消失（兩個方向）
+        conn.execute(
+            "DELETE FROM friend_visits WHERE (sender_id = ? AND receiver_id = ?) "
+            "OR (sender_id = ? AND receiver_id = ?)",
+            (user_id, friend_id, friend_id, user_id),
+        )
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+def add_friend_visit(sender_id, receiver_id, day, kind, keep_since, db_path=None):
+    """
+    存一次拜訪。同一天已經送過 → False（不覆蓋，一天一次）。
+    keep_since：比這天早的拜訪順手刪掉（所有人的，存 14 天的規則在 social/town）。
+    """
+    conn = connect(db_path)
+    try:
+        conn.execute("DELETE FROM friend_visits WHERE day < ?", (keep_since,))
+        exists = conn.execute(
+            "SELECT kind FROM friend_visits WHERE sender_id = ? AND receiver_id = ? AND day = ?",
+            (sender_id, receiver_id, day),
+        ).fetchall()
+        if exists:
+            conn.commit()
+            return False
+        conn.execute(
+            "INSERT INTO friend_visits (sender_id, receiver_id, day, kind, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sender_id, receiver_id, day, kind, now_iso()),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def list_friend_visits(user_id, day, db_path=None):
+    """那一天的拜訪：(我收到的 [(sender_id, kind)]，我送出的 {receiver_id: kind})。舊的先送的在前。"""
+    conn = connect(db_path)
+    try:
+        got = conn.execute(
+            "SELECT sender_id, kind FROM friend_visits WHERE receiver_id = ? AND day = ? "
+            "ORDER BY created_at",
+            (user_id, day),
+        ).fetchall()
+        sent = conn.execute(
+            "SELECT receiver_id, kind FROM friend_visits WHERE sender_id = ? AND day = ?",
+            (user_id, day),
+        ).fetchall()
+        return ([(r["sender_id"], r["kind"]) for r in got],
+                {r["receiver_id"]: r["kind"] for r in sent})
     finally:
         conn.close()
 

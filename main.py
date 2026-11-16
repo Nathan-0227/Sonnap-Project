@@ -73,6 +73,7 @@ from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
 import camera_curve  # noqa: E402  攝影機曲線只留睡著那段（純函式，不載入 OpenCV）
 from social import leaderboard as social_leaderboard  # noqa: E402  好友排行榜（純函式）
+from social import town as social_town  # noqa: E402  好友小鎮（純函式）
 from build_app_payload import sleep_heart_rate  # noqa: E402  garmin/ 由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
@@ -1742,6 +1743,11 @@ class AddFriendRequest(BaseModel):
     invite_code: str
 
 
+class VisitRequest(BaseModel):
+    user_id: str
+    kind: str
+
+
 FEED_DAYS = 7
 
 
@@ -1998,6 +2004,76 @@ async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query
         "below": below,
         "me": me,
     }
+
+
+@app.get("/friends/town")
+async def get_friends_town(user_id: str = Query(...)):
+    """
+    好友小鎮：我＋朋友（照加好友的先後，App 把我放中間）、誰昨晚發光、今天誰來看過我。
+    發光＝昨晚準時放下手機且有分享 On time（我自己照亮）。沒發光**不給原因**。
+    card＝那個人昨晚的卡（只有他打開的項目），沒有就是 null → App 不畫「See last night」。
+    不回任何 user_id。⚠️ 路徑要排在 /friends/{handle} 前面。
+    """
+    require_user(user_id)
+    from datetime import datetime as _dt
+    night = date_cls.today().isoformat()
+    day = social_town.visit_day(_dt.now())
+    received, sent = db.list_friend_visits(user_id, day)
+    people, names = [], {}
+    for uid in [user_id, *db.list_friend_ids(user_id)]:
+        settings = _sharing(uid)
+        summary = _friend_summary(uid, masked=False)
+        user = db.get_user(uid) or {}
+        mine = uid == user_id
+        cards = await _cards_for(uid, days=1)
+        card = next((c for c in cards if c["date"] == night and c["items"]), None)
+        names[uid] = summary["display_name"]
+        people.append({
+            "handle": summary["handle"],
+            "display_name": summary["display_name"],
+            "mine": mine,
+            "demo": user.get("study_cohort") == db.DEMO_COHORT,
+            "pet_species": settings["pet_species"],
+            # 心情只有他有分享才給（自己的照給）；沒有 → App 畫 bored
+            "pet_mood": summary.get("pet_mood") if (mine or settings["items"].get("pet_mood")) else None,
+            "glow": social_town.glows(db.get_nightly_behavior(uid, days=3), night,
+                                      mine or bool(settings["items"].get("on_time"))),
+            "sent": None if mine else sent.get(uid),
+            "card": card,
+        })
+    me_species = people[0]["pet_species"]
+    visits = [{
+        "display_name": names.get(sid) or (db.get_user(sid) or {}).get("display_name", ""),
+        "kind": kind,
+        "message": social_town.message(kind, social_town.display_name(
+            names.get(sid) or (db.get_user(sid) or {}).get("display_name", "")), me_species),
+    } for sid, kind in received]
+    return {
+        "night": night,
+        "day": day,
+        "people": people,
+        "visits": visits,
+        "kinds": [{"key": k, "label": social_town.button_label(k)} for k in social_town.KIND_ORDER],
+    }
+
+
+@app.post("/friends/{handle}/visit", status_code=201)
+async def visit_friend(handle: str, req: VisitRequest):
+    """
+    拜訪朋友：摸摸或一句預設的話。同一個朋友一天（起床日）一次 → 第二次 409。
+    不給 XP、不影響分數、不推播。不認得的動作 422；不是朋友 404。
+    """
+    require_user(req.user_id)
+    if req.kind not in social_town.KINDS:
+        raise HTTPException(status_code=422, detail=f"kind must be one of {social_town.KIND_ORDER}.")
+    friend_id = _friend_by_handle(req.user_id, handle)
+    from datetime import datetime as _dt, timedelta as _td
+    now = _dt.now()
+    day = social_town.visit_day(now)
+    keep_since = social_town.visit_day(now - _td(days=social_town.VISIT_KEEP_DAYS))
+    if not db.add_friend_visit(req.user_id, friend_id, day, req.kind, keep_since):
+        raise HTTPException(status_code=409, detail="You already visited today. Come back tomorrow.")
+    return {"sent": req.kind, "label": social_town.button_label(req.kind), "day": day}
 
 
 @app.get("/friends/{handle}")
