@@ -327,6 +327,13 @@ ALL_KEYS = ITEM_KEYS + (STREAK_KEY,)
 assert not set(ALL_KEYS) & {k for k, _ in NEVER_SHARED}, "永遠不給的項目不能出現在清單裡"
 
 
+def item_label(key):
+    """分享項目的名字（設定頁上那個）；連續天數不在清單裡，另外給。"""
+    if key == STREAK_KEY:
+        return "Streak"
+    return _BY_KEY[key][2] if key in _BY_KEY else key
+
+
 def defaults():
     out = {k: d for k, (_, d, _, _) in _BY_KEY.items()}
     out[STREAK_KEY] = True

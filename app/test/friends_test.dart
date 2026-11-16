@@ -20,7 +20,6 @@ import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/friend_night_card.dart' show FriendNightPage;
 import 'package:app/widgets/mood_filter_bar.dart';
-import 'package:app/widgets/top_streak_card.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 
@@ -69,6 +68,16 @@ Map<String, dynamic> stateJson({List<Map<String, dynamic>>? friends, List<Map<St
     };
 
 class _StubFriends implements FriendsService {
+  LeaderboardBoard? board;
+  final List<(String, String?)> boardCalls = [];
+  @override
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(String metric, {String? period}) async {
+    boardCalls.add((metric, period));
+    return board == null
+        ? const FriendsResult(FriendsStatus.failed)
+        : FriendsResult(FriendsStatus.ok, value: board);
+  }
+
   FriendsResult<FriendsState> result;
   FriendsResult<FriendSummary> addResult;
   final List<String> addCalls = [];
@@ -280,16 +289,29 @@ void main() {
       expect(tester.widget<Text>(find.byKey(const Key('circle-late'))).data, '1');
     });
 
-    testWidgets('排行照後端的順序，Dart 不重排', (tester) async {
-      // 後端把連續 0 晚的 Carol 排第一——就算看起來不合理也照抄。
-      // Dart 自己依 streak 重排的話，同分規則就有第二個定義處。
-      await pump(tester, _StubFriends(result: FriendsResult(FriendsStatus.ok,
-          value: FriendsState.fromJson(stateJson(board: const [
-            {'rank': 1, 'handle': 'CAR567', 'display_name': 'Carol', 'current_streak': 0, 'best_streak': 1},
-            {'rank': 2, 'handle': 'BOB234', 'display_name': 'Bob', 'current_streak': 2, 'best_streak': 3},
-          ])))));
-      final card = tester.widget<TopStreakCard>(find.byType(TopStreakCard));
-      expect(card.users.map((u) => u.name), ['Carol', 'Bob']);
+    testWidgets('Friends 分頁有七個排行榜那一塊（舊的只有連續天數），照後端的順序', (tester) async {
+      final stub = _StubFriends();
+      stub.board = LeaderboardBoard.fromJson({
+        'metric': 'on_time', 'period': 'week', 'label': 'On time', 'title': 'Phone-down champ', 'need': 3,
+        'metrics': [{'key': 'on_time', 'label': 'On time'}],
+        'periods': [{'key': 'week', 'label': 'Week'}],
+        // 後端把 0/3 的 Carol 排第一——看起來不合理也照抄
+        'entries': [
+          {'handle': 'CAR567', 'display_name': 'Carol', 'rank': 1, 'display': '0 / 3 nights'},
+          {'handle': 'BOB234', 'display_name': 'Bob', 'rank': 2, 'display': '3 / 3 nights'},
+        ],
+        'below': [],
+        'me': {'status': 'not_sharing', 'share_label': 'On time or late'},
+      });
+      await pump(tester, stub);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(stub.boardCalls.first, ('on_time', null));
+      expect(find.byKey(const Key('leaderboard')), findsOneWidget);
+      final carol = tester.getCenter(find.byKey(const Key('lb-podium-CAR567'))).dx;
+      final bob = tester.getCenter(find.byKey(const Key('lb-podium-BOB234'))).dx;
+      expect(carol, greaterThan(bob)); // 後端的第一名站中間
     });
 
     testWidgets('篩選列沒有「Sick」', (tester) async {

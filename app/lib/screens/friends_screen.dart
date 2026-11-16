@@ -7,7 +7,7 @@ import '../services/pet_choice.dart';
 import '../widgets/friend_night_card.dart';
 import '../widgets/mood_filter_bar.dart';
 import '../widgets/streak_card.dart';
-import '../widgets/top_streak_card.dart';
+import '../widgets/leaderboard_section.dart';
 import 'friend_sharing_screen.dart';
 
 /// 好友。資料來自 `GET /friends`。
@@ -211,28 +211,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  void _showFullRanking(List<LeaderboardEntry> board) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF10265A),
-      builder: (context) => ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text('Streak ranking',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          for (final e in board)
-            ListTile(
-              leading: Text('#${e.rank}', style: const TextStyle(color: Color(0xFFFFD96A))),
-              title: Text(e.displayName, style: const TextStyle(color: Colors.white)),
-              trailing: Text('${e.currentStreak} nights',
-                  style: const TextStyle(color: Colors.white70)),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _titleRow() => Row(
         children: [
           const Expanded(
@@ -423,20 +401,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return [
       _inviteCard(state.myInviteCode),
       _circleCard(state.friends),
-      if (state.leaderboard.isNotEmpty)
-        TopStreakCard(
-          users: [
-            for (final e in state.leaderboard)
-              TopStreakUser(
-                rank: e.rank,
-                emoji: "🐶",
-                name: e.displayName,
-                streakDays: e.currentStreak,
-                bestDays: e.bestStreak,
-              ),
-          ],
-          onViewAll: () => _showFullRanking(state.leaderboard),
-        ),
+      // 七個排行榜（第二批）：名次、門檻都照抄後端（舊的只有連續天數那張換掉了）
+      if (widget.service != null) LeaderboardSection(service: widget.service!),
       MoodFilterBar(
         options: moodOptions,
         selectedMood: selectedMood,

@@ -63,6 +63,16 @@ Widget host(Widget child, {bool reduce = false}) => MaterialApp(
 );
 
 class _Stub implements FriendsService {
+  LeaderboardBoard? board;
+  final List<(String, String?)> boardCalls = [];
+  @override
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(String metric, {String? period}) async {
+    boardCalls.add((metric, period));
+    return board == null
+        ? const FriendsResult(FriendsStatus.failed)
+        : FriendsResult(FriendsStatus.ok, value: board);
+  }
+
   final List<Map<String, dynamic>> patches = [];
   String species;
   String scene = 'campfire';

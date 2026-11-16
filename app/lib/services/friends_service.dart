@@ -289,6 +289,110 @@ class FriendsState {
       );
 }
 
+/// 排行榜上的一個人（上榜的有名次；不到門檻的 rank 是 null）。
+@immutable
+class RankedFriend {
+  final String handle;
+  final String displayName;
+  final bool mine;
+  final bool demo;
+  final String? petSpecies;
+  final String? petMood;
+  final int? rank;
+  final String? display;
+  final int nights;
+
+  /// 跟上一個時段比：正＝名次往上、負＝往下、0＝不變、null＝上個時段沒上榜。
+  final int? change;
+
+  const RankedFriend({
+    required this.handle,
+    required this.displayName,
+    this.mine = false,
+    this.demo = false,
+    this.petSpecies,
+    this.petMood,
+    this.rank,
+    this.display,
+    this.nights = 0,
+    this.change,
+  });
+
+  factory RankedFriend.fromJson(Map<String, dynamic> j) => RankedFriend(
+        handle: (j['handle'] as String?) ?? '',
+        displayName: (j['display_name'] as String?) ?? '',
+        mine: j['mine'] == true,
+        demo: j['demo'] == true,
+        petSpecies: j['pet_species'] as String?,
+        petMood: j['pet_mood'] as String?,
+        rank: (j['rank'] as num?)?.toInt(),
+        display: j['display'] as String?,
+        nights: (j['nights'] as num?)?.toInt() ?? 0,
+        change: (j['change'] as num?)?.toInt(),
+      );
+}
+
+/// 一張排行榜（一個指標 × 一個時段）。
+@immutable
+class LeaderboardBoard {
+  final String metric;
+  final String period;
+  final String label;
+  final String title;
+  final int need;
+  final List<(String, String)> metrics;
+  final List<(String, String)> periods;
+  final List<RankedFriend> entries;
+  final List<RankedFriend> below;
+
+  /// 我自己：ranked／below／not_sharing。
+  final String meStatus;
+  final RankedFriend? me;
+  final String? shareLabel;
+
+  const LeaderboardBoard({
+    required this.metric,
+    required this.period,
+    required this.label,
+    required this.title,
+    required this.need,
+    required this.metrics,
+    required this.periods,
+    required this.entries,
+    required this.below,
+    required this.meStatus,
+    this.me,
+    this.shareLabel,
+  });
+
+  factory LeaderboardBoard.fromJson(Map<String, dynamic> j) {
+    List<(String, String)> pairs(dynamic v) => [
+          for (final m in (v as List? ?? const []).whereType<Map>())
+            ((m['key'] as String?) ?? '', (m['label'] as String?) ?? ''),
+        ];
+    List<RankedFriend> people(dynamic v) => [
+          for (final e in (v as List? ?? const []).whereType<Map<String, dynamic>>())
+            RankedFriend.fromJson(e),
+        ];
+    final me = (j['me'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final status = (me['status'] as String?) ?? 'not_sharing';
+    return LeaderboardBoard(
+      metric: (j['metric'] as String?) ?? '',
+      period: (j['period'] as String?) ?? '',
+      label: (j['label'] as String?) ?? '',
+      title: (j['title'] as String?) ?? '',
+      need: (j['need'] as num?)?.toInt() ?? 1,
+      metrics: pairs(j['metrics']),
+      periods: pairs(j['periods']),
+      entries: people(j['entries']),
+      below: people(j['below']),
+      meStatus: status,
+      me: status == 'not_sharing' ? null : RankedFriend.fromJson(me),
+      shareLabel: me['share_label'] as String?,
+    );
+  }
+}
+
 class FriendsService {
   final String baseUrl;
   final UserIdentity identity;
@@ -319,6 +423,22 @@ class FriendsService {
           .whereType<Map<String, dynamic>>())
         FriendNightCard.fromJson(c),
     ]);
+  }
+
+  /// 好友排行榜（第二批）。名次、門檻、並列、名次變化全在後端算，Dart 照抄、不重排。
+  /// period 給 null＝那個指標預設的時段。比別的端點慢（每個人要撈一年的資料），用動態牆的等待時間。
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(
+    String metric, {
+    String? period,
+  }) async {
+    final r = await _request(
+      'GET',
+      '/friends/leaderboard',
+      query: {'metric': metric, 'period': ?period},
+      wait: feedTimeout,
+    );
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: LeaderboardBoard.fromJson(r.value!));
   }
 
   /// 一位朋友：摘要＋最近一晚的卡（可能沒有）。
@@ -397,6 +517,7 @@ class FriendsService {
     String path, {
     Map<String, dynamic>? body,
     Duration? wait,
+    Map<String, String>? query,
   }) async {
     final timeout = wait ?? this.timeout;
     if (baseUrl.trim().isEmpty) return const FriendsResult(FriendsStatus.noBackend);
@@ -405,7 +526,9 @@ class FriendsService {
 
     final base = Uri.parse('$baseUrl$path');
     final hasBody = method == 'POST' || method == 'PATCH';
-    final uri = hasBody ? base : base.replace(queryParameters: {'user_id': userId});
+    final uri = hasBody
+        ? base
+        : base.replace(queryParameters: {...?query, 'user_id': userId});
     final client = HttpClient()..connectionTimeout = timeout;
 
     try {

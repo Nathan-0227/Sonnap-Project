@@ -72,6 +72,7 @@ from social import sharing as social_sharing
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
 import camera_curve  # noqa: E402  攝影機曲線只留睡著那段（純函式，不載入 OpenCV）
+from social import leaderboard as social_leaderboard  # noqa: E402  好友排行榜（純函式）
 from build_app_payload import sleep_heart_rate  # noqa: E402  garmin/ 由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
@@ -1913,6 +1914,77 @@ async def get_friends_feed(user_id: str = Query(...)):
                           "pet_species": s["pet_species"], "mine": fid == user_id, **c})
     cards.sort(key=lambda c: (c["date"], c["mine"], c["display_name"]), reverse=True)
     return {"cards": cards}
+
+
+@app.get("/friends/leaderboard")
+async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query("on_time"),
+                                  period: Optional[str] = Query(None)):
+    """
+    好友排行榜（七個標籤之一 × 時段）。名次、門檻、並列、跟上個時段比的變化都在這裡算，App 照抄。
+    參加的人＝我＋我的好友；**只有公開那一項的人才上榜**（我也一樣）。不回任何 user_id。
+    ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "leaderboard" 會被當成邀請碼。
+    """
+    require_user(user_id)
+    spec = social_leaderboard.METRICS.get(metric)
+    if spec is None:
+        raise HTTPException(status_code=422, detail=f"metric must be one of {social_leaderboard.METRIC_ORDER}.")
+    period = period or spec["periods"][0]
+    if period not in spec["periods"]:
+        raise HTTPException(status_code=422, detail=f"{metric} can be shown for {spec['periods']}.")
+    today = date_cls.today()
+    since = date_cls(today.year - 1, 1, 1).isoformat()
+    people, info = [], {}
+    for uid in [user_id, *db.list_friend_ids(user_id)]:
+        settings = _sharing(uid)
+        summary = _friend_summary(uid, masked=False)
+        user = db.get_user(uid) or {}
+        key = summary["handle"]
+        people.append({
+            "key": key,
+            "shares": bool(settings["items"].get(spec["share"])),
+            "behavior": db.get_nightly_behavior(uid, days=800),
+            "wearable": db.get_wearable_nightly(uid, days=800),
+            "daily": db.list_garmin_daily(uid, since, today.isoformat()),
+            "streak": (summary.get("current_streak"), summary.get("best_streak")),
+        })
+        info[key] = {
+            "handle": key,
+            "display_name": summary["display_name"],
+            "mine": uid == user_id,
+            "demo": user.get("study_cohort") == db.DEMO_COHORT,
+            "pet_species": settings["pet_species"],
+            # 寵物的心情只有他有分享「寵物心情」才給（自己的照給）；沒有 → App 畫 bored，不編一個開心的
+            "pet_mood": summary.get("pet_mood")
+            if (uid == user_id or settings["items"].get("pet_mood")) else None,
+        }
+    b = social_leaderboard.board(people, metric, period, today)
+    me_key = next(k for k, v in info.items() if v["mine"])
+    entries = [{**info[k], "rank": r, "display": shown, "nights": n,
+                "change": (b["prev"][k] - r) if k in b["prev"] else None}
+               for k, r, _value, shown, n in b["ranked"]]
+    below = [{**info[k], "nights": n} for k, n in b["below"]]
+    mine = next((e for e in entries if e["mine"]), None)
+    if me_key in b["hidden"]:
+        me = {"status": "not_sharing", "share_item": spec["share"],
+              "share_label": social_sharing.item_label(spec["share"])}
+    elif mine:
+        me = {"status": "ranked", **mine}
+    else:
+        me = {"status": "below", **next(x for x in below if x["mine"])}
+    return {
+        "metric": metric,
+        "period": period,
+        "label": spec["label"],
+        "title": spec["title"],
+        "need": b["need"],
+        "window": {"from": b["window"][0], "to": b["window"][1]},
+        "metrics": [{"key": k, "label": social_leaderboard.METRICS[k]["label"]}
+                    for k in social_leaderboard.METRIC_ORDER],
+        "periods": [{"key": q, "label": social_leaderboard.PERIOD_LABELS[q]} for q in spec["periods"]],
+        "entries": entries,
+        "below": below,
+        "me": me,
+    }
 
 
 @app.get("/friends/{handle}")
