@@ -189,6 +189,26 @@ def _camera_timeline(c):
     })
 
 
+def _devices(c):
+    """
+    那一晚用了哪些設備（2026-11-16 使用者要求，像 Strava 活動頁的鞋子與手錶）：
+    手錶（型號照 wearable_nightly.device_brand）、有錄影就有攝影機、有就寢紀錄就有手機。
+    只寫名字，不寫序號或任何識別碼。
+    """
+    home = c["home"]
+    out = []
+    if _g(home, "scoring", "source"):
+        brand = _g(home, "scoring", "device_brand")
+        out.append({"kind": "watch",
+                     "name": brand if isinstance(brand, str) and brand and brand != "demo" else "Watch"})
+    if c.get("camera"):
+        out.append({"kind": "camera", "name": "Camera"})
+    b = _g(home, "behavior") or {}
+    if b.get("lights_out_at") or b.get("bed_start_at"):
+        out.append({"kind": "phone", "name": "Phone"})
+    return out or None
+
+
 def _stress(c):
     s = _g(c["home"], "yesterday", "stress")
     if not isinstance(s, dict):
@@ -265,6 +285,7 @@ ITEMS = (
      lambda c: _num((c.get("camera") or {}).get("events_per_hour"))),
     ("camera_timeline", "sleep", False, "Movement through the night (camera timeline)",
      _camera_timeline),
+    ("devices", "sleep", True, "Devices used that night (watch model, camera, phone)", _devices),
     ("morning_rating", "sleep", False, "How rested you felt",
      lambda c: _compact({"rested": _num(_g(c["home"], "morning_rating", "rested")),
                          "label": _g(c["home"], "morning_rating", "label")})),

@@ -501,8 +501,18 @@ void main() {
         'efficiency': {'value': 93.4, 'label': 'Sleep button'},
         'morning_rating': {'rested': 4, 'label': 'Rested'},
         'challenges': [{'title': 'Steady bedtime', 'completed': true}],
+        'devices': [
+          {'kind': 'watch', 'name': 'Garmin Vivoactive 3'},
+          {'kind': 'camera', 'name': 'Camera'},
+          {'kind': 'phone', 'name': 'Phone'},
+        ],
       });
       await tester.pumpWidget(MaterialApp(home: FriendNightPage(card: card)));
+      // 用了哪些設備（像 Strava 的鞋子與手錶），照後端給的寫
+      for (final d in ['Garmin Vivoactive 3', 'Camera', 'Phone']) {
+        expect(find.descendant(of: find.byKey(const Key('night-devices')), matching: find.text(d)),
+            findsOneWidget, reason: d);
+      }
       await tester.pump(const Duration(milliseconds: 100));
       for (final k in ['stages', 'hr', 'camera', 'bedtime', 'morning', 'game']) {
         expect(find.byKey(Key('section-$k')), findsOneWidget, reason: k);

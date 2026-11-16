@@ -958,7 +958,7 @@ Future<void> openFriendNight(
   );
 }
 
-class FriendNightPage extends StatelessWidget {
+class FriendNightPage extends StatefulWidget {
   final FriendNightCard card;
   final int? streak;
   final List<StreakDay>? week;
@@ -969,8 +969,20 @@ class FriendNightPage extends StatelessWidget {
     this.week,
   });
 
+  @override
+  State<FriendNightPage> createState() => _FriendNightPageState();
+}
+
+class _FriendNightPageState extends State<FriendNightPage> {
   static const _page = Color(0xFF081326);
   static const _sheet = Color(0xFF111A3A);
+
+  /// 資訊卡現在佔畫面多少（0–1）。拉到最上面時整個畫面都是它（同 Strava，2026-11-16 使用者定）。
+  double? _extent;
+
+  FriendNightCard get card => widget.card;
+  int? get streak => widget.streak;
+  List<StreakDay>? get week => widget.week;
 
   @override
   Widget build(BuildContext context) {
@@ -996,6 +1008,14 @@ class FriendNightPage extends StatelessWidget {
     );
     final name = card.mine ? 'You' : card.displayName;
     final statCols = layout.stats.length <= 3 ? layout.stats.length : 2;
+    // 最後 12% 的路程裡：頂端那條深色列淡入、資訊卡的圓角變平、內容往下讓出那條列的高度
+    final extent = _extent ?? sheetMin;
+    final full = ((extent - 0.88) / 0.12).clamp(0.0, 1.0);
+    final barH = inset.top + 56;
+    final devices = [
+      for (final d in (items['devices'] is List ? items['devices'] as List : const []))
+        if (d is Map && d['name'] is String) (d['kind'] as String?, d['name'] as String),
+    ];
 
     return Scaffold(
       backgroundColor: _page,
@@ -1040,23 +1060,32 @@ class FriendNightPage extends StatelessWidget {
               size: petSize,
             ),
           ),
-          DraggableScrollableSheet(
+          NotificationListener<DraggableScrollableNotification>(
+            onNotification: (n) {
+              if (n.extent != _extent) setState(() => _extent = n.extent);
+              return false;
+            },
+            child: DraggableScrollableSheet(
             key: const Key('night-sheet'),
             initialChildSize: sheetMin,
             minChildSize: sheetMin,
-            // 拉到最上面也停在返回鍵下面（不頂到狀態列、不蓋住名字）
-            maxChildSize: ((h - inset.top - 64) / h).clamp(sheetMin, 1.0).toDouble(),
+            // 拉到最上面＝整個畫面（上面不留場景），頂端換成一條深色列（返回鍵＋名字）
+            maxChildSize: 1,
             builder: (context, controller) => DecoratedBox(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: _sheet,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(24 * (1 - full)),
+                ),
+                boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
               ),
               child: ListView(
                 key: const Key('night-detail'),
                 controller: controller,
                 padding: EdgeInsets.only(top: 10, bottom: inset.bottom + 32),
                 children: [
+                  // 拉到最上面時讓出頂端那條列的高度（名字不會被它蓋住）
+                  SizedBox(height: (barH - 10) * full),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
@@ -1206,6 +1235,40 @@ class FriendNightPage extends StatelessWidget {
                     const SizedBox(height: 4),
                     StreakWeekRow(key: const Key('card-week'), week: week!),
                   ],
+                  // 用了哪些設備（像 Strava 的鞋子與手錶），他有分享才出現
+                  if (devices.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Column(
+                      key: const Key('night-devices'),
+                      children: [
+                        for (final (kind, dname) in devices)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  switch (kind) {
+                                    'watch' => Icons.watch_rounded,
+                                    'camera' => Icons.videocam_rounded,
+                                    'phone' => Icons.phone_android_rounded,
+                                    _ => Icons.devices_other_rounded,
+                                  },
+                                  color: Colors.white,
+                                  size: 26,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    dname,
+                                    style: const TextStyle(color: Colors.white, fontSize: 17),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                       ],
                     ),
                   ),
@@ -1215,12 +1278,41 @@ class FriendNightPage extends StatelessWidget {
               ),
             ),
           ),
-          // 返回鍵疊在場景上（圓形深色底，跟 Strava 一樣）
+          ),
+          // 拉到最上面時的頂端列（深色、跟資訊卡同色）：名字疊在返回鍵旁邊，像 Strava 的「Run」
           Positioned(
-            top: inset.top + 8,
+            key: const Key('night-topbar'),
+            top: 0,
+            left: 0,
+            right: 0,
+            height: barH,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: full,
+                child: Container(
+                  color: _sheet,
+                  padding: EdgeInsets.only(top: inset.top, left: 68, right: 20),
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 返回鍵：在場景上是圓形深色底；拉到頂時底色淡掉、跟頂端列融在一起
+          Positioned(
+            top: inset.top + 4,
             left: 12,
             child: Material(
-              color: const Color(0x99000000),
+              color: Color.lerp(const Color(0x99000000), Colors.transparent, full),
               shape: const CircleBorder(),
               child: IconButton(
                 key: const Key('night-back'),

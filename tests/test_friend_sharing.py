@@ -109,7 +109,7 @@ check("四組", [g["id"] for g in v["groups"]], ["sleep", "heart", "day", "game"
 check("放下手機、準時、連續、寵物心情、衣服、挑戰＋卡上三個大數字 預設開",
       sorted(k for k, on in items.items() if on),
       sorted(["phone_down_time", "on_time", "streak", "pet_mood", "outfit", "challenges",
-              "sleep_duration", "camera_moves", "score"]))
+              "sleep_duration", "camera_moves", "score", "devices"]))
 check("攝影機時間軸是選項、預設關（每小時幾次預設開）", (items.get("camera_timeline"), items.get("camera_moves")),
       (False, True))
 check("永遠不給的三項有說明、但不是選項", (len(v["never_shared"]),
@@ -119,13 +119,15 @@ check("動態卡有 Bob 那一晚", [(c["display_name"], c["date"]) for c in car
 check("卡上只有預設開的那幾項（行為＋遊戲＋睡多久、分數；Bob 沒有攝影機 → 沒有每小時動作）",
       sorted(cards[0]["items"]),
       sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges",
-              "sleep_duration", "score"]))
+              "sleep_duration", "score", "devices"]))
 # 預設開的三個大數字可以關掉，關了就一個字都不出後端
 client.patch("/sharing", json={"user_id": bob, "items": {
     "sleep_duration": False, "score": False, "camera_moves": False}})
 cards = feed()
-check("關掉那三個 → 卡上只剩行為＋遊戲", sorted(cards[0]["items"]),
-      sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges"]))
+check("關掉那三個 → 卡上只剩行為＋遊戲＋設備", sorted(cards[0]["items"]),
+      sorted(["phone_down_time", "on_time", "pet_mood", "outfit", "challenges", "devices"]))
+check("Bob 的設備：手錶型號＋手機（沒有攝影機）", [d["kind"] for d in cards[0]["items"]["devices"]],
+      ["watch", "phone"])
 check("放下手機時刻 01:12、晚了", (cards[0]["items"]["phone_down_time"], cards[0]["items"]["on_time"]),
       ("01:12", False))
 check("⚠️ 沒打開的值一個字都不出後端（動態卡）", leaked(client.get(f"/friends/feed?user_id={alice}").json()), [])

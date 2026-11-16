@@ -441,17 +441,29 @@ void main() {
       final sheetTop0 = tester.getTopLeft(find.byKey(const Key('night-detail'))).dy;
       final pet = tester.getRect(find.descendant(of: page, matching: find.byKey(const Key('streak-flames-2'))));
       expect(pet.bottom, lessThanOrEqualTo(sheetTop0 + 1));
-      // 往上拉到底：卡最多拉到返回鍵下面（名字不被蓋住），最後一格不被系統按鍵列蓋住
+      // 往上拉到底（同 Strava）：資訊卡佔滿整個畫面、上面不留場景，頂端換成深色列寫名字
+      expect(tester.widget<Opacity>(find.descendant(
+          of: find.byKey(const Key('night-topbar')), matching: find.byType(Opacity))).opacity, 0);
+      await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -560));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.getTopLeft(find.byKey(const Key('night-detail'))).dy, lessThanOrEqualTo(0.5));
+      expect(tester.widget<Opacity>(find.descendant(
+          of: find.byKey(const Key('night-topbar')), matching: find.byType(Opacity))).opacity, 1);
+      expect(find.descendant(of: find.byKey(const Key('night-topbar')), matching: find.text('Bob')),
+          findsOneWidget);
+      // 名字在頂端列下面，沒被它蓋住
+      final barBottom = tester.getBottomLeft(find.byKey(const Key('night-topbar'))).dy;
+      final nameTop = tester.getTopLeft(find.descendant(
+          of: find.byKey(const Key('night-detail')), matching: find.text('Bob'))).dy;
+      expect(nameTop, greaterThanOrEqualTo(barBottom));
       for (var k = 0; k < 3; k++) {
         await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
         for (var i = 0; i < 5; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
       }
-      final back = tester.getRect(find.byKey(const Key('night-back')));
-      // 拉到最上面時，資訊卡上緣仍在返回鍵下面（名字不會被它蓋住、不頂到狀態列）
-      final sheetTop = tester.getTopLeft(find.byKey(const Key('night-detail'))).dy;
-      expect(sheetTop, greaterThanOrEqualTo(back.bottom));
       final screenH = tester.view.physicalSize.height / tester.view.devicePixelRatio;
       final navBar = tester.view.padding.bottom / tester.view.devicePixelRatio;
       // 最底下那一段（Game）

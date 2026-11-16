@@ -76,6 +76,7 @@ PERSONAS = [
         "offset": lambda i, n, rng: min(-1.0, rng.gauss(-20, 8)),
         "species": "cat", "scene": "lake", "precision": "on_time_only",
         "sleep": ((455, 20), 0.19, 0.23, (12, 5)), "day": (9500, 0.2, None),
+        "device": "Garmin Forerunner 265",
         "share": ("stages", "sleep_duration", "score", "awake", "steps", "sleeping_hr",
                   "camera_timeline", "morning_rating", "level"),
         "camera": (12, 3),
@@ -85,6 +86,7 @@ PERSONAS = [
         "offset": _improving,
         "species": "dog", "scene": "campfire", "precision": "exact",
         "sleep": ((410, 30), 0.16, 0.21, (20, 8)), "day": (7200, 0.35, 44),
+        "device": "Samsung Galaxy Watch6",
         "share": ("stages", "sleep_duration", "time_in_bed", "awake", "sleeping_hr",
                   "level", "steps", "stress", "camera_timeline", "target_bedtime", "fell_asleep"),
         "camera": (19, 5),
@@ -94,6 +96,7 @@ PERSONAS = [
         "offset": lambda i, n, rng: rng.gauss(75, 30),
         "species": "cat", "scene": "rooftop", "precision": "exact",
         "sleep": ((375, 40), 0.14, 0.20, (28, 10)), "day": (5200, 0.5, None),
+        "device": "Fitbit Charge 6",
         "share": ("stages", "sleep_duration", "bed_times", "awake", "stress", "body_battery",
                   "sleeping_hr", "camera_timeline", "efficiency", "time_in_bed"),
         "camera": (27, 6),
@@ -103,6 +106,7 @@ PERSONAS = [
         "offset": lambda i, n, rng: None if i % 4 == 2 else rng.gauss(15, 35),
         "species": "dog", "scene": "treehouse", "precision": "exact",
         "sleep": ((420, 50), 0.17, 0.21, (22, 12)), "day": (11000, 0.3, 47),
+        "device": "Garmin Vivoactive 5",
         "share": (),
         "camera": None,
     },
@@ -183,7 +187,7 @@ def write_watch_night(uid, wake_day, p, lights_out, rng, db_path=None):
     bed_end = wake + timedelta(minutes=rng.randint(4, 18))
 
     night, metrics, _ = to_wearable_row(_session(onset, segs, bed_start, bed_end, rng),
-                                        date=wake_day.isoformat(), device_brand="demo")
+                                        date=wake_day.isoformat(), device_brand=p["device"])
     assert night == wake_day.isoformat(), (night, wake_day)
     metrics["awake_count"] = demo_sleep.awake_count(segs)
     db.upsert_wearable_nightly(uid, night, "demo", metrics, db_path=db_path)
