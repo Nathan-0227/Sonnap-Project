@@ -2,7 +2,7 @@
 好友排行榜（social/leaderboard.py ＋ GET /friends/leaderboard）。2026-11-17 新增。
 
 守的事：
-【1】時段的範圍（晚／日／週一開始的週／日曆月／日曆年，以及「上一個時段」）
+【1】時段的範圍（晚／日／最近 7、30、365 天，以及「上一個時段」）
 【2】月、年用平均不用加總：晚數多的人不會因為加總而贏
 【3】門檻：不到的人沒有名次、列在下面；沒資料的晚上不算準時也不算分母
 【4】同分並列（1, 1, 3）；Steady 越小越前
@@ -35,12 +35,12 @@ print("【1】時段範圍")
 tue = date(2026, 11, 17)  # 週二
 check("晚＝今天起床那一晚", lb.window("night", tue), ("2026-11-17", "2026-11-17"))
 check("日＝昨天", lb.window("day", tue), ("2026-11-16", "2026-11-16"))
-check("週從週一開始", lb.window("week", tue), ("2026-11-16", "2026-11-17"))
-check("上一週是完整的週一到週日", lb.window("week", tue, back=1), ("2026-11-09", "2026-11-15"))
-check("日曆月", lb.window("month", tue), ("2026-11-01", "2026-11-17"))
-check("上個月整個月", lb.window("month", tue, back=1), ("2026-10-01", "2026-10-31"))
-check("一月的上個月是去年十二月", lb.window("month", date(2026, 1, 5), back=1), ("2025-12-01", "2025-12-31"))
-check("日曆年", lb.window("year", tue), ("2026-01-01", "2026-11-17"))
+check("最近 7 天（週二也滿 7 天，不會週一週二整張空）", lb.window("week", tue), ("2026-11-11", "2026-11-17"))
+check("上一個 7 天緊接在前面", lb.window("week", tue, back=1), ("2026-11-04", "2026-11-10"))
+check("最近 30 天", lb.window("month", tue), ("2026-10-19", "2026-11-17"))
+check("上一個 30 天", lb.window("month", tue, back=1), ("2026-09-19", "2026-10-18"))
+check("最近 12 個月（365 天）", lb.window("year", tue), ("2025-11-18", "2026-11-17"))
+check("時段的名字", [lb.PERIOD_LABELS[p] for p in ("week", "month", "year")], ["7 days", "30 days", "12 months"])
 
 
 def night(d, late, bed=False, lights="2026-11-10T23:30:00"):
@@ -92,6 +92,19 @@ sc = person("sc", behavior=[night(nov[0], False, bed=True), night(nov[1], False,
             wearable=[{"date": nov[0], "final_score": 70}, {"date": nov[1], "final_score": 95}])
 v, shown, n = lb.measure("score", sc, nov[0], nov[1])
 check("沒按的那晚（95）不算", (shown, n), ("70", 1))
+
+print("\n【5b】Chill：平均壓力越低越前；沒讀數的天不算")
+calm = person("calm")
+calm["stress"] = {nov[0]: 20, nov[1]: 30, nov[2]: None}
+tense = person("tense")
+tense["stress"] = {nov[0]: 50, nov[1]: 60, nov[2]: 40}
+ranked, below, _ = lb.rank([tense, calm], "chill", "week", nov[0], nov[2])
+check("None 那天不算進平均也不算天數（tense 3 天上榜、平均 50）", [(k, s, n) for k, _, _, s, n in ranked],
+      [("tense", "50 avg", 3)])
+check("calm 只有 2 天 → 不到 7 天榜的門檻 3", below, [("calm", 2)])
+ranked, _, _ = lb.rank([tense, calm], "chill", "day", nov[0], nov[0])
+check("單日：越低越前", [(k, s) for k, _, _, s, _ in ranked], [("calm", "20 avg"), ("tense", "50 avg")])
+check("第一名稱號", lb.METRICS["chill"]["title"], "Most chill")
 
 print("\n【6】API")
 tmp = tempfile.mkdtemp()

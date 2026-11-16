@@ -1916,6 +1916,17 @@ async def get_friends_feed(user_id: str = Query(...)):
     return {"cards": cards}
 
 
+def _daily_stress_avgs(uid):
+    """{日期: 那天平均壓力}。存在資料庫的（示範帳號）＋電腦上的原始檔（只有它的主人，見 _owns_garmin_file）。
+    兩邊都有的那天以原始檔為準——那是每 3 分鐘讀數算出來的，跟早晨報告 Stress 那一格同一個數字。"""
+    since = date_cls(date_cls.today().year - 1, 1, 1).isoformat()
+    out = {r["date"]: r["stress_avg"] for r in db.list_garmin_daily(uid, since, date_cls.today().isoformat())
+           if r.get("stress_avg") is not None}
+    if _owns_garmin_file(uid):
+        out.update(sleep_heart_rate.stress_day_averages(_garmin_records() or []))
+    return out
+
+
 @app.get("/friends/leaderboard")
 async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query("on_time"),
                                   period: Optional[str] = Query(None)):
@@ -1946,6 +1957,7 @@ async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query
             "wearable": db.get_wearable_nightly(uid, days=800),
             "daily": db.list_garmin_daily(uid, since, today.isoformat()),
             "streak": (summary.get("current_streak"), summary.get("best_streak")),
+            "stress": _daily_stress_avgs(uid),
         })
         info[key] = {
             "handle": key,

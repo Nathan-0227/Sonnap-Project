@@ -252,6 +252,9 @@ def write_day(uid, day, p, rng, db_path=None):
         "body_battery_charged": rng.randint(35, 80), "body_battery_drained": rng.randint(40, 85),
         "vo2max": vo2, "move_iq": sorted(walks, key=lambda w: w["start"]),
     }, db_path=db_path)
+    # 那天的平均壓力（排行榜 Chill；壓力越多的人平均越高）——腳本產生的，標 Demo
+    db.set_garmin_stress_avg(uid, day.isoformat(),
+                             round(min(80, max(8, 15 + 50 * stress + rng.gauss(0, 5)))), db_path)
 
 
 def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,

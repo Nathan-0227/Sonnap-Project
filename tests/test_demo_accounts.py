@@ -55,7 +55,7 @@ for d in range(1, 6):
                                night["lights_out_at"], night["adherence_minutes"],
                                night["is_late"], db_path=TMP)
 
-from datetime import date
+from datetime import date, timedelta
 rows = demo_accounts.create_all(nights=21, end=date(2026, 11, 6), db_path=TMP)
 
 print("【1】示範帳號不會被當成手機帳號")
@@ -173,6 +173,15 @@ check("Mia：攝影機時間軸有光柱、總次數、動了多久、跟平常�
 check("攝影機時間軸只給第幾分鐘，不給時刻",
       any("T" in str(p.get("m")) for p in tl.get("points") or []), False)
 check("Ken（只開預設）：沒有攝影機時間軸（預設關）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
+# 排行榜 Chill：示範帳號每天有平均壓力（腳本產生），壓力多的人平均高
+_since = (date.today() - timedelta(days=30)).isoformat()
+_avg = {}
+for _uid, _name in demo_accounts.demo_users(TMP):
+    _vals = [r["stress_avg"] for r in db.list_garmin_daily(_uid, _since, date.today().isoformat(), db_path=TMP)
+             if r.get("stress_avg") is not None]
+    _avg[_name] = sum(_vals) / len(_vals) if _vals else None
+check("每個示範帳號都有平均壓力", all(v is not None for v in _avg.values()), True)
+check("壓力設定最高的 Yuki 平均比最低的 Mia 高", _avg["Yuki (demo)"] > _avg["Mia (demo)"], True)
 devs = {n: [d["name"] for d in (c["items"].get("devices") or [])] for n, c in latest.items()}
 check("設備（預設分享）：手錶、攝影機、手機都寫型號；沒有攝影機的就沒有那一台",
       (devs["Mia (demo)"], devs["Ken (demo)"]),

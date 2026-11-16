@@ -598,6 +598,7 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     -- 每 15 分鐘的活動程度：JSON 96 格 [sleep|still|active|high|other, 步數] 或 null（沒戴錶）；
     -- 來源同上，set_garmin_activity_quarters 寫（2026-11-15，Active time 的時間軸）
     activity_quarters    TEXT,
+    stress_avg     REAL,                     -- 那一天每 3 分鐘壓力讀數的平均；只有示範帳號存（本人的從原始檔現算），排行榜 Chill 用
     updated_at           TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -693,6 +694,7 @@ COLUMN_MIGRATIONS = [
     ("nightly_behavior", "bridged_unlocks", "INTEGER"),
     ("nightly_behavior", "phone_model", "TEXT"),
     ("camera_nightly", "camera_model", "TEXT"),
+    ("garmin_daily", "stress_avg", "REAL"),
     # 2026-11-07：睡眠效率恢復計分，每晚用的是哪一種（三段式）。
     # ⚠️ 與上面 nightly_behavior.efficiency_basis **同名不同表、不同意思**：
     #    那個是行為版效率的 basis，這個是**進分數的那個效率**的 basis。
@@ -2306,6 +2308,20 @@ def get_garmin_daily(user_id, date, db_path=None):
     finally:
         conn.close()
     return _garmin_daily_row(rows[0]) if rows else None
+
+
+def set_garmin_stress_avg(user_id, date, value, db_path=None):
+    """**只**寫那一天的平均壓力（同 set_garmin_steps_hourly：存白天資料時不會被蓋掉）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET stress_avg = ? WHERE user_id = ? AND date = ?",
+            (value, user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
 
 
 def list_garmin_daily(user_id, since, until, db_path=None):

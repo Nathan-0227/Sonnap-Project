@@ -31,6 +31,7 @@ const _kDefaultMetrics = [
   ('steps', 'Steps'),
   ('sleep', 'Sleep'),
   ('score', 'Score'),
+  ('chill', 'Chill'),
 ];
 
 class _LeaderboardSectionState extends State<LeaderboardSection> {

@@ -5,7 +5,9 @@
 - 只是好玩，不代表誰睡得好；第一名的稱號刻意俏皮（Sleepyhead）。
 - 只有**公開那一項的人**才上榜（自己沒公開也一樣不上，釘在底下的卡會說要打開哪一項）。
 - **月、年用平均，不用加總**（少戴幾天錶的人不會永遠追不上）。
-- 上榜門檻跟著時段：晚／日 1、週 3、月 10、年 60；不到的列在最下面「N nights so far」，沒有名次。
+- 上榜門檻跟著時段：晚／日 1、7 天 3、30 天 10、12 個月 60；不到的列在最下面「N nights so far」，沒有名次。
+- **時段是「最近 N 天」不是日曆的週／月／年**（2026-11-17 使用者同意）：日曆的週在週一、週二
+  一定沒有人到 3 晚，整張榜是空的。
 - 沒資料的晚上不算準時、也不算進平均。同分並列同一個名次（1, 1, 3）。
 - Score 只算有按 Start Sleep 的晚上（不然大家會為了上榜故意不按，見 CLAUDE.md 三段式計分）。
 - 名次變化跟上一個同長度的時段比，箭頭只代表方向（上升紅、下降綠，App 照首頁的規矩）。
@@ -14,7 +16,7 @@
 ⚠️ 「準時」的判準只有一處：behavior.challenges.night_achieved（同 Streak、挑戰）。
 ⚠️ 作息收斂只有一處：behavior.adherence.bedtime_spread_minutes（同挑戰 Steady bedtime）。
 """
-from datetime import date as _date, timedelta
+from datetime import timedelta
 
 from behavior.adherence import bedtime_spread_minutes
 from behavior.challenges import night_achieved
@@ -22,8 +24,9 @@ from behavior.challenges import night_achieved
 # 名次表的時段
 PERIOD_LABELS = {
     "now": "Now", "night": "Night", "day": "Day",
-    "week": "Week", "month": "Month", "year": "Year",
+    "week": "7 days", "month": "30 days", "year": "12 months",
 }
+SPAN_DAYS = {"week": 7, "month": 30, "year": 365}
 THRESHOLD = {"now": 1, "night": 1, "day": 1, "week": 3, "month": 10, "year": 60}
 
 # key → 分享項目、能選的時段、排序方向、第一名稱號、顯示名
@@ -40,13 +43,16 @@ METRICS = {
               "higher": True, "title": "Sleepyhead", "label": "Sleep"},
     "score": {"share": "score", "periods": ("night", "week", "month", "year"),
               "higher": True, "title": "Top score", "label": "Score"},
+    # 平均壓力（Garmin 的 0–100），越低越前。只寫數字、不分程度、不用紅黃
+    "chill": {"share": "stress", "periods": ("day", "week", "month", "year"),
+              "higher": False, "title": "Most chill", "label": "Chill"},
 }
-METRIC_ORDER = ("on_time", "streak", "steady", "steps", "sleep", "score")
+METRIC_ORDER = ("on_time", "streak", "steady", "steps", "sleep", "score", "chill")
 
 
 def window(period, today, back=0):
     """時段 → (起, 迄)（含兩端，ISO 日期字串）。back=1 是上一個同長度的時段（算箭頭用）。
-    晚＝今天起床的那一晚；日＝昨天（白天資料早上才匯入）；週從週一開始；月、年是日曆的。"""
+    晚＝今天起床的那一晚；日＝昨天（白天資料早上才匯入）；其他是「到今天為止最近 N 天」。"""
     if period == "now":  # Streak：目前連續幾晚，不分時段
         return today.isoformat(), today.isoformat()
     if period == "night":
@@ -55,21 +61,10 @@ def window(period, today, back=0):
     if period == "day":
         d = today - timedelta(days=1 + back)
         return d.isoformat(), d.isoformat()
-    if period == "week":
-        start = today - timedelta(days=today.weekday()) - timedelta(weeks=back)
-        end = today if back == 0 else start + timedelta(days=6)
-        return start.isoformat(), end.isoformat()
-    if period == "month":
-        start = today.replace(day=1)
-        for _ in range(back):
-            start = (start - timedelta(days=1)).replace(day=1)
-        if back == 0:
-            return start.isoformat(), today.isoformat()
-        nxt = (start + timedelta(days=32)).replace(day=1)
-        return start.isoformat(), (nxt - timedelta(days=1)).isoformat()
-    if period == "year":
-        y = today.year - back
-        return _date(y, 1, 1).isoformat(), (today if back == 0 else _date(y, 12, 31)).isoformat()
+    if period in SPAN_DAYS:
+        n = SPAN_DAYS[period]
+        end = today - timedelta(days=n * back)
+        return (end - timedelta(days=n - 1)).isoformat(), end.isoformat()
     raise ValueError(period)
 
 
@@ -130,6 +125,13 @@ def measure(metric, person, lo, hi):
             return None, None, 0
         avg = sum(vals) / len(vals)
         return avg, f"{round(avg)}", len(vals)
+    if metric == "chill":
+        vals = [v for d, v in (person.get("stress") or {}).items()
+                if lo <= d <= hi and isinstance(v, (int, float))]
+        if not vals:
+            return None, None, 0
+        avg = sum(vals) / len(vals)
+        return avg, f"{round(avg)} avg", len(vals)
     raise ValueError(metric)
 
 
