@@ -1889,17 +1889,19 @@ async def add_friend(req: AddFriendRequest):
 @app.get("/friends/feed")
 async def get_friends_feed(user_id: str = Query(...)):
     """
-    朋友們最近 7 天每一晚的卡（新的在前），每張只有那位朋友打開的項目。
+    朋友們與我自己最近 7 天每一晚的卡（新的在前），每張只有那個人打開的項目。
+    我自己的卡（mine: true，2026-11-16 使用者定）一樣照我的分享設定——
+    看到的就是朋友看到的我，不會比朋友多。同一天我的排最前面。
     ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "feed" 會被當成邀請碼。
     """
     require_user(user_id)
     cards = []
-    for fid in db.list_friend_ids(user_id):
+    for fid in [user_id, *db.list_friend_ids(user_id)]:
         s = _friend_summary(fid)
         for c in await _cards_for(fid):
             cards.append({"handle": s["handle"], "display_name": s["display_name"],
-                          "pet_species": s["pet_species"], **c})
-    cards.sort(key=lambda c: (c["date"], c["display_name"]), reverse=True)
+                          "pet_species": s["pet_species"], "mine": fid == user_id, **c})
+    cards.sort(key=lambda c: (c["date"], c["mine"], c["display_name"]), reverse=True)
     return {"cards": cards}
 
 

@@ -622,7 +622,7 @@ class FriendNightCardView extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          card.displayName,
+                          card.mine ? 'You' : card.displayName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -690,7 +690,7 @@ class FriendNightCardView extends StatelessWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '${card.displayName.split(' ').first} reached a $streak-night streak',
+                                  '${card.mine ? 'You' : card.displayName.split(' ').first} reached a $streak-night streak',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
@@ -840,6 +840,7 @@ Future<void> openFriendNight(
   int? streak,
   List<StreakDay>? week,
   VoidCallback? onOpenFriend,
+  String settingsLabel = 'Friend settings',
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -875,7 +876,7 @@ Future<void> openFriendNight(
                         Navigator.of(context).pop();
                         onOpenFriend();
                       },
-                      child: const Text('Friend settings'),
+                      child: Text(settingsLabel),
                     ),
                   ),
               ],
@@ -910,6 +911,16 @@ class _StageChart extends StatelessWidget {
       key: const Key('card-stages'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Sleep stages',
+          key: Key('card-stages-title'),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 96,
           width: double.infinity,
@@ -929,6 +940,39 @@ class _StageChart extends StatelessWidget {
               key: const Key('card-stages-end'),
               style: label,
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          key: const Key('card-stages-legend'),
+          spacing: 14,
+          runSpacing: 4,
+          children: [
+            for (final (k, name) in const [
+              ('deep', 'Deep'),
+              ('light', 'Light'),
+              ('rem', 'REM'),
+              ('awake', 'Awake'),
+            ])
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _stageColors[k],
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    // 沒量到 REM 的晚上不畫那一層，圖例照實寫
+                    k == 'rem' && !remMeasured ? 'REM not measured' : name,
+                    style: label,
+                  ),
+                ],
+              ),
           ],
         ),
       ],

@@ -437,6 +437,49 @@ void main() {
       expect(btn.bottom, lessThanOrEqualTo(screenH - navBar));
     });
 
+    testWidgets('自己的卡也在動態牆上：寫 You、用自己的連續天數，點開最下面是分享設定；睡眠圖有標題與圖例', (tester) async {
+      final json = stateJson(friends: [friendJson('BOB234', 'Bob', streak: 4)]);
+      json['me'] = friendJson('K7QM2P', 'Nathan', streak: 5,
+          week: ['on_time', 'on_time', 'on_time', 'on_time', 'on_time', 'future', 'future']);
+      final stub = _StubFriends(result: FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(json)));
+      stub.feed = const [
+        FriendNightCard(handle: 'K7QM2P', displayName: 'Nathan', date: '2026-09-03', mine: true,
+            items: {
+              'on_time': true,
+              'stages': {
+                'rem_measured': false,
+                'segments': [
+                  {'stage': 'light', 'from': 0, 'to': 40},
+                  {'stage': 'deep', 'from': 40, 'to': 90},
+                ],
+              },
+            }),
+        FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-03', items: {'on_time': true}),
+      ];
+      await pump(tester, stub, friendsTab: false);
+      final mine = find.byKey(const Key('feed-card-K7QM2P-2026-09-03'));
+      expect(mine, findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.text('You')), findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.text('Nathan')), findsNothing);
+      expect(find.text('You reached a 5-night streak'), findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.byKey(const Key('card-week'))), findsOneWidget);
+      // 睡眠圖：標題＋圖例；沒量到 REM 照實寫
+      expect(find.descendant(of: mine, matching: find.text('Sleep stages')), findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.text('Deep')), findsOneWidget);
+      expect(find.descendant(of: mine, matching: find.text('REM not measured')), findsOneWidget);
+
+      await tester.tap(mine);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.drag(find.byKey(const Key('night-detail')), const Offset(0, -3000));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text('Sharing settings'), findsOneWidget);
+      expect(find.text('Friend settings'), findsNothing);
+    });
+
     testWidgets('還沒有朋友 → 講清楚怎麼加', (tester) async {
       await pump(tester, _StubFriends(result: FriendsResult(FriendsStatus.ok,
           value: FriendsState.fromJson(stateJson(friends: const [], board: const [])))));

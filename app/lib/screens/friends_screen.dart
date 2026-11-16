@@ -388,7 +388,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _card(Text(
           state.friends.isEmpty
               ? "No friends yet. Open Friends to share your invite code."
-              : "No nights from your friends in the last 7 days yet.",
+              : "No nights from you or your friends in the last 7 days yet.",
           key: const Key('feed-empty'),
           style: const TextStyle(color: Colors.white70, height: 1.4),
         )),
@@ -397,7 +397,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return [
       for (final c in _feed)
         Builder(builder: (context) {
-          final f = state.friends.where((x) => x.handle == c.handle).firstOrNull;
+          // 我自己的卡：連續天數與這週用我自己的摘要；點開最下面是分享設定
+          final f = c.mine
+              ? state.me
+              : state.friends.where((x) => x.handle == c.handle).firstOrNull;
           return FriendNightCardView(
             card: c,
             // 連續天數的橫幅只放在他最近那一晚的卡上
@@ -407,7 +410,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
             onTap: () => openFriendNight(context, c,
                 streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
                 week: f != null && f.lastNightDate == c.date ? f.streakWeek : null,
-                onOpenFriend: f == null ? null : () => _showFriend(f)),
+                onOpenFriend: c.mine
+                    ? _openSharing
+                    : (f == null ? null : () => _showFriend(f)),
+                settingsLabel: c.mine ? 'Sharing settings' : 'Friend settings'),
           );
         }),
     ];

@@ -130,6 +130,9 @@ class FriendNightCard {
   /// 他選的場景（social/sharing.SCENES）；null／不認得 → 畫預設那張。
   final String? scene;
 
+  /// 我自己的卡（後端標的）。內容照我的分享設定＝朋友看到的我。
+  final bool mine;
+
   const FriendNightCard({
     required this.handle,
     required this.displayName,
@@ -137,6 +140,7 @@ class FriendNightCard {
     required this.items,
     this.petSpecies,
     this.scene,
+    this.mine = false,
   });
 
   factory FriendNightCard.fromJson(Map<String, dynamic> json) => FriendNightCard(
@@ -146,6 +150,7 @@ class FriendNightCard {
         date: (json['date'] as String?) ?? '',
         items: ((json['items'] as Map?) ?? const {}).cast<String, dynamic>(),
         scene: json['scene'] as String?,
+        mine: json['mine'] == true,
       );
 }
 

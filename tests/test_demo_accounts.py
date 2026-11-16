@@ -144,7 +144,8 @@ check("200", r.status_code, 200)
 cards = r.json()["cards"]
 latest = {}
 for c in cards:
-    latest.setdefault(c["display_name"], c)
+    if not c["mine"]:
+        latest.setdefault(c["display_name"], c)
 check("4 位朋友都有卡", len(latest), 4)
 check("各自的場景", {n: c["scene"] for n, c in latest.items()},
       {"Mia (demo)": "lake", "Leo (demo)": "campfire", "Yuki (demo)": "rooftop", "Ken (demo)": "treehouse"})

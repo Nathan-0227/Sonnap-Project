@@ -98,7 +98,8 @@ def leaked(payload):
 
 
 def feed():
-    return client.get(f"/friends/feed?user_id={alice}").json()["cards"]
+    """朋友的卡（自己的卡另外測）。"""
+    return [c for c in client.get(f"/friends/feed?user_id={alice}").json()["cards"] if not c["mine"]]
 
 
 print("【1】預設：行為開、其他關")
@@ -119,6 +120,12 @@ check("放下手機時刻 01:12、晚了", (cards[0]["items"]["phone_down_time"]
 check("⚠️ 沒打開的值一個字都不出後端（動態卡）", leaked(client.get(f"/friends/feed?user_id={alice}").json()), [])
 check("⚠️ 摘要與單一朋友也一樣", leaked(client.get(f"/friends?user_id={alice}").json())
       + leaked(client.get(f"/friends/{code_b}?user_id={alice}").json()), [])
+
+own = [c for c in client.get(f"/friends/feed?user_id={bob}").json()["cards"] if c["mine"]]
+check("Bob 自己的動態牆也有自己那一晚（mine）", [(c["display_name"], c["date"]) for c in own], [("Bob", NIGHT)])
+check("自己的卡＝朋友看到的那張（照分享設定，不多給）", own[0]["items"], cards[0]["items"])
+check("Alice 沒有夜晚 → 沒有自己的卡",
+      [c for c in client.get(f"/friends/feed?user_id={alice}").json()["cards"] if c["mine"]], [])
 
 print("\n【2】打開才出現，數字跟本人 /home 同一份")
 r = client.patch("/sharing", json={"user_id": bob, "items": {
