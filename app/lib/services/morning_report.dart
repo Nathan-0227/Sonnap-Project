@@ -12,6 +12,7 @@ import 'bed_marks.dart';
 import 'camera_insights.dart';
 import 'game_service.dart';
 import 'morning_rating.dart';
+import 'pet_notes.dart';
 import 'user_identity.dart';
 
 /// 早晨報告（2026-11-12 定案，版面 11-13 依示意圖重做）：滑完 Slide to get up
@@ -31,8 +32,8 @@ import 'user_identity.dart';
 ///
 /// ⚠️ 心情只在有分數時才用（使用者定：還在等資料時畫睡姿小狗）。
 ///
-/// ⚠️ 「From your buddy」那段（AI）與小建議都來自 `/night-summary`，**照抄**。
-///    小建議由後端從 12 句裡逐字挑（behavior/morning_tips.py），Dart 不挑也不改字。
+/// ⚠️ 寵物 notes（AI 總結＋建議，2026-11-17 起取代夢境日記與「From your buddy」）
+///    來自 `/night-summary`，**照抄**（見 services/pet_notes.dart）。Dart 不挑也不改字。
 const String kWaitingForWatch = 'Waiting for your watch data';
 
 /// 不是剛結束的那一晚、又沒有分數時的說法。
@@ -60,16 +61,6 @@ ChangeDirection? changeOf(double? now, double? before) {
   final d = (now - before).round();
   if (d == 0) return ChangeDirection.same;
   return d > 0 ? ChangeDirection.up : ChangeDirection.down;
-}
-
-/// 小建議。`kind` 是 tip（下次可以怎麼做）或 note（只解釋這一晚）。
-@immutable
-class ReportTip {
-  final String kind;
-  final String text;
-  const ReportTip({required this.kind, required this.text});
-
-  bool get isNote => kind == 'note';
 }
 
 @immutable
@@ -113,8 +104,6 @@ class MorningReport {
   /// 沒有後端時只有打包檔最新那一晚有。
   final SleepStages? stages;
 
-  /// 夢境日記。只有打包檔最新那一晚有，而且是電腦上生成的，早上通常還沒有。
-  final String? dream;
 
   /// 前一個日曆日的 Garmin 白天資料（`/home` 的 `yesterday`，2026-11-13）。只呈現、不計分；
   /// 沒有後端或那天沒資料是 null，報告整塊不畫。
@@ -177,12 +166,8 @@ class MorningReport {
   /// 攝影機那一晚。只顯示後端寫好的「跟你平常比」那句（不計分）。
   final CameraNight? camera;
 
-  // ── From your buddy（/night-summary） ──
-  final String? summaryText;
-
-  /// llm 或 fallback。
-  final String? summarySource;
-  final ReportTip? tip;
+  /// 寵物 notes（/night-summary）。null＝沒有內容或還沒拿到，日記本不出現。
+  final PetNotes? notes;
 
   // ── 等級與這一晚的 XP：全部照抄後端 /game ──
   /// null = 沒有後端或讀不到 /game，整塊不畫。
@@ -224,7 +209,6 @@ class MorningReport {
     this.remMinutes,
     this.remMeasured = false,
     this.stages,
-    this.dream,
     this.yesterday,
     this.heartRate,
     this.movement,
@@ -248,9 +232,7 @@ class MorningReport {
     this.efficiencyKind,
     this.efficiencyCaveat,
     this.camera,
-    this.summaryText,
-    this.summarySource,
-    this.tip,
+    this.notes,
     this.level,
     this.xpIntoLevel,
     this.xpLevelSize,
@@ -285,10 +267,7 @@ class MorningReport {
     MorningRating? rating,
     String? ratingLabel,
     CameraNight? camera,
-    String? summaryText,
-    String? summarySource,
-    ReportTip? tip,
-    bool clearSummary = false,
+    PetNotes? notes,
     int? level,
     int? xpIntoLevel,
     int? xpLevelSize,
@@ -318,7 +297,6 @@ class MorningReport {
       remMinutes: remMinutes,
       remMeasured: remMeasured,
       stages: stages,
-      dream: dream,
       yesterday: yesterday,
       heartRate: heartRate,
       movement: movement,
@@ -342,13 +320,7 @@ class MorningReport {
       efficiencyKind: efficiencyKind,
       efficiencyCaveat: efficiencyCaveat,
       camera: camera ?? this.camera,
-      summaryText: clearSummary
-          ? summaryText
-          : (summaryText ?? this.summaryText),
-      summarySource: clearSummary
-          ? summarySource
-          : (summarySource ?? this.summarySource),
-      tip: clearSummary ? tip : (tip ?? this.tip),
+      notes: notes ?? this.notes,
       level: replaceGame ? level : this.level,
       xpIntoLevel: replaceGame ? xpIntoLevel : this.xpIntoLevel,
       xpLevelSize: replaceGame ? xpLevelSize : this.xpLevelSize,
@@ -401,25 +373,11 @@ class MorningReport {
     );
   }
 
-  /// 接上 `/night-summary` 的回應。status 不是 ok（例如還在等手錶）就不畫那張卡。
-  MorningReport withSummary(Map<String, dynamic>? json) {
-    if (json == null || json['date'] != date || json['status'] != 'ok') {
-      return this;
-    }
-    final text = json['text'] as String?;
-    final tipJson = (json['tip'] as Map?)?.cast<String, dynamic>();
-    final tipText = tipJson?['text'] as String?;
-    return _copy(
-      clearSummary: true,
-      summaryText: text == null || text.trim().isEmpty ? null : text,
-      summarySource: json['source'] as String?,
-      tip: tipText == null || tipText.isEmpty
-          ? null
-          : ReportTip(
-              kind: tipJson?['kind'] as String? ?? 'tip',
-              text: tipText,
-            ),
-    );
+  /// 接上 `/night-summary` 的回應（寵物 notes）。日期對不上、沒有內容就維持原樣。
+  /// waiting（手錶還沒到）也收：那時只有行為那幾條原句，日記本照樣出現。
+  MorningReport withNotes(Map<String, dynamic>? json) {
+    final parsed = PetNotes.fromJson(json, date: date);
+    return parsed == null ? this : _copy(notes: parsed);
   }
 }
 
@@ -500,15 +458,12 @@ MorningReport buildMorningReport({
     bedEnd = marks?.endAt;
   }
 
-  // 打包檔最新那一晚就是這一晚 → 才拿它的 Sleep Stages 與夢境
+  // 打包檔最新那一晚就是這一晚 → 才拿它的 Sleep Stages
   final latest = session != null && session.history.isNotEmpty
       ? session.history.last
       : null;
   final sameNightAsBundle = latest != null && latest.date == date;
   final bundleStages = sameNightAsBundle ? session!.metrics.sleepStages : null;
-  final dream = sameNightAsBundle && session!.aiContent.hasDream
-      ? session.aiContent.dreamSummary
-      : null;
 
   if (home != null && home['date'] == date) {
     final behavior = (home['behavior'] as Map?)?.cast<String, dynamic>();
@@ -567,7 +522,6 @@ MorningReport buildMorningReport({
           ? (SleepStages.fromJsonOrNull(metrics?['sleep_stages']) ??
                 bundleStages)
           : null,
-      dream: dream,
       // 白天資料跟睡眠分數無關：那一天有就畫（手錶睡眠還沒到也一樣）
       yesterday: YesterdayActivity.fromJsonOrNull(home['yesterday']),
       heartRate: has
@@ -629,7 +583,6 @@ MorningReport buildMorningReport({
       deepMinutes: entry.deepMinutes?.toDouble(),
       remMeasured: bundleStages?.remMeasured ?? false,
       stages: bundleStages,
-      dream: dream,
       source: ReportSource.bundled,
     );
   }
@@ -639,18 +592,24 @@ MorningReport buildMorningReport({
     bedStart: bedStart,
     bedEnd: bedEnd,
     timeInBedMinutes: _minutesBetween(bedStart, bedEnd),
-    dream: dream,
     source: ReportSource.phoneOnly,
   );
 }
+
+/// 拿某一晚的寵物 notes（`/night-summary`）。[generate] = false 時後端絕不呼叫 AI。
+/// ⚠️ 沒有分數時一律帶 false：手錶還沒到，後端本來就不會生成，App 也不要求。
+typedef NotesLoader = Future<Map<String, dynamic>?> Function({bool generate});
 
 /// 讀 `/home?date=` 與 `/night-summary`。可以換成假的來測。
 abstract class MorningReportSource {
   /// 成功回整份 JSON；沒有後端、沒有帳號、連不到都回 null。
   Future<Map<String, dynamic>?> fetchNight(String date);
 
-  /// `/night-summary`。同上，失敗回 null（畫面就不畫那張卡）。
-  Future<Map<String, dynamic>?> fetchSummary(String date);
+  /// `/night-summary`（寵物 notes）。同上，失敗回 null（日記本不出現）。
+  ///
+  /// [generate] = false：後端**絕不呼叫 AI**，只回已經存好的那一份（沒有就回原句）。
+  /// 🔴 首頁一律用 false——AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤）。
+  Future<Map<String, dynamic>?> fetchSummary(String date, {bool generate = true});
 }
 
 class MorningReportService implements MorningReportSource {
@@ -673,20 +632,22 @@ class MorningReportService implements MorningReportSource {
       _get('/home', date, timeout);
 
   @override
-  Future<Map<String, dynamic>?> fetchSummary(String date) =>
-      _get('/night-summary', date, summaryTimeout);
+  Future<Map<String, dynamic>?> fetchSummary(String date, {bool generate = true}) =>
+      _get('/night-summary', date, generate ? summaryTimeout : timeout,
+          extra: generate ? const {} : const {'generate': 'false'});
 
   Future<Map<String, dynamic>?> _get(
     String path,
     String date,
-    Duration wait,
-  ) async {
+    Duration wait, {
+    Map<String, String> extra = const {},
+  }) async {
     if (baseUrl.trim().isEmpty) return null;
     final userId = await identity.currentUserId();
     if (userId == null) return null;
     final uri = Uri.parse(
       '$baseUrl$path',
-    ).replace(queryParameters: {'user_id': userId, 'date': date});
+    ).replace(queryParameters: {'user_id': userId, 'date': date, ...extra});
     final client = HttpClient()..connectionTimeout = timeout;
     try {
       final request = await client.getUrl(uri).timeout(timeout);
