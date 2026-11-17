@@ -12,7 +12,7 @@ import 'streak_card.dart' show speciesOf;
 /// 2026-11-18 改成**整個畫面都是小鎮、上下左右都能滑**（使用者給 Finch 的截圖）：一張從斜上方看的
 /// 卡通的夜晚村莊（使用者生成的 `town_map.jpg`，有河、橋、池塘），十間房子，正中間有柵欄那間是你家，
 /// 朋友照加好友的先後住進離你家近的房子，寵物站在房子右邊那塊亮草地上。**昨晚準時放下手機、而且有分享 On time 的人
-/// 頭上一顆會閃的星星**（腳下的金光 11-18 拿掉：那塊草地本來就亮，看不出來）；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，
+/// 頭頂一圈會閃的閃光**（腳下的金光 11-18 拿掉：那塊草地本來就亮，看不出來）；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，
 /// 不變暗、不說原因（後端也只給 glow: false）。
 ///
 /// ⚠️ 小鎮裡**不畫心情**（所有寵物同一個樣子）；心情只在點開的小卡上、而且要他有分享。
@@ -63,10 +63,12 @@ class TownPetSprite extends StatelessWidget {
   );
 }
 
-/// 頭上那顆星：慢慢閃；系統開「減少動態效果」時靜止。
+/// 頭頂一圈閃光（2026-11-18 使用者給 Finch 的截圖：一顆小星星不夠明顯）。
+/// 三顆四角閃光圍著頭（左、上、右），各自錯開時間一閃一閃，外面一圈暖色光暈。
+/// 系統開「減少動態效果」時靜止。[size]＝整圈的寬度。
 class TownStar extends StatefulWidget {
   final double size;
-  const TownStar({super.key, this.size = 18});
+  const TownStar({super.key, this.size = 60});
 
   @override
   State<TownStar> createState() => _TownStarState();
@@ -76,7 +78,7 @@ class _TownStarState extends State<TownStar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: const Duration(milliseconds: 2400),
   );
 
   @override
@@ -85,9 +87,9 @@ class _TownStarState extends State<TownStar>
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
       _c
         ..stop()
-        ..value = 1;
+        ..value = 0.25;
     } else if (!_c.isAnimating) {
-      _c.repeat(reverse: true);
+      _c.repeat();
     }
   }
 
@@ -99,42 +101,61 @@ class _TownStarState extends State<TownStar>
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.size;
+    final w = widget.size;
     return AnimatedBuilder(
       animation: _c,
-      builder: (context, _) {
-        final t = Curves.easeInOut.transform(_c.value);
-        return Opacity(
-          opacity: 0.6 + 0.4 * t,
-          child: Transform.scale(
-            scale: 0.88 + 0.12 * t,
-            child: SizedBox(
-              width: s * 2.2,
-              height: s * 2.2,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          kTownGold.withValues(alpha: 0.55),
-                          kTownGold.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
-                    child: SizedBox(width: s * 2.2, height: s * 2.2),
-                  ),
-                  Icon(Icons.star_rounded, color: kTownGold, size: s),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      builder: (context, _) => Opacity(
+        opacity: 0.8 + 0.2 * math.sin(2 * math.pi * _c.value),
+        child: CustomPaint(
+          size: Size(w, w * 0.55),
+          painter: _SparklePainter(_c.value),
+        ),
+      ),
     );
   }
+}
+
+class _SparklePainter extends CustomPainter {
+  final double t;
+  _SparklePainter(this.t);
+
+  /// (x, y, 半徑, 錯開的相位)，以整圈的寬高為比例。
+  static const _sparkles = [
+    (0.12, 0.78, 0.15, 0.0),
+    (0.50, 0.22, 0.20, 0.33),
+    (0.88, 0.76, 0.14, 0.66),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final (fx, fy, fr, phase) in _sparkles) {
+      final c = Offset(fx * size.width, fy * size.height);
+      final pulse = 0.5 + 0.5 * math.sin(2 * math.pi * (t + phase));
+      final r = fr * size.width * (0.7 + 0.3 * pulse);
+      canvas.drawCircle(
+        c,
+        r * 2.0,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              kTownGold.withValues(alpha: 0.75 * (0.6 + 0.4 * pulse)),
+              kTownGold.withValues(alpha: 0),
+            ],
+          ).createShader(Rect.fromCircle(center: c, radius: r * 2.0)),
+      );
+      final path = Path()
+        ..moveTo(c.dx, c.dy - r)
+        ..quadraticBezierTo(c.dx, c.dy, c.dx + r, c.dy)
+        ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy + r)
+        ..quadraticBezierTo(c.dx, c.dy, c.dx - r, c.dy)
+        ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy - r)
+        ..close();
+      canvas.drawPath(path, Paint()..color = const Color(0xFFFFF6DC));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklePainter old) => old.t != t;
 }
 
 /// 名牌：沒有框、只有字，像地圖上的地名（2026-11-18 使用者：深色膠囊框太突兀）。
@@ -151,17 +172,21 @@ class TownNameTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text.rich(
-    TextSpan(children: [
-      TextSpan(
-        text: person.mine ? 'You' : person.displayName.replaceAll(' (demo)', ''),
-        style: TextStyle(
-          color: person.mine ? const Color(0xFFE2D8FF) : Colors.white,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w800,
-          shadows: _shadow,
+    TextSpan(
+      children: [
+        TextSpan(
+          text: person.mine
+              ? 'You'
+              : person.displayName.replaceAll(' (demo)', ''),
+          style: TextStyle(
+            color: person.mine ? const Color(0xFFE2D8FF) : Colors.white,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            shadows: _shadow,
+          ),
         ),
-      ),
-    ]),
+      ],
+    ),
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
     textAlign: TextAlign.center,
@@ -250,8 +275,13 @@ class _TownMapState extends State<TownMap> {
                         const ColoredBox(color: Color(0xFF101A3F)),
                   ),
                 ),
-                if (widget.onAddFriend != null && people.length < kTownLots.length)
-                  _inviteSpot(kTownLots[people.length].dx * mapW, kTownLots[people.length].dy * mapH, mapW),
+                if (widget.onAddFriend != null &&
+                    people.length < kTownLots.length)
+                  _inviteSpot(
+                    kTownLots[people.length].dx * mapW,
+                    kTownLots[people.length].dy * mapH,
+                    mapW,
+                  ),
                 for (final (i, p) in people.indexed)
                   _townie(
                     p,
@@ -292,9 +322,16 @@ class _TownMapState extends State<TownMap> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0x33FFFFFF),
-                  border: Border.all(color: const Color(0xAAFFFFFF), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xAAFFFFFF),
+                    width: 1.5,
+                  ),
                 ),
-                child: Icon(Icons.add_rounded, color: Colors.white, size: d * 0.6),
+                child: Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: d * 0.6,
+                ),
               ),
               const SizedBox(height: 2),
               const Text(
@@ -333,19 +370,20 @@ class _TownMapState extends State<TownMap> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: starBox,
-                child: p.glow
-                    ? TownStar(
-                        key: Key('town-glow-${p.handle}'),
-                        size: starBox * 0.8,
-                      )
-                    : null,
-              ),
+              SizedBox(height: starBox),
               Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.bottomCenter,
                 children: [
+                  // 閃光圍著頭：從頭頂上方一點開始，兩側往下到耳朵旁
+                  if (p.glow)
+                    Positioned(
+                      top: -pet * 0.32,
+                      child: TownStar(
+                        key: Key('town-glow-${p.handle}'),
+                        size: pet * 1.35,
+                      ),
+                    ),
                   // 首頁那隻寵物自己可以點（會有反應），會把點擊吃掉 → 小鎮裡交給外層
                   IgnorePointer(
                     child: TownPetSprite(species: p.petSpecies, size: pet),
