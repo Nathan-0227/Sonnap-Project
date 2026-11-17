@@ -141,42 +141,38 @@ class _TownStarState extends State<TownStar>
   }
 }
 
+/// 名牌：沒有框、只有字，像地圖上的地名（2026-11-18 使用者：深色膠囊框太突兀）。
+/// 白字加一圈柔和的深色陰影才讀得到；你自己用淡紫色。
 class TownNameTag extends StatelessWidget {
   final TownPerson person;
   const TownNameTag({super.key, required this.person});
 
+  static const _shadow = [
+    Shadow(color: Color(0xCC0B1024), blurRadius: 4),
+    Shadow(color: Color(0x990B1024), blurRadius: 8),
+  ];
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-    decoration: BoxDecoration(
-      color: const Color(0x99101634),
-      borderRadius: BorderRadius.circular(12),
-      border: person.mine ? Border.all(color: const Color(0xFFB9A6FF)) : null,
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            person.mine ? 'You' : person.displayName.replaceAll(' (demo)', ''),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: person.mine ? const Color(0xFFD9CCFF) : Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+  Widget build(BuildContext context) => Text.rich(
+    TextSpan(children: [
+      TextSpan(
+        text: person.mine ? 'You' : person.displayName.replaceAll(' (demo)', ''),
+        style: TextStyle(
+          color: person.mine ? const Color(0xFFE2D8FF) : Colors.white,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+          shadows: _shadow,
         ),
-        if (person.demo) ...[
-          const SizedBox(width: 4),
-          const Text(
-            'Demo',
-            style: TextStyle(color: Color(0x99FFFFFF), fontSize: 10),
-          ),
-        ],
-      ],
-    ),
+      ),
+      if (person.demo)
+        const TextSpan(
+          text: ' · demo',
+          style: TextStyle(color: Color(0xBBFFFFFF), fontSize: 10, fontWeight: FontWeight.w600, shadows: _shadow),
+        ),
+    ]),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    textAlign: TextAlign.center,
   );
 }
 
@@ -328,8 +324,8 @@ class _TownMapState extends State<TownMap> {
     const boxW = 110.0;
     return Positioned(
       left: x - boxW / 2,
-      // 往下 0.35 隻：寵物圖腳下有留白，不往下的話看起來浮在草地上緣（11-18 使用者）
-      top: y - pet - starBox + pet * 0.35,
+      // 往下 0.2 隻：寵物圖腳下有留白，不往下的話看起來浮在草地上緣（11-18 使用者）
+      top: y - pet - starBox + pet * 0.2,
       width: boxW,
       child: GestureDetector(
         key: Key('town-${p.handle}'),
@@ -360,7 +356,6 @@ class _TownMapState extends State<TownMap> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
               TownNameTag(person: p),
             ],
           ),
