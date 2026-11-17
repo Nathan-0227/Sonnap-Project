@@ -49,7 +49,7 @@ TIPS = {
     "T7": ("tip", "Regular physical activity is linked with better sleep quality."),
     "T8": ("tip", "Jotting down tomorrow's to-do list before bed helped people fall asleep faster in one sleep-lab study."),
     "T9": ("note", "When you're unwell, your body often needs more sleep — rest is part of recovering."),
-    "T10": ("note", "If you crossed time zones, your body clock can take a few days to catch up."),
+    "T10": ("note", "If you crossed time zones, your body clock can take a few days to a week to catch up."),
     "T11": ("note", "Being woken up by someone else is out of your control — tonight is a fresh start."),
     "T12": ("tip", "Noise at night can disturb sleep even when you don't fully wake — a quieter bedroom helps."),
     # ── 生理狀況（2026-11-18 使用者審過；出處見研究文件「生理狀況」一節）──
