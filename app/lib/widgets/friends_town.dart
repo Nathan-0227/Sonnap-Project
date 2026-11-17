@@ -131,7 +131,7 @@ class _SparklePainter extends CustomPainter {
     for (final (fx, fy, fr, phase) in _sparkles) {
       final c = Offset(fx * size.width, fy * size.height);
       final pulse = 0.5 + 0.5 * math.sin(2 * math.pi * (t + phase));
-      final r = fr * size.width * (0.7 + 0.3 * pulse);
+      final r = fr * size.width * 1.4 * (0.7 + 0.3 * pulse);
       canvas.drawCircle(
         c,
         r * 2.0,
@@ -150,7 +150,17 @@ class _SparklePainter extends CustomPainter {
         ..quadraticBezierTo(c.dx, c.dy, c.dx - r, c.dy)
         ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy - r)
         ..close();
-      canvas.drawPath(path, Paint()..color = const Color(0xFFFFF6DC));
+      // 光束：中心白亮，往四個尖端漸漸變透明（照 Finch 的閃光，2026-11-18 使用者）
+      canvas.drawPath(
+        path,
+        Paint()
+          ..shader = RadialGradient(
+            colors: const [Color(0xFFFFFFFF), Color(0xEEFFF6DC), Color(0x00FFE7A8)],
+            stops: const [0.0, 0.3, 1.0],
+          ).createShader(Rect.fromCircle(center: c, radius: r)),
+      );
+      // 中心一點更亮的核
+      canvas.drawCircle(c, r * 0.12, Paint()..color = Colors.white);
     }
   }
 
