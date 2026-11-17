@@ -5,17 +5,17 @@ ai/chat.py —— 睡眠助理的問答（B6）。
 四道驗證才交給 App。
 
 ═══════════════════════════════════════════════════════════════════
-四道驗證（跟夢境日記共用同一份定義，不在這裡另寫一份）
+四道驗證（定義在 ai/text_guards.py，寵物 notes 也共用，不在這裡另寫一份）
 ═══════════════════════════════════════════════════════════════════
 
-    1. 醫療用語禁詞       generate_advice.BANNED_WORDS，**完整單詞比對**
+    1. 醫療用語禁詞       text_guards.BANNED_WORDS，**完整單詞比對**
                           （treat 不能命中 retreat）
     2. 數字必須在事實裡   回答裡的每一個數字都要出現在事實區塊
-    3. 中文洩漏           generate_advice.CJK_LEAK_PATTERN（輸出固定英文）
-    4. 拼字數值           generate_advice.SPELLED_NUMERAL_PATTERN——
+    3. 中文洩漏           text_guards.CJK_LEAK_PATTERN（輸出固定英文）
+    4. 拼字數值           text_guards.SPELLED_NUMERAL_PATTERN——
                           **必須有 point 才擋**，"give it one more try" 要放行
 
-⚠️ 從 generate_advice import 而不是抄一份：兩份禁詞清單漂移時，夢境擋得住的詞
+⚠️ 從 text_guards import 而不是抄一份：兩份禁詞清單漂移時，notes 擋得住的詞
    聊天擋不住，而且不會有任何錯誤訊息。
 ⚠️ 驗證寫寬很省事，但誤判的代價是使用者拿不到答案（方法論第 5 點）。
    tests/test_chat.py 同時驗「擋得住」與「不誤傷」。
@@ -35,12 +35,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import llm_client  # noqa: E402
-from generate_advice import (  # noqa: E402
+from env_utils import load_env_file  # noqa: E402
+from text_guards import (  # noqa: E402
     BANNED_WORDS,
     CJK_LEAK_PATTERN,
     NUMBER_PATTERN,
     SPELLED_NUMERAL_PATTERN,
 )
+
+# 讀 ai/.env 的金鑰。⚠️ 原本由 generate_advice.py 在 import 時讀（chat 間接沾光），
+# 2026-11-18 夢境程式刪掉後搬到這裡——少了這一行，助理與寵物 notes 會悄悄變成
+# 「永遠沒有金鑰」而且不會報錯。不覆寫已存在的環境變數（測試先設成空字串就擋得住）。
+load_env_file()
 
 # ── 測試替換點（測試換成假的，永遠不打真的 API）──────────────────
 complete = llm_client.complete_json
