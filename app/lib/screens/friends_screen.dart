@@ -287,7 +287,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    return Center(
+    // ⚠️ 靠上對齊，不能用 Center：內容比螢幕短時（小鎮分頁）Center 會把整頁垂直置中，
+    //    上面空一大塊（2026-11-18 實機）。以前頁首有很高的 Streak 大卡才看不出來。
+    return Align(
+      alignment: Alignment.topCenter,
       child: SizedBox(
         width: MediaQuery.of(context).size.width > 650 ? 650 : MediaQuery.of(context).size.width,
         child: SingleChildScrollView(

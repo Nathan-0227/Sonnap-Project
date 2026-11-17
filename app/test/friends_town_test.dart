@@ -400,6 +400,11 @@ void main() {
     expect(find.byKey(const Key('my-invite-code')), findsOneWidget);
   });
 
+  testWidgets('內容比螢幕短時，標題仍在最上面（不被垂直置中）', (tester) async {
+    await pump(tester, TownStub());
+    expect(tester.getTopLeft(find.text('Friends ✨')).dy, lessThan(40));
+  });
+
   testWidgets('【7】連不到後端 → 照實說，小鎮裡一個人都沒有', (tester) async {
     await pump(tester, TownStub(town: const FriendsResult(FriendsStatus.failed)));
     expect(find.byKey(const Key('town-unreachable')), findsOneWidget);
