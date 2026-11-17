@@ -1901,9 +1901,14 @@ SUMMARY_RETRY_MINUTES = 60
 def get_night_summary(
     user_id: str = Query(...),
     date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    generate: bool = Query(True),
 ):
     """
     寵物 notes（2026-11-17 起取代夢境日記與「From your buddy」）：AI 的總結＋0–3 條建議。
+
+    generate=false：**絕不呼叫 AI**，只回已經存好的那一份，沒有就回原句（不存）。
+    首頁用這個——🔴 AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤），
+    首頁一打開就生成的話，寫出來的不含自評，補了自評又要再花一次額度。
 
     回傳：
       status   "ok" | "waiting"（手錶資料還沒到）
@@ -1989,8 +1994,8 @@ def get_night_summary(
             if age < SUMMARY_RETRY_MINUTES:
                 return fallback()
 
-    if not ns.key_available():
-        # 沒設定金鑰：一次都沒試，不寫進資料庫（設定好之後下一次打開就會生成）
+    if not generate or not ns.key_available():
+        # 不准生成（首頁）／沒設定金鑰：一次都沒試，不寫進資料庫
         return fallback()
     try:
         result = ns.summarize_night(facts, tip_list)

@@ -230,6 +230,9 @@ check("舊版 App 的 tip 欄位＝第一條原句", r["tip"]["id"], "P2")
 v_fallback = r["version"]
 
 ns.key_available = lambda: True
+r = client.get(f"/night-summary?user_id={u}&date={D}&generate=false").json()
+check("⚠️ generate=false（首頁）→ 有金鑰也不呼叫 AI、不存", (len(CALLS), r["source"], r["summary"],
+      db.get_night_summary(u, D, db_path=TMP)), (0, "fallback", None, None))
 GOOD = notes("We slept 3h 35m together, 3h 25m less than the night before.",
              ("P2", "Hard workouts that end near bedtime might make our nights shorter, "
                     "so let's wrap them up at least 4 hours before."))
@@ -241,6 +244,8 @@ check("建議用寵物口吻，原句另外附上", (r["tips"][0]["text"], r["ti
 check("呼叫了一次", len(CALLS), 1)
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
 check("⚠️ 再打開一次 → 讀存好的，不再花額度", (len(CALLS), r["summary"]), (1, GOOD["summary"]))
+r = client.get(f"/night-summary?user_id={u}&date={D}&generate=false").json()
+check("generate=false 讀得到已經存好的那一份", (len(CALLS), r["source"], r["summary"]), (1, "llm", GOOD["summary"]))
 ok("事實區塊有寫好的時長（照抄用，不讓 AI 換算）", "3h 25m less" in CALLS[0], "")
 ok("事實區塊有使用者的目標", '"in_bed_by": "23:30"' in CALLS[0], "")
 ok("事實區塊附判讀（AI 不自己判）", f'"judgment": "{mt.BELOW}"' in CALLS[0], "")
