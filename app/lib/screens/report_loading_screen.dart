@@ -30,7 +30,7 @@ class ReportLoadingScreen extends StatefulWidget {
   final MorningReport fallback;
 
   /// AI 那段。null＝沒有後端。
-  final Future<Map<String, dynamic>?> Function()? loadSummary;
+  final NotesLoader? loadSummary;
 
   /// 按下 View sleep report：把準備好的報告交出去（還在路上的 AI 那段一起交）。
   final void Function(PreparedReport prepared) onView;
@@ -109,8 +109,11 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
     }
     final load = widget.loadSummary;
     Future<Map<String, dynamic>?>? pending;
-    // 手錶資料還沒到時後端不會呼叫 AI（回 waiting），不用等
-    if (load != null && report.hasScore) {
+    // 手錶資料還沒到時後端不會呼叫 AI（回 waiting，只有行為那幾條原句）：不用等，
+    // 交給報告畫面在背景接上
+    if (load != null && !report.hasScore) {
+      pending = load(generate: false).catchError((_) => null);
+    } else if (load != null) {
       final summary = load().catchError((_) => null);
       // 用 Timer 而不是 Future.delayed：AI 先回來時要把倒數取消掉
       final first = Completer<bool>(); // true＝AI 先到
@@ -125,7 +128,7 @@ class _ReportLoadingScreenState extends State<ReportLoadingScreen> {
       final arrived = await first.future;
       timer.cancel();
       if (arrived) {
-        report = report.withSummary(json);
+        report = report.withNotes(json);
       } else {
         pending = summary;
       }

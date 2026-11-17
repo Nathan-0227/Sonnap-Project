@@ -1,28 +1,28 @@
-// 夢境日記本（2026-11-14 報告先用，11-15 首頁也改用）：還沒看過就抖一抖＋右上角紅點，
-// 看過就靜止；系統開「減少動態效果」時不抖、紅點照樣在。看過沒看過由呼叫端給（DreamReadStore）。
+// 草地上那本日記（2026-11-14 報告先用，11-15 首頁也改用；11-17 起裡面是寵物 notes，不再是夢）：
+// 還沒看過就抖一抖＋右上角紅點，看過就靜止；系統開「減少動態效果」時不抖、紅點照樣在。
+// 看過沒看過由呼叫端給（NotesReadStore，依 version）。
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'dream_diary.dart';
 
-/// 夢境入口：草地上一本攤開的日記（使用者生成）。讀不到圖時退回小雲。
-/// 早晨報告與首頁共用（2026-11-15 使用者定：首頁不用雲朵了，跟報告一樣）。
-const String kDreamBookAsset = 'assets/moods/dream_book.png';
+/// notes 入口：草地上一本攤開的日記（使用者生成）。讀不到圖時退回程式畫的書本圖示。
+/// 早晨報告與首頁共用。圖檔名沿用 dream_book.png（圖本身沒有夢的元素）。
+const String kNotesBookAsset = 'assets/moods/dream_book.png';
 
-class DreamBook extends StatefulWidget {
+class NotesBook extends StatefulWidget {
   final VoidCallback onTap;
 
-  /// 還沒看過這一晚的夢 → 每隔一下抖一抖（2026-11-14 使用者定）。看過就靜止。
+  /// 還沒看過這一晚（這個 version）的 notes → 每隔一下抖一抖（2026-11-14 使用者定）。看過就靜止。
   final bool unread;
-  const DreamBook({super.key, required this.onTap, required this.unread});
+  const NotesBook({super.key, required this.onTap, required this.unread});
 
   @override
-  State<DreamBook> createState() => _DreamBookState();
+  State<NotesBook> createState() => _NotesBookState();
 }
 
-class _DreamBookState extends State<DreamBook>
+class _NotesBookState extends State<NotesBook>
     with SingleTickerProviderStateMixin {
   /// 抖一次多久、兩次之間停多久。停的時候不排畫面，測試的 pumpAndSettle 才停得下來。
   static const _shake = Duration(milliseconds: 700);
@@ -42,7 +42,7 @@ class _DreamBookState extends State<DreamBook>
   }
 
   @override
-  void didUpdateWidget(covariant DreamBook old) {
+  void didUpdateWidget(covariant NotesBook old) {
     super.didUpdateWidget(old);
     _sync();
   }
@@ -81,7 +81,7 @@ class _DreamBookState extends State<DreamBook>
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Open dream diary',
+      label: "Open your buddy's notes",
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
@@ -92,7 +92,7 @@ class _DreamBookState extends State<DreamBook>
             // 左右搖三下、越搖越小
             final angle = math.sin(t * math.pi * 6) * 0.14 * (1 - t);
             return Transform.rotate(
-              key: const Key('dream-book-shake'),
+              key: const Key('notes-book-shake'),
               angle: angle,
               alignment: Alignment.bottomCenter,
               child: child,
@@ -102,19 +102,18 @@ class _DreamBookState extends State<DreamBook>
             clipBehavior: Clip.none,
             children: [
               Image.asset(
-                kDreamBookAsset,
-                key: const Key('dream-book'),
+                kNotesBookAsset,
+                key: const Key('notes-book'),
                 width: 66,
                 // 高度也要給：圖還沒讀進來時高度是 0，點不到（測試抓到的）
                 height: 64,
                 fit: BoxFit.contain,
-                errorBuilder: (_, _, _) =>
-                    DreamBubble(compact: true, onTap: widget.onTap),
+                errorBuilder: (_, _, _) => const _PaintedBook(),
               ),
               // 沒看過 → 右上角一個紅點（2026-11-14 使用者定）。減少動態效果時不抖，紅點照樣在。
               if (widget.unread)
                 Positioned(
-                  key: const Key('dream-book-unread-dot'),
+                  key: const Key('notes-book-unread-dot'),
                   // 圖的上半是透明的，書落在下半——紅點貼在書的右上角
                   right: 6,
                   top: 16,
@@ -134,6 +133,24 @@ class _DreamBookState extends State<DreamBook>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 日記本圖讀不到時的退路：程式畫的書本圖示（大小同圖，點得到）。
+class _PaintedBook extends StatelessWidget {
+  const _PaintedBook();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      key: Key('notes-book-painted'),
+      width: 66,
+      height: 64,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Icon(Icons.menu_book_rounded, size: 40, color: Color(0xFFF7F4FF)),
       ),
     );
   }

@@ -17,7 +17,7 @@
 ## 專案是什麼
 
 Sonnap 是結合「睡眠監測」與「AI 寵物陪伴」的 App。攝影機/穿戴裝置偵測使用者睡眠狀態，
-轉換成虛擬寵物的心情與活動，並用 AI（**Claude API**，見 `ai/llm_client.py`）生成「夢境日記」。詳見 [README.md](README.md)。
+轉換成虛擬寵物的心情與活動，並用 AI（**Claude API**，見 `ai/llm_client.py`）寫「寵物 notes」（每晚的總結＋從有出處的清單挑的建議；2026-11-17 起取代夢境日記）。詳見 [README.md](README.md)。
 
 團隊分工：PM/系統整合、UI/UX（Figma）、App 前端、影像工程（OpenCV）、AI/數據處理，共 5 人。
 
@@ -396,8 +396,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 |---|---|
 | 頂端只有小字「Hi, 暱稱!」＋大字「Welcome to Sonnap」（2026-11-13 使用者定），**不分早午晚、不放後端的 `header_message`**；暱稱一律來自帳號，沒有帳號是 `Hi, Sleeper!` | 不得拿任何人的名字當佔位符（見上方） |
 | 一週心情列、圖例、寵物旁的心情標籤畫**狗頭表情**（`assets/moods/dog_*.png`，使用者生成），**不用起床自評那五顆圓臉**；不認得的心情退回 bored | 圓臉是「你覺得怎樣」、狗頭是「寵物的心情」，共用一套臉同一個早上會看到兩個意思 |
-| 夢境日記：**首頁與早晨報告都是草地上一本攤開的日記**（`widgets/dream_book.dart`，圖 `assets/moods/dream_book.png` 使用者生成；首頁 11-15 取代原本頭邊的雲朵，使用者定）。首頁放在小狗右下、貼著草地（心情標籤 11-15 起在小狗正下方中間）；報告放右下草地。**那一晚的夢還沒看過就抖＋右上角紅點**，看過就靜止（看過沒看過兩邊共用 `DreamReadStore`），減少動態效果時不抖、紅點照樣在。點開才看全文（`widgets/dream_diary.dart`，標題下寫那一晚的日期）。**沒有夢就不出現、小狗不說「沒做夢」**。`DreamBubble`（雲朵）只剩讀不到日記本圖時的退路 | 使用者定。沒有夢是資料沒來，不是牠沒做夢 |
-| 首頁右上**沒有夢境日記圖示**（11-15 使用者定：草地上那本日記就是入口），只剩衣櫃、獎勵、設定 | — |
+| **寵物 notes**（2026-11-17 取代夢境日記）：**首頁與早晨報告都是草地上一本攤開的日記**（`widgets/notes_book.dart`，圖 `assets/moods/dream_book.png` 使用者生成）。首頁放在小狗右下、貼著草地；報告放右下草地。點開是 AI 的總結＋從清單挑的建議（`widgets/pet_notes_sheet.dart`，標題 **Your buddy's notes**——寵物沒有名字，小狗、貓都適用；標題下寫那一晚的日期）。**還沒看過這個 version 就抖＋右上角紅點**，看過就靜止（`services/pet_notes.dart` 的 `NotesReadStore` 存**看過的 version**，首頁與報告共用；內容換了紅點再亮），減少動態效果時不抖、紅點照樣在。**沒有內容（沒總結、沒建議）就不出現**。🔴 **首頁一律 `generate=false`**（絕不觸發 AI）；生成只在報告流程（自評之後），報告關掉後首頁重新拿一次。沒有分數時報告與等待畫面也帶 `generate=false`（`NotesLoader`）。讀不到日記本圖時退回程式畫的書本圖示 | 使用者定。AI 那段要讀自評，首頁一打開就生成會不含自評、還多花一次額度（`pet_notes_test.dart` 守著）|
+| 首頁右上**沒有 notes 圖示**（11-15 使用者定：草地上那本日記就是入口），只剩衣櫃、獎勵、設定 | — |
 | **導覽列**（2026-11-13 使用者定，照參考圖）：只有圖示、沒有文字；Home · Friends ｜ **中間一顆凸出的紫色圓鈕＝開始睡覺**（畫睡著的狗頭 `dog_tired.png`，缺圖退回月亮）：**先滑出 Sleep schedule**（同時鐘卡那個轉盤，按鈕字換成 Start Sleep），按了才開始；把面板關掉＝不開始、不記上床。面板背景是使用者生成的夜晚窗景 `assets/backgrounds/schedule_night.jpg`（三個入口共用；讀不到退回深藍）｜ Insights · Assistant。**Settings 搬到首頁右上角的人像**，按返回回首頁。選中的分頁紫色＋底下小點，圖示保留朗讀名稱（`widgets/moon_nav_bar.dart`） | 中間那顆只送一個請求（`StartSleepRequests`），**開始睡覺的流程只在首頁一份**；在別的分頁按會先切回 Home，起床報告才接得下去。⚠️ Settings 刻意留在 IndexedStack（不另開一頁）：首頁與設定頁共用就寢時間，要即時同步（`bedtime_sync_test`）。⚠️ 頁面延伸到導覽列後面（extendBody），但內容只排到導覽列上緣：高度用 body 的 `padding.bottom`，**不能用 `viewPadding`**（Scaffold 已經拿掉系統那段，實機量過，首頁最底那列會被蓋住） |
 | **等級徽章在寵物正上方**，不在標題旁（2026-11-13 使用者定）；沒有後端不畫 | `game_test.dart` 量位置守著 |
 | **寵物用隊友的 2D 分層寵物**（`lib/pet2d/`，2026-11-15 換成 v4.6.45：**小狗四種心情都有圖、多一隻灰色虎斑貓**，經 `widgets/home_pet.dart` 這個插槽）。**設定頁「Pet」選小狗或貓**（`services/pet_choice.dart`，**只存在手機上**、預設小狗、不認得的值當小狗）。**缺圖的心情畫 bored，絕不畫 happy**（`PetDefinition.resolve()`，隊友原版退回 happy）。⚠️ 起床／等報告／睡覺的 GIF 與睡姿圖**只有小狗版**：選貓時走各自的程式版退路（寵物是 `HomePet`，所以是貓；睡覺畫面是 tired 的貓）；**一週心情列與導覽列的狗頭圖示還沒有貓的版本**（待辦：請隊友補貓頭） | 焦慮的夜晚畫成開心的寵物＝紅線 5。`pet2d_test.dart` 用一隻故意缺圖的假寵物守退路、守兩隻四種心情都畫自己的圖；`pet_choice_test.dart` 守選貓時三個畫面都不出現小狗 GIF（拿掉判斷三條都會紅） |
@@ -519,8 +519,8 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 按 View sleep report）→ 報告；首頁一週心情列點任一天、補填自評之後則直接開報告（不經等待畫面）。`screens/morning_report_screen.dart`，合併規則在
 `services/morning_report.dart` 的 `buildMorningReport()`（純函式）。
 
-版面（11-13 依示意圖定案，11-14 依參考圖改）：日期 → **一條半圓線**的分數（只有線、不墊深色底盤；數字在弧裡、小狗頭上）＋小狗置中坐在弧下的草坡（腳下淡影子）＋左下起床自評（只有臉＋字、不寫 You felt、不加框，11-14 使用者定）＋右下夢境日記本（**那一晚的夢還沒看過就每隔幾秒抖一下、右上角一個紅點**，看過或減少動態效果時靜止；看過沒看過用首頁同一份 `DreamReadStore`） → 那句話置中（背景是使用者生成的日出 `assets/backgrounds/report_dawn.jpg`，壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘）→ 大字 Lv.6、「Your experience」＋右邊這一晚的 +N XP、經驗條（**沒有卡片框，直接在草坡上**；「215 / 400 XP」寫在條裡；條只有**白與金兩種顏色、不畫分隔線**（11-14 使用者定）：之前累積的是白，這一晚那段金色（`xpBarSegments()` 只排版不算 XP）；+0 的晚上沒有格子、+0 XP 照寫）→ 那句話置中（背景圖要蓋到經驗條，所以是 2:3、下半是一整片平整草地）
-→ From your buddy（AI 那段＋小建議）→ **Last night 圖形格子** → Sleep phases → **Yesterday 圖形格子**
+版面（11-13 依示意圖定案，11-14 依參考圖改）：日期 → **一條半圓線**的分數（只有線、不墊深色底盤；數字在弧裡、小狗頭上）＋小狗置中坐在弧下的草坡（腳下淡影子）＋左下起床自評（只有臉＋字、不寫 You felt、不加框，11-14 使用者定）＋右下 notes 日記本（**這一晚的 notes（這個 version）還沒看過就每隔幾秒抖一下、右上角一個紅點**，看過或減少動態效果時靜止；看過沒看過用首頁同一份 `NotesReadStore`） → 那句話置中（背景是使用者生成的日出 `assets/backgrounds/report_dawn.jpg`，壓一層薄深藍、下緣淡成透明接到報告背景——**淡成某個顏色會多一條分界線**；讀不到圖退回程式畫的山丘）→ 大字 Lv.6、「Your experience」＋右邊這一晚的 +N XP、經驗條（**沒有卡片框，直接在草坡上**；「215 / 400 XP」寫在條裡；條只有**白與金兩種顏色、不畫分隔線**（11-14 使用者定）：之前累積的是白，這一晚那段金色（`xpBarSegments()` 只排版不算 XP）；+0 的晚上沒有格子、+0 XP 照寫）→ 那句話置中（背景圖要蓋到經驗條，所以是 2:3、下半是一整片平整草地）
+→ **Last night 圖形格子**（11-17 起 From your buddy 那張卡整段搬進日記本，`pet_notes_test.dart` 守著不再出現） → Sleep phases → **Yesterday 圖形格子**
 → View sleep insights → Back to home。
 
 **圖形格子**（2026-11-14 使用者定，參考圖：每一格的圖就是那個數字，`widgets/report_tiles.dart`）：
