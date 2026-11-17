@@ -592,12 +592,14 @@ Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %�
 | **起床自評**（`POST /rested`、表 `morning_ratings`）題目照抄 Consensus Sleep Diary-M 第 10 題；**不進分數、不給 XP、不給好友看** | `test_morning_report.py`【4】存了「很累」與「很有精神」前後比分數與 XP，並掃 `garmin/`、`game/`、`social/` 不得讀它 |
 | 標籤只收 `behavior/morning_tips.TAGS` 的 id，不收自由文字 | 隱私、無法統計，送進 AI 還可能被拿來改寫指令 |
 | 記下 `minutes_after_wake` | 日誌標準是起床一小時內；App 允許 6 小時內補填，分析時可以只取 ≤ 60 的 |
-| **小建議 12 句只在 `behavior/morning_tips.py`**，措辭與 `Research-Background/起床小建議與自評.md` 逐字一致（測試【2】讀文件比對） | 改措辭先改文件；句子由使用者審過 |
+| **建議清單 20 句（T1–T12＋P1–P8）只在 `behavior/morning_tips.py`**，措辭與 `Research-Background/起床小建議與自評.md` 逐字一致（測試【2】讀文件比對） | 改措辭先改文件；句子由使用者審過（P 系列 11-18） |
 | ⚠️ T1（晚 30–59 分）與 T2（晚 ≥ 60 分）**不重疊** | 原本 T2 是 ≥ 60、T1 是 ≥ 30 且優先，T2 永遠輪不到（寫程式時發現） |
-| **AI 不寫建議**：`/night-summary` 回 `text`（AI 寫）與 `tip`（後端挑、逐字）兩個欄位，畫面分兩列 | AI 碰不到建議，就改不壞它 |
-| AI 每晚只生成一次，存 `night_summaries`；`facts_hash` 變了才重生；手錶資料沒到不呼叫 | 每呼叫一次花一次額度 |
-| 寫不出來（沒金鑰／連不上／兩次沒過驗證）→ 退回 `/home` 畫面上那幾句話；沒金鑰不存，失敗的存起來、**60 分鐘內不再試** | 連不上時每打開一次報告就花一次額度 |
-| 驗證沿用 `ai/chat.validate_answer`，另加：≤ 60 字、≤ 3 句、不准 because／due to | 只能說同一晚發生了什麼，不能說為什麼 |
+| **寵物 notes**（2026-11-17 使用者 grill 後定，取代夢境日記與 From your buddy；**推翻 11-12 的「AI 不寫建議」**）：`/night-summary` 回 `summary`（AI 寫，≤2 句）＋`tips`（AI 從清單挑 0–3 條、換成寵物口吻，`original` 附原句）＋`version`（依回傳內容算，App 用它讓紅點再亮）。`text`／`tip` 是舊版 App 的欄位 | 使用者要 AI 實際幫忙改善睡眠；**行動只能來自清單**，驗證擋清單外的 id、換掉重點字（`KEYWORDS`）、總結裡塞建議 |
+| 交給 AI 的是**整晚資料＋後端判讀**（`ai/night_summary.judge_night()`：評分器的級距常數、心率用 Tier3 修正值＋`ANXIOUS_HR_CONFIRM`）；同一份判讀也給 `morning_tips.triggered()` 挑原句 | AI 不自己判「45 分鐘深睡算少」；判讀不另訂門檻 |
+| 🔴 **攝影機與 Garmin 壓力不交給 AI**；昨天的步數要給，但**不准當成任何一晚的原因**（Atoui 2021 逐日研究不支持）。研究文件「AI 不准說」那張表能用字串抓的在 `FORBIDDEN_CLAIMS` 擋（`test_morning_report.py`【6c】【6d】） | 攝影機 11-09 驗證過跟任何結果都沒有相關；壓力對自評壓力預測力弱 |
+| AI 每晚只生成一次，存 `night_summaries`（`text` 欄存 JSON）；`facts_hash`（事實＋清單）變了才重生；手錶資料沒到**不呼叫**、只給行為那幾條原句 | 每呼叫一次花一次額度 |
+| 寫不出來（沒金鑰／連不上／兩次沒過驗證）→ `summary` 是 null、`tips` 是 `applicable_tips()` 挑的原句；**不拿 `/home` 的句子冒充總結**。沒金鑰不存，失敗的存起來、**60 分鐘內不再試** | 連不上時每打開一次報告就花一次額度 |
+| 驗證沿用 `ai/chat.validate_answer`，另加：全部 ≤ 120 字、總結 ≤ 2 句、每條 ≤ 2 句；**可以說可能原因但只准 might／can**，because／due to 照擋。數字：總結只能用事實裡的，每條建議只能用事實或**它自己那一句**的 | 放寬成「整份清單的數字都算」的話，P1 的 7–9 hours 會讓「睡了 9h」過關（測試抓到過） |
 | 時長在事實區塊裡寫成「3h 25m less」這種字串，要 AI 照抄 | 讓 AI 自己換算，換錯了看起來也很合理；測試寫錯一個數字就被數字檢查擋下過 |
 | `/home?date=` 的 `metrics.sleep_stages`：**只有 Garmin 來源**有每晚曲線 | 逐段資料只在電腦上的 `garmin_standard_data.json`（25 MB，讀一次留在記憶體，mtime 變了才重讀）；Health Connect 的逐段資料沒存 |
 | `/home` 另回 `morning_rating` 與 `previous_night`（上一個有資料的晚上的臥床、睡眠分鐘數） | 「跟上一晚比」的箭頭方向由 App 比，只代表方向 |
@@ -1538,7 +1540,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
   助理 `POST /chat`；
-  早晨報告 `POST /rested`（起床自評）、`GET /night-summary`（AI 分析＋小建議）。
+  早晨報告 `POST /rested`（起床自評）、`GET /night-summary`（寵物 notes：AI 總結＋從清單挑的建議）。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
 - `db.py` — 17 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
@@ -1695,7 +1697,7 @@ python tests/test_sleep_heart_rate.py    # 2026-11-13 新增：心率與手錶�
 python tests/test_camera_curve.py        # 2026-11-13 新增：攝影機曲線每 5 分鐘有幾成在動、不可用的幀不算、沒 ROI 不給、門檻呼叫時才讀、/home 只留睡著那段、回填只補曲線不動別的欄位
 python tests/test_scored_efficiency.py   # 2026-11-13 新增：首頁效率顯示進分數的那一個——每種 basis 都有那行字、與 behavior 常數一致、打包檔逐夜直讀評分器
 python tests/test_home_activity.py       # 2026-11-13 新增：首頁 Activity 是前一個日曆日、沒資料整塊 None、VO2 max 90 天內、整天心率只取那個日曆日（終點不含隔天 00:00）
-python tests/test_morning_report.py      # 2026-11-12 新增：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
+python tests/test_morning_report.py      # 2026-11-12 新增（11-17 改寵物 notes：清單外行動、不准說、攝影機與壓力不進 prompt）：小建議觸發與優先順序、12 句與文件逐字一致、自評不進分數不給 XP、AI 每晚只呼叫一次且驗證擋得住、刪帳號一起刪、每晚曲線；不碰網路
 python tests/test_awake_count.py         # 2026-11-15 新增：醒來次數＝時間軸的清醒段數（不是 summary 那個多 1 的）、回填只補這一欄、只改 Garmin、舊資料庫補欄位、/home 與 /insights 帶出來
 python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時間記 recalled、當下按的不能被回想的蓋掉、警語只在用到回想那一端時掛、API 與打包檔同一句
 python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 三種狀態，「沒判」存成 NULL 不是 0（準時）；原本 None 會被存成準時、算進熬夜比率分母（手動補資料才會遇到，11-07 中過）

@@ -2,13 +2,16 @@
 tests/test_morning_report.py —— 早晨報告的後端（2026-11-12）
 
 守的東西（都是壞掉時不會報錯的）：
-   【1】小建議：觸發條件、優先順序、T1/T2 不重疊、運動只在沒有別的觸發時出現
-   【2】程式裡的 12 句與 Research-Background/起床小建議與自評.md **逐字一致**
+   【1】小建議：觸發條件、優先順序、T1/T2 不重疊、運動只在沒有別的觸發時出現；
+        生理判讀（P1–P8）的適用條件；最多 3 條
+   【2】程式裡的 20 句與 Research-Background/起床小建議與自評.md **逐字一致**
    【3】POST /rested：只收清單裡的標籤、分數 1–5、真的日期；同一晚覆蓋
    【4】⚠️ 自評**不進分數、不給 XP**：存了自評前後，分數與 XP 一模一樣；評分層與遊戲層不讀這張表
    【5】刪帳號時自評與 AI 分析一起刪
-   【6】AI 分析：沒有手錶資料不呼叫；沒有金鑰退回且不存；每晚只呼叫一次；事實變了才重生；
-        驗證擋得住（數字、因果、太長）；兩次沒過退回並存起來、一小時內不再試；小建議逐字附上
+   【6】寵物 notes（2026-11-17）：沒有手錶資料不呼叫、只給行為原句；沒有金鑰只給原句、不給總結、不存；
+        每晚只呼叫一次；事實變了才重生、version 跟著換；兩次沒過退回並存起來、一小時內不再試
+   【6c】驗證：清單外的行動、換掉重點、總結塞建議、斷定因果、「不准說」那幾種話、太長都擋；好的不誤擋
+   【6d】⚠️ 攝影機與壓力不進 prompt；判讀用評分器的門檻、不是另訂的
    【7】每一晚的曲線：Garmin 來源有、Health Connect 沒有
    【8】整支測試一次都沒碰到網路
 
@@ -20,6 +23,7 @@ tests/test_morning_report.py —— 早晨報告的後端（2026-11-12）
 執行：python tests/test_morning_report.py
 """
 import os
+import re
 import sys
 import tempfile
 import urllib.request
@@ -102,11 +106,36 @@ check("噪音與溫度分開（拆成兩個標籤）", (tip(["noise"]), tip(["te
 check("不認得的標籤 → 不觸發", tip(["coffee"]), None)
 check("說明類的句子標成 note", mt.pick_tip(["travel"])["kind"], "note")
 check("每個標籤都有對應的句子", set(mt.TAG_TIPS) == set(mt.TAGS), True)
-check("優先順序涵蓋全部 12 句、沒有重複", sorted(mt.PRIORITY, key=lambda x: int(x[1:])),
-      [f"T{i}" for i in range(1, 13)])
+check("優先順序涵蓋全部句子、沒有重複", sorted(mt.PRIORITY), sorted(mt.TIPS))
+check("每一句都有適用說明與重點字", (set(mt.WHEN), set(mt.KEYWORDS)), (set(mt.TIPS), set(mt.TIPS)))
+for tid, (_, text) in mt.TIPS.items():
+    ok(f"{tid} 的原句本身就含重點字（不然原句也過不了驗證）",
+       bool(re.search(mt.KEYWORDS[tid], text, re.I)), text[:40])
+
+
+def ptips(tags=(), minutes=None, **judged):
+    return [t["id"] for t in mt.applicable_tips(tags, minutes, judged, limit=99)]
+
+
+B, W, A, H = mt.BELOW, mt.WITHIN, mt.ABOVE, mt.HR_HIGHER
+check("睡太短 → P1", ptips(time_asleep=B), ["P1"])
+check("時長在範圍內 → 不給", ptips(time_asleep=W), [])
+check("勾運動＋睡太短 → P2 優先於 P1、T7 拿掉（紅線 5）", ptips(["exercise"], time_asleep=B), ["P2", "P1"])
+check("勾運動但睡得好 → 只有 T7", ptips(["exercise"], time_asleep=W), ["T7"])
+check("REM 少＋手機晚放 → P3", "P3" in ptips(minutes=10, rem_sleep=B), True)
+check("REM 少但準時 → 沒有 P3", "P3" in ptips(minutes=-5, rem_sleep=B), False)
+check("REM 少＋睡太短 → P4", "P4" in ptips(time_asleep=B, rem_sleep=B), True)
+check("深睡少、前一晚睡夠 → P5（不是問題）", ptips(deep_sleep=B, previous_time_asleep=W), ["P5"])
+check("深睡少、前一晚也短 → 沒有 P5", ptips(deep_sleep=B, previous_time_asleep=B), [])
+check("深睡少＋午睡 → T5 之後接 P6", ptips(["napped"], deep_sleep=B), ["T5", "P6"])
+check("心率高＋酒精 → P7 緊接 T4", ptips(["alcohol"], sleeping_heart_rate=H), ["T4", "P7"])
+check("心率高＋生病 → P8 緊接 T9", ptips(["unwell"], sleeping_heart_rate=H), ["T9", "P8"])
+check("心率高但沒勾任何東西 → 不硬塞原因", ptips(sleeping_heart_rate=H), [])
+check("最多 3 條（紅線 5）", len(mt.applicable_tips(["unwell", "alcohol", "late_caffeine", "noise"], 90,
+                                               {"time_asleep": B, "sleeping_heart_rate": H})), 3)
 
 # ═══════════════════════════════════════════════════════════════════
-section("【2】程式裡的 12 句與文件逐字一致（措辭由使用者審過）")
+section("【2】程式裡的句子與文件逐字一致（措辭由使用者審過）")
 doc = (ROOT / "Research-Background" / "起床小建議與自評.md").read_text(encoding="utf-8")
 for tip_id, (_, text) in mt.TIPS.items():
     ok(f"{tip_id} 在文件裡找得到原句", text in doc, text[:40])
@@ -163,65 +192,82 @@ for name in ("score_claim.py", "build_app_payload.py"):
 check("上一晚的睡眠長度給「跟上一晚比」用", h2["previous_night"]["sleep_duration_minutes"], 420)
 
 # ═══════════════════════════════════════════════════════════════════
-section("【6】AI 分析")
+section("【6】寵物 notes")
 CALLS = []
 REPLIES = []
 
 
 def fake_complete(system, user_prompt, schema, max_tokens=0):     # 保險 3
     CALLS.append(user_prompt)
-    return {"text": REPLIES.pop(0)}, "fake-model"
+    return REPLIES.pop(0), "fake-model"
+
+
+def notes(summary, *tips):
+    return {"summary": summary, "tips": [{"id": i, "text": t} for i, t in tips]}
 
 
 ns.complete = fake_complete
 ns.key_available = lambda: False
 
+# 前一個日曆日的白天資料：步數要進 prompt，壓力不准進
+db.upsert_garmin_daily(u, PREV, {"steps": 4321, "step_goal": 8000, "active_sec": 1800,
+                                 "stress_high_sec": 7777, "stress_medium_sec": 6666}, db_path=TMP)
+
 w = client.get(f"/night-summary?user_id={u}&date=2026-11-01").json()
 check("沒有手錶資料 → waiting，不呼叫 AI", (w["status"], len(CALLS)), ("waiting", 0))
+check("waiting 沒有總結", w["summary"], None)
 
+# 這一晚：睡 3h35m（低於 7–9h）、REM 19.5%（低於 20–25%）、深睡 20%（範圍內）、
+# 放下手機晚 20 分、勾了運動、前一晚 7h（範圍內）
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
-check("沒有金鑰 → 退回後端那兩句話", r["source"], "fallback")
-# 這一晚有行為資料 → /home 的文案是行為那一套（沒有 score_message），有幾句就接幾句
-check("退回的文字就是 /home 畫面上的那幾句", r["text"],
-      " ".join(x for x in (h2["display"].get("score_message"), h2["display"].get("mood_description")) if x))
+check("沒有金鑰 → fallback", r["source"], "fallback")
+check("⚠️ fallback 不給總結（不拿模板假裝是 AI 寫的）", r["summary"], None)
+check("fallback 給原句：運動＋睡太短 → P2、REM 少＋手機晚 → P3、睡太短 → P1",
+      [t["id"] for t in r["tips"]], ["P2", "P3", "P1"])
+check("原句逐字", r["tips"][0]["text"], mt.TIPS["P2"][1])
 check("沒有金鑰 → 不存（設定好之後要能生成）", db.get_night_summary(u, D, db_path=TMP), None)
-check("小建議照樣附上、逐字（勾了運動 → T7）", r["tip"]["text"], mt.TIPS["T7"][1])
+check("舊版 App 的 tip 欄位＝第一條原句", r["tip"]["id"], "P2")
+v_fallback = r["version"]
 
 ns.key_available = lambda: True
-GOOD = "We slept 3h 35m together, 3h 25m less than the night before. Let's be in bed by 23:30 tonight."
+GOOD = notes("We slept 3h 35m together, 3h 25m less than the night before.",
+             ("P2", "Hard workouts that end near bedtime might make our nights shorter, "
+                    "so let's wrap them up at least 4 hours before."))
 REPLIES[:] = [GOOD]
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
-check("有金鑰 → AI 寫的那段", (r["source"], r["text"]), ("llm", GOOD))
+check("有金鑰 → AI 寫的那段", (r["source"], r["summary"]), ("llm", GOOD["summary"]))
+check("建議用寵物口吻，原句另外附上", (r["tips"][0]["text"], r["tips"][0]["original"]),
+      (GOOD["tips"][0]["text"], mt.TIPS["P2"][1]))
 check("呼叫了一次", len(CALLS), 1)
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
-check("⚠️ 再打開一次 → 讀存好的，不再花額度", (len(CALLS), r["text"]), (1, GOOD))
+check("⚠️ 再打開一次 → 讀存好的，不再花額度", (len(CALLS), r["summary"]), (1, GOOD["summary"]))
 ok("事實區塊有寫好的時長（照抄用，不讓 AI 換算）", "3h 25m less" in CALLS[0], "")
 ok("事實區塊有使用者的目標", '"in_bed_by": "23:30"' in CALLS[0], "")
+ok("事實區塊附判讀（AI 不自己判）", f'"judgment": "{mt.BELOW}"' in CALLS[0], "")
+ok("整份清單都交給 AI", all(f'"id": "{tid}"' in CALLS[0] for tid in mt.TIPS), "")
+ok("後端挑到的標成 suggested_tonight", '"suggested_tonight": true' in CALLS[0], "")
+v_llm = r["version"]
 
 client.post("/rested", json={"user_id": u, "date": D, "rested": 3, "tags": ["late_caffeine"]})
-REPLIES[:] = [GOOD]
+REPLIES[:] = [notes("We slept 3h 35m together.",
+                    ("T3", "Caffeine even 6 hours before bed can cut sleep short, so maybe keep coffee early."))]
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
 check("補了自評（事實變了）→ 重生一次", len(CALLS), 2)
-check("小建議跟著換成咖啡因那句", r["tip"]["id"], "T3")
+ok("⚠️ 內容變了 → version 跟著換（App 靠它讓紅點再亮）", len({v_fallback, v_llm, r["version"]}) == 3,
+   str((v_fallback, v_llm, r["version"])))
 
-BAD_NUMBER = "We slept 9h together. Let's be in bed by 23:30 tonight."
-BAD_CAUSE = "We slept 3h 35m because of the caffeine. Let's be in bed by 23:30 tonight."
-LONG = " ".join(["We slept 3h 35m together."] * 14)
-check("數字不在事實裡 → 擋", bool(ns.validate_summary(BAD_NUMBER, CALLS[0])), True)
-check("說因果（because）→ 擋", bool(ns.validate_summary(BAD_CAUSE, CALLS[0])), True)
-check("太長 → 擋", bool(ns.validate_summary(LONG, CALLS[0])), True)
-check("好的那段不誤擋", ns.validate_summary(GOOD, CALLS[0]), [])
-
+BAD_NUMBER = notes("We slept 9h together.")
+REPLIES[:] = [BAD_NUMBER, notes("We slept 3h 35m together.")]
 client.post("/rested", json={"user_id": u, "date": D, "rested": 3, "tags": ["late_caffeine", "stress"]})
-REPLIES[:] = [BAD_NUMBER, GOOD]
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
 check("第一次沒過 → 帶著原因重問，第二次過了", (r["source"], len(CALLS)), ("llm", 4))
 ok("重問時有說哪裡不行", "REJECTED" in CALLS[-1], "")
+check("好晚上可以 0 條建議", r["tips"], [])
 
 client.post("/rested", json={"user_id": u, "date": D, "rested": 4, "tags": []})
-REPLIES[:] = [BAD_CAUSE, BAD_NUMBER]
+REPLIES[:] = [BAD_NUMBER, BAD_NUMBER]
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
-check("兩次都沒過 → 退回", r["source"], "fallback")
+check("兩次都沒過 → fallback", (r["source"], r["summary"]), ("fallback", None))
 check("退回也存起來", db.get_night_summary(u, D, db_path=TMP)["source"], "fallback")
 n = len(CALLS)
 client.get(f"/night-summary?user_id={u}&date={D}")
@@ -231,11 +277,62 @@ conn = db.connect(TMP)
 conn.execute("UPDATE night_summaries SET created_at = ? WHERE user_id = ?", (old, u))
 conn.commit()
 conn.close()
-REPLIES[:] = [GOOD]
+REPLIES[:] = [notes("We slept 3h 35m together.")]
 r = client.get(f"/night-summary?user_id={u}&date={D}").json()
 check("超過一小時 → 再試一次", (r["source"], len(CALLS)), ("llm", n + 1))
 
-section("【6b】事實區塊")
+# ═══════════════════════════════════════════════════════════════════
+section("【6c】驗證")
+FACTS_TEXT = CALLS[0].split("\n\nTIP LIST:")[0]   # 只取事實那段（清單裡的數字不算數）
+ok("反向對照：真的切掉了清單", "TIP LIST" not in FACTS_TEXT and '"last_night"' in FACTS_TEXT, "")
+
+
+def problems(n):
+    return ns.validate_notes(n, FACTS_TEXT)
+
+
+check("好的不誤擋", problems(GOOD), [])
+check("數字不在事實裡 → 擋", bool(problems(BAD_NUMBER)), True)
+ok("⚠️ 清單外的行動 → 擋", any("not in the tip list" in p for p in
+   problems(notes("We slept 3h 35m.", ("X1", "Try melatonin gummies tonight.")))), "")
+ok("挑了 T3 卻沒講咖啡（換掉重點）→ 擋", any("lost its key point" in p for p in
+   problems(notes("We slept 3h 35m.", ("T3", "Let's go to bed earlier tonight.")))), "")
+ok("總結裡塞建議 → 擋", any("advice" in p for p in
+   problems(notes("We slept 3h 35m, so try to sleep earlier."))), "")
+ok("斷定因果（because）→ 擋", any("cause" in p for p in
+   problems(notes("We slept 3h 35m because of the coffee."))), "")
+ok("可能原因用 might → 不擋", not problems(notes("We slept 3h 35m; the late coffee might be part of it.")), "")
+ok("同一條用兩次 → 擋", any("twice" in p for p in problems(
+    notes("We slept 3h 35m.", ("T3", "Keep caffeine early."), ("T3", "Coffee early.")))), "")
+ok("超過 3 條 → 擋", any("more than 3" in p for p in problems(notes(
+    "We slept 3h 35m.", ("T3", "Keep caffeine early."), ("T4", "Alcohol breaks up sleep."),
+    ("T6", "A cool room helps."), ("T12", "A quiet room helps.")))), "")
+ok("太長 → 擋", any("too long" in p for p in problems(notes(" ".join(["We slept 3h 35m."] * 2),
+   ("T6", " ".join(["A cool room helps a lot."] * 20))))), "")
+for label, bad in [
+    ("酒精讓深睡變少", notes("We slept 3h 35m.", ("T4", "Alcohol might leave you with less deep sleep."))),
+    ("步數當原因", notes("We slept 3h 35m, and fewer steps might be why we slept less.")),
+    ("晚餐吃太晚", notes("We slept 3h 35m; a late dinner might be part of it.")),
+    ("待辦清單讓人睡更久", notes("We slept 3h 35m.", ("T8", "A to-do list can help you sleep longer."))),
+    ("晚上運動傷睡眠", notes("We slept 3h 35m.", ("T7", "Exercise in the evening is bad for sleep."))),
+    ("提到攝影機", notes("We slept 3h 35m and the camera saw lots of tossing.")),
+    ("提到壓力分數", notes("We slept 3h 35m with a high stress score.")),
+]:
+    ok(f"⚠️ 不准說：{label} → 擋", bool(problems(bad)), str(problems(bad)[:1]))
+ok("P2 的限定說法（高強度、睡前不久）→ 不擋", not problems(notes(
+    "We slept 3h 35m.", ("P2", "Hard workouts late in the evening might disturb sleep, "
+                               "so let's finish them 4 hours before bed."))), "")
+ok("步數只當背景、不當原因 → 不擋", not problems(notes("We slept 3h 35m after a day of 4,321 steps.")), "")
+
+# ═══════════════════════════════════════════════════════════════════
+section("【6d】⚠️ 攝影機與壓力不進 prompt；判讀用評分器的門檻")
+ok("步數有進 prompt（要給 AI 當背景）", '"steps": "4,321"' in FACTS_TEXT, "")
+ok("壓力沒有進 prompt（資料庫裡明明有）", "7777" not in FACTS_TEXT and "stress_" not in FACTS_TEXT, "")
+src = (ROOT / "ai" / "night_summary.py").read_text(encoding="utf-8")
+code = "\n".join(line.split("#")[0] for line in src.splitlines())
+for name in ("get_camera", "camera_nightly", "events_per_hour", "motion_", "stress_"):
+    check(f"night_summary.py 的程式碼不讀 {name}", name in code, False)
+import evaluate_sleep_quality as esq   # noqa: E402  ai/night_summary 已把 garmin/ 加進 sys.path
 facts = ns.build_night_facts(D, {"target_bedtime": "23:30"},
                              {"final_score": 69.9, "duration_min": 215, "deep_min": 43,
                               "waso_min": 8, "rem_min": 42, "rem_measured": 0},
@@ -244,7 +341,23 @@ check("分數只放整數（App 上顯示的那個）", facts["last_night"]["sco
 check("沒量到 REM → 不放 REM", "rem_sleep" in facts["last_night"], False)
 check("一樣長 → about the same", facts["change_vs_previous_night"]["time_asleep"], "about the same")
 check("時長格式", (ns.hm(215), ns.hm(45), ns.hm(120), ns.hm(-169)), ("3h 35m", "45m", "2h", "2h 49m"))
-
+lo, hi = esq.DURATION_RANGE["young_adult"]
+check("時長判讀邊界就是評分器的常數（下限剛好＝範圍內）",
+      (ns.judge_night({"final_score": 1, "duration_min": lo * 60}, None, {})["time_asleep"],
+       ns.judge_night({"final_score": 1, "duration_min": lo * 60 - 1}, None, {})["time_asleep"]),
+      (mt.WITHIN, mt.BELOW))
+good, fair = esq.WASO_THRESHOLD["young_adult"]
+check("WASO 判讀用評分器的分齡門檻", [ns.judge_night({"final_score": 1, "waso_min": m}, None, {})
+                                 ["awake_during_night"] for m in (good, fair, fair + 1)],
+      ["low", "moderate", "high"])
+check("年長者用自己的時長範圍（7–8h，9h 算 above）",
+      ns.judge_night({"final_score": 1, "duration_min": 540}, None, {"age_band": "older_adult"})["time_asleep"],
+      mt.ABOVE)
+check("心率修正值為負（心率比平常高）→ higher",
+      ns.judge_night({"final_score": 1, "rhr_modifier": -1.0, "avg_hr_modifier": -0.5}, None, {})
+      ["sleeping_heart_rate"], mt.HR_HIGHER)
+check("沒有心率修正值（冷啟動）→ 不判讀",
+      "sleeping_heart_rate" in ns.judge_night({"final_score": 1}, None, {}), False)
 # ═══════════════════════════════════════════════════════════════════
 section("【7】每一晚的曲線")
 main._garmin_records = lambda: [

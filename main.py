@@ -39,6 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import bisect
+import hashlib
 import json
 from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
@@ -1902,13 +1903,21 @@ def get_night_summary(
     date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
 ):
     """
-    早晨報告那張「From your buddy」卡：AI 寫的兩三句（寵物口吻）＋一句從清單挑的小建議。
+    寵物 notes（2026-11-17 起取代夢境日記與「From your buddy」）：AI 的總結＋0–3 條建議。
 
-    - 手錶資料還沒到 → status "waiting"，**不呼叫 AI**（使用者定）。
+    回傳：
+      status   "ok" | "waiting"（手錶資料還沒到）
+      source   "llm" | "fallback" | None
+      summary  AI 寫的總結；waiting 與 fallback 都是 None（**不拿模板假裝是 AI 寫的**）
+      tips     [{id, kind, text, original}]：text 是寵物口吻（llm）或原句（其他），original 一律是原句
+      version  內容變了就換（App 用它決定紅點要不要再亮）
+      text/tip 舊版 App 讀的欄位（= summary／第一條原句），App 換版後拿掉
+
+    - 手錶資料還沒到 → waiting，只放**行為**那幾條原句，**不呼叫 AI**（使用者定）。
     - 每晚只生成一次；事實變了（手錶晚到、補了自評）才重生。
-    - AI 沒設定／連不上／兩次沒過驗證 → 退回 /home 那兩句話（score_message + mood_description），
-      source = "fallback"；過 SUMMARY_RETRY_MINUTES 才再試。
-    - 小建議 tip 由 behavior/morning_tips.pick_tip() 挑，**逐字**；AI 碰不到它。
+    - AI 沒設定／連不上／兩次沒過驗證 → fallback：只給 applicable_tips() 的原句；
+      過 SUMMARY_RETRY_MINUTES 才再試。
+    - 行動只能來自 behavior/morning_tips.TIPS（驗證在 ai/night_summary.validate_notes）。
 
     ⚠️ 用同步的 def：AI 呼叫最多等 60 秒，async 會卡住整個事件迴圈（同 /chat）。
     """
@@ -1920,49 +1929,76 @@ def get_night_summary(
     w_row = _row_for(wearable_rows, date)
     b_row = _row_for(behavior_rows, date)
     rating = db.get_morning_rating(user_id, date)
+    tags = rating["tags"] if rating else ()
+    adherence = b_row.get("adherence_minutes") if b_row else None
+
+    def tip_out(tip_id, text=None):
+        kind, original = morning_tips.TIPS[tip_id]
+        return {"id": tip_id, "kind": kind, "text": text or original, "original": original}
+
+    def reply(status, source, summary, tips):
+        # version 依**實際回傳的內容**算：fallback 換成 AI 寫好的那一份時事實沒變，
+        # 用事實的雜湊的話 version 不會變、紅點就不會再亮。
+        version = hashlib.sha256(json.dumps([summary, [(t["id"], t["text"]) for t in tips]],
+                                            ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+        return {"date": date, "status": status, "source": source, "summary": summary,
+                "tips": tips, "version": version,
+                # 舊版 App 讀的欄位
+                "text": summary, "tip": ({k: tips[0][k] for k in ("id", "kind")}
+                                         | {"text": tips[0]["original"]}) if tips else None}
 
     if not w_row or w_row.get("final_score") is None:
-        return {"date": date, "status": "waiting", "text": None, "source": None, "tip": None}
+        waiting = [tip_out(t["id"]) for t in morning_tips.applicable_tips(tags, adherence)]
+        return reply("waiting", None, None, waiting)
 
-    tip = morning_tips.pick_tip(
-        rating["tags"] if rating else (),
-        b_row.get("adherence_minutes") if b_row else None,
-    )
+    prev = _previous(wearable_rows, date, "final_score")
+    judged = ns.judge_night(w_row, prev, user)
+    fallback_tips = [tip_out(t["id"])
+                     for t in morning_tips.applicable_tips(tags, adherence, judged)]
+    yesterday = db.get_garmin_daily(
+        user_id, (datetime.fromisoformat(date) - timedelta(days=1)).date().isoformat())
     facts = ns.build_night_facts(
-        date, user, w_row, _previous(wearable_rows, date, "final_score"), b_row,
+        date, user, w_row, prev, b_row,
         rating_label=morning_tips.RESTED_LABELS.get(rating["rested"]) if rating else None,
-        tag_labels=[morning_tips.TAGS[t] for t in (rating["tags"] if rating else [])
-                    if t in morning_tips.TAGS],
+        tag_labels=[morning_tips.TAGS[t] for t in tags if t in morning_tips.TAGS],
+        yesterday=yesterday,
     )
-    digest = ns.facts_hash(facts)
+    tip_list = ns.tip_list(t["id"] for t in fallback_tips)
+    digest = ns.facts_hash(facts, tip_list)
 
-    mood, _, driver = resolve_mood(b_row, w_row)
-    shown = display_for(mood, driver, w_row)
-    fallback_text = " ".join(x for x in (shown.get("score_message"), shown.get("mood_description")) if x)
+    def from_llm(notes):
+        return reply("ok", "llm", notes["summary"],
+                     [tip_out(t["id"], t["text"]) for t in notes["tips"]])
 
-    def reply(text, source):
-        return {"date": date, "status": "ok", "text": text, "source": source, "tip": tip}
+    def fallback():
+        return reply("ok", "fallback", None, fallback_tips)
 
     stored = db.get_night_summary(user_id, date)
     if stored and stored["facts_hash"] == digest:
         if stored["source"] == "llm":
-            return reply(stored["text"], "llm")
-        try:
-            age = (datetime.now(datetime.fromisoformat(stored["created_at"]).tzinfo)
-                   - datetime.fromisoformat(stored["created_at"])).total_seconds() / 60
-        except (TypeError, ValueError):
-            age = SUMMARY_RETRY_MINUTES
-        if age < SUMMARY_RETRY_MINUTES:
-            return reply(fallback_text, "fallback")
+            try:
+                return from_llm(json.loads(stored["text"]))
+            except (TypeError, ValueError, KeyError):
+                pass                          # 舊格式（純文字）：當作沒存過，重生一次
+        else:
+            try:
+                age = (datetime.now(datetime.fromisoformat(stored["created_at"]).tzinfo)
+                       - datetime.fromisoformat(stored["created_at"])).total_seconds() / 60
+            except (TypeError, ValueError):
+                age = SUMMARY_RETRY_MINUTES
+            if age < SUMMARY_RETRY_MINUTES:
+                return fallback()
 
     if not ns.key_available():
         # 沒設定金鑰：一次都沒試，不寫進資料庫（設定好之後下一次打開就會生成）
-        return reply(fallback_text, "fallback")
+        return fallback()
     try:
-        result = ns.summarize_night(facts)
+        result = ns.summarize_night(facts, tip_list)
     except ns.SummaryUnavailable as exc:
         print(f"night-summary: fallback for one night - {exc}")   # 不印 user_id
-        db.save_night_summary(user_id, date, fallback_text, "fallback", digest)
-        return reply(fallback_text, "fallback")
-    db.save_night_summary(user_id, date, result["text"], "llm", digest, result.get("model"))
-    return reply(result["text"], "llm")
+        db.save_night_summary(user_id, date, json.dumps({"fallback": True}), "fallback", digest)
+        return fallback()
+    notes = {"summary": result["summary"], "tips": result["tips"]}
+    db.save_night_summary(user_id, date, json.dumps(notes, ensure_ascii=False), "llm",
+                          digest, result.get("model"))
+    return from_llm(notes)
