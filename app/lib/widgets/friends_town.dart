@@ -139,6 +139,7 @@ class _TownStarState extends State<TownStar>
 
 /// 名牌：沒有框、只有字，像地圖上的地名（2026-11-18 使用者：深色膠囊框太突兀）。
 /// 白字加一圈柔和的深色陰影才讀得到；你自己用淡紫色。
+/// 2026-11-18 使用者定：小鎮的名牌不寫 demo（點開的小卡、Feed、排行榜仍然標 Demo）。
 class TownNameTag extends StatelessWidget {
   final TownPerson person;
   const TownNameTag({super.key, required this.person});
@@ -160,11 +161,6 @@ class TownNameTag extends StatelessWidget {
           shadows: _shadow,
         ),
       ),
-      if (person.demo)
-        const TextSpan(
-          text: ' · demo',
-          style: TextStyle(color: Color(0xBBFFFFFF), fontSize: 10, fontWeight: FontWeight.w600, shadows: _shadow),
-        ),
     ]),
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
