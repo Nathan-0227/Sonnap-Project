@@ -262,10 +262,6 @@ void main() {
         find.descendant(of: townie(h), matching: find.byType(TownStar)),
         findsNothing,
       );
-      expect(
-        find.descendant(of: townie(h), matching: find.byType(TownHalo)),
-        findsNothing,
-      );
     }
     // 三個人底下的元件種類完全相同（名字不算）：Late 的心情是 tired，也不能讓它長得不一樣
     List<Type> shape(String h) => [

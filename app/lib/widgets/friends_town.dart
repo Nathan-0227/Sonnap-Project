@@ -12,7 +12,7 @@ import 'streak_card.dart' show speciesOf;
 /// 2026-11-18 改成**整個畫面都是小鎮、上下左右都能滑**（使用者給 Finch 的截圖）：一張從斜上方看的
 /// 卡通的夜晚村莊（使用者生成的 `town_map.jpg`，有河、橋、池塘），十間房子，正中間有柵欄那間是你家，
 /// 朋友照加好友的先後住進離你家近的房子，寵物站在房子右邊那塊亮草地上。**昨晚準時放下手機、而且有分享 On time 的人
-/// 頭上一顆星、腳下一圈金光**；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，
+/// 頭上一顆會閃的星星**（腳下的金光 11-18 拿掉：那塊草地本來就亮，看不出來）；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，
 /// 不變暗、不說原因（後端也只給 glow: false）。
 ///
 /// ⚠️ 小鎮裡**不畫心情**（所有寵物同一個樣子）；心情只在點開的小卡上、而且要他有分享。
@@ -42,35 +42,29 @@ const kTownLots = <Offset>[
 ];
 
 /// 「+ Add a friend」木牌插在下方那片空草地上。
-const kTownSignAt = Offset(560 / 1086, 1170 / 1448);
+/// 2026-11-18 從 560 移到 660：原本一打開時在左下，會被 ✨ 與 🔥 小圓鈕蓋住。
+const kTownSignAt = Offset(660 / 1086, 1165 / 1448);
 
 /// 地圖住得下幾個朋友（十間扣掉你家）。
 const kTownMaxFriends = 9;
 
-/// 小寵物（使用者生成的兩張，柴犬與灰色虎斑貓，一個姿勢）。還沒放進來之前退回首頁那隻寵物縮小。
-/// 小鎮裡不畫心情，所以退路一律畫 bored（中性），**絕不畫 happy**。
+/// 小鎮裡的寵物：就是首頁那一隻（小狗或貓，2026-11-18 使用者定不另外生小寵物圖）。
+/// 小鎮裡不畫心情，所以一律畫 bored（中性），**絕不畫 happy**。
 class TownPetSprite extends StatelessWidget {
   final String? species;
   final double size;
   const TownPetSprite({super.key, required this.species, this.size = 58});
 
   @override
-  Widget build(BuildContext context) {
-    final kind = species == 'cat' ? 'cat' : 'dog';
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Image.asset(
-        'assets/pets/town/$kind.png',
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => HomePet(
-          mood: 'bored',
-          species: speciesOf(species),
-          size: size * 0.92,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: HomePet(
+      mood: 'bored',
+      species: speciesOf(species),
+      size: size * 0.92,
+    ),
+  );
 }
 
 /// 頭上那顆星：慢慢閃；系統開「減少動態效果」時靜止。
@@ -145,31 +139,6 @@ class _TownStarState extends State<TownStar>
       },
     );
   }
-}
-
-/// 腳下那圈金光（扁的橢圓）。
-class TownHalo extends StatelessWidget {
-  final double width;
-  const TownHalo({super.key, required this.width});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    height: width * 0.24,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.all(
-          Radius.elliptical(width / 2, width * 0.12),
-        ),
-        gradient: RadialGradient(
-          colors: [
-            kTownGold.withValues(alpha: 0.85),
-            kTownGold.withValues(alpha: 0),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class TownNameTag extends StatelessWidget {
@@ -354,7 +323,7 @@ class _TownMapState extends State<TownMap> {
 
   /// 腳踩在 (x, y)：上面一格放星星，下面是名牌。
   Widget _townie(TownPerson p, double x, double y, double mapW) {
-    final pet = mapW * (p.mine ? 0.085 : 0.075);
+    final pet = mapW * (p.mine ? 0.11 : 0.10);
     final starBox = pet * 0.55;
     const boxW = 110.0;
     return Positioned(
@@ -384,11 +353,6 @@ class _TownMapState extends State<TownMap> {
                 clipBehavior: Clip.none,
                 alignment: Alignment.bottomCenter,
                 children: [
-                  if (p.glow)
-                    Positioned(
-                      bottom: -pet * 0.1,
-                      child: TownHalo(width: pet * 1.5),
-                    ),
                   // 首頁那隻寵物自己可以點（會有反應），會把點擊吃掉 → 小鎮裡交給外層
                   IgnorePointer(
                     child: TownPetSprite(species: p.petSpecies, size: pet),
