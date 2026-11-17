@@ -323,12 +323,13 @@ class _TownMapState extends State<TownMap> {
 
   /// 腳踩在 (x, y)：上面一格放星星，下面是名牌。
   Widget _townie(TownPerson p, double x, double y, double mapW) {
-    final pet = mapW * (p.mine ? 0.11 : 0.10);
+    final pet = mapW * (p.mine ? 0.09 : 0.08);
     final starBox = pet * 0.55;
     const boxW = 110.0;
     return Positioned(
       left: x - boxW / 2,
-      top: y - pet - starBox,
+      // 往下 0.35 隻：寵物圖腳下有留白，不往下的話看起來浮在草地上緣（11-18 使用者）
+      top: y - pet - starBox + pet * 0.35,
       width: boxW,
       child: GestureDetector(
         key: Key('town-${p.handle}'),
