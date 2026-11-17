@@ -34,6 +34,8 @@ import 'friend_sharing_screen.dart';
 /// 2026-11-16：Streak 大卡底下分 **Feed**（動態牆，預設）與 **Friends**（邀請碼、名單、排行）兩個分頁。
 /// 2026-11-17（使用者定）：最前面多一個 **Town**（好友小鎮，預設），Streak 大卡換成小鎮底下的一行
 /// 「🔥 3 nights in a row · Best 5 · This week ›」（點了才看那張大卡）。小鎮的規則見 widgets/friends_town.dart。
+/// 2026-11-18：Town 改成**整個畫面都是地圖**（照 Finch），標題與分頁浮在上面，連續晚數、✨ 說明、
+/// 誰來看過你收成左下／右下的小圓鈕。載入中、連不到後端時退回一般的版面照實說。
 /// 朋友沒公開的值是 null，畫面就不畫那一項，不寫成 0。
 class FriendsScreen extends StatefulWidget {
   /// null = 這支 build 沒有後端，畫面會老實講要連上後端。
@@ -286,6 +288,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = _result?.value;
+    final town = _town?.value;
+    if (_tab == _Tab.town && widget.service != null && state != null && town != null && _town!.isOk) {
+      return _townFull(state, town);
+    }
     final top = MediaQuery.paddingOf(context).top;
     // ⚠️ 靠上對齊，不能用 Center：內容比螢幕短時（小鎮分頁）Center 會把整頁垂直置中，
     //    上面空一大塊（2026-11-18 實機）。以前頁首有很高的 Streak 大卡才看不出來。
@@ -314,7 +321,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: child);
 
   List<Widget> _body() => [
-        for (final w in _bodyParts()) w is _FullWidth ? w.child : _pad(w),
+        for (final w in _bodyParts()) _pad(w),
       ];
 
   List<Widget> _bodyParts() {
@@ -402,76 +409,124 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   /// 好友小鎮：夜景（整個寬度）→ 連續晚數那一行 → ✨ 的說明 → 今天誰來看過你。
+  /// 小鎮還沒好的時候（載入中、連不到後端）。好了之後整頁換成 [_townFull]。
   List<Widget> _townTab(FriendsState state) {
-    final t = _town;
-    if (t == null) {
+    if (_town == null) {
       return const [Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))];
     }
-    final town = t.value;
-    if (!t.isOk || town == null) {
-      return [
-        _card(const Text(
-          "The town lives on the backend, and it cannot be reached right now.",
-          key: Key('town-unreachable'),
-          style: TextStyle(color: Colors.white70),
-        )),
-      ];
-    }
-    final me = state.me;
     return [
-      _FullWidth(TownScene(town: town, onTap: _tapTownie)),
-      if (me?.currentStreak != null) _streakRow(me!),
-      const Padding(
-        padding: EdgeInsets.only(top: 6, bottom: 14),
-        child: Text('✨ = put the phone down on time last night',
-            key: Key('town-legend'), style: TextStyle(color: Color(0x88FFFFFF), fontSize: 12)),
-      ),
-      if (town.friends.isEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: FilledButton.icon(
-            key: const Key('town-invite'),
-            onPressed: () => setState(() => _tab = _Tab.friends),
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            label: const Text('Invite friends'),
-          ),
-        ),
-      if (town.visits.isNotEmpty) TownVisitsCard(visits: town.visits),
+      _card(const Text(
+        "The town lives on the backend, and it cannot be reached right now.",
+        key: Key('town-unreachable'),
+        style: TextStyle(color: Colors.white70),
+      )),
     ];
   }
 
-  Widget _streakRow(FriendSummary me) {
-    final n = me.currentStreak!;
-    return InkWell(
-      key: const Key('town-streak'),
-      onTap: () => _openMyWeek(me),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 14),
-        child: Row(
-          children: [
-            const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A5C), size: 22),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text.rich(
-                TextSpan(children: [
-                  TextSpan(
-                    text: '$n ${n == 1 ? 'night' : 'nights'} in a row',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  if (me.bestStreak != null)
-                    TextSpan(
-                      text: '  ·  Best ${me.bestStreak}',
-                      style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 14),
-                    ),
-                ]),
-                overflow: TextOverflow.ellipsis,
+  /// 整個畫面的小鎮：地圖鋪滿，上面浮標題與分頁，左下連續晚數＋✨ 說明，右下誰來看過你。
+  Widget _townFull(FriendsState state, TownState town) {
+    final pad = MediaQuery.paddingOf(context);
+    const headerH = 120.0;
+    final me = state.me;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: TownMap(
+            town: town,
+            onTap: _tapTownie,
+            onAddFriend: town.friends.length < kTownMaxFriends ? () => setState(() => _tab = _Tab.friends) : null,
+            covered: EdgeInsets.only(top: pad.top + headerH, bottom: pad.bottom + 70),
+          ),
+        ),
+        // 標題與分頁：上面一層淡淡的深色，字才看得清楚；不擋地圖的滑動（只有字與按鈕吃點擊）
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(0, pad.top + 12, 0, 18),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xE6081326), Color(0x00081326)],
               ),
             ),
-            const SizedBox(width: 8),
-            const Text('This week',
-                style: TextStyle(color: Color(0xFFB9A6FF), fontSize: 14, fontWeight: FontWeight.w600)),
-            const Icon(Icons.chevron_right, color: Color(0xFFB9A6FF), size: 20),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(padding: const EdgeInsets.fromLTRB(20, 0, 12, 4), child: _titleRow()),
+                _pad(_tabs()),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          bottom: pad.bottom + 16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TownRoundButton(
+                key: const Key('town-legend-button'),
+                tooltip: 'What the stars mean',
+                onTap: () => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(const SnackBar(
+                    content: Text('✨ = put the phone down on time last night', key: Key('town-legend')),
+                  )),
+                child: const Text('✨', style: TextStyle(fontSize: 20)),
+              ),
+              if (me?.currentStreak != null) ...[
+                const SizedBox(height: 10),
+                TownRoundButton(
+                  key: const Key('town-streak'),
+                  tooltip: '${me!.currentStreak} nights in a row. Open this week',
+                  onTap: () => _openMyWeek(me),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A5C), size: 22),
+                      const SizedBox(width: 4),
+                      Text('${me.currentStreak}',
+                          style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: pad.bottom + 16,
+          child: TownRoundButton(
+            key: const Key('town-visits-button'),
+            tooltip: 'Who stopped by today',
+            badge: town.visits.length,
+            onTap: () => _openVisits(town.visits),
+            child: const Icon(Icons.mail_rounded, color: Color(0xFFD9CCFF), size: 24),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openVisits(List<TownVisit> visits) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF10265A),
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: visits.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text('No one stopped by yet today.',
+                      key: Key('town-no-visits'), style: TextStyle(color: Colors.white70, fontSize: 15)),
+                )
+              : TownVisitsCard(visits: visits),
         ),
       ),
     );
@@ -671,11 +726,3 @@ class _FriendsScreenState extends State<FriendsScreen> {
 }
 
 enum _Tab { town, feed, friends }
-
-/// 不要左右留白的那一塊（小鎮的夜景要整個寬度）。
-class _FullWidth extends StatelessWidget {
-  final Widget child;
-  const _FullWidth(this.child);
-  @override
-  Widget build(BuildContext context) => child;
-}

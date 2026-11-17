@@ -204,20 +204,53 @@ Future<void> settle(WidgetTester tester) async {
 
 Finder townie(String handle) => find.byKey(Key('town-$handle'));
 
+/// 先把地圖滑到那個人（離你家遠的房子一打開時在畫面外），再點他。
+Future<void> tapTownie(WidgetTester tester, String handle) async {
+  final at = tester.getCenter(townie(handle));
+  await tester.drag(
+    find.byKey(const Key('town-map')),
+    const Offset(411 / 2, 450) - at,
+  );
+  await settle(tester);
+  await tester.tap(townie(handle));
+  await settle(tester);
+}
+
 void main() {
-  testWidgets('【1】預設在 Town；我在畫面正中間，朋友一右一左往外排', (tester) async {
+  testWidgets('【1】預設在 Town、整個畫面是地圖；一打開你家在看得到的那塊正中間，朋友住離你家近的房子', (tester) async {
     await pump(tester, TownStub());
-    expect(find.byKey(const Key('town-scroll')), findsOneWidget);
-    final me = tester.getCenter(townie('ME0001')).dx;
-    expect((me - 411 / 2).abs(), lessThan(2));
-    // 照後端順序：第 1 個在右、第 2 個在左、第 3 個在更右
-    expect(tester.getCenter(townie('EAR111')).dx, greaterThan(me));
-    expect(tester.getCenter(townie('LAT222')).dx, lessThan(me));
-    expect(
-      tester.getCenter(townie('BLA333')).dx,
-      greaterThan(tester.getCenter(townie('EAR111')).dx),
+    expect(find.byKey(const Key('town-map')), findsOneWidget);
+    final me = tester.getCenter(townie('ME0001'));
+    expect((me.dx - 411 / 2).abs(), lessThan(2));
+    // 第 1 個朋友住右上那間、第 2 個住右下那間（kTownLots 照離你家的距離排）
+    final first = tester.getCenter(townie('EAR111'));
+    final second = tester.getCenter(townie('LAT222'));
+    expect(first.dx > me.dx && first.dy < me.dy, isTrue);
+    expect(second.dx > me.dx && second.dy > me.dy, isTrue);
+    // 上下左右都滑得動
+    await tester.drag(
+      find.byKey(const Key('town-map')),
+      const Offset(120, 120),
     );
-    expect(townSlots(4), [0, 1, -1, 2, -2]);
+    await settle(tester);
+    final moved = tester.getCenter(townie('ME0001'));
+    expect(moved.dx, greaterThan(me.dx));
+    expect(moved.dy, greaterThan(me.dy));
+  });
+
+  testWidgets('地圖住滿（9 個朋友）→ 第 10 個不畫、木牌也不插', (tester) async {
+    final many = [for (var i = 0; i < 10; i++) person('F$i', 'Friend $i')];
+    final stub = TownStub(
+      town: FriendsResult(
+        FriendsStatus.ok,
+        value: townOf([person('ME0001', 'Nathan', mine: true), ...many]),
+      ),
+    );
+    await pump(tester, stub);
+    expect(kTownLots, hasLength(kTownMaxFriends + 1));
+    expect(find.byKey(const Key('town-F8')), findsOneWidget);
+    expect(find.byKey(const Key('town-F9')), findsNothing);
+    expect(find.byKey(const Key('town-invite')), findsNothing);
   });
 
   testWidgets('【2】只有發光的人有星星與金光；沒發光的三個人畫得一模一樣', (tester) async {
@@ -247,6 +280,10 @@ void main() {
     ];
     expect(shape('LAT222'), shape('BLA333'));
     expect(shape('BLA333'), shape('SHY444'));
+    // ✨ 的說明收在左下的小圓鈕裡，點了才出現
+    expect(find.byKey(const Key('town-legend')), findsNothing);
+    await tester.tap(find.byKey(const Key('town-legend-button')));
+    await settle(tester);
     expect(find.byKey(const Key('town-legend')), findsOneWidget);
   });
 
@@ -267,8 +304,7 @@ void main() {
   testWidgets('【4】點朋友 → 按鈕照抄後端；送出呼叫後端、變 Sent ✓、不能再送', (tester) async {
     final stub = TownStub();
     await pump(tester, stub);
-    await tester.tap(townie('EAR111'));
-    await settle(tester);
+    await tapTownie(tester, 'EAR111');
     expect(find.text('PROUD-FROM-BACKEND'), findsOneWidget);
     await tester.tap(find.byKey(const Key('town-visit-pet')));
     await settle(tester);
@@ -296,8 +332,7 @@ void main() {
       ),
     );
     await pump(tester, stub);
-    await tester.tap(townie('EAR111'));
-    await settle(tester);
+    await tapTownie(tester, 'EAR111');
     expect(find.text('Sleep well 💤 · Sent ✓'), findsOneWidget);
     await tester.tap(find.byKey(const Key('town-visit-pet')));
     await settle(tester);
@@ -312,8 +347,7 @@ void main() {
         message: 'ALREADY-FROM-BACKEND',
       );
     await pump(tester, stub);
-    await tester.tap(townie('LAT222'));
-    await settle(tester);
+    await tapTownie(tester, 'LAT222');
     await tester.tap(find.byKey(const Key('town-visit-proud')));
     await settle(tester);
     expect(find.text('ALREADY-FROM-BACKEND'), findsOneWidget);
@@ -322,8 +356,7 @@ void main() {
 
   testWidgets('【5】小卡：心情只有分享才有；準時才有 ✨；有卡才有 See last night', (tester) async {
     await pump(tester, TownStub());
-    await tester.tap(townie('EAR111'));
-    await settle(tester);
+    await tapTownie(tester, 'EAR111');
     expect(find.byKey(const Key('town-sheet-glow')), findsOneWidget);
     expect(find.byKey(const Key('town-see-night')), findsOneWidget);
     HomePet sheetPet() => tester.widget<HomePet>(
@@ -336,8 +369,7 @@ void main() {
     Navigator.of(tester.element(find.byKey(const Key('town-sheet')))).pop();
     await settle(tester);
 
-    await tester.tap(townie('BLA333'));
-    await settle(tester);
+    await tapTownie(tester, 'BLA333');
     expect(find.byKey(const Key('town-sheet-glow')), findsNothing);
     expect(find.byKey(const Key('town-see-night')), findsNothing);
     expect(
@@ -351,10 +383,21 @@ void main() {
     );
   });
 
-  testWidgets('【6】今天誰來看過你：照抄後端；沒人來整張不出現', (tester) async {
+  testWidgets('【6】今天誰來看過你：右下小圓鈕，有人來才有紅點；點開照抄後端', (tester) async {
     await pump(tester, TownStub());
-    expect(find.byKey(const Key('town-visits')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('town-visits-button')),
+        matching: find.text('1'),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const Key('town-visits-button')));
+    await settle(tester);
+    expect(find.byKey(const Key('town-no-visits')), findsOneWidget);
+  });
 
+  testWidgets('【6】有人來看過你 → 紅點寫人數、點開是後端那句', (tester) async {
     final stub = TownStub(
       town: FriendsResult(
         FriendsStatus.ok,
@@ -371,14 +414,26 @@ void main() {
       ),
     );
     await pump(tester, stub);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('town-visits-button')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('town-visits-button')));
+    await settle(tester);
     expect(find.text('Stopped by today'), findsOneWidget);
     expect(find.text('MESSAGE-FROM-BACKEND'), findsOneWidget);
   });
 
-  testWidgets('連續晚數那一行：點了打開這週的大卡', (tester) async {
+  testWidgets('連續晚數：左下小圓鈕寫幾晚，點了打開這週的大卡', (tester) async {
     await pump(tester, TownStub());
     expect(
-      find.text('3 nights in a row  ·  Best 5', findRichText: true),
+      find.descendant(
+        of: find.byKey(const Key('town-streak')),
+        matching: find.text('3'),
+      ),
       findsOneWidget,
     );
     await tester.tap(find.byKey(const Key('town-streak')));
@@ -386,7 +441,9 @@ void main() {
     expect(find.byKey(const Key('my-week-sheet')), findsOneWidget);
   });
 
-  testWidgets('【7】沒有朋友 → Invite friends，按了切到 Friends 分頁', (tester) async {
+  testWidgets('【7】沒有朋友 → 地圖上的 + Add a friend 木牌，按了切到 Friends 分頁', (
+    tester,
+  ) async {
     final stub = TownStub(
       town: FriendsResult(
         FriendsStatus.ok,
@@ -401,14 +458,20 @@ void main() {
   });
 
   testWidgets('內容比螢幕短時，標題仍在最上面（不被垂直置中）', (tester) async {
-    await pump(tester, TownStub());
+    await pump(
+      tester,
+      TownStub(town: const FriendsResult(FriendsStatus.failed)),
+    );
     expect(tester.getTopLeft(find.text('Friends ✨')).dy, lessThan(40));
   });
 
   testWidgets('【7】連不到後端 → 照實說，小鎮裡一個人都沒有', (tester) async {
-    await pump(tester, TownStub(town: const FriendsResult(FriendsStatus.failed)));
+    await pump(
+      tester,
+      TownStub(town: const FriendsResult(FriendsStatus.failed)),
+    );
     expect(find.byKey(const Key('town-unreachable')), findsOneWidget);
-    expect(find.byType(TownScene), findsNothing);
+    expect(find.byType(TownMap), findsNothing);
   });
 
   testWidgets('【8】減少動態效果：星星不閃', (tester) async {

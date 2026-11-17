@@ -9,21 +9,43 @@ import 'streak_card.dart' show speciesOf;
 
 /// 好友小鎮（2026-11-17 使用者定，照 Finch 的做法：朋友之間只看到寵物）。
 ///
-/// 一張很寬的夜景（使用者生成的 `town_night.jpg`），我在正中間，朋友照加好友的先後
-/// 一右一左往外排，左右滑著看。**昨晚準時放下手機、而且有分享 On time 的人頭上一顆星、
-/// 腳下一圈金光**；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，不變暗、不說原因
-/// （後端也只給 glow: false）。
+/// 2026-11-18 改成**整個畫面都是小鎮、上下左右都能滑**（使用者給 Finch 的截圖）：一張從斜上方看的
+/// 卡通的夜晚村莊（使用者生成的 `town_map.jpg`，有河、橋、池塘），十間房子，正中間有柵欄那間是你家，
+/// 朋友照加好友的先後住進離你家近的房子，寵物站在房子右邊那塊亮草地上。**昨晚準時放下手機、而且有分享 On time 的人
+/// 頭上一顆星、腳下一圈金光**；其他人一律不亮——晚了、沒資料、沒分享看起來**完全一樣**，
+/// 不變暗、不說原因（後端也只給 glow: false）。
 ///
 /// ⚠️ 小鎮裡**不畫心情**（所有寵物同一個樣子）；心情只在點開的小卡上、而且要他有分享。
 /// ⚠️ 拜訪不給 XP、不影響分數、不推播；按鈕上的字照抄後端（social/town.py）。
 /// ⚠️ 這個檔案一格都不算：誰亮、送過沒，全部照抄後端。
 
 const kTownGold = Color(0xFFFFD27A);
-const _townImage = 'assets/backgrounds/town_night.jpg';
-const _imageAspect = 2172 / 724;
+const _mapImage = 'assets/backgrounds/town_map.jpg';
 
-/// 腳踩在圖高的哪裡（那張圖的草地從約 75% 開始）。
-const _groundAt = 0.86;
+/// 原圖 1086 × 1448（寬 ÷ 高）。
+const _mapAspect = 1086 / 1448;
+
+/// 十間房子右邊那塊空草地（寵物腳踩的地方），用原圖的比例表示。2026-11-18 在第二版地圖上量的。
+/// 0＝正中間有柵欄那間（你家）；其餘照離你家的距離由近到遠排，朋友照加好友的先後住進去。
+/// ⚠️ 換地圖就要重量這些點。
+const kTownLots = <Offset>[
+  Offset(650 / 1086, 712 / 1448),
+  Offset(885 / 1086, 478 / 1448),
+  Offset(980 / 1086, 828 / 1448),
+  Offset(290 / 1086, 868 / 1448),
+  Offset(885 / 1086, 1033 / 1448),
+  Offset(265 / 1086, 610 / 1448),
+  Offset(900 / 1086, 308 / 1448),
+  Offset(325 / 1086, 1078 / 1448),
+  Offset(300 / 1086, 278 / 1448),
+  Offset(395 / 1086, 1243 / 1448),
+];
+
+/// 「+ Add a friend」木牌插在下方那片空草地上。
+const kTownSignAt = Offset(560 / 1086, 1170 / 1448);
+
+/// 地圖住得下幾個朋友（十間扣掉你家）。
+const kTownMaxFriends = 9;
 
 /// 小寵物（使用者生成的兩張，柴犬與灰色虎斑貓，一個姿勢）。還沒放進來之前退回首頁那隻寵物縮小。
 /// 小鎮裡不畫心情，所以退路一律畫 bored（中性），**絕不畫 happy**。
@@ -141,7 +163,7 @@ class TownHalo extends StatelessWidget {
         ),
         gradient: RadialGradient(
           colors: [
-            kTownGold.withValues(alpha: 0.55),
+            kTownGold.withValues(alpha: 0.85),
             kTownGold.withValues(alpha: 0),
           ],
         ),
@@ -189,35 +211,31 @@ class TownNameTag extends StatelessWidget {
   );
 }
 
-/// 誰站在哪一格：我在 0，朋友照後端順序 +1、−1、+2、−2…（一右一左往外排）。
-List<int> townSlots(int friends) => [
-  0,
-  for (var i = 0; i < friends; i++) (i.isEven ? 1 : -1) * (i ~/ 2 + 1),
-];
-
-/// 夜景本身：可以左右滑，一開始把我放在畫面正中間。
-class TownScene extends StatefulWidget {
+/// 整個畫面的小鎮地圖：上下左右滑、不能縮放，一開始讓你家出現在看得到的那塊正中間。
+class TownMap extends StatefulWidget {
   final TownState town;
-  final double height;
   final void Function(TownPerson person) onTap;
 
-  /// 兩個人之間隔多寬。
-  final double spacing;
+  /// 點木牌。null＝不插木牌（地圖住滿了）。
+  final VoidCallback? onAddFriend;
 
-  const TownScene({
+  /// 上面被分頁蓋住、下面被導覽列與小圓鈕蓋住的高度。一開始置中時要扣掉，不然你家會被蓋住。
+  final EdgeInsets covered;
+
+  const TownMap({
     super.key,
     required this.town,
     required this.onTap,
-    this.height = 300,
-    this.spacing = 92,
+    this.onAddFriend,
+    this.covered = EdgeInsets.zero,
   });
 
   @override
-  State<TownScene> createState() => _TownSceneState();
+  State<TownMap> createState() => _TownMapState();
 }
 
-class _TownSceneState extends State<TownScene> {
-  ScrollController? _controller;
+class _TownMapState extends State<TownMap> {
+  TransformationController? _controller;
 
   @override
   void dispose() {
@@ -227,65 +245,63 @@ class _TownSceneState extends State<TownScene> {
 
   @override
   Widget build(BuildContext context) {
-    final h = widget.height;
-    final tileW = h * _imageAspect;
-    final me = widget.town.me;
-    final friends = widget.town.friends;
-    final ordered = [?me, ...friends];
-    final slots = townSlots(friends.length);
-    final reach = slots.isEmpty
-        ? 0
-        : slots.map((s) => s.abs()).reduce(math.max);
-    // 兩邊都要留半個間隔＋邊距；人多到一張圖放不下就左右翻轉接著鋪
-    final needed = (reach + 1) * widget.spacing * 2;
-    final width = math.max(tileW, needed);
-    final center = width / 2;
-    final tiles = (width / tileW).ceil() + 1;
-    final groundY = h * _groundAt;
-
     return LayoutBuilder(
       builder: (context, box) {
-        final view = box.maxWidth;
-        _controller ??= ScrollController(
-          initialScrollOffset: math.max(0, center - view / 2),
+        final view = box.biggest;
+        // 地圖要比畫面寬也比畫面高，兩個方向才滑得動
+        final mapW = math.max(
+          view.width * 1.5,
+          view.height * _mapAspect * 1.08,
         );
-        return SizedBox(
-          height: h,
-          child: SingleChildScrollView(
-            key: const Key('town-scroll'),
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: math.max(width, view),
-              height: h,
-              child: Stack(
-                clipBehavior: Clip.hardEdge,
-                children: [
-                  // 圖從中間往兩邊鋪（中間那張不翻），我永遠站在原圖的正中間
-                  for (var i = -(tiles ~/ 2); i <= tiles ~/ 2; i++)
-                    Positioned(
-                      left: center - tileW / 2 + i * tileW,
-                      top: 0,
-                      width: tileW,
-                      height: h,
-                      child: Transform.flip(
-                        flipX: i.isOdd,
-                        child: Image.asset(
-                          _townImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              const ColoredBox(color: Color(0xFF101A3F)),
-                        ),
-                      ),
-                    ),
-                  for (var i = 0; i < ordered.length; i++)
-                    _townie(
-                      ordered[i],
-                      center + slots[i] * widget.spacing,
-                      groundY,
-                    ),
-                ],
-              ),
+        final mapH = mapW / _mapAspect;
+        final me = kTownLots[0];
+        if (_controller == null) {
+          final c = widget.covered;
+          final seenMidY = c.top + (view.height - c.top - c.bottom) / 2;
+          final dx = (view.width / 2 - me.dx * mapW).clamp(
+            view.width - mapW,
+            0.0,
+          );
+          final dy = (seenMidY - me.dy * mapH).clamp(view.height - mapH, 0.0);
+          _controller = TransformationController(
+            Matrix4.translationValues(dx, dy, 0),
+          );
+        }
+        final people = [
+          ?widget.town.me,
+          ...widget.town.friends.take(kTownMaxFriends),
+        ];
+        return InteractiveViewer(
+          key: const Key('town-map'),
+          transformationController: _controller,
+          constrained: false,
+          scaleEnabled: false,
+          minScale: 1,
+          maxScale: 1,
+          boundaryMargin: EdgeInsets.zero,
+          child: SizedBox(
+            width: mapW,
+            height: mapH,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: Image.asset(
+                    _mapImage,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: Color(0xFF101A3F)),
+                  ),
+                ),
+                if (widget.onAddFriend != null) _sign(mapW, mapH),
+                for (final (i, p) in people.indexed)
+                  _townie(
+                    p,
+                    kTownLots[i].dx * mapW,
+                    kTownLots[i].dy * mapH,
+                    mapW,
+                  ),
+              ],
             ),
           ),
         );
@@ -293,12 +309,57 @@ class _TownSceneState extends State<TownScene> {
     );
   }
 
-  Widget _townie(TownPerson p, double x, double groundY) {
-    final pet = p.mine ? 66.0 : 56.0;
-    const boxW = 96.0;
+  Widget _sign(double mapW, double mapH) {
+    const w = 150.0;
+    return Positioned(
+      left: kTownSignAt.dx * mapW - w / 2,
+      top: kTownSignAt.dy * mapH - 40,
+      width: w,
+      child: GestureDetector(
+        key: const Key('town-invite'),
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onAddFriend,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFB9772F),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF7A4A1C), width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '+ Add a friend',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Container(width: 6, height: 22, color: const Color(0xFF7A4A1C)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 腳踩在 (x, y)：上面一格放星星，下面是名牌。
+  Widget _townie(TownPerson p, double x, double y, double mapW) {
+    final pet = mapW * (p.mine ? 0.085 : 0.075);
+    final starBox = pet * 0.55;
+    const boxW = 110.0;
     return Positioned(
       left: x - boxW / 2,
-      top: groundY - pet - 34,
+      top: y - pet - starBox,
       width: boxW,
       child: GestureDetector(
         key: Key('town-${p.handle}'),
@@ -311,9 +372,12 @@ class _TownSceneState extends State<TownScene> {
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                height: 34,
+                height: starBox,
                 child: p.glow
-                    ? TownStar(key: Key('town-glow-${p.handle}'), size: 16)
+                    ? TownStar(
+                        key: Key('town-glow-${p.handle}'),
+                        size: starBox * 0.8,
+                      )
                     : null,
               ),
               Stack(
@@ -331,7 +395,7 @@ class _TownSceneState extends State<TownScene> {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               TownNameTag(person: p),
             ],
           ),
@@ -341,7 +405,77 @@ class _TownSceneState extends State<TownScene> {
   }
 }
 
-/// 「今天誰來看過你」。訊息照抄後端；沒有人來就整張不出現。
+/// 浮在地圖上的小圓鈕（連續晚數、✨ 說明、誰來看過你）。
+class TownRoundButton extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  /// 右上角的紅點數字；0＝不畫。
+  final int badge;
+
+  const TownRoundButton({
+    super.key,
+    required this.child,
+    required this.onTap,
+    required this.tooltip,
+    this.badge = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: tooltip,
+    child: GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xE6161F48),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: const Color(0x55FFFFFF)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+          if (badge > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF5A5F),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// 「今天誰來看過你」（右下角小圓鈕點開）。訊息照抄後端。
 class TownVisitsCard extends StatelessWidget {
   final List<TownVisit> visits;
   const TownVisitsCard({super.key, required this.visits});
