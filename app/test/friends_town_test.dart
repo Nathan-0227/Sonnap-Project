@@ -238,7 +238,7 @@ void main() {
     expect(moved.dy, greaterThan(me.dy));
   });
 
-  testWidgets('地圖住滿（9 個朋友）→ 第 10 個不畫、木牌也不插', (tester) async {
+  testWidgets('地圖住滿（9 個朋友）→ 第 10 個不畫、也沒有 Invite', (tester) async {
     final many = [for (var i = 0; i < 10; i++) person('F$i', 'Friend $i')];
     final stub = TownStub(
       town: FriendsResult(
@@ -437,7 +437,7 @@ void main() {
     expect(find.byKey(const Key('my-week-sheet')), findsOneWidget);
   });
 
-  testWidgets('【7】沒有朋友 → 地圖上的 + Add a friend 木牌，按了切到 Friends 分頁', (
+  testWidgets('【7】下一間空房子門口有 ＋ Invite，按了切到 Friends 分頁', (
     tester,
   ) async {
     final stub = TownStub(

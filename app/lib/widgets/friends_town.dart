@@ -41,10 +41,6 @@ const kTownLots = <Offset>[
   Offset(395 / 1086, 1243 / 1448),
 ];
 
-/// 「+ Add a friend」木牌插在下方那片空草地上。
-/// 2026-11-18 從 560 移到 660：原本一打開時在左下，會被 ✨ 與 🔥 小圓鈕蓋住。
-const kTownSignAt = Offset(660 / 1086, 1165 / 1448);
-
 /// 地圖住得下幾個朋友（十間扣掉你家）。
 const kTownMaxFriends = 9;
 
@@ -258,7 +254,8 @@ class _TownMapState extends State<TownMap> {
                         const ColoredBox(color: Color(0xFF101A3F)),
                   ),
                 ),
-                if (widget.onAddFriend != null) _sign(mapW, mapH),
+                if (widget.onAddFriend != null && people.length < kTownLots.length)
+                  _inviteSpot(kTownLots[people.length].dx * mapW, kTownLots[people.length].dy * mapH, mapW),
                 for (final (i, p) in people.indexed)
                   _townie(
                     p,
@@ -274,44 +271,47 @@ class _TownMapState extends State<TownMap> {
     );
   }
 
-  Widget _sign(double mapW, double mapH) {
-    const w = 150.0;
+  /// 下一間空房子門口：半透明的「＋」圓圈＋「Invite」（2026-11-18 使用者：木牌太突兀）。
+  /// 意思是「這間還沒人住，邀朋友來」，所以放在下一個朋友會住的那塊草地上。
+  Widget _inviteSpot(double x, double y, double mapW) {
+    final d = mapW * 0.06;
+    const boxW = 90.0;
     return Positioned(
-      left: kTownSignAt.dx * mapW - w / 2,
-      top: kTownSignAt.dy * mapH - 40,
-      width: w,
+      left: x - boxW / 2,
+      top: y - d * 0.75,
+      width: boxW,
       child: GestureDetector(
         key: const Key('town-invite'),
         behavior: HitTestBehavior.opaque,
         onTap: widget.onAddFriend,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFB9772F),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF7A4A1C), width: 2),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x66000000),
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
+        child: Semantics(
+          button: true,
+          label: 'Invite a friend',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: d,
+                height: d,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0x33FFFFFF),
+                  border: Border.all(color: const Color(0xAAFFFFFF), width: 1.5),
+                ),
+                child: Icon(Icons.add_rounded, color: Colors.white, size: d * 0.6),
               ),
-              child: const Text(
-                '+ Add a friend',
+              const SizedBox(height: 2),
+              const Text(
+                'Invite',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.w800,
+                  shadows: TownNameTag._shadow,
                 ),
               ),
-            ),
-            Container(width: 6, height: 22, color: const Color(0xFF7A4A1C)),
-          ],
+            ],
+          ),
         ),
       ),
     );
