@@ -777,9 +777,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _openCloset() async {
     final service = widget.game;
     if (service == null) return _showNeedsBackend("Closet");
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => ClosetScreen(service: service)));
+    // 衣櫃裡的預覽要跟首頁那隻是同一隻：心情與成長階段都照抄後端，
+    // 不在這裡挑。拿不到心情就讓 HomePet 走它自己的預設（bored）。
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClosetScreen(
+          service: service,
+          mood: mood,
+          growthStage: _game?.value?.growthStage,
+        ),
+      ),
+    );
     // 回來時重讀：剛換的衣服要出現在寵物身上。
     if (mounted) await _loadGame();
   }
