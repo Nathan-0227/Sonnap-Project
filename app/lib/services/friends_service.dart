@@ -398,6 +398,118 @@ class LeaderboardBoard {
   }
 }
 
+/// 好友小鎮的一個人（`GET /friends/town`，2026-11-17）。
+///
+/// ⚠️ 沒發光的三種情況（晚了、沒資料、沒分享）後端給的一模一樣——只有 `glow: false`，
+///    不給原因。畫面也就畫得一模一樣，不要在這裡加任何能分辨它們的東西。
+@immutable
+class TownPerson {
+  final String handle;
+  final String displayName;
+  final bool mine;
+  final bool demo;
+
+  /// 'dog'／'cat'；null＝畫小狗。
+  final String? petSpecies;
+
+  /// 只有他有分享心情才有（自己的照給）；只用在點開的小卡上，小鎮裡不畫心情。
+  final String? petMood;
+  final bool glow;
+
+  /// 我今天送過他什麼（'pet'…）；null＝還沒送。自己永遠是 null。
+  final String? sent;
+
+  /// 他昨晚的卡（只有他打開的項目）；null＝不畫「See last night」。
+  final FriendNightCard? card;
+
+  const TownPerson({
+    required this.handle,
+    required this.displayName,
+    this.mine = false,
+    this.demo = false,
+    this.petSpecies,
+    this.petMood,
+    this.glow = false,
+    this.sent,
+    this.card,
+  });
+
+  factory TownPerson.fromJson(Map<String, dynamic> j) {
+    final handle = (j['handle'] as String?) ?? '';
+    final name = (j['display_name'] as String?) ?? '';
+    final species = j['pet_species'] as String?;
+    final mine = j['mine'] == true;
+    final c = j['card'];
+    return TownPerson(
+      handle: handle,
+      displayName: name,
+      mine: mine,
+      demo: j['demo'] == true,
+      petSpecies: species,
+      petMood: j['pet_mood'] as String?,
+      glow: j['glow'] == true,
+      sent: j['sent'] as String?,
+      card: c is Map
+          ? FriendNightCard.fromJson({
+              'handle': handle,
+              'display_name': name,
+              'pet_species': species,
+              'mine': mine,
+              ...c.cast<String, dynamic>(),
+            })
+          : null,
+    );
+  }
+}
+
+/// 今天來看過我的人。message 照抄後端（字只在 social/town.py）。
+@immutable
+class TownVisit {
+  final String displayName;
+  final String kind;
+  final String message;
+  const TownVisit(this.displayName, this.kind, this.message);
+}
+
+@immutable
+class TownState {
+  final String night;
+
+  /// 我＋朋友，順序照後端（我第一個、朋友照加好友的先後）。誰放哪裡由畫面決定。
+  final List<TownPerson> people;
+  final List<TownVisit> visits;
+
+  /// 拜訪的四種動作：(key, 按鈕上的字)，順序與字都照抄後端。
+  final List<(String, String)> kinds;
+
+  const TownState({
+    required this.night,
+    required this.people,
+    this.visits = const [],
+    this.kinds = const [],
+  });
+
+  TownPerson? get me => people.where((p) => p.mine).firstOrNull;
+  List<TownPerson> get friends => [for (final p in people) if (!p.mine) p];
+
+  factory TownState.fromJson(Map<String, dynamic> j) => TownState(
+        night: (j['night'] as String?) ?? '',
+        people: [
+          for (final p in ((j['people'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            TownPerson.fromJson(p),
+        ],
+        visits: [
+          for (final v in ((j['visits'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            TownVisit((v['display_name'] as String?) ?? '', (v['kind'] as String?) ?? '',
+                (v['message'] as String?) ?? ''),
+        ],
+        kinds: [
+          for (final k in ((j['kinds'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            ((k['key'] as String?) ?? '', (k['label'] as String?) ?? ''),
+        ],
+      );
+}
+
 class FriendsService {
   final String baseUrl;
   final UserIdentity identity;
@@ -444,6 +556,20 @@ class FriendsService {
     );
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: LeaderboardBoard.fromJson(r.value!));
+  }
+
+  /// 好友小鎮。比一般端點慢（每個人要組一次昨晚的卡），用動態牆的等待時間。
+  Future<FriendsResult<TownState>> fetchTown() async {
+    final r = await _request('GET', '/friends/town', wait: feedTimeout);
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: TownState.fromJson(r.value!));
+  }
+
+  /// 拜訪朋友（摸摸或一句話）。一天一次：第二次後端回 409，message 照抄後端那句。
+  Future<FriendsResult<String>> visit(String handle, String kind) async {
+    final r = await _request('POST', '/friends/${Uri.encodeComponent(handle)}/visit', body: {'kind': kind});
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: (r.value!['sent'] as String?) ?? kind);
   }
 
   /// 一位朋友：摘要＋最近一晚的卡（可能沒有）。

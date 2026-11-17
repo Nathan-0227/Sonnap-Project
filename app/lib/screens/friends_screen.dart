@@ -5,6 +5,7 @@ import '../models/wall_clock.dart';
 import '../services/friends_service.dart';
 import '../services/pet_choice.dart';
 import '../widgets/friend_night_card.dart';
+import '../widgets/friends_town.dart';
 import '../widgets/mood_filter_bar.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/leaderboard_section.dart';
@@ -31,6 +32,8 @@ import 'friend_sharing_screen.dart';
 /// 2026-11-15（使用者定，grill）：每個人自己選公開什麼（右上角 → What friends can see）；
 /// 最上面是**我的 Streak 大卡**，下面多一段朋友最近 7 天的**動態卡**（只有他公開的項目）。
 /// 2026-11-16：Streak 大卡底下分 **Feed**（動態牆，預設）與 **Friends**（邀請碼、名單、排行）兩個分頁。
+/// 2026-11-17（使用者定）：最前面多一個 **Town**（好友小鎮，預設），Streak 大卡換成小鎮底下的一行
+/// 「🔥 3 nights in a row · Best 5 · This week ›」（點了才看那張大卡）。小鎮的規則見 widgets/friends_town.dart。
 /// 朋友沒公開的值是 null，畫面就不畫那一項，不寫成 0。
 class FriendsScreen extends StatefulWidget {
   /// null = 這支 build 沒有後端，畫面會老實講要連上後端。
@@ -45,9 +48,10 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> {
   String selectedMood = "All";
 
-  /// 2026-11-16 使用者定：好友頁分兩個分頁，打開預設在 Feed（動態牆）。
-  bool _onFeed = true;
+  /// 2026-11-17 使用者定：Town · Feed · Friends，打開預設在 Town。
+  _Tab _tab = _Tab.town;
   FriendsResult<FriendsState>? _result;
+  FriendsResult<TownState>? _town;
   List<FriendNightCard> _feed = const [];
 
   /// 好友畫面的篩選選項。⚠️ 沒有「Sick」，理由見類別說明。
@@ -85,6 +89,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final r = await service.fetch();
     if (!mounted) return;
     setState(() => _result = r);
+    await _loadTown();
+    if (!mounted) return;
     // 寵物原本只存在手機上：跟後端不一樣就送一次，朋友才畫得出你選的那一隻
     final mine = PetChoice.current.value.name;
     final server = r.value?.me?.petSpecies;
@@ -94,6 +100,55 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final feed = await service.fetchFeed();
     if (!mounted) return;
     if (feed.isOk) setState(() => _feed = feed.value!);
+  }
+
+  Future<void> _loadTown() async {
+    final service = widget.service;
+    if (service == null) return;
+    final t = await service.fetchTown();
+    if (mounted) setState(() => _town = t);
+  }
+
+  /// 送出拜訪。null＝成功；否則是要顯示在小卡上的話（後端原文：409 是「今天已經來過了」）。
+  Future<String?> _visit(TownPerson p, String kind) async {
+    final service = widget.service;
+    if (service == null) return 'Could not reach the backend.';
+    final r = await service.visit(p.handle, kind);
+    if (r.isOk || r.httpStatus == 409) _loadTown();
+    if (r.isOk) return null;
+    return r.message ?? 'Could not reach the backend.';
+  }
+
+  void _tapTownie(TownPerson p) {
+    if (p.mine) {
+      // 點自己＝看自己昨晚（朋友看到的那張）
+      final card = p.card;
+      if (card != null) {
+        openFriendNight(context, card);
+      } else {
+        _toast('Nothing to show for last night yet.');
+      }
+      return;
+    }
+    showTownFriendSheet(
+      context,
+      person: p,
+      kinds: _town?.value?.kinds ?? const [],
+      onVisit: (kind) => _visit(p, kind),
+    );
+  }
+
+  void _openMyWeek(FriendSummary me) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF10265A),
+      builder: (context) => SingleChildScrollView(
+        key: const Key('my-week-sheet'),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: StreakCard(summary: me),
+      ),
+    );
   }
 
   Future<void> _openSharing() async {
@@ -231,9 +286,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 有自己的 Streak 時，樹屋場景直接當頁面背景（整個寬度、不包框，2026-11-16 使用者定），
-    // 標題疊在場景的天空上；沒有（載入中、連不到）時照舊只有標題
-    final me = _result?.value?.me;
     final top = MediaQuery.paddingOf(context).top;
     return Center(
       child: SizedBox(
@@ -242,37 +294,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (me != null)
-                StreakCard(
-                  summary: me,
-                  scene: kFriendsScene,
-                  header: Padding(
-                    padding: EdgeInsets.fromLTRB(20, top + 12, 12, 0),
-                    child: _titleRow(),
-                  ),
-                )
-              else
-                Padding(
-                  padding: EdgeInsets.fromLTRB(20, top + 20, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _titleRow(),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "See how your friends are keeping their bedtimes.",
-                        style: TextStyle(color: Colors.white70, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _body(),
-                ),
+                padding: EdgeInsets.fromLTRB(20, top + 12, 12, 12),
+                child: _titleRow(),
               ),
+              ..._body(),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -280,7 +307,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  List<Widget> _body() {
+  static Widget _pad(Widget child) =>
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: child);
+
+  List<Widget> _body() => [
+        for (final w in _bodyParts()) w is _FullWidth ? w.child : _pad(w),
+      ];
+
+  List<Widget> _bodyParts() {
     if (widget.service == null) {
       return [
         _card(const Text(
@@ -312,7 +346,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return [
       _tabs(),
       const SizedBox(height: 16),
-      if (_onFeed) ..._feedTab(state) else ..._friendsTab(state, visible),
+      ...switch (_tab) {
+        _Tab.town => _townTab(state),
+        _Tab.feed => _feedTab(state),
+        _Tab.friends => _friendsTab(state, visible),
+      },
       if (state.notes['what_is_shared'] != null) ...[
         const SizedBox(height: 12),
         Text(state.notes['what_is_shared']!,
@@ -352,10 +390,87 @@ class _FriendsScreenState extends State<FriendsScreen> {
         );
     return Row(
       children: [
-        tab('Feed', _onFeed, () => setState(() => _onFeed = true), const Key('tab-feed')),
-        const SizedBox(width: 20),
-        tab('Friends', !_onFeed, () => setState(() => _onFeed = false), const Key('tab-friends')),
+        for (final (t, label) in [(_Tab.town, 'Town'), (_Tab.feed, 'Feed'), (_Tab.friends, 'Friends')]) ...[
+          tab(label, _tab == t, () => setState(() => _tab = t), Key('tab-${t.name}')),
+          const SizedBox(width: 20),
+        ],
       ],
+    );
+  }
+
+  /// 好友小鎮：夜景（整個寬度）→ 連續晚數那一行 → ✨ 的說明 → 今天誰來看過你。
+  List<Widget> _townTab(FriendsState state) {
+    final t = _town;
+    if (t == null) {
+      return const [Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))];
+    }
+    final town = t.value;
+    if (!t.isOk || town == null) {
+      return [
+        _card(const Text(
+          "The town lives on the backend, and it cannot be reached right now.",
+          key: Key('town-unreachable'),
+          style: TextStyle(color: Colors.white70),
+        )),
+      ];
+    }
+    final me = state.me;
+    return [
+      _FullWidth(TownScene(town: town, onTap: _tapTownie)),
+      if (me?.currentStreak != null) _streakRow(me!),
+      const Padding(
+        padding: EdgeInsets.only(top: 6, bottom: 14),
+        child: Text('✨ = put the phone down on time last night',
+            key: Key('town-legend'), style: TextStyle(color: Color(0x88FFFFFF), fontSize: 12)),
+      ),
+      if (town.friends.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: FilledButton.icon(
+            key: const Key('town-invite'),
+            onPressed: () => setState(() => _tab = _Tab.friends),
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Invite friends'),
+          ),
+        ),
+      if (town.visits.isNotEmpty) TownVisitsCard(visits: town.visits),
+    ];
+  }
+
+  Widget _streakRow(FriendSummary me) {
+    final n = me.currentStreak!;
+    return InkWell(
+      key: const Key('town-streak'),
+      onTap: () => _openMyWeek(me),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Row(
+          children: [
+            const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF8A5C), size: 22),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: '$n ${n == 1 ? 'night' : 'nights'} in a row',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  if (me.bestStreak != null)
+                    TextSpan(
+                      text: '  ·  Best ${me.bestStreak}',
+                      style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 14),
+                    ),
+                ]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text('This week',
+                style: TextStyle(color: Color(0xFFB9A6FF), fontSize: 14, fontWeight: FontWeight.w600)),
+            const Icon(Icons.chevron_right, color: Color(0xFFB9A6FF), size: 20),
+          ],
+        ),
+      ),
     );
   }
 
@@ -550,4 +665,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
         ),
       );
+}
+
+enum _Tab { town, feed, friends }
+
+/// 不要左右留白的那一塊（小鎮的夜景要整個寬度）。
+class _FullWidth extends StatelessWidget {
+  final Widget child;
+  const _FullWidth(this.child);
+  @override
+  Widget build(BuildContext context) => child;
 }

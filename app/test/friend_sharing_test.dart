@@ -63,6 +63,12 @@ Widget host(Widget child, {bool reduce = false}) => MaterialApp(
 );
 
 class _Stub implements FriendsService {
+  @override
+  Future<FriendsResult<TownState>> fetchTown() async => const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<String>> visit(String handle, String kind) async => const FriendsResult(FriendsStatus.failed);
+
   LeaderboardBoard? board;
   final List<(String, String?)> boardCalls = [];
   @override

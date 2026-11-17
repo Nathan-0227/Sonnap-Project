@@ -11,6 +11,12 @@ import 'package:app/services/friends_service.dart';
 import 'package:app/widgets/leaderboard_section.dart';
 
 class FakeLeaderboardService implements FriendsService {
+  @override
+  Future<FriendsResult<TownState>> fetchTown() async => const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<String>> visit(String handle, String kind) async => const FriendsResult(FriendsStatus.failed);
+
   final List<(String, String?)> calls = [];
   Map<String, dynamic> Function(String metric, String? period) reply;
   FakeLeaderboardService(this.reply);

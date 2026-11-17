@@ -83,6 +83,18 @@ class _StubFriends implements FriendsService {
   final List<String> addCalls = [];
   final List<String> removeCalls = [];
   List<FriendNightCard> feed = const [];
+  FriendsResult<TownState> town = const FriendsResult(FriendsStatus.failed);
+  final List<(String, String)> visitCalls = [];
+  FriendsResult<String> visitResult = const FriendsResult(FriendsStatus.ok, value: 'pet');
+
+  @override
+  Future<FriendsResult<TownState>> fetchTown() async => town;
+
+  @override
+  Future<FriendsResult<String>> visit(String handle, String kind) async {
+    visitCalls.add((handle, kind));
+    return visitResult;
+  }
 
   _StubFriends({FriendsResult<FriendsState>? result, FriendsResult<FriendSummary>? addResult})
       : result = result ?? FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(stateJson())),
@@ -178,18 +190,18 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-/// 打開好友頁。2026-11-16 起預設在 Feed 分頁；名單、邀請碼、排行在 Friends 分頁，
-/// 所以預設切過去（要看 Feed 的測試傳 friendsTab: false）。
-Future<void> pump(WidgetTester tester, FriendsService? service, {bool friendsTab = true}) async {
+/// 打開好友頁。2026-11-17 起預設在 Town 分頁；名單、邀請碼、排行在 Friends 分頁，
+/// 所以預設切過去（要看 Feed 的傳 tab: 'feed'，要看小鎮的傳 tab: 'town'）。
+Future<void> pump(WidgetTester tester, FriendsService? service, {String tab = 'friends'}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(home: Scaffold(body: FriendsScreen(service: service))));
   await tester.pump();
   await tester.pump();
-  final tab = find.byKey(const Key('tab-friends'));
-  if (friendsTab && tab.evaluate().isNotEmpty) {
-    await tester.tap(tab);
+  final button = find.byKey(Key('tab-$tab'));
+  if (tab != 'town' && button.evaluate().isNotEmpty) {
+    await tester.tap(button);
     await tester.pump();
   }
 }
@@ -367,8 +379,8 @@ void main() {
       expect(stub.removeCalls, ['BOB234']);
     });
 
-    testWidgets('打開預設在 Feed；沒有動態時講清楚，名單在另一個分頁', (tester) async {
-      await pump(tester, _StubFriends(), friendsTab: false);
+    testWidgets('Feed：沒有動態時講清楚，名單在另一個分頁', (tester) async {
+      await pump(tester, _StubFriends(), tab: 'feed');
       expect(find.byKey(const Key('feed-empty')), findsOneWidget);
       expect(find.text('K7QM2P'), findsNothing);
       await tester.tap(find.byKey(const Key('tab-friends')));
@@ -395,7 +407,7 @@ void main() {
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-02', scene: 'lake',
             items: {'on_time': true}),
       ];
-      await pump(tester, stub, friendsTab: false);
+      await pump(tester, stub, tab: 'feed');
       // 手機大小（內容要長到會捲）＋底部的系統按鍵列
       tester.view.physicalSize = const Size(400, 560);
       tester.view.padding = const FakeViewPadding(bottom: 48);
@@ -512,7 +524,7 @@ void main() {
             }),
         FriendNightCard(handle: 'BOB234', displayName: 'Bob', date: '2026-09-03', items: {'on_time': true}),
       ];
-      await pump(tester, stub, friendsTab: false);
+      await pump(tester, stub, tab: 'feed');
       final mine = find.byKey(const Key('feed-card-K7QM2P-2026-09-03'));
       expect(mine, findsOneWidget);
       expect(find.descendant(of: mine, matching: find.text('You')), findsOneWidget);
