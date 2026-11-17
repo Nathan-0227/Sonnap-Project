@@ -2157,6 +2157,23 @@
       "prompt_version": "v4",
       "fingerprint": "7e2ceaf699536652",
       "generated_at": "2026-11-16T07:28:17+08:00"
+    },
+    "2026-11-17": {
+      "date": "2026-11-17",
+      "lang": "en",
+      "trend_note": "Your sleep score has dropped over the last 7 nights compared to the 28 nights before, even though your heart rate and stress levels have stayed about the same.",
+      "model": "claude-sonnet-5",
+      "advice": "You slept 5.3 hours last night, which is below the 7-9 hour range, but your sleep was efficient at 99.7%. Keep your current routine, and try to add a little more time in bed tonight.",
+      "dream_summary": "I was chasing something warm and bright through tall grass, the ground cool under my paws, the air smelling of earth after rain. I could feel my own breath going fast with excitement, ears flattened back in the wind. Just as I was about to catch up to it, the sky went pale and the whole dream stopped short, like it was only halfway told.",
+      "source": "llm",
+      "is_ai_generated": true,
+      "content_type": "fiction+advice",
+      "data_sources": [
+        "garmin"
+      ],
+      "prompt_version": "v4",
+      "fingerprint": "d4d999d4bf329fb9",
+      "generated_at": "2026-11-17T11:55:54+08:00"
     }
   }
 }

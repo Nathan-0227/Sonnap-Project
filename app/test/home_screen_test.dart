@@ -331,7 +331,10 @@ void main() {
       await pumpHome(tester, () => at(12, 9));
       expect(find.text('No watch data'), findsNWidgets(3));
       expect(
-        find.textContaining('0 min'),
+        // ⚠️ 不可以寫成 textContaining('0 min')：那會連「50 min」「10 min」一起命中
+        // （子字串），別處有個剛好以 0 結尾的分鐘數就會紅，而程式根本沒壞。
+        // 2026-11-18 的打包檔有「50 min」，就是這樣誤判的。
+        find.textContaining(RegExp(r'(?<![0-9])0 min')),
         findsNothing,
         reason: '「0 min」會被讀成整晚沒睡，真相是沒量到',
       );
