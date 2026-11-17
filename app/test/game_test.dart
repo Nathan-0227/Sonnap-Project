@@ -172,6 +172,10 @@ class _ImmediateRepository implements SleepRepository {
   Future<SleepSession> load() async => session;
 }
 
+/// 衣櫃預覽裡那隻寵物。試穿要看得到，所以直接讀 `HomePet` 拿到的衣服。
+HomePet petIn(WidgetTester tester) =>
+    tester.widget<HomePet>(find.byType(HomePet));
+
 Future<void> pumpScreen(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(1200, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -284,27 +288,54 @@ void main() {
   });
 
   group('衣櫃', () {
-    testWidgets('沒解鎖的點下去不發請求，直接講幾級解鎖', (tester) async {
+    testWidgets('沒解鎖的點下去不試穿也不發請求，直接講幾級解鎖', (tester) async {
       final stub = _StubGame();
       await pumpScreen(tester, ClosetScreen(service: stub));
       await tester.tap(find.byKey(const Key('closet-crown')));
       await tester.pump();
       expect(stub.equipCalls, isEmpty);
       expect(find.text('Crown unlocks at level 8.'), findsOneWidget);
+      // 連試穿都不行：寵物身上不能變成皇冠。
+      expect(petIn(tester).equippedItemId, isNull);
     });
 
-    testWidgets('解鎖的點下去就穿、穿著的再點一次就脫', (tester) async {
+    testWidgets('點一下只是試穿，Confirm 才送後端', (tester) async {
+      // ⚠️ 這是 2026-11-18 改版的核心：壞掉的話會變成「點到就直接存進後端」，
+      //    而畫面照樣顯示得好好的——試穿的意義整個消失。
       final stub = _StubGame();
       await pumpScreen(tester, ClosetScreen(service: stub));
-      // ⚠️ 要在點下去**之前**把假後端改成「穿著圍巾」：畫面在換裝完成的
-      //    那一刻就會重讀衣櫃，點完才改的話它讀到的還是舊的。
-      stub.closetResult = GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf')));
       await tester.tap(find.byKey(const Key('closet-scarf')));
       await tester.pump();
+      expect(stub.equipCalls, isEmpty, reason: '試穿不可以送後端');
+      // 但預覽要立刻換上去。
+      expect(petIn(tester).equippedItemId, 'scarf');
+      expect(find.text('Trying it on · not saved yet'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('closet-confirm')));
       await tester.pump();
-      await tester.tap(find.byKey(const Key('closet-scarf')));
+      expect(stub.equipCalls, ['scarf']);
+    });
+
+    testWidgets('點 None 再 Confirm = 脫掉（送 null）', (tester) async {
+      final stub = _StubGame(
+          closetResult: GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf'))));
+      await pumpScreen(tester, ClosetScreen(service: stub));
+      expect(petIn(tester).equippedItemId, 'scarf');
+      await tester.tap(find.byKey(const Key('closet-none')));
       await tester.pump();
-      expect(stub.equipCalls, ['scarf', null]);
+      expect(petIn(tester).equippedItemId, isNull);
+      await tester.tap(find.byKey(const Key('closet-confirm')));
+      await tester.pump();
+      expect(stub.equipCalls, [null]);
+    });
+
+    testWidgets('沒改就按 Confirm 不發請求', (tester) async {
+      final stub = _StubGame(
+          closetResult: GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf'))));
+      await pumpScreen(tester, ClosetScreen(service: stub));
+      await tester.tap(find.byKey(const Key('closet-confirm')));
+      await tester.pump();
+      expect(stub.equipCalls, isEmpty);
     });
 
     testWidgets('解鎖與否照抄後端：等級不夠但穿過的，照樣能穿', (tester) async {
@@ -315,7 +346,23 @@ void main() {
       await pumpScreen(tester, ClosetScreen(service: stub));
       await tester.tap(find.byKey(const Key('closet-crown')));
       await tester.pump();
+      await tester.tap(find.byKey(const Key('closet-confirm')));
+      await tester.pump();
       expect(stub.equipCalls, ['crown']);
+    });
+
+    testWidgets('沒有真圖的衣服照樣分得到類（不會點了分類就消失）', (tester) async {
+      // ⚠️ 皇冠沒有 PNG。分類若是看「有沒有真圖」來判斷插槽，它在 Head 裡會整件不見，
+      //    而畫面不會報錯——使用者只會覺得衣櫃漏了一件。
+      final stub = _StubGame(
+          closetResult: GameResult(GameStatus.ok, value: closet(closetJson(crownOwned: true))));
+      await pumpScreen(tester, ClosetScreen(service: stub));
+      await tester.tap(find.byKey(const Key('closet-filter-head')));
+      await tester.pump();
+      expect(find.byKey(const Key('closet-crown')), findsOneWidget);
+      expect(find.byKey(const Key('closet-scarf')), findsNothing);
+      // None 不屬於任何插槽，但任何分類下都必須在——不然沒辦法脫衣服。
+      expect(find.byKey(const Key('closet-none')), findsOneWidget);
     });
 
     testWidgets('連不上後端要講清楚，不畫一個空衣櫃', (tester) async {
