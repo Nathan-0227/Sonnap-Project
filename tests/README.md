@@ -42,7 +42,7 @@ python tests/test_history_mood.py
 2. **沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline**
    —— 含反向對照，確認那些欄位真的有被讀，否則這條會**假性通過**
 3. **baseline 窗格是日曆天不是筆數**（`MAX_BASELINE_DAYS`）
-4. **`MOTIF_FAMILIES` 與夢境調色盤選項一對一**，且沒有兩個家族共用關鍵字
+4. （2026-11-18 移除：夢境日記退場，意象去重跟著刪掉）
 
 ### `test_tapo_index.py`（5 條）
 

@@ -1219,9 +1219,8 @@ async def get_home(
                 "would let people build streaks by only opening the app on good days."
             ),
         },
-        # ⚠️ AI 夢境／建議目前只為研究者本人批次生成（ai/data/ai_advice.json），
-        #    還沒有 per-user 的生成流程，所以這條路徑一律 null。
-        #    留 null 而不省略欄位，是讓這個缺口對 App 端可見。
+        # 夢境日記 2026-11-17 退場；每晚的 AI 內容改走 GET /night-summary（寵物 notes）。
+        #    留 null 而不省略欄位：舊版 App 讀得到這個鍵。
         "ai_content": None,
         "data_sources": data_sources,
         "notes": {
@@ -1813,8 +1812,7 @@ async def remove_friend(handle: str, user_id: str = Query(...)):
 # ⚠️ 會花錢：每問一次就是一次 Claude API 呼叫（ai/llm_client.py，標準庫 urllib，不裝 SDK）。
 # ⚠️ 回答要通過 ai/chat.py 的四道驗證才回給 App；兩次都沒過就 503，
 #    不把沒過驗證的回答交出去。
-# ⚠️ `ai.chat` 在函式裡才 import：它會連帶 import ai/generate_advice.py，
-#    而那一支在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
+# ⚠️ `ai.chat` 在函式裡才 import：它在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
 #    任何一支 import main 的測試都會帶著真的金鑰在跑。
 
 

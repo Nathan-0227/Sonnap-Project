@@ -9,8 +9,8 @@ build_app_payload.py
 
     garmin/data/garmin_sleep_quality_final.json ─┐
     garmin/data/garmin_sleep_features.json      ─┤
-    ai/data/ai_advice.json（有才用）             ─┼→ 本腳本
-    app/sleep_report.json（過不了門檻就跳過）     ─┘      │
+    app/sleep_report.json（過不了門檻就跳過）     ─┴→ 本腳本
+                                                          │
                                                           ▼
                                       app/assets/data/app_payload.json
                                                           │
@@ -56,7 +56,6 @@ from pathlib import Path
 # ═══════════════════════════════════════════════════════════════════
 ROOT = Path(__file__).parent
 GARMIN_DATA = ROOT / "garmin" / "data"
-AI_DATA = ROOT / "ai" / "data"
 OUTPUT_PATH = ROOT / "app" / "assets" / "data" / "app_payload.json"
 
 # TAPO 攝影機資料統一由 tapo_index 讀（它同時吃 tapo/sleep_records.sql 與
@@ -374,27 +373,12 @@ def load_tapo_night(night_iso):
 
 def load_ai_advice(target_date, fallback_recommendation):
     """
-    載入 AI 產生的建議。ai/ 還沒建立或該晚還沒生成時，優雅降級成規則式文字。
+    打包檔的 ai_content：一律是規則式那一句建議。
 
-    降級後使用者**一點實質內容都沒少**，只少了語氣潤飾——因為 AI 的 advice
-    本來就設計成「規則式文字的重新配音 + 跨夜趨勢」，而不是取代它。
+    2026-11-17 起夢境日記退場（改成寵物 notes，由後端 /night-summary 依使用者生成），
+    這裡**不再讀 ai/data/ai_advice.json**（那份留著當歷史資料）。保留 ai_content 這個鍵
+    與形狀，是讓舊版 App 讀得到；dream_summary／trend_note 一律 null。
     """
-    advice_file = load_json(AI_DATA / "ai_advice.json")
-    entry = None
-    if advice_file:
-        entry = (advice_file.get("entries") or {}).get(target_date)
-
-    if entry and entry.get("source") == "llm":
-        return {
-            "advice": entry.get("advice"),
-            "dream_summary": entry.get("dream_summary"),
-            "trend_note": entry.get("trend_note"),
-            "is_ai_generated": True,
-            "content_type": "fiction+advice",
-            "source": "llm",
-            "model": entry.get("model"),
-        }
-
     return {
         "advice": fallback_recommendation,
         "dream_summary": None,
@@ -865,33 +849,10 @@ def build_payload(target_date=None):
         },
         "disclaimer": (
             "Sleep scores are computed from Garmin watch data using "
-            "literature-weighted rules and do not constitute a medical diagnosis. "
-            "Any dream content, where generated, is an AI creation imagined from "
-            "sleep data, not a record of the user’s actual dreams."
+            "literature-weighted rules and do not constitute a medical diagnosis."
         ),
         "timestamp": features.get("wake_time"),
     }
-
-
-def _report_pending_ai(payload):
-    """
-    印出「還有幾晚沒有 AI 建議」。
-
-    零成本補洞：不呼叫任何 API，純粹在本地數。目的是讓「AI 這一步存在」
-    永遠不會隱形——否則沒加 --ai 時整條 pipeline 完全不會提到它，
-    幾週後就沒人記得還有這個步驟。
-    """
-    quality_rows = load_json(GARMIN_DATA / "garmin_sleep_quality_final.json") or []
-    advice = load_json(AI_DATA / "ai_advice.json") or {}
-    done = {
-        date
-        for date, entry in (advice.get("entries") or {}).items()
-        if entry.get("source") == "llm"
-    }
-    pending = len({row["date"] for row in quality_rows} - done)
-    if pending:
-        print(f"  {pending} night(s) still have no AI advice"
-              f"  (run: python garmin/run_pipeline.py --ai)")
 
 
 def main():
@@ -918,7 +879,6 @@ def main():
 
     rel = OUTPUT_PATH.relative_to(ROOT).as_posix()
     print(f"✓ Wrote {rel}")
-    _report_pending_ai(payload)
     print(f"  Night: {payload['session_id'][:8]}  "
           f"Score: {payload['scoring']['final_score']} "
           f"({payload['scoring']['final_quality']})")
