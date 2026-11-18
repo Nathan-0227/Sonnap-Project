@@ -64,15 +64,20 @@ Widget host(Widget child, {bool reduce = false}) => MaterialApp(
 
 class _Stub implements FriendsService {
   @override
-  Future<FriendsResult<TownState>> fetchTown() async => const FriendsResult(FriendsStatus.failed);
+  Future<FriendsResult<TownState>> fetchTown() async =>
+      const FriendsResult(FriendsStatus.failed);
 
   @override
-  Future<FriendsResult<String>> visit(String handle, String kind) async => const FriendsResult(FriendsStatus.failed);
+  Future<FriendsResult<String>> visit(String handle, String kind) async =>
+      const FriendsResult(FriendsStatus.failed);
 
   LeaderboardBoard? board;
   final List<(String, String?)> boardCalls = [];
   @override
-  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(String metric, {String? period}) async {
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(
+    String metric, {
+    String? period,
+  }) async {
     boardCalls.add((metric, period));
     return board == null
         ? const FriendsResult(FriendsStatus.failed)
@@ -368,54 +373,58 @@ void main() {
       ],
     };
 
-    testWidgets('卡上只有三個大數字：睡多久、每小時動幾次、分數（2026-11-16 使用者定）；其他算進 +N more', (tester) async {
-      await tester.pumpWidget(
-        host(
-          const FriendNightCardView(
-            card: FriendNightCard(
-              handle: 'B',
-              displayName: 'Bob',
-              date: '2026-11-14',
-              items: {
-                'score': {'score': 84.2},
-                'camera_moves': 18.4,
-                'sleep_duration': 412,
-                'efficiency': {'value': 91.4},
-                'steps': {'steps': 8432},
-                'phone_down_time': '23:42',
-                'on_time': true,
-                'pet_mood': 'happy',
-              },
+    testWidgets(
+      '卡上只有三個大數字：睡多久、每小時動幾次、分數（2026-11-16 使用者定）；其他點進去看（11-19 Feed 精簡：沒有 +N more／See all，整張卡點了就進去）',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            const FriendNightCardView(
+              card: FriendNightCard(
+                handle: 'B',
+                displayName: 'Bob',
+                date: '2026-11-14',
+                items: {
+                  'score': {'score': 84.2},
+                  'camera_moves': 18.4,
+                  'sleep_duration': 412,
+                  'efficiency': {'value': 91.4},
+                  'steps': {'steps': 8432},
+                  'phone_down_time': '23:42',
+                  'on_time': true,
+                  'pet_mood': 'happy',
+                },
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 50));
-      List<String> keysStarting(String prefix) => tester
-          .widgetList(
-            find.byWidgetPredicate(
-              (w) =>
-                  w.key is ValueKey<String> &&
-                  (w.key as ValueKey<String>).value.startsWith(prefix),
-            ),
-          )
-          .map((w) => (w.key as ValueKey<String>).value)
-          .toList();
-      expect(keysStarting('card-stat-'), [
-        'card-stat-sleep_duration',
-        'card-stat-camera_moves',
-        'card-stat-score',
-      ]);
-      expect(find.text('6h 52m'), findsOneWidget);
-      expect(find.text('Moves/hr'), findsOneWidget);
-      expect(find.text('18'), findsOneWidget);
-      expect(find.text('84'), findsOneWidget);
-      // 效率太擠拿掉了；卡上沒有小格
-      expect(find.text('Efficiency'), findsNothing);
-      expect(keysStarting('card-tile-'), isEmpty);
-      // 剩下效率、放下手機、準時（pet_mood 畫成寵物、步數完整頁不放，都不算）
-      expect(find.text('+3 more'), findsOneWidget);
-    });
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        List<String> keysStarting(String prefix) => tester
+            .widgetList(
+              find.byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    (w.key as ValueKey<String>).value.startsWith(prefix),
+              ),
+            )
+            .map((w) => (w.key as ValueKey<String>).value)
+            .toList();
+        expect(keysStarting('card-stat-'), [
+          'card-stat-sleep_duration',
+          'card-stat-camera_moves',
+          'card-stat-score',
+        ]);
+        expect(find.text('6h 52m'), findsOneWidget);
+        expect(find.text('Moves/hr'), findsOneWidget);
+        expect(find.text('18'), findsOneWidget);
+        expect(find.text('84'), findsOneWidget);
+        // 效率太擠拿掉了；卡上沒有小格
+        expect(find.text('Efficiency'), findsNothing);
+        expect(keysStarting('card-tile-'), isEmpty);
+        // 剩下的（效率、放下手機、準時）點進去才看得到；卡上不寫 +N more
+        expect(find.byKey(const Key('card-more')), findsNothing);
+        expect(find.textContaining('more'), findsNothing);
+      },
+    );
 
     testWidgets('全部都畫在卡上了就沒有 See all', (tester) async {
       await tester.pumpWidget(
@@ -475,7 +484,10 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       expect(find.byKey(const Key('night-detail')), findsOneWidget);
-      expect(find.byKey(const Key('night-scene')), findsOneWidget); // 上面是場景（像 Strava 的地圖）
+      expect(
+        find.byKey(const Key('night-scene')),
+        findsOneWidget,
+      ); // 上面是場景（像 Strava 的地圖）
       // 三個大數字之外的 7 項全部是小格（卡片上只會有 3 格）
       // Strava 式的區塊（2026-11-16 使用者定）：他有公開的才出現
       for (final k in ['stages', 'hr', 'bedtime', 'game']) {
@@ -501,36 +513,80 @@ void main() {
       tester.view.physicalSize = const Size(400, 4000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final card = FriendNightCard(handle: 'B', displayName: 'Bob', date: '2026-11-14', items: {
-        'stages': {
-          'deep': 60, 'light': 240, 'rem': 0, 'rem_measured': false, 'start': '23:28', 'end': '07:41',
-          'segments': [{'stage': 'light', 'from': 0, 'to': 60}, {'stage': 'deep', 'from': 60, 'to': 120}],
+      final card = FriendNightCard(
+        handle: 'B',
+        displayName: 'Bob',
+        date: '2026-11-14',
+        items: {
+          'stages': {
+            'deep': 60,
+            'light': 240,
+            'rem': 0,
+            'rem_measured': false,
+            'start': '23:28',
+            'end': '07:41',
+            'segments': [
+              {'stage': 'light', 'from': 0, 'to': 60},
+              {'stage': 'deep', 'from': 60, 'to': 120},
+            ],
+          },
+          'awake': {'count': 1, 'minutes': 6},
+          'sleeping_hr': {
+            'avg': 56,
+            'min': 48,
+            'curve': [
+              for (var i = 0; i < 20; i++) {'m': i * 5, 'v': 50 + i % 7},
+            ],
+          },
+          'resting_hr': 54,
+          'camera_moves': 14,
+          'camera_timeline': {
+            'points': [
+              for (var i = 0; i < 20; i++)
+                {'m': i * 5, 'v': i % 3 == 0 ? 0.2 : 0.0},
+            ],
+            'total': 105,
+            'moving_sec': 1500,
+            'usual': 'About the same as usual',
+          },
+          'target_bedtime': '23:30',
+          'phone_down_time': '23:12',
+          'on_time': true,
+          'bed_times': {'start': '23:16', 'end': '07:52'},
+          'fell_asleep': 12,
+          'efficiency': {'value': 93.4, 'label': 'Sleep button'},
+          'morning_rating': {'rested': 4, 'label': 'Rested'},
+          'challenges': [
+            {'title': 'Steady bedtime', 'completed': true},
+          ],
+          'devices': [
+            {'kind': 'watch', 'name': 'Garmin Vivoactive 3'},
+            {'kind': 'camera', 'name': 'Camera'},
+            {'kind': 'phone', 'name': 'Phone'},
+          ],
         },
-        'awake': {'count': 1, 'minutes': 6},
-        'sleeping_hr': {'avg': 56, 'min': 48, 'curve': [for (var i = 0; i < 20; i++) {'m': i * 5, 'v': 50 + i % 7}]},
-        'resting_hr': 54,
-        'camera_moves': 14,
-        'camera_timeline': {'points': [for (var i = 0; i < 20; i++) {'m': i * 5, 'v': i % 3 == 0 ? 0.2 : 0.0}],
-          'total': 105, 'moving_sec': 1500, 'usual': 'About the same as usual'},
-        'target_bedtime': '23:30', 'phone_down_time': '23:12', 'on_time': true,
-        'bed_times': {'start': '23:16', 'end': '07:52'}, 'fell_asleep': 12,
-        'efficiency': {'value': 93.4, 'label': 'Sleep button'},
-        'morning_rating': {'rested': 4, 'label': 'Rested'},
-        'challenges': [{'title': 'Steady bedtime', 'completed': true}],
-        'devices': [
-          {'kind': 'watch', 'name': 'Garmin Vivoactive 3'},
-          {'kind': 'camera', 'name': 'Camera'},
-          {'kind': 'phone', 'name': 'Phone'},
-        ],
-      });
+      );
       await tester.pumpWidget(MaterialApp(home: FriendNightPage(card: card)));
       // 用了哪些設備（像 Strava 的鞋子與手錶），照後端給的寫
       for (final d in ['Garmin Vivoactive 3', 'Camera', 'Phone']) {
-        expect(find.descendant(of: find.byKey(const Key('night-devices')), matching: find.text(d)),
-            findsOneWidget, reason: d);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('night-devices')),
+            matching: find.text(d),
+          ),
+          findsOneWidget,
+          reason: d,
+        );
       }
       await tester.pump(const Duration(milliseconds: 100));
-      for (final k in ['stages', 'hr', 'camera', 'bedtime', 'morning', 'game']) {
+      for (final k in [
+        'stages',
+        'hr',
+        'camera',
+        'bedtime',
+        'morning',
+        'game',
+      ]) {
         expect(find.byKey(Key('section-$k')), findsOneWidget, reason: k);
       }
       // 階段表：比例照抄分鐘數；沒量到 REM 寫 not measured、不畫成 0%
@@ -547,14 +603,21 @@ void main() {
       expect(find.byKey(const Key('camera-chart')), findsOneWidget);
       expect(find.text('About the same as usual'), findsOneWidget);
       expect(find.text('25m'), findsOneWidget);
-      expect(find.textContaining('Not part of the sleep score'), findsOneWidget);
+      expect(
+        find.textContaining('Not part of the sleep score'),
+        findsOneWidget,
+      );
       // 就寢時間軸照時間排（目標 23:30 排在睡著 23:28 之後；過了午夜的排最後）
       final labels = [
         for (var i = 0; i < 6; i++)
-          (tester.widget<Text>(find.descendant(
-            of: find.byKey(Key('bed-step-$i')),
-            matching: find.byType(Text),
-          ).at(1))).data,
+          (tester.widget<Text>(
+            find
+                .descendant(
+                  of: find.byKey(Key('bed-step-$i')),
+                  matching: find.byType(Text),
+                )
+                .at(1),
+          )).data,
       ];
       expect(labels, [
         'Phone down · On time',
@@ -571,21 +634,38 @@ void main() {
     });
 
     testWidgets('See all：有睡眠圖時，深睡／淺睡／REM 各一格（卡片上不放）', (tester) async {
-      const card = FriendNightCard(handle: 'B', displayName: 'Bob', date: '2026-11-14', items: {
-        'stages': {'deep': 82, 'light': 215, 'rem': 103, 'rem_measured': true,
-          'segments': [{'stage': 'light', 'from': 0, 'to': 60}, {'stage': 'deep', 'from': 60, 'to': 120}]},
-      });
+      const card = FriendNightCard(
+        handle: 'B',
+        displayName: 'Bob',
+        date: '2026-11-14',
+        items: {
+          'stages': {
+            'deep': 82,
+            'light': 215,
+            'rem': 103,
+            'rem_measured': true,
+            'segments': [
+              {'stage': 'light', 'from': 0, 'to': 60},
+              {'stage': 'deep', 'from': 60, 'to': 120},
+            ],
+          },
+        },
+      );
       await tester.pumpWidget(host(const FriendNightCardView(card: card)));
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.byKey(const Key('card-tile-stages-deep')), findsNothing);
-      await tester.pumpWidget(host(const FriendNightCardView(card: card, expanded: true)));
+      await tester.pumpWidget(
+        host(const FriendNightCardView(card: card, expanded: true)),
+      );
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('1h 22m'), findsOneWidget);
       expect(find.text('3h 35m'), findsOneWidget);
       expect(find.text('1h 43m'), findsOneWidget);
     });
 
-    testWidgets('Sleep Stages：準確時刻的人兩端寫時刻', (tester) async {
+    testWidgets('Sleep Stages（11-19 Feed 精簡）：卡上只有一條細長條；準確時刻的人入睡 → 起床寫在名字下面', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         host(
           const FriendNightCardView(
@@ -601,35 +681,47 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.byKey(const Key('card-stages')), findsOneWidget);
-      expect(find.text('00:31'), findsOneWidget);
-      expect(find.text('07:38'), findsOneWidget);
-      // 圖例拿掉了（B 版）；分鐘數在 See all 裡
-      expect(find.text('Deep 1h 2m'), findsNothing);
+      expect(find.byKey(const Key('card-stages-strip')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const Key('card-stages-strip'))).height,
+        28,
+      );
+      // 完整的圖（標題、刻度、圖例）只在點進去的頁面
+      expect(find.byKey(const Key('card-stages')), findsNothing);
+      expect(find.text('Sleep stages'), findsNothing);
+      expect(find.text('Deep'), findsNothing);
+      expect(find.text('00:31 → 07:38'), findsOneWidget);
+      // 名字在上、時刻在下
+      expect(
+        tester.getTopLeft(find.text('00:31 → 07:38')).dy,
+        greaterThan(tester.getTopLeft(find.text('Bob')).dy),
+      );
       // 有圖時分鐘數不再重複寫成一行小字
       expect(find.byKey(const Key('card-item-stages')), findsNothing);
     });
 
-    testWidgets('Sleep Stages：只寫準時與否的人（後端沒給時刻）兩端只寫 Fell asleep／Woke up', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        host(
-          const FriendNightCardView(
-            card: FriendNightCard(
-              handle: 'B',
-              displayName: 'Bob',
-              date: '2026-11-14',
-              items: {'stages': stages},
+    testWidgets(
+      'Sleep Stages：只寫準時與否的人（後端沒給時刻）卡上不寫時刻，也不寫 Fell asleep → Woke up',
+      (tester) async {
+        await tester.pumpWidget(
+          host(
+            const FriendNightCardView(
+              card: FriendNightCard(
+                handle: 'B',
+                displayName: 'Bob',
+                date: '2026-11-14',
+                items: {'stages': stages},
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text('Fell asleep'), findsOneWidget);
-      expect(find.text('Woke up'), findsOneWidget);
-      expect(find.textContaining(RegExp(r'\d\d:\d\d')), findsNothing);
-    });
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byKey(const Key('card-stages-strip')), findsOneWidget);
+        expect(find.byKey(const Key('card-times')), findsNothing);
+        expect(find.textContaining('Fell asleep'), findsNothing);
+        expect(find.textContaining(RegExp(r'\d\d:\d\d')), findsNothing);
+      },
+    );
   });
 
   group('What friends can see', () {

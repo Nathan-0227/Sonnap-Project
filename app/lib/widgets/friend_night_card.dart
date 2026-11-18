@@ -484,6 +484,9 @@ const kDefaultScene = 'campfire';
 String sceneAsset(String? scene) =>
     'assets/backgrounds/scene_${kSceneGround.containsKey(scene) ? scene : kDefaultScene}.jpg';
 
+/// 動態牆上場景的天空往上切掉多少（圖高的比例）。完整頁不切。
+const kFeedSkyCut = 0.17;
+
 const _sceneBottom = Color(0xFF061A6B); // 卡比圖長時接著圖底部的顏色
 const _shadow = [Shadow(blurRadius: 8, color: Colors.black54)];
 const _stageColors = {
@@ -515,10 +518,25 @@ List<(String, double, double)> _segmentsOf(Map<String, dynamic>? stages) => [
 
 /// 完整頁那幾個區塊會畫的項目（見 friend_night_sections.dart）。
 const kDetailKeys = [
-  'stages', 'awake', 'sleeping_hr', 'resting_hr', 'camera_moves', 'camera_timeline',
-  'target_bedtime', 'phone_down_time', 'on_time', 'bed_times', 'fell_asleep',
-  'time_in_bed', 'phone_after_start', 'prebed_phone', 'efficiency',
-  'morning_rating', 'level', 'outfit', 'challenges',
+  'stages',
+  'awake',
+  'sleeping_hr',
+  'resting_hr',
+  'camera_moves',
+  'camera_timeline',
+  'target_bedtime',
+  'phone_down_time',
+  'on_time',
+  'bed_times',
+  'fell_asleep',
+  'time_in_bed',
+  'phone_after_start',
+  'prebed_phone',
+  'efficiency',
+  'morning_rating',
+  'level',
+  'outfit',
+  'challenges',
 ];
 
 bool _hasValue(dynamic v) =>
@@ -563,6 +581,14 @@ class FriendNightCardView extends StatelessWidget {
       expanded: expanded,
     );
     final stats = layout.stats;
+    // 動態牆上名字下面的「入睡 → 起床」：兩個時刻都有才寫（只寫準時與否的人後端不給時刻）
+    final times =
+        !expanded &&
+            segments.isNotEmpty &&
+            stages?['start'] is String &&
+            stages?['end'] is String
+        ? '${stages!['start']} → ${stages['end']}'
+        : null;
 
     // 自己的卡在動態牆上要一眼認得出來（2026-11-16 使用者要求）：紫色外框＋一圈光
     final glow = card.mine && !expanded;
@@ -575,285 +601,305 @@ class FriendNightCardView extends StatelessWidget {
             ? BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: const [
-                  BoxShadow(color: Color(0x887657FF), blurRadius: 22, spreadRadius: 1),
+                  BoxShadow(
+                    color: Color(0x887657FF),
+                    blurRadius: 22,
+                    spreadRadius: 1,
+                  ),
                 ],
               )
             : null,
         child: Material(
-        color: _sceneBottom,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(expanded ? 0 : 24),
-          side: glow
-              ? const BorderSide(color: Color(0xFFA48BFF), width: 2)
-              : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: Key(
-            '${expanded ? 'night-detail' : 'feed-card'}-${card.handle}-${card.date}',
+          color: _sceneBottom,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(expanded ? 0 : 24),
+            side: glow
+                ? const BorderSide(color: Color(0xFFA48BFF), width: 2)
+                : BorderSide.none,
           ),
-          onTap: onTap,
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final w = c.maxWidth;
-              final imgH = w * 5 / 4;
-              final ground =
-                  imgH *
-                  (kSceneGround[card.scene] ?? kSceneGround[kDefaultScene]!);
-              const petSize = 120.0;
-              return Stack(
-                children: [
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: imgH,
-                    child: Image.asset(
-                      sceneAsset(card.scene),
-                      key: const Key('card-scene'),
-                      fit: BoxFit.fitWidth,
-                      alignment: Alignment.topCenter,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: Key(
+              '${expanded ? 'night-detail' : 'feed-card'}-${card.handle}-${card.date}',
+            ),
+            onTap: onTap,
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final w = c.maxWidth;
+                final imgH = w * 5 / 4;
+                // 動態牆上場景矮一點（2026-11-19 使用者定 Feed 精簡）：天空往上切掉一段，
+                // 寵物和地面還在，一張卡從約 70% 螢幕縮到約一半
+                final skyCut = expanded ? 0.0 : imgH * kFeedSkyCut;
+                final ground =
+                    imgH *
+                        (kSceneGround[card.scene] ??
+                            kSceneGround[kDefaultScene]!) -
+                    skyCut;
+                const petSize = 120.0;
+                return Stack(
+                  children: [
+                    Positioned(
+                      top: -skyCut,
+                      left: 0,
+                      right: 0,
+                      height: imgH,
+                      child: Image.asset(
+                        sceneAsset(card.scene),
+                        key: const Key('card-scene'),
+                        fit: BoxFit.fitWidth,
+                        alignment: Alignment.topCenter,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
                     ),
-                  ),
-                  // 卡比圖長時，圖的底緣淡進卡片底色（不然看得到一條接縫）
-                  Positioned(
-                    top: imgH - 90,
-                    left: 0,
-                    right: 0,
-                    height: 91,
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x00061A6B), _sceneBottom],
+                    // 卡比圖長時，圖的底緣淡進卡片底色（不然看得到一條接縫）
+                    Positioned(
+                      top: imgH - skyCut - 90,
+                      left: 0,
+                      right: 0,
+                      height: 91,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x00061A6B), _sceneBottom],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // 上緣稍微壓暗，名字才看得清楚
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: imgH * 0.25,
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x55000000), Color(0x00000000)],
+                    // 上緣稍微壓暗，名字才看得清楚
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: imgH * 0.25,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x55000000), Color(0x00000000)],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // 火焰直接在場景裡、寵物正後面（2026-11-16 使用者定）。外框 1.25 倍、寵物貼底，
-                  // 所以腳還是踩在同一個地面上
-                  Positioned(
-                    top: ground + petSize * 0.08 - petSize * 1.25,
-                    right: 18 - petSize * 0.125,
-                    child: PetWithFlames(
-                      mood: items['pet_mood'] as String?,
-                      species: speciesOf(card.petSpecies),
-                      streak: streak,
-                      size: petSize,
+                    // 火焰直接在場景裡、寵物正後面（2026-11-16 使用者定）。外框 1.25 倍、寵物貼底，
+                    // 所以腳還是踩在同一個地面上
+                    Positioned(
+                      top: ground + petSize * 0.08 - petSize * 1.25,
+                      right: 18 - petSize * 0.125,
+                      child: PetWithFlames(
+                        mood: items['pet_mood'] as String?,
+                        species: speciesOf(card.petSpecies),
+                        streak: streak,
+                        size: petSize,
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(18, 16 + topInset, 18, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(18, 16 + topInset, 18, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                card.mine ? 'You' : card.displayName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: _shadow,
+                                ),
+                              ),
+                              if (card.mine) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  key: const Key('card-mine-pill'),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF7657FF),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Text(
+                                    'What friends see',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          // 動態牆上：入睡 → 起床寫在名字下面（階梯圖縮成細條，底下不再寫時刻）
+                          if (times != null)
                             Text(
-                              card.mine ? 'You' : card.displayName,
+                              times,
+                              key: const Key('card-times'),
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                color: Color(0xDDFFFFFF),
+                                fontSize: 12,
                                 shadows: _shadow,
                               ),
                             ),
-                            if (card.mine) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                key: const Key('card-mine-pill'),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF7657FF),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Text(
-                                  'What friends see',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        // 動態牆上換一天有分隔線寫日期，卡上不再寫；完整頁沒有分隔線，照寫
-                        if (expanded)
-                        Text(
-                          'Night of ${friendCardDate(card.date)}',
-                          style: const TextStyle(
-                            color: Color(0xDDFFFFFF),
-                            fontSize: 12,
-                            shadows: _shadow,
-                          ),
-                        ),
-                        // 數字從地面下面開始（名字＋日期約 40 高，只有名字約 24）
-                        SizedBox(
-                          height: ground - 16 - topInset - (expanded ? 40 : 24) + 20,
-                        ),
-                        if (stats.isNotEmpty)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (final (k, label, value) in stats)
-                                Expanded(
-                                  key: Key('card-stat-$k'),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        label,
-                                        style: const TextStyle(
-                                          color: Color(0xB3FFFFFF),
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          value,
-                                          softWrap: false,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        if (streak != null && streak! >= 3) ...[
-                          const SizedBox(height: 14),
-                          Row(
-                            key: const Key('card-streak'),
-                            children: [
-                              const Icon(
-                                Icons.local_fire_department_rounded,
-                                color: Color(0xFFFF8A5C),
-                                size: 24,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '${card.mine ? 'You' : card.displayName.split(' ').first} reached a $streak-night streak',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (week != null && week!.length == 7) ...[
-                          const SizedBox(height: 12),
-                          StreakWeekRow(key: const Key('card-week'), week: week!),
-                        ],
-                        if (segments.isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          _StageChart(
-                            segments: segments,
-                            remMeasured: stages?['rem_measured'] != false,
-                            start: stages?['start'] as String?,
-                            end: stages?['end'] as String?,
-                            minutes: stages ?? const {},
-                          ),
-                        ],
-                        if (layout.tiles.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          for (
-                            var r = 0;
-                            r < layout.tiles.length;
-                            r += kMaxTiles
-                          )
-                            Padding(
-                              padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
-                              child: Row(
-                                children: [
-                                  for (var i = 0; i < kMaxTiles; i++)
-                                    Expanded(
-                                      child: Padding(
-                                        padding: EdgeInsets.only(
-                                          right: i == kMaxTiles - 1 ? 0 : 8,
-                                        ),
-                                        // 不滿三格也照三格的寬度排（每張卡長得一樣）
-                                        child: r + i < layout.tiles.length
-                                            ? _Tile(
-                                                key: Key(
-                                                  'card-tile-${layout.tiles[r + i].$1}',
-                                                ),
-                                                icon: layout.tiles[r + i].$2,
-                                                value: layout.tiles[r + i].$3,
-                                                label: layout.tiles[r + i].$4,
-                                              )
-                                            : const SizedBox.shrink(),
-                                      ),
-                                    ),
-                                ],
+                          // 動態牆上換一天有分隔線寫日期，卡上不再寫；完整頁沒有分隔線，照寫
+                          if (expanded)
+                            Text(
+                              'Night of ${friendCardDate(card.date)}',
+                              style: const TextStyle(
+                                color: Color(0xDDFFFFFF),
+                                fontSize: 12,
+                                shadows: _shadow,
                               ),
                             ),
-                        ],
-                        if (!expanded && layout.more > 0) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            key: const Key('card-more'),
-                            children: [
-                              Text(
-                                '+${layout.more} more',
-                                style: const TextStyle(
-                                  color: Color(0xB3FFFFFF),
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const Spacer(),
-                              const Text(
-                                'See all  ›',
-                                style: TextStyle(
-                                  color: Color(0xFFC9B8FF),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                          // 數字從地面下面開始（名字＋日期約 40 高，只有名字約 24）
+                          SizedBox(
+                            height:
+                                ground -
+                                16 -
+                                topInset -
+                                (expanded || times != null ? 40 : 24) +
+                                20,
                           ),
+                          if (stats.isNotEmpty)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final (k, label, value) in stats)
+                                  Expanded(
+                                    key: Key('card-stat-$k'),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          label,
+                                          style: const TextStyle(
+                                            color: Color(0xB3FFFFFF),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            value,
+                                            softWrap: false,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          if (streak != null && streak! >= 3) ...[
+                            const SizedBox(height: 14),
+                            Row(
+                              key: const Key('card-streak'),
+                              children: [
+                                const Icon(
+                                  Icons.local_fire_department_rounded,
+                                  color: Color(0xFFFF8A5C),
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${card.mine ? 'You' : card.displayName.split(' ').first} reached a $streak-night streak',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (expanded &&
+                              week != null &&
+                              week!.length == 7) ...[
+                            const SizedBox(height: 12),
+                            StreakWeekRow(
+                              key: const Key('card-week'),
+                              week: week!,
+                            ),
+                          ],
+                          if (segments.isNotEmpty && !expanded) ...[
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              key: const Key('card-stages-strip'),
+                              height: 28,
+                              width: double.infinity,
+                              child: CustomPaint(
+                                painter: _StagePainter(
+                                  segments,
+                                  stages?['rem_measured'] != false,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (segments.isNotEmpty && expanded) ...[
+                            const SizedBox(height: 14),
+                            _StageChart(
+                              segments: segments,
+                              remMeasured: stages?['rem_measured'] != false,
+                              start: stages?['start'] as String?,
+                              end: stages?['end'] as String?,
+                              minutes: stages ?? const {},
+                            ),
+                          ],
+                          if (layout.tiles.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            for (
+                              var r = 0;
+                              r < layout.tiles.length;
+                              r += kMaxTiles
+                            )
+                              Padding(
+                                padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
+                                child: Row(
+                                  children: [
+                                    for (var i = 0; i < kMaxTiles; i++)
+                                      Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            right: i == kMaxTiles - 1 ? 0 : 8,
+                                          ),
+                                          // 不滿三格也照三格的寬度排（每張卡長得一樣）
+                                          child: r + i < layout.tiles.length
+                                              ? _Tile(
+                                                  key: Key(
+                                                    'card-tile-${layout.tiles[r + i].$1}',
+                                                  ),
+                                                  icon: layout.tiles[r + i].$2,
+                                                  value: layout.tiles[r + i].$3,
+                                                  label: layout.tiles[r + i].$4,
+                                                )
+                                              : const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -1013,8 +1059,10 @@ class _FriendNightPageState extends State<FriendNightPage> {
     final full = ((extent - 0.88) / 0.12).clamp(0.0, 1.0);
     final barH = inset.top + 56;
     final devices = [
-      for (final d in (items['devices'] is List ? items['devices'] as List : const []))
-        if (d is Map && d['name'] is String) (d['kind'] as String?, d['name'] as String),
+      for (final d
+          in (items['devices'] is List ? items['devices'] as List : const []))
+        if (d is Map && d['name'] is String)
+          (d['kind'] as String?, d['name'] as String),
     ];
 
     return Scaffold(
@@ -1066,218 +1114,241 @@ class _FriendNightPageState extends State<FriendNightPage> {
               return false;
             },
             child: DraggableScrollableSheet(
-            key: const Key('night-sheet'),
-            initialChildSize: sheetMin,
-            minChildSize: sheetMin,
-            // 拉到最上面＝整個畫面（上面不留場景），頂端換成一條深色列（返回鍵＋名字）
-            maxChildSize: 1,
-            builder: (context, controller) => DecoratedBox(
-              decoration: BoxDecoration(
-                color: _sheet,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(24 * (1 - full)),
-                ),
-                boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
-              ),
-              child: ListView(
-                key: const Key('night-detail'),
-                controller: controller,
-                padding: EdgeInsets.only(top: 10, bottom: inset.bottom + 32),
-                children: [
-                  // 拉到最上面時讓出頂端那條列的高度（名字不會被它蓋住）
-                  SizedBox(height: (barH - 10) * full),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0x55FFFFFF),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+              key: const Key('night-sheet'),
+              initialChildSize: sheetMin,
+              minChildSize: sheetMin,
+              // 拉到最上面＝整個畫面（上面不留場景），頂端換成一條深色列（返回鍵＋名字）
+              maxChildSize: 1,
+              builder: (context, controller) => DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _sheet,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(24 * (1 - full)),
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      if (card.mine) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF7657FF),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'What friends see',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x66000000), blurRadius: 16),
+                  ],
+                ),
+                child: ListView(
+                  key: const Key('night-detail'),
+                  controller: controller,
+                  padding: EdgeInsets.only(top: 10, bottom: inset.bottom + 32),
+                  children: [
+                    // 拉到最上面時讓出頂端那條列的高度（名字不會被它蓋住）
+                    SizedBox(height: (barH - 10) * full),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: const Color(0x55FFFFFF),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Night of ${friendCardDate(card.date)}',
-                    style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 13),
-                  ),
-                  if (streak != null && streak! >= 3) ...[
-                    const SizedBox(height: 18),
-                    Container(
-                      key: const Key('card-streak'),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0x14FFFFFF),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.local_fire_department_rounded,
-                                  color: Color(0xFFFF8A5C),
-                                  size: 34,
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    '$streak',
-                                    style: const TextStyle(
-                                      color: Color(0xFF3A1A00),
+                              ),
+                              if (card.mine) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF7657FF),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Text(
+                                    'What friends see',
+                                    style: TextStyle(
+                                      color: Colors.white,
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),
                               ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Night of ${friendCardDate(card.date)}',
+                            style: const TextStyle(
+                              color: Color(0x99FFFFFF),
+                              fontSize: 13,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              '${card.mine ? 'You' : card.displayName.split(' ').first} reached a $streak-night streak',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                          if (streak != null && streak! >= 3) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              key: const Key('card-streak'),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0x14FFFFFF),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 34,
+                                    height: 34,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.local_fire_department_rounded,
+                                          color: Color(0xFFFF8A5C),
+                                          size: 34,
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 8,
+                                          ),
+                                          child: Text(
+                                            '$streak',
+                                            style: const TextStyle(
+                                              color: Color(0xFF3A1A00),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      '${card.mine ? 'You' : card.displayName.split(' ').first} reached a $streak-night streak',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
+                          ],
+                          if (layout.stats.isNotEmpty) ...[
+                            const SizedBox(height: 22),
+                            // 大數字置中；三個以內排一排，多了一排兩個（同 Strava）
+                            for (
+                              var r = 0;
+                              r < layout.stats.length;
+                              r += statCols
+                            )
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: Row(
+                                  children: [
+                                    for (var c = r; c < r + statCols; c++)
+                                      Expanded(
+                                        child: c < layout.stats.length
+                                            ? Column(
+                                                key: Key(
+                                                  'card-stat-${layout.stats[c].$1}',
+                                                ),
+                                                children: [
+                                                  Text(
+                                                    layout.stats[c].$2,
+                                                    style: const TextStyle(
+                                                      color: Color(0xB3FFFFFF),
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    layout.stats[c].$3,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 26,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                          if (week != null && week!.length == 7) ...[
+                            const SizedBox(height: 4),
+                            StreakWeekRow(
+                              key: const Key('card-week'),
+                              week: week!,
+                            ),
+                          ],
+                          // 用了哪些設備（像 Strava 的鞋子與手錶），他有分享才出現
+                          if (devices.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Column(
+                              key: const Key('night-devices'),
+                              children: [
+                                for (final (kind, dname) in devices)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          switch (kind) {
+                                            'watch' => Icons.watch_rounded,
+                                            'camera' => Icons.videocam_rounded,
+                                            'phone' =>
+                                              Icons.phone_android_rounded,
+                                            _ => Icons.devices_other_rounded,
+                                          },
+                                          color: Colors.white,
+                                          size: 26,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Text(
+                                            dname,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 17,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
+                    // 往下捲：Strava 式的一段一段（睡眠圖、心率、攝影機、就寢、早上、遊戲）
+                    ...friendNightSections(items),
                   ],
-                  if (layout.stats.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    // 大數字置中；三個以內排一排，多了一排兩個（同 Strava）
-                    for (var r = 0; r < layout.stats.length; r += statCols)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
-                        child: Row(
-                          children: [
-                            for (var c = r; c < r + statCols; c++)
-                              Expanded(
-                                child: c < layout.stats.length
-                                    ? Column(
-                                        key: Key('card-stat-${layout.stats[c].$1}'),
-                                        children: [
-                                          Text(
-                                            layout.stats[c].$2,
-                                            style: const TextStyle(
-                                              color: Color(0xB3FFFFFF),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            layout.stats[c].$3,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 26,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    : const SizedBox.shrink(),
-                              ),
-                          ],
-                        ),
-                      ),
-                  ],
-                  if (week != null && week!.length == 7) ...[
-                    const SizedBox(height: 4),
-                    StreakWeekRow(key: const Key('card-week'), week: week!),
-                  ],
-                  // 用了哪些設備（像 Strava 的鞋子與手錶），他有分享才出現
-                  if (devices.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Column(
-                      key: const Key('night-devices'),
-                      children: [
-                        for (final (kind, dname) in devices)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  switch (kind) {
-                                    'watch' => Icons.watch_rounded,
-                                    'camera' => Icons.videocam_rounded,
-                                    'phone' => Icons.phone_android_rounded,
-                                    _ => Icons.devices_other_rounded,
-                                  },
-                                  color: Colors.white,
-                                  size: 26,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    dname,
-                                    style: const TextStyle(color: Colors.white, fontSize: 17),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                      ],
-                    ),
-                  ),
-                  // 往下捲：Strava 式的一段一段（睡眠圖、心率、攝影機、就寢、早上、遊戲）
-                  ...friendNightSections(items),
-                ],
+                ),
               ),
             ),
-          ),
           ),
           // 拉到最上面時的頂端列（深色、跟資訊卡同色）：名字疊在返回鍵旁邊，像 Strava 的「Run」
           Positioned(
@@ -1312,7 +1383,11 @@ class _FriendNightPageState extends State<FriendNightPage> {
             top: inset.top + 4,
             left: 12,
             child: Material(
-              color: Color.lerp(const Color(0x99000000), Colors.transparent, full),
+              color: Color.lerp(
+                const Color(0x99000000),
+                Colors.transparent,
+                full,
+              ),
               shape: const CircleBorder(),
               child: IconButton(
                 key: const Key('night-back'),
@@ -1355,16 +1430,16 @@ class _StageChart extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showTitle) ...[
-        const Text(
-          'Sleep stages',
-          key: Key('card-stages-title'),
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
+          const Text(
+            'Sleep stages',
+            key: Key('card-stages-title'),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
         ],
         SizedBox(
           height: 96,
