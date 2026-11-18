@@ -3419,13 +3419,13 @@
     "rem_ratio": 0.0,
     "light_ratio": 0.9104,
     "awake_ratio": 0.2556,
-    "avg_heart_rate": 66.56,
-    "resting_heart_rate": 61,
-    "avg_stress_score": 19.74,
+    "avg_heart_rate": 78.73,
+    "resting_heart_rate": 59,
+    "avg_stress_score": 42.84,
     "movement_sample_minutes": 240,
     "movement_level_mean": 1.816,
     "movement_level_max": 5.899,
     "movement_active_minutes": 155,
-    "total_steps": 185
+    "total_steps": 9238
   }
 ]
