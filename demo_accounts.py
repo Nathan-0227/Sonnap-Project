@@ -25,6 +25,9 @@ demo_accounts.py —— 成果展用的示範帳號。
      不是手寫的數字
    - garmin_daily：白天資料（步數、壓力、Body Battery…），給動態卡的「Yesterday」
    - friend_sharing：每個人公開哪些項目、選哪隻寵物、哪個場景（讓動態卡各有樣子）
+   - friend_visits（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪手機帳號一次，
+     成果展上自己的卡才看得到「🐾 2 paws · See who」。**這是唯一寫進本人帳號的示範資料**：
+     送的人是示範帳號，刪示範帳號時 CASCADE 一起刪，--remove 之後本人一筆都不剩
 ⚠️ 假的生理資料有被誤算進統計的風險，所以：source 一律 "demo"、帳號一律 DEMO_COHORT；
    評分與匯入只認 source = "garmin"（migrate_garmin_to_db 的 _garmin_windows 等）。
 
@@ -257,6 +260,10 @@ def write_day(uid, day, p, rng, db_path=None):
                              round(min(80, max(8, 15 + 50 * stress + rng.gauss(0, 5)))), db_path)
 
 
+# 最後一天誰拜訪手機帳號、送什麼（social/town.KINDS 的 key）。拜訪日＝最後一晚的起床日＝那張卡的日期
+DEMO_PAWS = {"Mia (demo)": "pet", "Leo (demo)": "sleep_well"}
+
+
 def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
                friend_of=None, db_path=None):
     """
@@ -309,7 +316,16 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
             db.add_friendship(friend_of, uid, db_path=db_path)
         summary.append({"name": p["name"], "target": p["target"], "nights": written,
                         "watch_nights": nights, "late": late, "code": code,
-                        "friended": bool(friend_of)})
+                        "friended": bool(friend_of), "uid": uid})
+    if friend_of:
+        keep_since = (end - timedelta(days=14)).isoformat()
+        for r in summary:
+            kind = DEMO_PAWS.get(r["name"])
+            if kind:
+                db.add_friend_visit(r["uid"], friend_of, end.isoformat(), kind, keep_since, db_path=db_path)
+                r["pawed"] = kind
+    for r in summary:
+        r.pop("uid")  # 不讓 user_id 流到會印出來的地方
     return summary
 
 
@@ -341,7 +357,7 @@ def main():
         print("⚠️ 找不到手機帳號（resolve_phone_account 分不出來），沒有加好友。")
     for r in rows:
         print(f"  {r['name']:<12} 目標 {r['target']}  行為 {r['nights']:>2} 晚、手錶 {r['watch_nights']:>2} 晚、"
-              f"熬夜 {r['late']:>2} 晚  邀請碼 {r['code']}")
+              f"熬夜 {r['late']:>2} 晚  邀請碼 {r['code']}" + (f"  🐾 給你（{r['pawed']}）" if r.get("pawed") else ""))
     print("🔴 這些是示範資料，不是受測者。畫面上出現時要標 Demo accounts。")
 
 

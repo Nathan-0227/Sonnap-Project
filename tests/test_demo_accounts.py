@@ -11,6 +11,8 @@ tests/test_demo_accounts.py —— 成果展示範帳號不得污染真實資料
        API 重排的睡眠階段跟評分時同一份（demo_sleep 是決定性的）、白天資料有寫
   【7】動態牆：每張卡帶自己選的場景與寵物；只寫準時與否的人階梯圖沒有時刻；
        只開預設的人沒有階梯圖；回應裡沒有任何 user_id
+  【9】🐾（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪本人一次；重建不累積；
+       --remove 之後本人收到的拜訪一筆不剩；回傳的摘要裡沒有 user_id
   【8】Garmin 原始檔是本人的：示範帳號（沒有 garmin 來源）的「昨天」一次都不讀它，
        整天心率／壓力線／醒著心率是 null；有 garmin 來源的帳號照讀（反向對照）
 
@@ -82,13 +84,32 @@ check("全部是本人的好友", friends == demo_ids, True)
 check("暱稱都帶 (demo)", all(n.endswith("(demo)") for _, n in demo_accounts.demo_users(TMP)), True)
 check("每個都有邀請碼", all(r["code"] for r in rows), True)
 
+
+def visits_to_me():
+    c = db.connect(TMP)
+    try:
+        return sorted((u["display_name"], v["day"], v["kind"]) for v in c.execute(
+            "SELECT sender_id, day, kind FROM friend_visits WHERE receiver_id = ?", (me,))
+            for u in [c.execute("SELECT display_name FROM users WHERE user_id = ?",
+                                (v["sender_id"],)).fetchone()])
+    finally:
+        c.close()
+
+
+print("【9】🐾 給本人")
+check("Mia、Leo 在最後一天各拜訪一次", visits_to_me(),
+      [("Leo (demo)", "2026-11-06", "sleep_well"), ("Mia (demo)", "2026-11-06", "pet")])
+check("摘要裡沒有 user_id", any("uid" in r or any(v in str(r) for v in demo_ids) for r in rows), False)
+
 print("【4】重建不累積、刪除不傷本人")
 demo_accounts.create_all(nights=21, end=date(2026, 11, 6), db_path=TMP)
 check("重建後仍是 4 個", len(demo_accounts.demo_users(TMP)), 4)
 check("本人的好友仍是 4 個（舊的那批已被清掉）", len(db.list_friend_ids(me, TMP)), 4)
+check("【9】重建後本人收到的拜訪仍是 2 筆", len(visits_to_me()), 2)
 check("刪除回報 4 個", demo_accounts.remove_all(TMP), 4)
 check("本人的 5 晚還在", len(db.get_nightly_behavior(me, days=3650, db_path=TMP)), 5)
 check("本人沒有好友殘留", db.list_friend_ids(me, TMP), [])
+check("【9】--remove 之後本人收到的拜訪一筆不剩", visits_to_me(), [])
 conn = db.connect(TMP)
 orphans = conn.execute(
     "SELECT COUNT(*) AS n FROM nightly_behavior WHERE user_id NOT IN (SELECT user_id FROM users)"
