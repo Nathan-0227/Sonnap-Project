@@ -111,16 +111,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (mounted && feed.isOk) setState(() => _feed = feed.value!);
   }
 
+  /// 按了 🐾、後端還沒回來的人：按鈕當下就變 Sent，不然等重拿動態牆那一下會被連按好幾次
+  /// （2026-11-19 實機：一次 201 後面跟三次 409）。送失敗才拿掉。
+  final Set<String> _pawPending = {};
+
   /// 動態卡上的 🐾＝在小鎮摸摸他的寵物（同一件事、一天一次）。
   Future<void> _paw(FriendNightCard c) async {
     final service = widget.service;
-    if (service == null) return;
+    if (service == null || _pawPending.contains(c.handle)) return;
+    setState(() => _pawPending.add(c.handle));
     final r = await service.visit(c.handle, 'pet');
     if (!mounted) return;
     if (r.isOk || r.httpStatus == 409) {
       await _loadFeed();
       _loadTown();
     } else {
+      setState(() => _pawPending.remove(c.handle));
       _toast(r.message ?? 'Could not reach the backend.');
     }
   }
@@ -616,8 +622,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           return FriendNightCardView(
             card: c,
             paws: c.paws,
-            pawSent: c.pawSent,
-            onPaw: c.canPaw && !c.pawSent && !c.mine ? () => _paw(c) : null,
+            pawSent: c.pawSent || (c.canPaw && _pawPending.contains(c.handle)),
+            onPaw: c.canPaw && !c.pawSent && !c.mine && !_pawPending.contains(c.handle)
+                ? () => _paw(c)
+                : null,
             onSeeWho: c.mine && c.pawFrom.isNotEmpty ? () => _showPawFrom(c) : null,
             // 連續天數的橫幅只放在他最近那一晚的卡上
             streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,

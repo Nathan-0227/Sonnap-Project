@@ -795,6 +795,50 @@ void main() {
       expect(stub.visitCalls, hasLength(1));
     });
 
+    testWidgets('🐾 連按：只送一次，按下當下就是 Sent（11-19 實機：一次 201 後面跟三次 409）；送失敗才變回 Paw', (tester) async {
+      FriendNightCard bob() => const FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: '2026-09-03',
+        items: {'on_time': true},
+        paws: 1,
+        canPaw: true,
+      );
+      // 後端重拿還是舊的（還沒 Sent）也一樣：只靠 App 自己記得按過
+      final stub = _StubFriends()..feed = [bob()];
+      await pump(tester, stub, tab: 'feed');
+      final button = find.byKey(const Key('card-paw-button'));
+      await tester.tap(button);
+      await tester.tap(button);
+      await tester.tap(button);
+      await tester.pump();
+      expect(stub.visitCalls, hasLength(1));
+      expect(find.text('Sent'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Sent'), findsOneWidget);
+    });
+
+    testWidgets('🐾 送失敗（連不上）：變回 Paw、照實說', (tester) async {
+      FriendNightCard bob() => const FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: '2026-09-03',
+        items: {'on_time': true},
+        paws: 1,
+        canPaw: true,
+      );
+      final failing = _StubFriends()
+        ..feed = [bob()]
+        ..visitResult = const FriendsResult(FriendsStatus.failed, message: 'Could not reach the backend.');
+      await pump(tester, failing, tab: 'feed');
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Paw'), findsOneWidget);
+      expect(find.text('Could not reach the backend.'), findsOneWidget);
+    });
+
     testWidgets('🐾：自己的卡沒有按鈕，點數字看是誰（名單只有自己的卡有）', (tester) async {
       final stub = _StubFriends()
         ..feed = const [
