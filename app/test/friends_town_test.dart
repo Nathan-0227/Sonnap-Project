@@ -7,6 +7,8 @@
 // 【6】今天誰來看過你：訊息照抄後端；沒人來整張不出現
 // 【7】沒有朋友 → Invite friends；連不到後端 → 照實說，不畫假朋友
 // 【8】減少動態效果時星星不閃
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -437,9 +439,7 @@ void main() {
     expect(find.byKey(const Key('my-week-sheet')), findsOneWidget);
   });
 
-  testWidgets('【7】下一間空房子門口有 ＋ Invite，按了切到 Friends 分頁', (
-    tester,
-  ) async {
+  testWidgets('【7】下一間空房子門口有 ＋ Invite，按了切到 Friends 分頁', (tester) async {
     final stub = TownStub(
       town: FriendsResult(
         FriendsStatus.ok,
@@ -468,6 +468,69 @@ void main() {
     );
     expect(find.byKey(const Key('town-unreachable')), findsOneWidget);
     expect(find.byType(TownMap), findsNothing);
+  });
+
+  testWidgets('【2b】金色外框只畫在發光的人身上', (tester) async {
+    await pump(tester, TownStub());
+    expect(find.byKey(const Key('town-outline-ME0001')), findsOneWidget);
+    expect(find.byKey(const Key('town-outline-EAR111')), findsOneWidget);
+    for (final h in ['LAT222', 'BLA333', 'SHY444']) {
+      expect(
+        find.descendant(of: townie(h), matching: find.byType(TownOutlineGlow)),
+        findsNothing,
+      );
+    }
+  });
+
+  testWidgets('【9】兩指縮放：最小＝地圖的寬塞進螢幕、最大 2.5 倍；點兩下空地回到原本大小與你家', (tester) async {
+    await pump(tester, TownStub());
+    double scale() => tester
+        .widget<InteractiveViewer>(find.byKey(const Key('town-map')))
+        .transformationController!
+        .value
+        .getMaxScaleOnAxis();
+    final home = tester.getCenter(townie('ME0001'));
+    expect(scale(), 1);
+
+    Future<void> pinch(double from, double to) async {
+      const c = Offset(205, 450);
+      final a = await tester.startGesture(c - Offset(from, 0));
+      final b = await tester.startGesture(c + Offset(from, 0), pointer: 2);
+      for (var i = 1; i <= 10; i++) {
+        final d = from + (to - from) * i / 10;
+        await a.moveTo(c - Offset(d, 0));
+        await b.moveTo(c + Offset(d, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await a.up();
+      await b.up();
+      await settle(tester);
+    }
+
+    // 縮到不能再縮：地圖的寬剛好等於畫面寬
+    await pinch(180, 10);
+    final mapW = math.max(411 * 1.5, 900 * (1086 / 1448) * 1.08);
+    expect(scale(), closeTo(411 / mapW, 0.01));
+    final board = tester.getRect(find.byKey(const Key('town-board')));
+    expect(board.width, closeTo(411, 1));
+    expect(board.height, greaterThanOrEqualTo(900 - 1), reason: '縮到最小也不露出空白');
+
+    // 放到不能再放：2.5 倍
+    await pinch(10, 200);
+    await pinch(10, 200);
+    await pinch(10, 200);
+    expect(scale(), closeTo(2.5, 0.01));
+
+    // 點兩下空地（最左邊沒有房子）→ 回到 1 倍、你家回到原位
+    await pinch(180, 10);
+    final spot = Offset(board.left + 8, 450);
+    await tester.tapAt(spot);
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.tapAt(spot);
+    await settle(tester);
+    expect(scale(), closeTo(1, 0.001));
+    final back = tester.getCenter(townie('ME0001'));
+    expect((back - home).distance, lessThan(1));
   });
 
   testWidgets('【8】減少動態效果：星星不閃', (tester) async {

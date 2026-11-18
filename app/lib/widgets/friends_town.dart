@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -64,7 +65,8 @@ class TownPetSprite extends StatelessWidget {
 }
 
 /// 頭頂一圈閃光（2026-11-18 使用者給 Finch 的截圖：一顆小星星不夠明顯）。
-/// 三顆四角閃光圍著頭（左、上、右），各自錯開時間一閃一閃，外面一圈暖色光暈。
+/// 三顆白色四角閃光圍著頭（左、上、右），各自錯開時間一閃一閃，外面一圈白色光暈。
+/// 寵物本身另有 [TownOutlineGlow] 的金邊。
 /// 系統開「減少動態效果」時靜止。[size]＝整圈的寬度。
 class TownStar extends StatefulWidget {
   final double size;
@@ -121,9 +123,9 @@ class _SparklePainter extends CustomPainter {
 
   /// (x, y, 半徑, 錯開的相位)，以整圈的寬高為比例。
   static const _sparkles = [
-    (0.12, 0.78, 0.15, 0.0),
-    (0.50, 0.22, 0.20, 0.33),
-    (0.88, 0.76, 0.14, 0.66),
+    (0.10, 0.80, 0.14, 0.0),
+    (0.50, 0.20, 0.19, 0.33),
+    (0.90, 0.78, 0.13, 0.66),
   ];
 
   @override
@@ -131,17 +133,18 @@ class _SparklePainter extends CustomPainter {
     for (final (fx, fy, fr, phase) in _sparkles) {
       final c = Offset(fx * size.width, fy * size.height);
       final pulse = 0.5 + 0.5 * math.sin(2 * math.pi * (t + phase));
-      final r = fr * size.width * 1.4 * (0.7 + 0.3 * pulse);
+      final r = fr * size.width * (0.75 + 0.25 * pulse);
+      // 白色光暈（2026-11-19：金色在夜景裡跟暖色燈光混在一起，看不出來）
       canvas.drawCircle(
         c,
-        r * 2.0,
+        r * 1.3,
         Paint()
           ..shader = RadialGradient(
             colors: [
-              kTownGold.withValues(alpha: 0.75 * (0.6 + 0.4 * pulse)),
-              kTownGold.withValues(alpha: 0),
+              Colors.white.withValues(alpha: 0.8 * (0.6 + 0.4 * pulse)),
+              Colors.white.withValues(alpha: 0),
             ],
-          ).createShader(Rect.fromCircle(center: c, radius: r * 2.0)),
+          ).createShader(Rect.fromCircle(center: c, radius: r * 1.3)),
       );
       final path = Path()
         ..moveTo(c.dx, c.dy - r)
@@ -150,22 +153,39 @@ class _SparklePainter extends CustomPainter {
         ..quadraticBezierTo(c.dx, c.dy, c.dx - r, c.dy)
         ..quadraticBezierTo(c.dx, c.dy, c.dx, c.dy - r)
         ..close();
-      // 光束：中心白亮，往四個尖端漸漸變透明（照 Finch 的閃光，2026-11-18 使用者）
-      canvas.drawPath(
-        path,
-        Paint()
-          ..shader = RadialGradient(
-            colors: const [Color(0xFFFFFFFF), Color(0xEEFFF6DC), Color(0x00FFE7A8)],
-            stops: const [0.0, 0.3, 1.0],
-          ).createShader(Rect.fromCircle(center: c, radius: r)),
-      );
-      // 中心一點更亮的核
-      canvas.drawCircle(c, r * 0.12, Paint()..color = Colors.white);
+      canvas.drawPath(path, Paint()..color = Colors.white);
     }
   }
 
   @override
   bool shouldRepaint(_SparklePainter old) => old.t != t;
+}
+
+/// 寵物整隻描一圈金色外光（2026-11-19 使用者從五種做法裡選的）。
+/// 同一隻寵物染成金色、模糊兩層，墊在寵物後面；地圖縮放時跟著一起縮。
+class TownOutlineGlow extends StatelessWidget {
+  final String? species;
+  final double size;
+  const TownOutlineGlow({super.key, required this.species, required this.size});
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Stack(
+      children: [
+        for (final sigma in [size * 0.12, size * 0.05])
+          ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(
+                Color(0xFFFFE08A),
+                BlendMode.srcIn,
+              ),
+              child: TownPetSprite(species: species, size: size),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// 名牌：沒有框、只有字，像地圖上的地名（2026-11-18 使用者：深色膠囊框太突兀）。
@@ -203,7 +223,9 @@ class TownNameTag extends StatelessWidget {
   );
 }
 
-/// 整個畫面的小鎮地圖：上下左右滑、不能縮放，一開始讓你家出現在看得到的那塊正中間。
+/// 整個畫面的小鎮地圖：上下左右滑、兩指縮放，一開始讓你家出現在看得到的那塊正中間。
+/// 縮放（2026-11-19 使用者定）：最小＝整張地圖的寬剛好塞進螢幕、最大 2.5 倍；
+/// 名牌與寵物跟著縮；點兩下空地回到原本大小、你家回到中間。
 class TownMap extends StatefulWidget {
   final TownState town;
   final void Function(TownPerson person) onTap;
@@ -226,11 +248,49 @@ class TownMap extends StatefulWidget {
   State<TownMap> createState() => _TownMapState();
 }
 
-class _TownMapState extends State<TownMap> {
+class _TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
   TransformationController? _controller;
+
+  /// 一打開的位置，點兩下回到這裡。
+  Matrix4? _home;
+  late final AnimationController _back;
+  Animation<Matrix4>? _backAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _back = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    )..addListener(_onBack);
+  }
+
+  static const maxScale = 2.5;
+
+  void _onBack() {
+    final a = _backAnim;
+    if (a != null) _controller?.value = a.value;
+  }
+
+  void _goHome() {
+    final c = _controller, home = _home;
+    if (c == null || home == null) return;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      c.value = home.clone();
+      return;
+    }
+    _backAnim = Matrix4Tween(
+      begin: c.value.clone(),
+      end: home,
+    ).animate(CurvedAnimation(parent: _back, curve: Curves.easeOutCubic));
+    _back
+      ..reset()
+      ..forward();
+  }
 
   @override
   void dispose() {
+    _back.dispose();
     _controller?.dispose();
     super.dispose();
   }
@@ -246,6 +306,11 @@ class _TownMapState extends State<TownMap> {
           view.height * _mapAspect * 1.08,
         );
         final mapH = mapW / _mapAspect;
+        // 縮到最小時地圖的寬＝畫面寬。地圖比手機矮胖，上下不夠的那段補一圈模糊的夜色，
+        // 不然縮小時會露出一塊空白
+        final minScale = view.width / mapW;
+        final boardH = math.max(mapH, view.height / minScale);
+        final oy = (boardH - mapH) / 2;
         final me = kTownLots[0];
         if (_controller == null) {
           final c = widget.covered;
@@ -254,49 +319,96 @@ class _TownMapState extends State<TownMap> {
             view.width - mapW,
             0.0,
           );
-          final dy = (seenMidY - me.dy * mapH).clamp(view.height - mapH, 0.0);
-          _controller = TransformationController(
-            Matrix4.translationValues(dx, dy, 0),
+          final dy = (seenMidY - (oy + me.dy * mapH)).clamp(
+            view.height - boardH,
+            0.0,
           );
+          _home = Matrix4.translationValues(dx, dy, 0);
+          _controller = TransformationController(_home!.clone());
         }
         final people = [
           ?widget.town.me,
           ...widget.town.friends.take(kTownMaxFriends),
         ];
+        Widget map(BoxFit fit) => Image.asset(
+          _mapImage,
+          fit: fit,
+          errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF101A3F)),
+        );
         return InteractiveViewer(
           key: const Key('town-map'),
           transformationController: _controller,
           constrained: false,
-          scaleEnabled: false,
-          minScale: 1,
-          maxScale: 1,
+          minScale: minScale,
+          maxScale: maxScale,
           boundaryMargin: EdgeInsets.zero,
           child: SizedBox(
             width: mapW,
-            height: mapH,
+            height: boardH,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                // 空地：點兩下回家。寵物與 Invite 疊在上面，點它們不會走到這裡
                 Positioned.fill(
-                  child: Image.asset(
-                    _mapImage,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: Color(0xFF101A3F)),
+                  child: GestureDetector(
+                    key: const Key('town-board'),
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: _goHome,
+                    child: Stack(
+                      children: [
+                        if (oy > 0) ...[
+                          Positioned.fill(
+                            child: ImageFiltered(
+                              imageFilter: ui.ImageFilter.blur(
+                                sigmaX: 18,
+                                sigmaY: 18,
+                              ),
+                              child: map(BoxFit.cover),
+                            ),
+                          ),
+                          const Positioned.fill(
+                            child: ColoredBox(color: Color(0x99081326)),
+                          ),
+                        ],
+                        Positioned(
+                          left: 0,
+                          top: oy,
+                          width: mapW,
+                          height: mapH,
+                          child: oy > 0
+                              ? ShaderMask(
+                                  blendMode: BlendMode.dstIn,
+                                  shaderCallback: (r) => const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0x00000000),
+                                      Color(0xFF000000),
+                                      Color(0xFF000000),
+                                      Color(0x00000000),
+                                    ],
+                                    stops: [0, 0.04, 0.96, 1],
+                                  ).createShader(r),
+                                  child: map(BoxFit.cover),
+                                )
+                              : map(BoxFit.cover),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (widget.onAddFriend != null &&
                     people.length < kTownLots.length)
                   _inviteSpot(
                     kTownLots[people.length].dx * mapW,
-                    kTownLots[people.length].dy * mapH,
+                    oy + kTownLots[people.length].dy * mapH,
                     mapW,
                   ),
                 for (final (i, p) in people.indexed)
                   _townie(
                     p,
                     kTownLots[i].dx * mapW,
-                    kTownLots[i].dy * mapH,
+                    oy + kTownLots[i].dy * mapH,
                     mapW,
                   ),
               ],
@@ -385,7 +497,17 @@ class _TownMapState extends State<TownMap> {
                 clipBehavior: Clip.none,
                 alignment: Alignment.bottomCenter,
                 children: [
-                  // 閃光圍著頭：從頭頂上方一點開始，兩側往下到耳朵旁
+                  if (p.glow)
+                    TownOutlineGlow(
+                      key: Key('town-outline-${p.handle}'),
+                      species: p.petSpecies,
+                      size: pet,
+                    ),
+                  // 首頁那隻寵物自己可以點（會有反應），會把點擊吃掉 → 小鎮裡交給外層
+                  IgnorePointer(
+                    child: TownPetSprite(species: p.petSpecies, size: pet),
+                  ),
+                  // 閃光圍著頭：從頭頂上方一點開始，兩側往下到耳朵旁；畫在寵物前面才不會被擋住
                   if (p.glow)
                     Positioned(
                       top: -pet * 0.32,
@@ -394,10 +516,6 @@ class _TownMapState extends State<TownMap> {
                         size: pet * 1.35,
                       ),
                     ),
-                  // 首頁那隻寵物自己可以點（會有反應），會把點擊吃掉 → 小鎮裡交給外層
-                  IgnorePointer(
-                    child: TownPetSprite(species: p.petSpecies, size: pet),
-                  ),
                 ],
               ),
               TownNameTag(person: p),
