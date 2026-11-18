@@ -724,6 +724,130 @@ void main() {
       expect(last.bottom, lessThanOrEqualTo(screenH - navBar));
     });
 
+    testWidgets('🐾（2026-11-19）：數字照抄後端；只有能按的那張有按鈕；按了＝拜訪（摸摸），重拿一次變 Sent', (
+      tester,
+    ) async {
+      FriendNightCard bob({
+        required String date,
+        int paws = 0,
+        bool canPaw = false,
+        bool sent = false,
+      }) => FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: date,
+        items: const {'on_time': true},
+        paws: paws,
+        canPaw: canPaw,
+        pawSent: sent,
+      );
+      final stub = _StubFriends()
+        ..feed = [
+          bob(date: '2026-09-03', paws: 3, canPaw: true),
+          bob(date: '2026-09-02', paws: 0),
+          bob(date: '2026-09-01', paws: 1),
+        ];
+      await pump(tester, stub, tab: 'feed');
+      final today = find.byKey(const Key('feed-card-BOB234-2026-09-03'));
+      expect(
+        find.descendant(of: today, matching: find.text('3 paws')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('card-paw-button')),
+        findsOneWidget,
+        reason: '舊的卡不能按',
+      );
+      expect(
+        find.descendant(
+          of: today,
+          matching: find.byKey(const Key('card-paw-button')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('1 paw'), findsOneWidget, reason: '舊的卡照樣寫數字（單數）');
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('feed-card-BOB234-2026-09-02')),
+          matching: find.textContaining('paw'),
+        ),
+        findsNothing,
+        reason: '0 個不寫',
+      );
+      // 朋友的卡看不到是誰
+      expect(find.byKey(const Key('card-paws-who')), findsNothing);
+
+      stub.feed = [
+        bob(date: '2026-09-03', paws: 4, canPaw: true, sent: true),
+        bob(date: '2026-09-02'),
+        bob(date: '2026-09-01', paws: 1),
+      ];
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(stub.visitCalls, [('BOB234', 'pet')]);
+      expect(find.text('4 paws'), findsOneWidget);
+      expect(find.text('Sent'), findsOneWidget);
+      // Sent 之後再按不會再送
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      await tester.pump();
+      expect(stub.visitCalls, hasLength(1));
+    });
+
+    testWidgets('🐾：自己的卡沒有按鈕，點數字看是誰（名單只有自己的卡有）', (tester) async {
+      final stub = _StubFriends()
+        ..feed = const [
+          FriendNightCard(
+            handle: 'K7QM2P',
+            displayName: 'Nathan',
+            date: '2026-09-03',
+            mine: true,
+            items: {'on_time': true},
+            paws: 2,
+            pawFrom: ['Bob', 'Carol'],
+          ),
+        ];
+      await pump(tester, stub, tab: 'feed');
+      expect(find.byKey(const Key('card-paw-button')), findsNothing);
+      expect(find.text('2 paws'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('card-paws-who')));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final sheet = find.byKey(const Key('paw-from-sheet'));
+      expect(
+        find.descendant(of: sheet, matching: find.text('Bob')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.text('Carol')),
+        findsOneWidget,
+      );
+    });
+
+    test('🐾：卡片照抄後端的 paws／can_paw／paw_sent／paw_from，沒給就是 0／不能按', () {
+      final c = FriendNightCard.fromJson({
+        'handle': 'B',
+        'display_name': 'Bob',
+        'date': '2026-09-03',
+        'items': <String, dynamic>{},
+        'paws': 2,
+        'can_paw': true,
+        'paw_sent': true,
+        'paw_from': ['Bob', 7],
+      });
+      expect((c.paws, c.canPaw, c.pawSent), (2, true, true));
+      expect(c.pawFrom, ['Bob']);
+      final old = FriendNightCard.fromJson({
+        'handle': 'B',
+        'date': '2026-09-03',
+        'items': <String, dynamic>{},
+      });
+      expect((old.paws, old.canPaw, old.pawSent), (0, false, false));
+      expect(old.pawFrom, isEmpty);
+    });
+
     testWidgets('自己的卡也在動態牆上：寫 You、用自己的連續天數，點開最下面是分享設定；睡眠圖在卡上是細長條', (
       tester,
     ) async {

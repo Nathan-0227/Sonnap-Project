@@ -104,6 +104,61 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (feed.isOk) setState(() => _feed = feed.value!);
   }
 
+  Future<void> _loadFeed() async {
+    final service = widget.service;
+    if (service == null) return;
+    final feed = await service.fetchFeed();
+    if (mounted && feed.isOk) setState(() => _feed = feed.value!);
+  }
+
+  /// 動態卡上的 🐾＝在小鎮摸摸他的寵物（同一件事、一天一次）。
+  Future<void> _paw(FriendNightCard c) async {
+    final service = widget.service;
+    if (service == null) return;
+    final r = await service.visit(c.handle, 'pet');
+    if (!mounted) return;
+    if (r.isOk || r.httpStatus == 409) {
+      await _loadFeed();
+      _loadTown();
+    } else {
+      _toast(r.message ?? 'Could not reach the backend.');
+    }
+  }
+
+  /// 自己的卡：是誰給了 🐾（名單只給卡片主人）。
+  void _showPawFrom(FriendNightCard c) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF10265A),
+      builder: (context) => Padding(
+        key: const Key('paw-from-sheet'),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              c.paws == 1 ? '1 paw' : '${c.paws} paws',
+              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            for (final n in c.pawFrom)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.pets_rounded, color: Color(0xFFFFD27A), size: 18),
+                    const SizedBox(width: 10),
+                    Text(n, style: const TextStyle(color: Colors.white, fontSize: 15)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadTown() async {
     final service = widget.service;
     if (service == null) return;
@@ -116,7 +171,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final service = widget.service;
     if (service == null) return 'Could not reach the backend.';
     final r = await service.visit(p.handle, kind);
-    if (r.isOk || r.httpStatus == 409) _loadTown();
+    if (r.isOk || r.httpStatus == 409) {
+      _loadTown();
+      _loadFeed(); // 🐾 跟拜訪是同一件事，動態卡上的數字與 Sent 也要跟著變
+    }
     if (r.isOk) return null;
     return r.message ?? 'Could not reach the backend.';
   }
@@ -557,6 +615,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
               : state.friends.where((x) => x.handle == c.handle).firstOrNull;
           return FriendNightCardView(
             card: c,
+            paws: c.paws,
+            pawSent: c.pawSent,
+            onPaw: c.canPaw && !c.pawSent && !c.mine ? () => _paw(c) : null,
+            onSeeWho: c.mine && c.pawFrom.isNotEmpty ? () => _showPawFrom(c) : null,
             // 連續天數的橫幅只放在他最近那一晚的卡上
             streak: f != null && f.lastNightDate == c.date ? f.currentStreak : null,
             week: f != null && f.lastNightDate == c.date ? f.streakWeek : null,

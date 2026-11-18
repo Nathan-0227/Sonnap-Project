@@ -1912,12 +1912,37 @@ async def get_friends_feed(user_id: str = Query(...)):
     ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "feed" 會被當成邀請碼。
     """
     require_user(user_id)
+    from datetime import datetime as _dt
+    today = social_town.visit_day(_dt.now())
+    ids = [user_id, *db.list_friend_ids(user_id)]
+    # 🐾（2026-11-19 使用者定，像 Strava 的 kudos）：一個 🐾＝那一天的一次拜訪，跟小鎮是同一件事。
+    # 數字大家都看得到；**是誰只給卡片主人**——朋友的朋友不一定是我的朋友，名字不能給。
+    paws = {}
+    for rid, sid, day in db.list_visits_received(
+            ids, (date_cls.today() - timedelta(days=social_town.VISIT_KEEP_DAYS)).isoformat()):
+        paws.setdefault((rid, day), []).append(sid)
+    _, sent = db.list_friend_visits(user_id, today)
+    names = {}
     cards = []
-    for fid in [user_id, *db.list_friend_ids(user_id)]:
+    for fid in ids:
         s = _friend_summary(fid)
+        names[fid] = s["display_name"]
+        mine = fid == user_id
         for c in await _cards_for(fid):
-            cards.append({"handle": s["handle"], "display_name": s["display_name"],
-                          "pet_species": s["pet_species"], "mine": fid == user_id, **c})
+            got = paws.get((fid, c["date"]), [])
+            card = {"handle": s["handle"], "display_name": s["display_name"],
+                    "pet_species": s["pet_species"], "mine": mine, **c, "paws": len(got)}
+            if mine:
+                card["paw_from"] = got
+            else:
+                # 只有「今天」那張卡能按（拜訪一天一次，以起床日算）
+                card["can_paw"] = c["date"] == today
+                card["paw_sent"] = c["date"] == today and fid in sent
+            cards.append(card)
+    for card in cards:
+        if card["mine"]:
+            card["paw_from"] = [names.get(sid) or (db.get_user(sid) or {}).get("display_name", "")
+                                for sid in card["paw_from"]]
     cards.sort(key=lambda c: (c["date"], c["mine"], c["display_name"]), reverse=True)
     return {"cards": cards}
 

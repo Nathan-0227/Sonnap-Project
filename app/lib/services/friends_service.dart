@@ -133,6 +133,18 @@ class FriendNightCard {
   /// 我自己的卡（後端標的）。內容照我的分享設定＝朋友看到的我。
   final bool mine;
 
+  /// 那一晚收到幾個 🐾（＝那天的拜訪數，2026-11-19）。大家都看得到。
+  final int paws;
+
+  /// 這張卡能不能按 🐾（只有朋友「今天」那張；後端判斷）。
+  final bool canPaw;
+
+  /// 我今天已經拜訪過他（小鎮或這裡）。
+  final bool pawSent;
+
+  /// 是誰給的。**只有我自己的卡有**（後端只給卡片主人）。
+  final List<String> pawFrom;
+
   const FriendNightCard({
     required this.handle,
     required this.displayName,
@@ -141,6 +153,10 @@ class FriendNightCard {
     this.petSpecies,
     this.scene,
     this.mine = false,
+    this.paws = 0,
+    this.canPaw = false,
+    this.pawSent = false,
+    this.pawFrom = const [],
   });
 
   factory FriendNightCard.fromJson(Map<String, dynamic> json) => FriendNightCard(
@@ -151,6 +167,13 @@ class FriendNightCard {
         items: ((json['items'] as Map?) ?? const {}).cast<String, dynamic>(),
         scene: json['scene'] as String?,
         mine: json['mine'] == true,
+        paws: (json['paws'] as num?)?.toInt() ?? 0,
+        canPaw: json['can_paw'] == true,
+        pawSent: json['paw_sent'] == true,
+        pawFrom: [
+          for (final n in (json['paw_from'] as List?) ?? const [])
+            if (n is String) n,
+        ],
       );
 }
 

@@ -2244,6 +2244,24 @@ def list_friend_visits(user_id, day, db_path=None):
         conn.close()
 
 
+def list_visits_received(user_ids, since, db_path=None):
+    """這幾個人從 since（起床日，含）起收到的拜訪：[(receiver_id, sender_id, day)]，先送的在前。
+    動態卡的 🐾 數用（2026-11-19）。"""
+    if not user_ids:
+        return []
+    marks = ", ".join("?" for _ in user_ids)
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            f"SELECT receiver_id, sender_id, day FROM friend_visits "
+            f"WHERE receiver_id IN ({marks}) AND day >= ? ORDER BY created_at",
+            (*user_ids, since),
+        ).fetchall()
+        return [(r["receiver_id"], r["sender_id"], r["day"]) for r in rows]
+    finally:
+        conn.close()
+
+
 def list_friend_ids(user_id, db_path=None):
     conn = connect(db_path)
     try:

@@ -9,6 +9,7 @@
 【5】不給 XP、不影響分數
 【6】存 14 天：寫入時順手刪舊的；解除好友、刪帳號時一起刪
 【7】回應裡沒有任何 user_id；/friends/town 不會被當成邀請碼
+【8】動態卡的 🐾：數字大家看得到、是誰只給卡片主人（朋友的朋友不一定是你的朋友）；只有今天那張能按
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_friend_town.py
 """
@@ -135,6 +136,49 @@ visit(h["Shy"], "sleep_well")
 after = client.get("/game", params={"user_id": shy}).json()
 check("被拜訪前後 /game 一模一樣", before == after, True)
 
+print("\n【8】動態卡的 🐾（2026-11-19）：數字大家看得到、是誰只給卡片主人；只有今天那張能按")
+yday = (date.today() - timedelta(days=1)).isoformat()
+db.upsert_nightly_behavior(early, yday, "23:00", f"{yday}T23:00:00", 0, False)
+conn = db.connect()
+conn.execute("INSERT INTO friend_visits (sender_id, receiver_id, day, kind, created_at) VALUES (?,?,?,?,?)",
+             (late, early, yday, "pet", "2026-01-01T00:00:00"))
+conn.commit()
+conn.close()
+
+
+def feed(who):
+    return client.get("/friends/feed", params={"user_id": who}).json()["cards"]
+
+
+def card_of(cards, name, day):
+    return next((c for c in cards if c["display_name"] == name and c["date"] == day), None)
+
+
+mine_feed = feed(me)
+e_today = card_of(mine_feed, "Early", today)
+check("【8】Early 今天那張：1 個 🐾（我送的）", e_today and e_today["paws"], 1)
+check("【8】今天那張可以按、我已經送過", e_today and (e_today["can_paw"], e_today["paw_sent"]), (True, True))
+check("【8】朋友的卡沒有名單", e_today and "paw_from" in e_today, False)
+s_today = card_of(mine_feed, "Shy", today)
+check("【8】Shy 今天那張：1 個 🐾、我送過", s_today and (s_today["paws"], s_today["paw_sent"]), (1, True))
+e_yday = card_of(mine_feed, "Early", yday)
+check("【8】昨天那張：數字照算（Late 送的）、不能按", e_yday and (e_yday["paws"], e_yday["can_paw"]), (1, False))
+me_today = card_of(mine_feed, "Me", today)
+check("【8】我自己的卡：1 個、名單是 Early", me_today and (me_today["paws"], me_today["paw_from"]), (1, ["Early"]))
+check("【8】自己的卡不能按", me_today and "can_paw" in me_today, False)
+late_feed = feed(late)
+me_for_late = card_of(late_feed, "Me", today)
+check("【8】Late 看我的卡：看得到 1 個", me_for_late and me_for_late["paws"], 1)
+check("【8】但看不到是誰（Early 不是 Late 的朋友）",
+      (me_for_late and "paw_from" in me_for_late, "Early" in client.get("/friends/feed", params={"user_id": late}).text),
+      (False, False))
+check("【8】Early 看我的卡：可以按、已經送過（proud）",
+      (lambda c: c and (c["can_paw"], c["paw_sent"]))(card_of(feed(early), "Me", today)), (True, True))
+check("【8】Late 還沒拜訪我 → paw_sent False", me_for_late and me_for_late["paw_sent"], False)
+check("【8】feed 回應裡沒有任何 user_id",
+      any(u in client.get("/friends/feed", params={"user_id": w}).text
+          for w in (me, early, late) for u in (me, early, late, blank, shy)), False)
+
 print("\n【6】存多久、什麼時候刪")
 conn = db.connect()
 conn.execute("INSERT INTO friend_visits (sender_id, receiver_id, day, kind, created_at) VALUES (?,?,?,?,?)",
@@ -152,7 +196,9 @@ def count(sql, *a):
         c.close()
 
 
-check("20 天前的拜訪被清掉", count("SELECT COUNT(*) FROM friend_visits WHERE sender_id = ?", late), 0)
+check("20 天前的拜訪被清掉", count("SELECT COUNT(*) FROM friend_visits WHERE sender_id = ? AND day < ?", late,
+                                  (date.today() - timedelta(days=14)).isoformat()), 0)
+check("（對照）昨天的還在", count("SELECT COUNT(*) FROM friend_visits WHERE sender_id = ? AND day = ?", late, yday), 1)
 n_before = count("SELECT COUNT(*) FROM friend_visits WHERE (sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)",
                  me, early, early, me)
 check("（對照）解除好友前 Me↔Early 有 2 筆", n_before, 2)

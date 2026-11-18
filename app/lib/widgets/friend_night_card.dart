@@ -568,7 +568,23 @@ class FriendNightCardView extends StatelessWidget {
     this.week,
     this.expanded = false,
     this.topInset = 0,
+    this.paws = 0,
+    this.pawSent = false,
+    this.onPaw,
+    this.onSeeWho,
   });
+
+  /// 那一晚收到幾個 🐾（＝那天的拜訪數，後端算的；2026-11-19 使用者定大家都看得到數字）。
+  final int paws;
+
+  /// 我今天已經拜訪過他（在小鎮或這裡都算）→ 按鈕變成 Sent。
+  final bool pawSent;
+
+  /// 給一個 🐾。null＝這張卡沒有按鈕（自己的卡、比較舊的卡）。
+  final VoidCallback? onPaw;
+
+  /// 點數字看是誰。只有自己的卡有（名單只給卡片主人，朋友的朋友不一定是你的朋友）。
+  final VoidCallback? onSeeWho;
 
   @override
   Widget build(BuildContext context) {
@@ -892,6 +908,14 @@ class FriendNightCardView extends StatelessWidget {
                                 ),
                               ),
                           ],
+                          if (!expanded &&
+                              (paws > 0 || onPaw != null || pawSent))
+                            _PawRow(
+                              paws: paws,
+                              sent: pawSent,
+                              onPaw: onPaw,
+                              onSeeWho: onSeeWho,
+                            ),
                         ],
                       ),
                     ),
@@ -1542,4 +1566,112 @@ class _StagePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StagePainter old) => old.segments != segments;
+}
+
+/// 動態卡最下面的 🐾 那一列（2026-11-19 使用者定，像 Strava 的 kudos）：
+/// 左邊是這一晚收到幾個（0 不寫），右邊是按鈕。按一下＝在小鎮拜訪他（摸摸寵物），同一件事、一天一次。
+class _PawRow extends StatelessWidget {
+  final int paws;
+  final bool sent;
+  final VoidCallback? onPaw;
+  final VoidCallback? onSeeWho;
+  const _PawRow({
+    required this.paws,
+    required this.sent,
+    required this.onPaw,
+    required this.onSeeWho,
+  });
+
+  static const _gold = Color(0xFFFFD27A);
+
+  @override
+  Widget build(BuildContext context) {
+    final count = paws > 0
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.pets_rounded, color: _gold, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                paws == 1 ? '1 paw' : '$paws paws',
+                key: const Key('card-paws'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (onSeeWho != null)
+                const Text(
+                  '  ·  See who ›',
+                  style: TextStyle(
+                    color: Color(0xFFC9B8FF),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          )
+        : const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Row(
+        children: [
+          if (onSeeWho != null && paws > 0)
+            GestureDetector(
+              key: const Key('card-paws-who'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onSeeWho,
+              child: count,
+            )
+          else
+            count,
+          const Spacer(),
+          if (onPaw != null || sent)
+            Semantics(
+              button: true,
+              label: sent ? 'Paw sent' : 'Give a paw',
+              child: GestureDetector(
+                key: const Key('card-paw-button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: sent ? null : onPaw,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: sent ? const Color(0x33FFD27A) : null,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: sent ? _gold : const Color(0x99FFFFFF),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.pets_rounded,
+                        size: 16,
+                        color: sent ? _gold : Colors.white,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        sent ? 'Sent' : 'Paw',
+                        style: TextStyle(
+                          color: sent ? _gold : Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
