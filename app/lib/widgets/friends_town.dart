@@ -770,7 +770,22 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
       child: ReportFont(
         child: Stack(
           children: [
-            const Positioned.fill(child: ReportBackground()),
+            // 背景（2026-11-19 使用者生成的夜空雲海）：圖貼在最上面，下半部本來就是平整的深藍，
+            // 底色用同一個顏色（從圖底量的 #0E1B4D），捲到哪裡都接得上。讀不到圖退回報告的漸層
+            const Positioned.fill(child: ColoredBox(color: Color(0xFF0E1B4D))),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Image.asset(
+                'assets/backgrounds/town_sheet_sky.jpg',
+                key: const Key('town-sheet-sky'),
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, _, _) =>
+                    const SizedBox(height: 600, child: ReportBackground()),
+              ),
+            ),
             Column(
         children: [
           Expanded(
