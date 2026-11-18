@@ -1555,6 +1555,13 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   ⚠️ 任何掃過所有使用者的查詢都要排除 `DEMO_COHORT`——`resolve_phone_account()`
   靠「夜數最多」認帳號，示範帳號比本人多的話，手錶與攝影機匯入會寫進假帳號且不報錯。
   只寫行為資料不寫手錶資料。成果展前一天重跑 `--create`，日期才會是最新的。
+- **`export_teammate.py`（2026-11-19 新增）— 給隊友在她自己電腦上跑後端用的資料庫副本。**
+  手機帳號＋它的好友整份複製成一個 SQLite 檔（連片段），**每個帳號都換新 id**：
+  user_id 是憑證，而且 App 沒有唯讀模式，用你的 id 的話她手機一打開就會把她的資料整列蓋進你的夜晚。
+  第一次產生新 id；之後更新資料帶 `--user-id-file <上次的>/NEW_USER_ID.txt` 沿用，
+  她手上那支 APK（`SONNAP_USER_ID`＝那個 id、`SONNAP_API_BASE=http://127.0.0.1:8000`，手機用 USB＋`adb reverse`）就不用重建。
+  只讀來源、不印 id。⚠️ 產出物有真實睡眠資料、臥室畫面，放 `sonnap-data/` 底下，不進 repo。
+  ⚠️ 新增指向帳號的欄位時要加進 `ID_COLUMNS`，不然那一欄會帶著你真正的 id 出去（測試【2】掃整個檔案守著）。
 - **`camera_clips.py`（2026-11-07 新增）— 攝影機動作片段。** 一晚挑動作最大的 10 段（11-15 使用者定，原本 3 段；一段約 1.8 MB）、
   每段 10 秒，做成 GIF（**原始畫面**＋暖色外框框住在動的地方＋「02:41 · moved for 6 s」），
   App 的 Insights 攝影機卡跟著趨勢圖點選的那一晚顯示。早上匯入會自動跑；
@@ -1599,7 +1606,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 | `ai/` | 寵物 notes（`night_summary.py`）與睡眠助理（`chat.py`），都走 Claude API；共用驗證在 `text_guards.py`。`data/ai_advice.json` 是退場夢境的歷史資料。⚠️ `ai/.env` 有金鑰，已被 gitignore |
 | `tapo/` | 影像組負責。⚠️ 檔名是 `tapo_detector.py`（不是 `motion_detector.py`） |
 | `itegration/` | `if_integrate.py`（Garmin×TAPO 整合）。⚠️ `itegration` 是拼字錯誤，刻意不改名。2026-08-30 從 MySQL 改讀 `tapo_index`，**第一次真的跑得起來**（先前那個 `sonnap` 資料庫不在這台機器上）。需要 `pip install -r requirements.txt` |
-| `tests/` | 37 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
+| `tests/` | 38 支，**獨立腳本不需 pytest**（清單見下方驗收指令） |
 | `app/` | Flutter（Jeremy 負責）。⚠️ **動之前先問他** |
 | `Research-Background/` | 文獻依據，正式來源是 `Garmin手錶分數.md` |
 | `docs` | 43 bytes 的佔位**檔案**（不是資料夾），待團隊決定 |
@@ -1608,7 +1615,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **驗收指令**
 
-Python 37 支，都是獨立腳本、不需要 pytest。全部跑一次：
+Python 38 支，都是獨立腳本、不需要 pytest。全部跑一次：
 
 ```bash
 for f in tests/*.py; do PYTHONIOENCODING=utf-8 python "$f" > /dev/null 2>&1 || echo "FAIL $f"; done
@@ -1649,6 +1656,7 @@ python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時�
 python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 三種狀態，「沒判」存成 NULL 不是 0（準時）；原本 None 會被存成準時、算進熬夜比率分母（手動補資料才會遇到，11-07 中過）
 python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
+python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
