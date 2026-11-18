@@ -48,8 +48,12 @@ class _NoAlarm implements AlarmScheduler {
 /// 假的後端：記下每次要 notes 時帶的 generate。
 class _Source implements MorningReportSource {
   Map<String, dynamic>? notes;
+
+  /// 依日期給不同的 notes；有給就以它為準（沒列到的日期回 null），沒給就每天都回 [notes]。
+  Map<String, Map<String, dynamic>?>? byDate;
   final generateFlags = <bool>[];
-  _Source(this.notes);
+  final asked = <String>[];
+  _Source(this.notes, {this.byDate});
 
   @override
   Future<Map<String, dynamic>?> fetchNight(String date) async => null;
@@ -58,7 +62,9 @@ class _Source implements MorningReportSource {
   Future<Map<String, dynamic>?> fetchSummary(String date,
       {bool generate = true}) async {
     generateFlags.add(generate);
-    return notes;
+    asked.add(date);
+    final b = byDate;
+    return b != null ? b[date] : notes;
   }
 }
 
@@ -156,11 +162,14 @@ void main() {
     setUp(() => kv = InMemoryKeyValueStore());
 
     Future<_Source> pumpHome(WidgetTester tester, Map<String, dynamic>? notes,
-        {Size size = const Size(1200, 4200), double dpr = 3.0}) async {
+        {Size size = const Size(1200, 4200),
+        double dpr = 3.0,
+        Map<String, Map<String, dynamic>?>? byDate,
+        DateTime? now}) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = dpr;
       addTearDown(tester.view.reset);
-      final source = _Source(notes);
+      final source = _Source(notes, byDate: byDate);
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: HomeScreen(
@@ -168,7 +177,7 @@ void main() {
             bedMarks: BedMarkStore(kv),
             alarmScheduler: _NoAlarm(),
             morningReport: source,
-            clock: () => DateTime(2026, 11, 13, 9),
+            clock: () => now ?? DateTime(2026, 11, 13, 9),
           ),
         ),
       ));
@@ -213,6 +222,52 @@ void main() {
       await NotesReadStore(kv).markRead(_today, 'v-morning');
       await pumpHome(tester, notesJson(version: 'v-afternoon'));
       expect(find.byKey(const Key('notes-book-unread-dot')), findsOneWidget);
+    });
+
+    // 2026-11-19 使用者定：今天這一晚沒內容就退回前一晚，只往回 1 晚。
+    // 實例：凌晨 1 點（11-14）還沒睡，問「今天」問的是還沒開始的那一晚，原本日記本會消失到起床。
+    testWidgets('⚠️ 過了午夜、今天這一晚還沒內容 → 顯示前一晚的 notes（日期寫前一晚、紅點記在前一晚）',
+        (tester) async {
+      final source = await pumpHome(tester, null,
+          now: DateTime(2026, 11, 14, 1),
+          byDate: {'2026-11-14': null, _today: notesJson()});
+      expect(source.asked, ['2026-11-14', _today]);
+      expect(source.generateFlags.every((g) => g == false), isTrue);
+      expect(find.byKey(const Key('home-notes')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester);
+      expect(textOf(tester, 'pet-notes-summary'), _summary);
+      expect(textOf(tester, 'pet-notes-date'), reportDateTitle(DateTime(2026, 11, 13)),
+          reason: '標題下的日期要寫前一晚，看得出是哪一晚');
+      Navigator.of(tester.element(find.byKey(const Key('pet-notes')))).pop();
+      await frames(tester);
+      expect(await NotesReadStore(kv).isRead(_today, 'v1'), isTrue);
+    });
+
+    testWidgets('今天這一晚有內容 → 用今天的，不問前一晚', (tester) async {
+      final source = await pumpHome(tester, null, byDate: {
+        _today: notesJson(),
+        '2026-11-12': notesJson(date: '2026-11-12', summary: 'SENTINEL-old'),
+      });
+      expect(source.asked, [_today]);
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester);
+      expect(textOf(tester, 'pet-notes-summary'), _summary);
+    });
+
+    testWidgets('⚠️ 只往回 1 晚：今天和前一晚都沒有 → 不出現，也不去找兩晚前的', (tester) async {
+      final source = await pumpHome(tester, null, byDate: {
+        _today: null,
+        '2026-11-12': notesJson(summary: null, tips: [], date: '2026-11-12'),
+        '2026-11-11': notesJson(date: '2026-11-11'),
+      });
+      expect(source.asked, [_today, '2026-11-12']);
+      expect(find.byKey(const Key('home-notes')), findsNothing);
+    });
+
+    test('往回找用日曆日：月初往回是上個月最後一天', () {
+      expect(homeNotesDates(DateTime(2026, 12, 1, 2)), ['2026-12-01', '2026-11-30']);
+      expect(kHomeNotesLookbackNights, 1);
     });
 
     testWidgets('⚠️ 沒有內容、沒有後端 → 不出現日記本', (tester) async {
