@@ -185,22 +185,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return r.message ?? 'Could not reach the backend.';
   }
 
+  final _townMap = GlobalKey<TownMapState>();
+
+  /// 點小鎮裡的人（2026-11-19 使用者定，照參考圖）：地圖把他移到上面那塊的正中間，
+  /// 下半部滑出資訊面板。點自己是同一個面板（朋友看到的你＋今天誰來看過你）。
   void _tapTownie(TownPerson p) {
-    if (p.mine) {
-      // 點自己＝看自己昨晚（朋友看到的那張）
-      final card = p.card;
-      if (card != null) {
-        openFriendNight(context, card);
-      } else {
-        _toast('Nothing to show for last night yet.');
-      }
-      return;
-    }
+    final state = _result?.value;
+    final h = MediaQuery.sizeOf(context).height;
+    final top = MediaQuery.paddingOf(context).top + 120;
+    _townMap.currentState?.focusOn(p.handle, (top + h * (1 - kTownSheetSize)) / 2);
     showTownFriendSheet(
       context,
       person: p,
       kinds: _town?.value?.kinds ?? const [],
-      onVisit: (kind) => _visit(p, kind),
+      onVisit: p.mine ? null : (kind) => _visit(p, kind),
+      summary: p.mine
+          ? state?.me
+          : state?.friends.where((f) => f.handle == p.handle).firstOrNull,
+      visits: p.mine ? _town?.value?.visits ?? const [] : const [],
     );
   }
 
@@ -496,6 +498,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       children: [
         Positioned.fill(
           child: TownMap(
+            key: _townMap,
             town: town,
             onTap: _tapTownie,
             onAddFriend: town.friends.length < kTownMaxFriends ? () => setState(() => _tab = _Tab.friends) : null,

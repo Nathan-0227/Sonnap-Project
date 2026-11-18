@@ -17,6 +17,8 @@ import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/friends_town.dart';
 import 'package:app/widgets/home_pet.dart';
+import 'package:app/widgets/last_night_art.dart';
+import 'package:app/widgets/report_tiles.dart';
 
 Map<String, dynamic> person(
   String handle,
@@ -379,6 +381,144 @@ void main() {
       petMoodFromBackend(sheetPet().mood),
       isNot(petMoodFromBackend('happy')),
     );
+  });
+
+  group('【10】資訊面板（2026-11-19 使用者定，照參考圖）', () {
+    Map<String, dynamic> richCard({bool times = true}) => {
+      'date': '2026-09-03',
+      'items': {
+        'sleep_duration': 412,
+        'phone_down_time': '23:22',
+        'on_time': false,
+        'score': {'score': 84.2},
+        'steps': {'steps': 10230, 'goal': 9540},
+        'sleeping_hr': {
+          'avg': 56,
+          'curve': [
+            {'m': 0, 'v': 58},
+            {'m': 5, 'v': 55},
+            {'m': 10, 'v': 57},
+          ],
+        },
+        'camera_moves': 18.4,
+        'camera_timeline': {
+          'points': [
+            {'m': 0, 'v': 0.1},
+            {'m': 5, 'v': 0.4},
+          ],
+        },
+        'stages': {
+          if (times) 'start': '23:40',
+          if (times) 'end': '06:52',
+          'rem_measured': true,
+          'segments': [
+            {'stage': 'light', 'from': 0, 'to': 30},
+            {'stage': 'deep', 'from': 30, 'to': 92},
+          ],
+        },
+      },
+    };
+
+    Map<String, dynamic> stateWithEarly() {
+      final st = stateJson();
+      st['friends'] = [
+        {
+          'handle': 'EAR111',
+          'display_name': 'Early',
+          'recorded_nights': 7,
+          'current_streak': 5,
+          'best_streak': 8,
+          'streak_week': [
+            for (var i = 0; i < 7; i++)
+              {'date': '2026-09-0${i + 1}', 'status': i < 3 ? 'on_time' : 'future'},
+          ],
+        },
+      ];
+      return st;
+    }
+
+    TownStub stubWith(Map<String, dynamic> card, {List<Map<String, dynamic>> visits = const []}) => TownStub(
+      town: FriendsResult(
+        FriendsStatus.ok,
+        value: townOf([
+          person('ME0001', 'Nathan', mine: true, card: card),
+          person('EAR111', 'Early', glow: true, card: card),
+        ], visits: visits),
+      ),
+      state: stateWithEarly(),
+    );
+
+    testWidgets('點朋友：地圖把他移到面板上面那塊；這週、連續晚數、他分享的格子；不寫 Late', (tester) async {
+      await pump(tester, stubWith(richCard()));
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      expect(find.byKey(const Key('town-sheet')), findsOneWidget);
+      // 地圖移過去了：他在面板（佔下面 60%）上面那塊裡
+      final at = tester.getCenter(townie('EAR111'));
+      expect(at.dy, lessThan(900 * (1 - kTownSheetSize)));
+      expect(at.dy, greaterThan(120));
+      // 左右：他住地圖最右邊那間，地圖到邊緣就停（不露出空白），所以只要求在畫面內
+      expect(at.dx, inInclusiveRange(0, 411));
+      expect(find.byKey(const Key('town-sheet-week')), findsOneWidget);
+      expect(find.textContaining('5 nights in a row', findRichText: true), findsOneWidget);
+      // 面板往上拉、再往下捲到底（ListView 沒捲到的格子不會建出來）
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -400));
+      await settle(tester);
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -900));
+      await settle(tester);
+      for (final k in ['sleep_duration', 'phone_down_time', 'score', 'steps', 'sleeping_hr', 'camera_moves']) {
+        expect(find.byKey(Key('town-sheet-tile-$k'), skipOffstage: false), findsOneWidget, reason: k);
+      }
+      // 小鎮上沒發光的原因不能從面板看出來：準時／晚了不做成格子
+      expect(find.byKey(const Key('town-sheet-tile-on_time'), skipOffstage: false), findsNothing);
+      expect(find.text('Late', skipOffstage: false), findsNothing);
+      // 步數：圓弧＋Goal（千分位）
+      expect(find.text('Goal 9,540', skipOffstage: false), findsOneWidget);
+      // 拜訪按鈕還在最下面
+      expect(find.byKey(const Key('town-visit-pet')), findsOneWidget);
+    });
+
+    testWidgets('小圖只畫他有分享的：沒有時刻（只寫準時與否）→ 不畫攝影機光柱；沒有目標時間 → 不畫半圓鐘', (tester) async {
+      await pump(tester, stubWith(richCard(times: false)));
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      bool hasPainter<T>(String key) => find
+          .descendant(
+            of: find.byKey(Key('town-sheet-tile-$key'), skipOffstage: false),
+            matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is T, skipOffstage: false),
+            skipOffstage: false,
+          )
+          .evaluate()
+          .isNotEmpty;
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -400));
+      await settle(tester);
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -900));
+      await settle(tester);
+      // 那一格本身在（不然「沒有光柱」會是因為整格沒建出來而假性通過）
+      expect(find.byKey(const Key('town-sheet-tile-camera_moves')), findsOneWidget);
+      expect(hasPainter<CameraBarsPainter>('camera_moves'), isFalse);
+      expect(find.byKey(const Key('town-sheet-tile-phone_down_time'), skipOffstage: false), findsOneWidget);
+      expect(hasPainter<ClockArcPainter>('phone_down_time'), isFalse);
+      // 反向對照：有曲線的照畫
+      expect(hasPainter<SleepHrWavePainter>('sleeping_hr'), isTrue);
+      expect(hasPainter<RingPainter>('score'), isTrue);
+    });
+
+    testWidgets('點自己：同一個面板（What friends see），最下面是今天誰來看過你，沒有拜訪按鈕', (tester) async {
+      await pump(
+        tester,
+        stubWith(richCard(), visits: [
+          {'display_name': 'Early', 'kind': 'pet', 'message': 'VISIT-FROM-BACKEND'},
+        ]),
+      );
+      await tester.tap(townie('ME0001'));
+      await settle(tester);
+      expect(find.byKey(const Key('town-sheet')), findsOneWidget);
+      expect(find.text('What friends see'), findsOneWidget);
+      expect(find.byKey(const Key('town-sheet-visitors')), findsOneWidget);
+      expect(find.text('VISIT-FROM-BACKEND'), findsOneWidget);
+      expect(find.byKey(const Key('town-visit-pet')), findsNothing);
+    });
   });
 
   testWidgets('【6】今天誰來看過你：右下小圓鈕，有人來才有紅點；點開照抄後端', (tester) async {

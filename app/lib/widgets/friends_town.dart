@@ -4,9 +4,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
-import 'friend_night_card.dart' show openFriendNight;
+import 'friend_night_card.dart'
+    show friendCheckIn, friendStagesStrip, openFriendNight;
+import 'last_night_art.dart';
+import 'steps_sheet.dart' show StepsArc, stepsFraction;
 import 'home_pet.dart';
-import 'streak_card.dart' show speciesOf;
+import 'report_tiles.dart';
+import '../theme/report_style.dart';
+import 'streak_card.dart' show StreakWeekRow, speciesOf;
 
 /// 好友小鎮（2026-11-17 使用者定，照 Finch 的做法：朋友之間只看到寵物）。
 ///
@@ -245,10 +250,11 @@ class TownMap extends StatefulWidget {
   });
 
   @override
-  State<TownMap> createState() => _TownMapState();
+  State<TownMap> createState() => TownMapState();
 }
 
-class _TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
+/// 外面（好友頁）要拿到它：點開資訊面板時把那個人移到面板上面那塊的正中間。
+class TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
   TransformationController? _controller;
 
   /// 一打開的位置，點兩下回到這裡。
@@ -273,19 +279,40 @@ class _TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
   }
 
   void _goHome() {
-    final c = _controller, home = _home;
-    if (c == null || home == null) return;
+    final home = _home;
+    if (home != null) _animateTo(home);
+  }
+
+  void _animateTo(Matrix4 target) {
+    final c = _controller;
+    if (c == null) return;
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-      c.value = home.clone();
+      c.value = target.clone();
       return;
     }
     _backAnim = Matrix4Tween(
       begin: c.value.clone(),
-      end: home,
+      end: target,
     ).animate(CurvedAnimation(parent: _back, curve: Curves.easeOutCubic));
     _back
       ..reset()
       ..forward();
+  }
+
+  /// 每個人寵物身體的中心（地圖座標），上一次 build 時記下來。
+  final Map<String, Offset> _spotOf = {};
+  Size? _view;
+  double _mapW = 0, _boardH = 0;
+
+  /// 把 [handle] 那隻寵物移到畫面寬度正中間、高度 [midY] 的地方（縮放倍數不變；
+  /// 到了地圖邊緣就停在邊緣，不露出空白）。2026-11-19：點開資訊面板時，面板蓋住下半部。
+  void focusOn(String handle, double midY) {
+    final at = _spotOf[handle], view = _view, c = _controller;
+    if (at == null || view == null || c == null) return;
+    final s = c.value.getMaxScaleOnAxis();
+    final tx = (view.width / 2 - at.dx * s).clamp(view.width - _mapW * s, 0.0);
+    final ty = (midY - at.dy * s).clamp(view.height - _boardH * s, 0.0);
+    _animateTo(Matrix4.diagonal3Values(s, s, 1)..setTranslationRaw(tx, ty, 0));
   }
 
   @override
@@ -311,6 +338,9 @@ class _TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
         final minScale = view.width / mapW;
         final boardH = math.max(mapH, view.height / minScale);
         final oy = (boardH - mapH) / 2;
+        _view = view;
+        _mapW = mapW;
+        _boardH = boardH;
         final me = kTownLots[0];
         if (_controller == null) {
           final c = widget.covered;
@@ -475,6 +505,7 @@ class _TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
   /// 腳踩在 (x, y)：上面一格放星星，下面是名牌。
   Widget _townie(TownPerson p, double x, double y, double mapW) {
     final pet = mapW * (p.mine ? 0.09 : 0.08);
+    _spotOf[p.handle] = Offset(x, y - pet * 0.4);
     final starBox = pet * 0.55;
     const boxW = 110.0;
     return Positioned(
@@ -636,35 +667,59 @@ class TownVisitsCard extends StatelessWidget {
   );
 }
 
-/// 點小鎮裡的朋友：名字、（他有分享就）心情的寵物、昨晚準時就一行 ✨、四個拜訪按鈕、See last night。
+/// 資訊面板一打開佔螢幕多高（2026-11-19 使用者定，照參考圖：上面還看得到地圖）。
+const kTownSheetSize = 0.6;
+
+/// 點小鎮裡的人 → 下半部滑出資訊面板（2026-11-19 使用者定，照參考圖）：
+/// 名字＋寵物 → 這週每晚準不準時 → 連續 3 晚以上一行 🔥 → 昨晚他有分享的格子（最多 6 格）
+/// → See last night ›；最下面固定是四個拜訪按鈕。
+/// 點自己：同一個面板（朋友看到的你），最下面換成「今天誰來看過你」。
 ///
-/// [onVisit] 回傳 null＝送出成功；否則是要顯示的那句話（後端的原文）。
+/// [onVisit] 回傳 null＝送出成功；否則是要顯示的那句話（後端的原文）。點自己時不用給。
 Future<void> showTownFriendSheet(
   BuildContext context, {
   required TownPerson person,
   required List<(String, String)> kinds,
-  required Future<String?> Function(String kind) onVisit,
+  Future<String?> Function(String kind)? onVisit,
+  FriendSummary? summary,
+  List<TownVisit> visits = const [],
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF161F48),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x22000000),
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: kTownSheetSize,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      builder: (context, scroll) => _TownFriendSheet(
+        person: person,
+        kinds: kinds,
+        onVisit: onVisit,
+        summary: summary,
+        visits: visits,
+        scroll: scroll,
+      ),
     ),
-    builder: (context) =>
-        _TownFriendSheet(person: person, kinds: kinds, onVisit: onVisit),
   );
 }
 
 class _TownFriendSheet extends StatefulWidget {
   final TownPerson person;
   final List<(String, String)> kinds;
-  final Future<String?> Function(String kind) onVisit;
+  final Future<String?> Function(String kind)? onVisit;
+  final FriendSummary? summary;
+  final List<TownVisit> visits;
+  final ScrollController scroll;
   const _TownFriendSheet({
     required this.person,
     required this.kinds,
     required this.onVisit,
+    required this.summary,
+    required this.visits,
+    required this.scroll,
   });
 
   @override
@@ -677,11 +732,13 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
   String? _error;
 
   Future<void> _send(String kind) async {
+    final onVisit = widget.onVisit;
+    if (onVisit == null) return;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final error = await widget.onVisit(kind);
+    final error = await onVisit(kind);
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -693,149 +750,300 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
     });
   }
 
+  static const _dim = Color(0x99FFFFFF);
+
   @override
   Widget build(BuildContext context) {
     final p = widget.person;
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        key: const Key('town-sheet'),
-        padding: EdgeInsets.fromLTRB(22, 12, 22, 20 + (bottom > 0 ? 0 : 8)),
+    final week = widget.summary?.streakWeek;
+    final streak = widget.summary?.currentStreak;
+    final best = widget.summary?.bestStreak;
+    final tiles = friendCheckIn(p.card?.items ?? const {});
+    // 背景與字型照早晨報告（2026-11-19 使用者：原本的平塗深藍不好看，格子參考 sleep report）
+    return Container(
+      key: const Key('town-sheet'),
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
+      ),
+      child: ReportFont(
+        child: Stack(
+          children: [
+            const Positioned.fill(child: ReportBackground()),
+            Column(
+        children: [
+          Expanded(
+            child: ListView(
+              controller: widget.scroll,
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0x44FFFFFF),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _header(p),
+                if (week != null && week.length == 7) ...[
+                  const SizedBox(height: 16),
+                  StreakWeekRow(key: const Key('town-sheet-week'), week: week),
+                ],
+                if (streak != null && streak >= 3) ...[
+                  const SizedBox(height: 14),
+                  _streakBanner(streak, best),
+                ],
+                const SizedBox(height: 20),
+                const Text(
+                  'Last night',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (tiles.isEmpty)
+                  const Text(
+                    'Nothing to show for last night.',
+                    key: Key('town-sheet-empty'),
+                    style: TextStyle(color: _dim, fontSize: 14),
+                  )
+                else
+                  // 攝影機那格（光柱）跟早晨報告一樣獨佔最後一整列：放半格太窄
+                  reportTileGrid([
+                    for (final t in tiles)
+                      if (t.$1 != 'camera_moves')
+                        townCheckInTile(t, p.card?.items ?? const {}),
+                  ]),
+                for (final t in tiles)
+                  if (t.$1 == 'camera_moves') ...[
+                    const SizedBox(height: 12),
+                    townCheckInTile(t, p.card?.items ?? const {}),
+                  ],
+                if (p.card != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const Key('town-see-night'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.only(top: 8),
+                        foregroundColor: const Color(0xFFB9A6FF),
+                      ),
+                      onPressed: () {
+                        final card = p.card!;
+                        Navigator.of(context).pop();
+                        openFriendNight(context, card);
+                      },
+                      child: const Text(
+                        'See last night ›',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // 最下面固定：朋友是拜訪按鈕，自己是今天誰來看過你
+          SafeArea(
+            top: false,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0x1AFFFFFF))),
+              ),
+              child: p.mine ? _visitors() : _visitButtons(),
+            ),
+          ),
+        ],
+      ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _streakBanner(int streak, int? best) => Container(
+    key: const Key('town-sheet-streak'),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0x14FFFFFF),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.local_fire_department_rounded,
+          color: Color(0xFFFF8A5C),
+          size: 26,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$streak nights in a row',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+                if (best != null)
+                  TextSpan(
+                    text: '  ·  Best $best',
+                    style: const TextStyle(color: _dim, fontSize: 13),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _header(TownPerson p) => Row(
+    children: [
+      SizedBox(
+        width: 64,
+        height: 64,
+        // 心情只有他有分享才有；沒有就是 null → HomePet 畫 bored（不畫 happy）
+        child: HomePet(
+          mood: p.petMood,
+          species: speciesOf(p.petSpecies),
+          size: 58,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0x44FFFFFF),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
             Row(
               children: [
-                SizedBox(
-                  width: 72,
-                  height: 72,
-                  // 心情只有他有分享才有；沒有就是 null → HomePet 畫 bored（不畫 happy）
-                  child: HomePet(
-                    mood: p.petMood,
-                    species: speciesOf(p.petSpecies),
-                    size: 64,
+                Flexible(
+                  child: Text(
+                    p.mine ? 'You' : p.displayName.replaceAll(' (demo)', ''),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              p.displayName.replaceAll(' (demo)', ''),
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          if (p.demo) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: const Color(0x66FFFFFF),
-                                ),
-                              ),
-                              child: const Text(
-                                'Demo',
-                                style: TextStyle(
-                                  color: Color(0xAAFFFFFF),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (p.glow) ...[
-                        const SizedBox(height: 4),
-                        const Text(
-                          'On time last night ✨',
-                          key: Key('town-sheet-glow'),
-                          style: TextStyle(
-                            color: kTownGold,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
+                if (p.demo) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0x66FFFFFF)),
+                    ),
+                    child: const Text(
+                      'Demo',
+                      style: TextStyle(color: Color(0xAAFFFFFF), fontSize: 11),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final (i, (key, label)) in widget.kinds.indexed)
-                  _chip(key, label, primary: i == 0),
-              ],
-            ),
-            if (_sent != null) ...[
-              const SizedBox(height: 10),
+            if (p.mine)
               const Text(
-                'You can visit again tomorrow.',
-                style: TextStyle(color: Color(0x99FFFFFF), fontSize: 13),
+                'What friends see',
+                style: TextStyle(color: _dim, fontSize: 13),
               ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                key: const Key('town-sheet-error'),
-                style: const TextStyle(color: Color(0xFFFFB4A8), fontSize: 13),
-              ),
-            ],
-            if (p.card != null) ...[
-              const SizedBox(height: 14),
-              TextButton(
-                key: const Key('town-see-night'),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  foregroundColor: const Color(0xFFB9A6FF),
-                ),
-                onPressed: () {
-                  final card = p.card!;
-                  Navigator.of(context).pop();
-                  openFriendNight(context, card);
-                },
-                child: const Text(
-                  'See last night ›',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            if (p.glow) ...[
+              const SizedBox(height: 2),
+              const Text(
+                'On time last night ✨',
+                key: Key('town-sheet-glow'),
+                style: TextStyle(
+                  color: kTownGold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ],
         ),
       ),
-    );
-  }
+    ],
+  );
+
+  Widget _visitButtons() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final (i, (key, label)) in widget.kinds.indexed)
+            _chip(key, label, primary: i == 0),
+        ],
+      ),
+      if (_sent != null) ...[
+        const SizedBox(height: 8),
+        const Text(
+          'You can visit again tomorrow.',
+          style: TextStyle(color: _dim, fontSize: 13),
+        ),
+      ],
+      if (_error != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          _error!,
+          key: const Key('town-sheet-error'),
+          style: const TextStyle(color: Color(0xFFFFB4A8), fontSize: 13),
+        ),
+      ],
+    ],
+  );
+
+  Widget _visitors() => Column(
+    key: const Key('town-sheet-visitors'),
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Stopped by today',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 6),
+      if (widget.visits.isEmpty)
+        const Text(
+          'No one yet today.',
+          style: TextStyle(color: _dim, fontSize: 14),
+        )
+      else
+        for (final v in widget.visits)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              v.message,
+              style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 14),
+            ),
+          ),
+    ],
+  );
 
   Widget _chip(String key, String label, {required bool primary}) {
     final sentThis = _sent == key;
@@ -870,3 +1078,133 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
     );
   }
 }
+
+/// 面板裡的一格：照早晨報告的格子（2026-11-19 使用者定）——每一項自己的顏色、
+/// 左上圖示＋名稱、大數字，底下的小圖跟報告同一套。**小圖只畫他有分享的資料**：
+/// - Total sleep：他有分享 Sleep stages 才畫那條階梯（睡眠目標只存在他手機上，後端沒有，
+///   所以不畫報告那條「睡了多久÷目標」的極光）
+/// - Phone down：他也分享了目標時間才畫半圓鐘（不然「目標」那一點是編的）
+/// - Score、Efficiency：圓環
+/// - Steps：圓弧＝步數÷那天 Garmin 的目標，超過就滿、不變色，只寫 Goal
+/// - Sleeping HR：整晚那條慢線（同一個開關，後端本來就給）
+/// - Movement：他有分享 Movement through the night 才畫光柱；時間軸要知道幾點睡著，
+///   他選了「只寫準時與否」（沒有時刻）就不畫，不然底下的鐘點是編的
+/// 不判斷好壞、不變色。
+Widget townCheckInTile(
+  (String, IconData, String, String) tile,
+  Map<String, dynamic> items,
+) {
+  final (key, icon, value, label) = tile;
+  final (title, color, unit) = switch (key) {
+    'sleep_duration' => ('Total sleep', const Color(0xFFB9A6FF), null),
+    'phone_down_time' => ('Phone down', const Color(0xFF6FE3D0), null),
+    'score' => ('Score', const Color(0xFFFFD27A), null),
+    'camera_moves' => ('Movement', const Color(0xFFFFD96A), 'moves / hour'),
+    'steps' => ('Steps', const Color(0xFFFFB37A), null),
+    'sleeping_hr' => ('Sleeping HR', const Color(0xFF8C9BFF), 'bpm'),
+    'awake' => ('Awake', const Color(0xFFFFC27A), label),
+    'efficiency' => ('Efficiency', const Color(0xFF7EC8FF), null),
+    'time_in_bed' => ('Time in bed', const Color(0xFF8FA8FF), null),
+    'fell_asleep' => ('Fell asleep', const Color(0xFFB9A6FF), 'to fall asleep'),
+    'stress' => ('Stress', const Color(0xFFA996FF), 'high stress'),
+    'resting_hr' => ('Resting HR', const Color(0xFFFF8AB8), 'bpm'),
+    'active_time' => ('Active', const Color(0xFFFFD96A), null),
+    'calories' => ('Calories', const Color(0xFFFF8A6B), 'active kcal'),
+    _ => (
+      label.isEmpty ? label : label[0].toUpperCase() + label.substring(1),
+      const Color(0xFFC9B8FF),
+      null,
+    ),
+  };
+  Widget? graphic;
+  double? n(dynamic v) => v is num ? v.toDouble() : null;
+  int? nightMinute(dynamic v) {
+    if (v is! String) return null;
+    final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(v);
+    if (m == null) return null;
+    return ((int.parse(m[1]!) * 60 + int.parse(m[2]!)) - 18 * 60) % 1440;
+  }
+
+  Map<String, dynamic> m(String k) =>
+      items[k] is Map ? (items[k] as Map).cast<String, dynamic>() : const {};
+  List<(double, double)> offsets(dynamic pts) => [
+    for (final p in (pts as List?) ?? const [])
+      if (p is Map && n(p['m']) != null && n(p['v']) != null)
+        (n(p['m'])!, n(p['v'])!),
+  ];
+  var graphicHeight = 52.0;
+  switch (key) {
+    case 'sleep_duration':
+      graphic = friendStagesStrip(items, height: 40);
+      graphicHeight = 40;
+    case 'sleeping_hr':
+      final pts = offsets(m('sleeping_hr')['curve']);
+      if (pts.length >= 2) {
+        final last = pts.last.$1;
+        graphic = paintBox(
+          SleepHrWavePainter([for (final (x, v) in pts) (last > 0 ? x / last : 0, v)], color),
+        );
+        graphicHeight = 64;
+      }
+    case 'camera_moves':
+      final pts = offsets(m('camera_timeline')['points']);
+      final start = m('stages')['start'];
+      final hm = start is String
+          ? RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(start)
+          : null;
+      if (pts.isNotEmpty && hm != null) {
+        final t0 = DateTime(2000, 1, 1, int.parse(hm[1]!), int.parse(hm[2]!));
+        graphic = paintBox(
+          CameraBarsPainter([
+            for (final (min, v) in pts)
+              (t0.add(Duration(seconds: (min * 60).round())), v),
+          ]),
+        );
+        graphicHeight = 110;
+      }
+    case 'steps':
+      final st = n(m('steps')['steps']);
+      if (st != null) {
+        graphic = StepsArc(
+          steps: st.round(),
+          fraction: stepsFraction(st.round(), n(m('steps')['goal'])?.round()),
+          color: color,
+        );
+        graphicHeight = 118;
+      }
+    case 'score':
+      final sc = n((items['score'] as Map?)?['score']);
+      if (sc != null) graphic = paintBox(RingPainter(sc, color));
+    case 'efficiency':
+      final e = n((items['efficiency'] as Map?)?['value']);
+      if (e != null) graphic = paintBox(RingPainter(e, color));
+    case 'phone_down_time':
+      final actual = nightMinute(items['phone_down_time']);
+      final target = nightMinute(items['target_bedtime']);
+      if (actual != null && target != null) {
+        graphic = paintBox(
+          ClockArcPainter(target.toDouble(), actual.toDouble(), color),
+        );
+      }
+  }
+  return ReportTile(
+    key: Key('town-sheet-tile-$key'),
+    icon: icon,
+    color: color,
+    title: title,
+    // 步數的數字已經在圓弧中間，大字不再寫一次（同早晨報告）
+    value: key == 'steps' && graphic != null ? null : value,
+    graphic: graphic,
+    graphicHeight: graphicHeight,
+    lines: [
+      if (unit != null) Text(unit),
+      if (key == 'steps' && n(m('steps')['goal']) != null)
+        Text('Goal ${_comma(n(m('steps')['goal'])!.round())}'),
+    ],
+  );
+}
+
+String _comma(int v) => v.toString().replaceAllMapped(
+  RegExp(r'(\d)(?=(\d{3})+$)'),
+  (m) => '${m[1]},',
+);

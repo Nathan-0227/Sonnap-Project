@@ -304,6 +304,8 @@ ITEMS = (
      lambda c: _num(_g(c["home"], "yesterday", "vo2max", "value"))),
     ("steps", "day", False, "Steps, distance and floors",
      lambda c: _compact({"steps": _num(_g(c["home"], "yesterday", "steps")),
+                         # 2026-11-19：小鎮面板的步數圓弧要目標（同早晨報告，只寫 Goal，不寫 reached）
+                         "goal": _num(_g(c["home"], "yesterday", "step_goal")),
                          "distance_m": _num(_g(c["home"], "yesterday", "distance_m")),
                          "floors": _num(_g(c["home"], "yesterday", "floors_up"))})),
     ("calories", "day", False, "Calories",

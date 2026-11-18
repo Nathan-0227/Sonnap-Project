@@ -170,6 +170,10 @@ check("⚠️ 哪個 App 永遠不出現", [s for s in ("SecretApp", "com.secret
                                  if s in json.dumps(feed())], [])
 check("躺多久才睡著＝按鈕 00:50 → 手錶 01:20", it.get("fell_asleep"), 30)
 check("沒打開的（壓力、步數）照樣沒有", [k for k in ("stress", "steps") if k in it], [])
+pick_steps = sharing._BY_KEY["steps"][3]
+check("步數那一項帶當天的目標（11-19：小鎮面板的圓弧）",
+      pick_steps({"home": {"yesterday": {"steps": 8000, "step_goal": 9540}}})["goal"], 9540)
+check("沒有目標是 None（不寫 0）", pick_steps({"home": {"yesterday": {"steps": 8000}}})["goal"], None)
 
 print("\n【3】永遠不給的、不認得的 → 422，一個都不改")
 for bad in ({"camera_clips": True}, {"move_iq_times": True}, {"prebed_apps": True},

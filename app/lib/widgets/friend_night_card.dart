@@ -263,6 +263,35 @@ const _tileOrder = [
 ];
 const kMaxTiles = 3;
 
+/// 小鎮資訊面板的「Last night」格子（2026-11-19 使用者定）：照這個順序挑他有分享的前 [max] 個。
+/// ⚠️ 不放 on_time：小鎮上「沒發光」的三種原因（晚了、沒資料、沒分享）要看起來一樣，
+/// 面板一打開就寫 Late 等於把原因講出來。
+const _checkInOrder = [
+  'sleep_duration',
+  'phone_down_time',
+  'score',
+  'camera_moves',
+  'steps',
+  'sleeping_hr',
+  'awake',
+  'efficiency',
+  'time_in_bed',
+  'fell_asleep',
+  'stress',
+  'resting_hr',
+  'active_time',
+  'calories',
+];
+
+List<(String, IconData, String, String)> friendCheckIn(
+  Map<String, dynamic> items, {
+  int max = 6,
+}) => [
+  for (final k in _checkInOrder)
+    if (friendTile(k, items[k]) case (final icon, final value, final label))
+      (k, icon, value, label),
+].take(max).toList();
+
 /// 一項 → 小格（圖示, 數字, 小標籤）；沒值 → null。不判斷好壞、不變色。
 (IconData, String, String)? friendTile(String key, dynamic v) {
   if (v == null) return null;
@@ -515,6 +544,21 @@ List<(String, double, double)> _segmentsOf(Map<String, dynamic>? stages) => [
         _n(s['to'])!.toDouble(),
       ),
 ];
+
+/// 他分享的睡眠階段畫成一條細的階梯（只有顏色）；沒分享 Sleep stages 就是 null。
+/// Feed 卡片與小鎮面板的 Total sleep 用同一支。
+Widget? friendStagesStrip(Map<String, dynamic> items, {double height = 28}) {
+  final stages = _stagesOf(items);
+  final segments = _segmentsOf(stages);
+  if (segments.isEmpty) return null;
+  return SizedBox(
+    height: height,
+    width: double.infinity,
+    child: CustomPaint(
+      painter: _StagePainter(segments, stages?['rem_measured'] != false),
+    ),
+  );
+}
 
 /// 完整頁那幾個區塊會畫的項目（見 friend_night_sections.dart）。
 const kDetailKeys = [
