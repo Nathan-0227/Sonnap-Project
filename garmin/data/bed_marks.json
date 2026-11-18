@@ -168,6 +168,20 @@
       "time_in_bed_minutes": 340.0,
       "bed_start_kind": "tap",
       "bed_end_kind": "tap"
+    },
+    "2026-11-16": {
+      "bed_start_at": "2026-11-16T00:44:13.301944",
+      "bed_end_at": "2026-11-16T06:16:54.716581",
+      "time_in_bed_minutes": 332.7,
+      "bed_start_kind": "tap",
+      "bed_end_kind": "tap"
+    },
+    "2026-11-17": {
+      "bed_start_at": "2026-11-17T12:55:55.646439",
+      "bed_end_at": "2026-11-17T12:56:00.624981",
+      "time_in_bed_minutes": null,
+      "bed_start_kind": "tap",
+      "bed_end_kind": "tap"
     }
   }
 }

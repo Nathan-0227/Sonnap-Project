@@ -1994,9 +1994,41 @@
     "deep_score": 6.6,
     "rem_score": 0.6,
     "rem_measured": true,
-    "efficiency_basis": "watch_tst__watch_onset_to_wake",
-    "efficiency_used": 100.0,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 96.8,
     "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+  },
+  {
+    "date": "2026-11-17",
+    "score": 75.3,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 13.2,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 5.4,
+    "rem_score": 6.8,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 99.07,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-18",
+    "score": 17.8,
+    "quality": "Bad",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 7.2,
+    "waso_score": 2.0,
+    "deep_score": 6.8,
+    "rem_score": null,
+    "rem_measured": false,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 74.44,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h."
   }
 ]
