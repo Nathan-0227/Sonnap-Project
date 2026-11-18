@@ -838,23 +838,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadNotes();
   }
 
-  /// 今天早上那一晚的寵物 notes。🔴 一律 generate=false：首頁**絕不觸發 AI**——
+  /// 今天早上那一晚的寵物 notes；**沒有內容就退回前一晚**（[homeNotesDates]）。
+  /// 🔴 一律 generate=false：首頁**絕不觸發 AI**——
   /// AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤），那只發生在報告流程。
   Future<void> _loadNotes() async {
     final source = widget.morningReport;
     if (source == null) return;
-    final date = reportDateKey(widget.clock());
-    Map<String, dynamic>? json;
-    try {
-      json = await source.fetchSummary(date, generate: false);
-    } catch (_) {
-      json = null;
+    PetNotes? found;
+    for (final date in homeNotesDates(widget.clock())) {
+      Map<String, dynamic>? json;
+      try {
+        json = await source.fetchSummary(date, generate: false);
+      } catch (_) {
+        json = null;
+      }
+      found = PetNotes.fromJson(json, date: date);
+      if (found != null) break;
     }
-    final notes = PetNotes.fromJson(json, date: date);
+    final notes = found;
     if (!mounted) return;
     setState(() => _notes = notes);
     if (notes == null) return;
-    final read = await _notesReads.isRead(date, notes.version);
+    final read = await _notesReads.isRead(notes.date, notes.version);
     if (!mounted || _notes?.version != notes.version) return;
     setState(() {
       _notesAskedVersion = notes.version;
@@ -2620,3 +2625,17 @@ class _ReportFetch {
 
   const _ReportFetch({this.home, this.game});
 }
+
+/// 首頁日記本最多往回找幾晚（2026-11-19 使用者定：只往回 1 晚）。
+const kHomeNotesLookbackNights = 1;
+
+/// 首頁日記本要依序問哪幾晚：今天日曆日，再往回 [kHomeNotesLookbackNights] 晚。
+///
+/// 為什麼要往回：使用者凌晨 3–6 點才睡。只問「今天」的話，一過午夜問的是還沒開始的那一晚，
+/// 從午夜到起床（約十小時）日記本整個消失，昨晚的 notes 明明還在。
+/// 只往回 1 晚：前一晚也沒有（例如沒戴錶）就不顯示，不冒出好幾天前的舊 notes。
+/// 用日曆日相減（`DateTime(y, m, d - i)`），不用減 24 小時。
+List<String> homeNotesDates(DateTime now) => [
+      for (var i = 0; i <= kHomeNotesLookbackNights; i++)
+        reportDateKey(DateTime(now.year, now.month, now.day - i)),
+    ];
