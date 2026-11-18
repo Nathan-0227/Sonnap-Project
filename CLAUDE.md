@@ -365,9 +365,17 @@ Garmin 回報那幾晚睡眠期間內零清醒），那些不是壞資料，不�
 
 ### ✅ 產品迴圈（PR #51，2026-09-12 合併）
 
-六個功能一起進來。🔴 **後三個（提醒、守門、Health Connect）沒有在實機驗證過**，
-只驗證了 `flutter build apk --debug` 編得過、Dart 端測試全過——
-報告與 PPT 不能寫成「手機上已經可以用」。
+六個功能一起進來。**最後三個的實機狀況（2026-11-19 用手機上的紀錄重新查證）**：
+
+| 功能 | 實機 | 依據 |
+|---|---|---|
+| Health Connect | ✅ **整條通了**（2026-11-17） | 手機送出 3 段、後端寫成 `source=health_connect`，再被 Garmin 依優先權蓋掉。詳見 [HEALTH_CONNECT.md](docs/HEALTH_CONNECT.md) |
+| 就寢守門 | ⚠️ **只有 Reminder 模式驗過**（2026-09-13 兩次） | 手機 `shared_prefs/sonnap_guard.xml` 的 `reminded:` 鍵（只在 reminder 模式寫）。**Send-home 模式沒有紀錄、不留痕跡**，而現在設定就是它。詳見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
+| 就寢提醒 | 🔴 **沒有驗過** | 只驗了編得過、Dart 測試全過 |
+
+🔴 **報告與 PPT 只能照這張表寫**：就寢提醒不能寫成「手機上已經可以用」，
+守門要寫就只能寫提醒模式。
+🔴 **重裝 APK 會把無障礙服務關掉、App 不會說**——換了 APK 又要示範守門的話必檢。
 
 | 功能 | 在哪 | 不能破的規則 |
 |---|---|---|
