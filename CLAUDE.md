@@ -593,7 +593,7 @@ Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %�
 | 記下 `minutes_after_wake` | 日誌標準是起床一小時內；App 允許 6 小時內補填，分析時可以只取 ≤ 60 的 |
 | **建議清單 20 句（T1–T12＋P1–P8）只在 `behavior/morning_tips.py`**，措辭與 `Research-Background/起床小建議與自評.md` 逐字一致（測試【2】讀文件比對） | 改措辭先改文件；句子由使用者審過（P 系列 11-18） |
 | ⚠️ T1（晚 30–59 分）與 T2（晚 ≥ 60 分）**不重疊** | 原本 T2 是 ≥ 60、T1 是 ≥ 30 且優先，T2 永遠輪不到（寫程式時發現） |
-| **寵物 notes**（2026-11-17 使用者 grill 後定，取代夢境日記與 From your buddy；**推翻 11-12 的「AI 不寫建議」**）：`/night-summary` 回 `summary`（AI 寫，≤2 句）＋`tips`（AI 從清單挑 0–3 條、換成寵物口吻，`original` 附原句）＋`version`（依回傳內容算，App 用它讓紅點再亮）。`text`／`tip` 是舊版 App 的欄位 | 使用者要 AI 實際幫忙改善睡眠；**行動只能來自清單**，驗證擋清單外的 id、換掉重點字（`KEYWORDS`）、總結裡塞建議 |
+| **寵物 notes**（2026-11-17 使用者 grill 後定，取代夢境日記與 From your buddy；**推翻 11-12 的「AI 不寫建議」**）：`/night-summary` 回 `summary`（AI 寫，≤2 句）＋`tips`（AI **只能從後端今晚推薦的那幾條**挑 0–3 條、換成寵物口吻，`original` 附原句；11-18 起交給 AI 的清單只有推薦的、驗證也擋別的——11-17 AI 自己挑了沒觸發的 P4 還把意思寫反）＋`version`（依回傳內容算，App 用它讓紅點再亮）。`text`／`tip` 是舊版 App 的欄位 | 使用者要 AI 實際幫忙改善睡眠；**行動只能來自清單**，驗證擋清單外的 id、換掉重點字（`KEYWORDS`）、總結裡塞建議 |
 | 交給 AI 的是**整晚資料＋後端判讀**（`ai/night_summary.judge_night()`：評分器的級距常數、心率用 Tier3 修正值＋`ANXIOUS_HR_CONFIRM`）；同一份判讀也給 `morning_tips.triggered()` 挑原句 | AI 不自己判「45 分鐘深睡算少」；判讀不另訂門檻 |
 | 🔴 **攝影機與 Garmin 壓力不交給 AI**；昨天的步數要給，但**不准當成任何一晚的原因**（Atoui 2021 逐日研究不支持）。研究文件「AI 不准說」那張表能用字串抓的在 `FORBIDDEN_CLAIMS` 擋（`test_morning_report.py`【6c】【6d】） | 攝影機 11-09 驗證過跟任何結果都沒有相關；壓力對自評壓力預測力弱 |
 | AI 每晚只生成一次，存 `night_summaries`（`text` 欄存 JSON）；`facts_hash`（事實＋清單）變了才重生；手錶資料沒到**不呼叫**、只給行為那幾條原句 | 每呼叫一次花一次額度 |

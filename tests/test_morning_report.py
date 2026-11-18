@@ -22,6 +22,7 @@ tests/test_morning_report.py —— 早晨報告的後端（2026-11-12）
 
 執行：python tests/test_morning_report.py
 """
+import json
 import os
 import re
 import sys
@@ -249,8 +250,11 @@ check("generate=false 讀得到已經存好的那一份", (len(CALLS), r["source
 ok("事實區塊有寫好的時長（照抄用，不讓 AI 換算）", "3h 25m less" in CALLS[0], "")
 ok("事實區塊有使用者的目標", '"in_bed_by": "23:30"' in CALLS[0], "")
 ok("事實區塊附判讀（AI 不自己判）", f'"judgment": "{mt.BELOW}"' in CALLS[0], "")
-ok("整份清單都交給 AI", all(f'"id": "{tid}"' in CALLS[0] for tid in mt.TIPS), "")
-ok("後端挑到的標成 suggested_tonight", '"suggested_tonight": true' in CALLS[0], "")
+TIPS_SENT = CALLS[0].split("\n\nTIP LIST:")[1]
+ok("今晚推薦的（P2、P3、P1）都交給 AI", all(f'"id": "{tid}"' in TIPS_SENT for tid in ("P2", "P3", "P1")), "")
+# ⚠️ 2026-11-18：原本整份 20 條都交給 AI、推薦只是標記；11-17 AI 自己挑了沒觸發的 P4 還把意思寫反
+check("⚠️ 沒被推薦的一條都不交給 AI", [tid for tid in mt.TIPS if f'"id": "{tid}"' in TIPS_SENT
+                                    and tid not in ("P2", "P3", "P1")], [])
 v_llm = r["version"]
 
 client.post("/rested", json={"user_id": u, "date": D, "rested": 3, "tags": ["late_caffeine"]})
@@ -292,11 +296,24 @@ FACTS_TEXT = CALLS[0].split("\n\nTIP LIST:")[0]   # 只取事實那段（清單�
 ok("反向對照：真的切掉了清單", "TIP LIST" not in FACTS_TEXT and '"last_night"' in FACTS_TEXT, "")
 
 
-def problems(n):
-    return ns.validate_notes(n, FACTS_TEXT)
+def problems(n, allowed=tuple(mt.TIPS)):
+    """內容規則的檢查不管今晚推薦哪幾條（全部都准），「只准推薦的」另外測。"""
+    return ns.validate_notes(n, FACTS_TEXT, allowed)
 
 
 check("好的不誤擋", problems(GOOD), [])
+P4_INVERTED = notes("We slept 3h 35m.", ("P4", "A short night can mean REM takes a bigger share — "
+                                              "most REM comes late in the night."))
+ok("⚠️ 不是今晚推薦的那條（11-17 的 P4）→ 擋", any("does not fit tonight" in p for p in
+   problems(P4_INVERTED, allowed=("P1",))), str(problems(P4_INVERTED, allowed=("P1",))))
+ok("反向對照：同一條被推薦時不擋", not problems(P4_INVERTED, allowed=("P4",)), "")
+ok("今晚沒有推薦 → 任何一條都擋", any("does not fit tonight" in p for p in problems(GOOD, allowed=())), "")
+FACTS = json.loads(FACTS_TEXT[len("FACTS:\n"):])
+REPLIES[:] = [P4_INVERTED, notes("We slept 3h 35m.", ("P1", "Most adults are recommended 7–9 hours, "
+                                                             "so give yourself enough time in bed."))]
+out = ns.summarize_night(FACTS, ns.tip_list(["P1"]))
+check("AI 挑了沒推薦的 → 帶著原因重寫，第二次過了", (out["attempts"], [t["id"] for t in out["tips"]]), (2, ["P1"]))
+ok("重寫時說了是哪條不適用", "P4 does not fit tonight" in CALLS[-1], "")
 check("數字不在事實裡 → 擋", bool(problems(BAD_NUMBER)), True)
 ok("⚠️ 清單外的行動 → 擋", any("not in the tip list" in p for p in
    problems(notes("We slept 3h 35m.", ("X1", "Try melatonin gummies tonight.")))), "")
