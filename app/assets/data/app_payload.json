@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "mapping_version": 1,
-  "generated_at": "2026-11-18T06:06:16+08:00",
+  "generated_at": "2026-11-19T00:38:59+08:00",
   "session_id": "20261118_001",
   "status": {
-    "pet_mood": "tired",
+    "pet_mood": "anxious",
     "current_activity": null,
-    "energy_level": 14,
-    "mood_reason": "final_quality=Bad"
+    "energy_level": 11,
+    "mood_reason": "rhr+avg_hr modifier=-3.33 ≤ -3.0 and stress_modifier=-1.98 < 0"
   },
   "metrics": {
     "motion_count": null,
@@ -465,8 +465,8 @@
       "bucket_minutes": 5
     },
     "camera_curve": null,
-    "avg_heart_rate": 66.56,
-    "resting_heart_rate": 61
+    "avg_heart_rate": 78.73,
+    "resting_heart_rate": 59
   },
   "ai_content": {
     "advice": "Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h.",
@@ -478,10 +478,10 @@
     "model": null
   },
   "scoring": {
-    "final_score": 13.8,
+    "final_score": 10.5,
     "final_quality": "Bad",
     "base_score": 17.8,
-    "total_modifier": -3.98,
+    "total_modifier": -7.3,
     "sri": 56.2,
     "modifier_note": "",
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h.",
@@ -2450,7 +2450,7 @@
       "max": 122,
       "min_at": "2026-11-17T08:26:00+08:00",
       "bucket_minutes": 10,
-      "resting": 61
+      "resting": 59
     },
     "history": [
       {
@@ -6701,7 +6701,7 @@
     },
     {
       "date": "2026-11-18",
-      "final_score": 13.8,
+      "final_score": 10.5,
       "final_quality": "Bad",
       "sleep_duration_hours": 2.23,
       "sleep_efficiency": 74.44,
@@ -6711,8 +6711,8 @@
       "deep_minutes": 12,
       "sleep_start_time": "2026-11-17T23:30:00+08:00",
       "wake_time": "2026-11-18T02:30:00+08:00",
-      "pet_mood": "tired",
-      "mood_reason": "final_quality=Bad",
+      "pet_mood": "anxious",
+      "mood_reason": "rhr+avg_hr modifier=-3.33 ≤ -3.0 and stress_modifier=-1.98 < 0",
       "composition": {
         "scored": [
           "duration",
