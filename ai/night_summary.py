@@ -42,7 +42,7 @@ complete = llm_client.complete_json
 key_available = llm_client.api_key_available
 
 # 改 prompt、事實的形狀、或建議清單時要升版：舊的那一份會因為 facts_hash 不同而重生。
-PROMPT_VERSION = "notes-v1"
+PROMPT_VERSION = "notes-v2"   # v2（2026-11-18）：清單只放後端推薦的那幾條
 
 MAX_ATTEMPTS = 2
 MAX_WORDS = 120
@@ -111,9 +111,10 @@ Write in warm, simple English, speaking as the pet ("I", "we", "you"). At most 1
 as given and never judge a number yourself. Items without a judgment must not be called good or bad.
 - No advice in the summary (no "try", "should", "avoid", "let's").
 
-"tips": 0 to 3 items chosen from the TIP LIST, most relevant first.
+"tips": 0 to 3 items chosen from the TIP LIST, most relevant first. The TIP LIST holds only the tips \
+that fit tonight's facts; never use any other tip. If the TIP LIST is empty, "tips" must be [].
 - Use the tip's "id" and rewrite its sentence in your own pet voice, 1 or 2 sentences. Keep its meaning \
-and its key words; do not add any other action. Tips marked "suggested_tonight" fit the facts best.
+and its key words; do not add any other action.
 - You may mention a possible reason, but only one that comes from "you_noted", from "phone_down", or \
 from the tip's own sentence. Always hedge it with "might" or "can". Never say "because", "due to" or "caused".
 - On a good night, 0 or 1 tip is fine. Never pile on.
@@ -319,11 +320,16 @@ def build_night_facts(date, user, wearable, previous_wearable, behavior,
 
 
 def tip_list(suggested_ids=()):
-    """交給 AI 的整份清單。suggested_tonight＝後端依適用條件挑到的（給 AI 參考，不強制）。"""
-    suggested = set(suggested_ids)
-    return [{"id": tid, "kind": kind, "sentence": text, "when": mt.WHEN[tid],
-             "suggested_tonight": tid in suggested}
-            for tid, (kind, text) in mt.TIPS.items()]
+    """
+    交給 AI 的清單：**只有**後端依適用條件挑到的那幾條（照傳進來的順序）。
+
+    ⚠️ 2026-11-18 以前是整份 20 條＋「suggested_tonight」標記、不強制。11-17 那晚 AI 挑了
+       沒被觸發的 P4（REM 其實偏高），還把原句的意思寫反（「睡得短→REM 少」寫成「REM 佔比高」）。
+       每條的適用條件是照文獻訂的，讓 AI 自己判斷適不適用，就是讓它替文獻下結論。
+       驗證另外再守一次（validate_notes 的 allowed）。
+    """
+    return [{"id": tid, "kind": mt.TIPS[tid][0], "sentence": mt.TIPS[tid][1], "when": mt.WHEN[tid]}
+            for tid in suggested_ids]
 
 
 def facts_hash(facts, tips):
@@ -339,8 +345,13 @@ def _sentences(text):
     return [s for s in re.split(r"[.!?]+(?:\s|$)", text.strip()) if s.strip()]
 
 
-def validate_notes(notes, facts_text):
-    """回傳問題清單；空清單代表通過。notes = {"summary", "tips": [{"id", "text"}]}。"""
+def validate_notes(notes, facts_text, allowed):
+    """
+    回傳問題清單；空清單代表通過。notes = {"summary", "tips": [{"id", "text"}]}。
+    allowed：今晚後端推薦的 tip id（＝交給 AI 的清單）。刻意沒有預設值——漏傳時直接報錯，
+    不會悄悄退回「20 條都可以」。
+    """
+    allowed = set(allowed)
     problems = []
     summary = (notes.get("summary") or "").strip()
     tips = notes.get("tips") or []
@@ -360,6 +371,8 @@ def validate_notes(notes, facts_text):
         if tid not in mt.TIPS:
             problems.append(f"tip id {tid!r} is not in the tip list (no actions outside the list)")
             continue
+        if tid not in allowed:
+            problems.append(f"tip {tid} does not fit tonight (use only the tips in the TIP LIST)")
         if tid in seen:
             problems.append(f"tip {tid} used twice")
         seen.add(tid)
@@ -410,7 +423,7 @@ def summarize_night(facts, tips):
         notes = {"summary": (data.get("summary") or "").strip(),
                  "tips": [{"id": t.get("id"), "text": (t.get("text") or "").strip()}
                           for t in (data.get("tips") or [])]}
-        problems = validate_notes(notes, facts_text)
+        problems = validate_notes(notes, facts_text, [t["id"] for t in tips])
         if not problems:
             return {**notes, "model": model, "attempts": attempt}
         feedback = (
