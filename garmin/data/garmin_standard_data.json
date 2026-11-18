@@ -3,7 +3,7 @@
   "source": "garmin_connect_api",
   "date": "2026-11-19",
   "daily_series_tz": "local",
-  "total_records": 193510,
+  "total_records": 194161,
   "records": [
     {
       "timestamp": "2026-05-28T15:00:00+08:00",
@@ -1161025,9 +1161025,27 @@
     },
     {
       "timestamp": "2026-11-19T00:24:00+08:00",
+      "metric": "movement",
+      "value": 5.904590479981304,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:24:00+08:00",
       "metric": "heart_rate",
       "value": 71,
       "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:25:00+08:00",
+      "metric": "movement",
+      "value": 5.5122525887804565,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:26:00+08:00",
+      "metric": "movement",
+      "value": 5.111490343590456,
+      "unit": "arb"
     },
     {
       "timestamp": "2026-11-19T00:26:00+08:00",
@@ -1161037,9 +1161055,21 @@
     },
     {
       "timestamp": "2026-11-19T00:27:00+08:00",
+      "metric": "movement",
+      "value": 4.713715378908335,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:27:00+08:00",
       "metric": "stress_score",
       "value": 46,
       "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:28:00+08:00",
+      "metric": "movement",
+      "value": 4.33131322202035,
+      "unit": "arb"
     },
     {
       "timestamp": "2026-11-19T00:28:00+08:00",
@@ -1161048,16 +1161078,3892 @@
       "unit": "bpm"
     },
     {
+      "timestamp": "2026-11-19T00:29:00+08:00",
+      "metric": "movement",
+      "value": 3.9769976108776075,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:30:00+08:00",
+      "metric": "movement",
+      "value": 3.6571785686052167,
+      "unit": "arb"
+    },
+    {
       "timestamp": "2026-11-19T00:30:00+08:00",
       "metric": "heart_rate",
       "value": 71,
       "unit": "bpm"
     },
     {
+      "timestamp": "2026-11-19T00:31:00+08:00",
+      "metric": "movement",
+      "value": 3.401326714397745,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:32:00+08:00",
+      "metric": "movement",
+      "value": 3.2114646719795754,
+      "unit": "arb"
+    },
+    {
       "timestamp": "2026-11-19T00:32:00+08:00",
       "metric": "heart_rate",
       "value": 64,
       "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:33:00+08:00",
+      "metric": "movement",
+      "value": 3.091138704791027,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:34:00+08:00",
+      "metric": "movement",
+      "value": 3.0368334690733074,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 64,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:35:00+08:00",
+      "metric": "movement",
+      "value": 3.035950285520242,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:36:00+08:00",
+      "metric": "movement",
+      "value": 3.073653989552826,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 74,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:36:00+08:00",
+      "metric": "stress_score",
+      "value": 49,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:37:00+08:00",
+      "metric": "movement",
+      "value": 3.1334875004752236,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:38:00+08:00",
+      "metric": "movement",
+      "value": 3.1936366887654506,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 70,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:39:00+08:00",
+      "metric": "movement",
+      "value": 3.256624653980465,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:39:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:40:00+08:00",
+      "metric": "movement",
+      "value": 3.3167684664864296,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 69,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:41:00+08:00",
+      "metric": "movement",
+      "value": 3.371497534280007,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:42:00+08:00",
+      "metric": "movement",
+      "value": 3.418540207607345,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 69,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:43:00+08:00",
+      "metric": "movement",
+      "value": 3.4559933475315474,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:44:00+08:00",
+      "metric": "movement",
+      "value": 3.4823445471621635,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 75,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:45:00+08:00",
+      "metric": "movement",
+      "value": 3.496458382331725,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:45:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:46:00+08:00",
+      "metric": "movement",
+      "value": 3.497117836754268,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 74,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:47:00+08:00",
+      "metric": "movement",
+      "value": 3.4848116258395425,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:48:00+08:00",
+      "metric": "movement",
+      "value": 3.459900805848374,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:48:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:49:00+08:00",
+      "metric": "movement",
+      "value": 3.4231665393412447,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:50:00+08:00",
+      "metric": "movement",
+      "value": 3.375787842357651,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:51:00+08:00",
+      "metric": "movement",
+      "value": 3.3193213330400746,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:52:00+08:00",
+      "metric": "movement",
+      "value": 3.2556795427890526,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 72,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:53:00+08:00",
+      "metric": "movement",
+      "value": 3.1871008547756907,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:54:00+08:00",
+      "metric": "movement",
+      "value": 3.117049082037441,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:54:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:55:00+08:00",
+      "metric": "movement",
+      "value": 3.0460355289730945,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:56:00+08:00",
+      "metric": "movement",
+      "value": 2.974386042822072,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:57:00+08:00",
+      "metric": "movement",
+      "value": 2.905161660704477,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:57:00+08:00",
+      "metric": "stress_score",
+      "value": 9,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T00:58:00+08:00",
+      "metric": "movement",
+      "value": 2.8399975535689173,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T00:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T00:59:00+08:00",
+      "metric": "movement",
+      "value": 2.790348821667411,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:00:00+08:00",
+      "metric": "movement",
+      "value": 2.7350408998543063,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:01:00+08:00",
+      "metric": "movement",
+      "value": 2.685544359306302,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:02:00+08:00",
+      "metric": "movement",
+      "value": 2.6446170679612644,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:03:00+08:00",
+      "metric": "movement",
+      "value": 2.6142737184262077,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:03:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:04:00+08:00",
+      "metric": "movement",
+      "value": 2.594042484067816,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:05:00+08:00",
+      "metric": "movement",
+      "value": 2.581063375397813,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:06:00+08:00",
+      "metric": "movement",
+      "value": 2.5719727656778395,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:06:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:07:00+08:00",
+      "metric": "movement",
+      "value": 2.574461193926464,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:08:00+08:00",
+      "metric": "movement",
+      "value": 2.559187570691304,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:08:00+08:00",
+      "metric": "heart_rate",
+      "value": 76,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:09:00+08:00",
+      "metric": "movement",
+      "value": 2.5339355463156004,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:09:00+08:00",
+      "metric": "stress_score",
+      "value": 39,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:10:00+08:00",
+      "metric": "movement",
+      "value": 2.4977113085599583,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:10:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:11:00+08:00",
+      "metric": "movement",
+      "value": 2.449415415007704,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:12:00+08:00",
+      "metric": "movement",
+      "value": 2.3879509474866865,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:12:00+08:00",
+      "metric": "heart_rate",
+      "value": 78,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:13:00+08:00",
+      "metric": "movement",
+      "value": 2.3123529730618917,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:14:00+08:00",
+      "metric": "movement",
+      "value": 2.2219224473598715,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:14:00+08:00",
+      "metric": "heart_rate",
+      "value": 82,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:15:00+08:00",
+      "metric": "movement",
+      "value": 2.1172895652462786,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:15:00+08:00",
+      "metric": "stress_score",
+      "value": 20,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:16:00+08:00",
+      "metric": "movement",
+      "value": 1.9976227808722387,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:16:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:17:00+08:00",
+      "metric": "movement",
+      "value": 1.8634615571427344,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:18:00+08:00",
+      "metric": "movement",
+      "value": 1.7160735497651587,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:18:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:18:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:19:00+08:00",
+      "metric": "movement",
+      "value": 1.5574052651135426,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:20:00+08:00",
+      "metric": "movement",
+      "value": 1.3899936778476254,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:20:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:21:00+08:00",
+      "metric": "movement",
+      "value": 1.216845807717014,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:21:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:22:00+08:00",
+      "metric": "movement",
+      "value": 1.0412930745116553,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:22:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:23:00+08:00",
+      "metric": "sleep_stage",
+      "value": "light",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:23:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T01:23:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:23:00+08:00",
+      "metric": "movement",
+      "value": 0.8622178318395184,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "sleep_start_time",
+      "value": "2026-11-19T01:24:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "sleep_stage",
+      "value": "rem",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "rem_duration_sec",
+      "value": 4800,
+      "unit": "sec"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "sleep_stage",
+      "value": "deep",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "deep_duration_sec",
+      "value": 2340,
+      "unit": "sec"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "sleep_stage",
+      "value": "light",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "light_duration_sec",
+      "value": 9660,
+      "unit": "sec"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "sleep_stage",
+      "value": "awake",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "awake_duration_sec",
+      "value": 60,
+      "unit": "sec"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "movement",
+      "value": 0.6864234675816205,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "resting_heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:24:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:25:00+08:00",
+      "metric": "movement",
+      "value": 0.525136046852219,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:26:00+08:00",
+      "metric": "movement",
+      "value": 0.3770578040770619,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:26:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:27:00+08:00",
+      "metric": "movement",
+      "value": 0.2430576815308004,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:27:00+08:00",
+      "metric": "stress_score",
+      "value": 20,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:28:00+08:00",
+      "metric": "movement",
+      "value": 0.11963425592653636,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:28:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:29:00+08:00",
+      "metric": "movement",
+      "value": 0.0624072560798502,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:30:00+08:00",
+      "metric": "movement",
+      "value": 0.07686529550989835,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:30:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:30:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:31:00+08:00",
+      "metric": "movement",
+      "value": 0.0,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:32:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T01:32:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:32:00+08:00",
+      "metric": "sleep_stage",
+      "value": "deep",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:32:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T01:32:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:32:00+08:00",
+      "metric": "movement",
+      "value": 0.0,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:32:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:33:00+08:00",
+      "metric": "movement",
+      "value": 0.0,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:33:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:34:00+08:00",
+      "metric": "movement",
+      "value": 0.0,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:35:00+08:00",
+      "metric": "movement",
+      "value": 0.21740788677182804,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:36:00+08:00",
+      "metric": "movement",
+      "value": 0.12692070098791608,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:36:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:37:00+08:00",
+      "metric": "movement",
+      "value": 0.38164927147853434,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:38:00+08:00",
+      "metric": "movement",
+      "value": 0.5984291527660196,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:39:00+08:00",
+      "metric": "movement",
+      "value": 0.8153308583110932,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:39:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:40:00+08:00",
+      "metric": "movement",
+      "value": 1.0338095766171254,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:41:00+08:00",
+      "metric": "movement",
+      "value": 1.250309750879997,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:42:00+08:00",
+      "metric": "movement",
+      "value": 1.4596825382018928,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:42:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:43:00+08:00",
+      "metric": "movement",
+      "value": 1.6562253120304713,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:44:00+08:00",
+      "metric": "movement",
+      "value": 1.8342033631827677,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:45:00+08:00",
+      "metric": "movement",
+      "value": 1.9882047741930808,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:45:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:46:00+08:00",
+      "metric": "movement",
+      "value": 2.113418587234989,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:47:00+08:00",
+      "metric": "movement",
+      "value": 2.205861042093696,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:48:00+08:00",
+      "metric": "movement",
+      "value": 2.2625548476430692,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:48:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:49:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T01:49:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:49:00+08:00",
+      "metric": "sleep_stage",
+      "value": "awake",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:49:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T01:49:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:49:00+08:00",
+      "metric": "movement",
+      "value": 2.281660200229985,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:50:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T01:50:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:50:00+08:00",
+      "metric": "sleep_stage",
+      "value": "deep",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T01:50:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T01:50:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T01:50:00+08:00",
+      "metric": "movement",
+      "value": 2.2612488065092102,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:51:00+08:00",
+      "metric": "movement",
+      "value": 2.206317417115927,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:51:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:52:00+08:00",
+      "metric": "movement",
+      "value": 2.1177216874917364,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 52,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:53:00+08:00",
+      "metric": "movement",
+      "value": 1.999430645329863,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:54:00+08:00",
+      "metric": "movement",
+      "value": 1.855921170671953,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 53,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:54:00+08:00",
+      "metric": "stress_score",
+      "value": 18,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:55:00+08:00",
+      "metric": "movement",
+      "value": 1.6955029435223297,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:56:00+08:00",
+      "metric": "movement",
+      "value": 1.5284609042750097,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 53,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:57:00+08:00",
+      "metric": "movement",
+      "value": 1.3642193603919834,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:57:00+08:00",
+      "metric": "stress_score",
+      "value": 20,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T01:58:00+08:00",
+      "metric": "movement",
+      "value": 1.2147335685012348,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T01:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 53,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T01:59:00+08:00",
+      "metric": "movement",
+      "value": 1.0925417938364645,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:00:00+08:00",
+      "metric": "movement",
+      "value": 1.0068691010675341,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:00:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:01:00+08:00",
+      "metric": "movement",
+      "value": 0.9673944180852048,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:02:00+08:00",
+      "metric": "movement",
+      "value": 0.9685297900182152,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:03:00+08:00",
+      "metric": "movement",
+      "value": 0.9979896985562667,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:03:00+08:00",
+      "metric": "stress_score",
+      "value": 12,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:04:00+08:00",
+      "metric": "movement",
+      "value": 1.0723221986902225,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:05:00+08:00",
+      "metric": "movement",
+      "value": 1.1100595513096503,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:06:00+08:00",
+      "metric": "movement",
+      "value": 1.1383353975255748,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:06:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:06:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:07:00+08:00",
+      "metric": "movement",
+      "value": 1.1528779648064318,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:08:00+08:00",
+      "metric": "movement",
+      "value": 1.160202563176991,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:08:00+08:00",
+      "metric": "heart_rate",
+      "value": 68,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:09:00+08:00",
+      "metric": "movement",
+      "value": 1.1671853625484858,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:09:00+08:00",
+      "metric": "stress_score",
+      "value": 19,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:10:00+08:00",
+      "metric": "movement",
+      "value": 1.173485138421918,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:10:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:11:00+08:00",
+      "metric": "movement",
+      "value": 1.1820282931897645,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T02:12:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "sleep_stage",
+      "value": "light",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T02:12:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "movement",
+      "value": 1.1950593640448584,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:12:00+08:00",
+      "metric": "stress_score",
+      "value": 13,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:13:00+08:00",
+      "metric": "movement",
+      "value": 1.2137064716597996,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:14:00+08:00",
+      "metric": "movement",
+      "value": 1.2377327565892997,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:14:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:15:00+08:00",
+      "metric": "movement",
+      "value": 1.2643872848916229,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:15:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:16:00+08:00",
+      "metric": "movement",
+      "value": 1.2949007437262494,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:16:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:17:00+08:00",
+      "metric": "movement",
+      "value": 1.3247236832507088,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:18:00+08:00",
+      "metric": "movement",
+      "value": 1.3506481243275683,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:18:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:18:00+08:00",
+      "metric": "stress_score",
+      "value": 12,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:19:00+08:00",
+      "metric": "movement",
+      "value": 1.3724772168597212,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:20:00+08:00",
+      "metric": "movement",
+      "value": 1.3811535455749135,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:20:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:21:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T02:21:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:21:00+08:00",
+      "metric": "sleep_stage",
+      "value": "rem",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T02:21:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T02:21:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:21:00+08:00",
+      "metric": "movement",
+      "value": 1.3774984238899237,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:22:00+08:00",
+      "metric": "movement",
+      "value": 1.360621624838424,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:22:00+08:00",
+      "metric": "heart_rate",
+      "value": 77,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:23:00+08:00",
+      "metric": "movement",
+      "value": 1.3316639469593476,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:24:00+08:00",
+      "metric": "movement",
+      "value": 1.2891557015497872,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:24:00+08:00",
+      "metric": "heart_rate",
+      "value": 63,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:24:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:25:00+08:00",
+      "metric": "movement",
+      "value": 1.2319691878119923,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:26:00+08:00",
+      "metric": "movement",
+      "value": 1.163093353064054,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:26:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:27:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T02:27:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:27:00+08:00",
+      "metric": "sleep_stage",
+      "value": "light",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T02:27:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T02:27:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T02:27:00+08:00",
+      "metric": "movement",
+      "value": 1.084728246500101,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:27:00+08:00",
+      "metric": "stress_score",
+      "value": 19,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:28:00+08:00",
+      "metric": "movement",
+      "value": 0.9978233954663901,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:28:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:29:00+08:00",
+      "metric": "movement",
+      "value": 0.9121114157110402,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:30:00+08:00",
+      "metric": "movement",
+      "value": 0.8250389649768095,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:30:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:30:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:31:00+08:00",
+      "metric": "movement",
+      "value": 0.7426655247089096,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:32:00+08:00",
+      "metric": "movement",
+      "value": 0.668295823685254,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:32:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:33:00+08:00",
+      "metric": "movement",
+      "value": 0.6098588046275663,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:33:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:34:00+08:00",
+      "metric": "movement",
+      "value": 0.5790944090616866,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:35:00+08:00",
+      "metric": "movement",
+      "value": 0.574676922233719,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:36:00+08:00",
+      "metric": "movement",
+      "value": 0.6105258956544497,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:36:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:37:00+08:00",
+      "metric": "movement",
+      "value": 0.669182183581969,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:38:00+08:00",
+      "metric": "movement",
+      "value": 0.7364033812250457,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:39:00+08:00",
+      "metric": "movement",
+      "value": 0.8105364958952632,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:39:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:40:00+08:00",
+      "metric": "movement",
+      "value": 0.8925329602681012,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:41:00+08:00",
+      "metric": "movement",
+      "value": 0.9750576463289193,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:42:00+08:00",
+      "metric": "movement",
+      "value": 1.0538979784207692,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:42:00+08:00",
+      "metric": "stress_score",
+      "value": 12,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:43:00+08:00",
+      "metric": "movement",
+      "value": 1.125375861340134,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:44:00+08:00",
+      "metric": "movement",
+      "value": 1.188071084817322,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:45:00+08:00",
+      "metric": "movement",
+      "value": 1.2357762318334142,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:45:00+08:00",
+      "metric": "stress_score",
+      "value": 11,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:46:00+08:00",
+      "metric": "movement",
+      "value": 1.2683926862928578,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:47:00+08:00",
+      "metric": "movement",
+      "value": 1.2849486698222603,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:48:00+08:00",
+      "metric": "movement",
+      "value": 1.2849486698222603,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:48:00+08:00",
+      "metric": "stress_score",
+      "value": 7,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:49:00+08:00",
+      "metric": "movement",
+      "value": 1.2683926862928578,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:50:00+08:00",
+      "metric": "movement",
+      "value": 1.2357762318334142,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:51:00+08:00",
+      "metric": "movement",
+      "value": 1.1880710848173217,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:51:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:52:00+08:00",
+      "metric": "movement",
+      "value": 1.1266876080413595,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:53:00+08:00",
+      "metric": "movement",
+      "value": 1.053420212877169,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:54:00+08:00",
+      "metric": "movement",
+      "value": 0.9703782269111545,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:54:00+08:00",
+      "metric": "stress_score",
+      "value": 14,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:55:00+08:00",
+      "metric": "movement",
+      "value": 0.8799049633255424,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:56:00+08:00",
+      "metric": "movement",
+      "value": 0.7844881360772946,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:57:00+08:00",
+      "metric": "movement",
+      "value": 0.6895594969512058,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:57:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T02:58:00+08:00",
+      "metric": "movement",
+      "value": 0.5916926062170559,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T02:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T02:59:00+08:00",
+      "metric": "movement",
+      "value": 0.4954624843494934,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:00:00+08:00",
+      "metric": "movement",
+      "value": 0.40336780708961395,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:00:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:01:00+08:00",
+      "metric": "movement",
+      "value": 0.3192282809217191,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:02:00+08:00",
+      "metric": "movement",
+      "value": 0.2566264040576807,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:03:00+08:00",
+      "metric": "movement",
+      "value": 0.2183967699085497,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:03:00+08:00",
+      "metric": "stress_score",
+      "value": 25,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:04:00+08:00",
+      "metric": "movement",
+      "value": 0.2115766559902864,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:05:00+08:00",
+      "metric": "movement",
+      "value": 0.22505840560485627,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:06:00+08:00",
+      "metric": "movement",
+      "value": 0.26039286485094787,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:06:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:06:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:07:00+08:00",
+      "metric": "movement",
+      "value": 0.3078157204313776,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:08:00+08:00",
+      "metric": "movement",
+      "value": 0.3649206345504732,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:08:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:09:00+08:00",
+      "metric": "movement",
+      "value": 0.4140563280076178,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:09:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:10:00+08:00",
+      "metric": "movement",
+      "value": 0.4585508407956919,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:10:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:11:00+08:00",
+      "metric": "movement",
+      "value": 0.4970511935482702,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:12:00+08:00",
+      "metric": "movement",
+      "value": 0.5283546468087472,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:12:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:12:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:13:00+08:00",
+      "metric": "movement",
+      "value": 0.551465260523424,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:14:00+08:00",
+      "metric": "movement",
+      "value": 0.5630213278244085,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:14:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:15:00+08:00",
+      "metric": "movement",
+      "value": 0.568705544659438,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:15:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:16:00+08:00",
+      "metric": "movement",
+      "value": 0.5719294799252964,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:16:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:17:00+08:00",
+      "metric": "movement",
+      "value": 0.5801780663439837,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:18:00+08:00",
+      "metric": "movement",
+      "value": 0.5934578834406128,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:18:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:18:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:19:00+08:00",
+      "metric": "movement",
+      "value": 0.6146443241940822,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:20:00+08:00",
+      "metric": "movement",
+      "value": 0.6452278231309155,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:20:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:21:00+08:00",
+      "metric": "movement",
+      "value": 0.6849175183184848,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:21:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:22:00+08:00",
+      "metric": "movement",
+      "value": 0.7317659710427863,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:22:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:23:00+08:00",
+      "metric": "movement",
+      "value": 0.7826769706909155,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:24:00+08:00",
+      "metric": "movement",
+      "value": 0.8335649412029634,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:24:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:24:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:25:00+08:00",
+      "metric": "movement",
+      "value": 0.8817870138175709,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:26:00+08:00",
+      "metric": "movement",
+      "value": 0.9247931523654114,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:26:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:27:00+08:00",
+      "metric": "movement",
+      "value": 0.9592677894895721,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:27:00+08:00",
+      "metric": "stress_score",
+      "value": 11,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:28:00+08:00",
+      "metric": "movement",
+      "value": 0.9770400202012873,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:28:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:29:00+08:00",
+      "metric": "movement",
+      "value": 0.9967081154019968,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:30:00+08:00",
+      "metric": "movement",
+      "value": 1.0133972718372988,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:30:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:30:00+08:00",
+      "metric": "stress_score",
+      "value": 18,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:31:00+08:00",
+      "metric": "movement",
+      "value": 1.0234807646931465,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:32:00+08:00",
+      "metric": "movement",
+      "value": 1.03618665770076,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:32:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:33:00+08:00",
+      "metric": "movement",
+      "value": 1.0527152250602083,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:33:00+08:00",
+      "metric": "stress_score",
+      "value": 25,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:34:00+08:00",
+      "metric": "movement",
+      "value": 1.0753160256326104,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:35:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T03:35:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T03:35:00+08:00",
+      "metric": "sleep_stage",
+      "value": "rem",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T03:35:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T03:35:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T03:35:00+08:00",
+      "metric": "movement",
+      "value": 1.1048299733200448,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:36:00+08:00",
+      "metric": "movement",
+      "value": 1.1404826695501782,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 68,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:36:00+08:00",
+      "metric": "stress_score",
+      "value": 24,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:37:00+08:00",
+      "metric": "movement",
+      "value": 1.1800274507738386,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:38:00+08:00",
+      "metric": "movement",
+      "value": 1.2201585209044052,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:39:00+08:00",
+      "metric": "movement",
+      "value": 1.2567404332105696,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:39:00+08:00",
+      "metric": "stress_score",
+      "value": 20,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:40:00+08:00",
+      "metric": "movement",
+      "value": 1.2865794467335305,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 63,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:41:00+08:00",
+      "metric": "movement",
+      "value": 1.3065023305564947,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:42:00+08:00",
+      "metric": "movement",
+      "value": 1.3140576044261751,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:42:00+08:00",
+      "metric": "stress_score",
+      "value": 40,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:43:00+08:00",
+      "metric": "movement",
+      "value": 1.3092207508702358,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:44:00+08:00",
+      "metric": "movement",
+      "value": 1.2899946304542915,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 73,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:45:00+08:00",
+      "metric": "movement",
+      "value": 1.256003291766356,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:45:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:46:00+08:00",
+      "metric": "movement",
+      "value": 1.2067744236406952,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:47:00+08:00",
+      "metric": "movement",
+      "value": 1.1462896436781396,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:48:00+08:00",
+      "metric": "movement",
+      "value": 1.0778964597189087,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:48:00+08:00",
+      "metric": "stress_score",
+      "value": 14,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:49:00+08:00",
+      "metric": "movement",
+      "value": 1.005296711676755,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:50:00+08:00",
+      "metric": "movement",
+      "value": 0.931930629052958,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:51:00+08:00",
+      "metric": "movement",
+      "value": 0.8623716955449883,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:51:00+08:00",
+      "metric": "stress_score",
+      "value": 52,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:52:00+08:00",
+      "metric": "movement",
+      "value": 0.8009594480366606,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 71,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:53:00+08:00",
+      "metric": "movement",
+      "value": 0.7505199398652757,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:54:00+08:00",
+      "metric": "movement",
+      "value": 0.7094893403050063,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 76,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:54:00+08:00",
+      "metric": "stress_score",
+      "value": 18,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:55:00+08:00",
+      "metric": "movement",
+      "value": 0.6834047299026865,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:56:00+08:00",
+      "metric": "movement",
+      "value": 0.6692756738136723,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 63,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:57:00+08:00",
+      "metric": "movement",
+      "value": 0.6768434208769966,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:57:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T03:58:00+08:00",
+      "metric": "movement",
+      "value": 0.6773803421786198,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T03:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T03:59:00+08:00",
+      "metric": "movement",
+      "value": 0.6799135057049852,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:00:00+08:00",
+      "metric": "movement",
+      "value": 0.6872489520870622,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:00:00+08:00",
+      "metric": "stress_score",
+      "value": 22,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:01:00+08:00",
+      "metric": "movement",
+      "value": 0.6920216384849884,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:02:00+08:00",
+      "metric": "movement",
+      "value": 0.6981100955322813,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:03:00+08:00",
+      "metric": "movement",
+      "value": 0.7044323731180545,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:03:00+08:00",
+      "metric": "stress_score",
+      "value": 18,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:04:00+08:00",
+      "metric": "movement",
+      "value": 0.710201003027274,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 67,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:05:00+08:00",
+      "metric": "movement",
+      "value": 0.7143246302842623,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:06:00+08:00",
+      "metric": "movement",
+      "value": 0.7155683983651899,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:06:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:06:00+08:00",
+      "metric": "stress_score",
+      "value": 10,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:07:00+08:00",
+      "metric": "movement",
+      "value": 0.7127152524669582,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:08:00+08:00",
+      "metric": "movement",
+      "value": 0.7054107716318244,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:08:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:09:00+08:00",
+      "metric": "movement",
+      "value": 0.692046998514043,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:09:00+08:00",
+      "metric": "stress_score",
+      "value": 13,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:10:00+08:00",
+      "metric": "movement",
+      "value": 0.6720284204189187,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:10:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:11:00+08:00",
+      "metric": "movement",
+      "value": 0.6452422017510758,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:12:00+08:00",
+      "metric": "movement",
+      "value": 0.6120191812614527,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:12:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:12:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:13:00+08:00",
+      "metric": "movement",
+      "value": 0.5670226247563442,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:14:00+08:00",
+      "metric": "movement",
+      "value": 0.5296502551709326,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:14:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:15:00+08:00",
+      "metric": "movement",
+      "value": 0.49869825717491334,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:15:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:16:00+08:00",
+      "metric": "movement",
+      "value": 0.479924563660757,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:16:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:17:00+08:00",
+      "metric": "movement",
+      "value": 0.47796365249360223,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:18:00+08:00",
+      "metric": "movement",
+      "value": 0.4944146848749297,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:18:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:18:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:19:00+08:00",
+      "metric": "movement",
+      "value": 0.5280322791917441,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:20:00+08:00",
+      "metric": "movement",
+      "value": 0.5727170923250894,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:20:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:21:00+08:00",
+      "metric": "movement",
+      "value": 0.6218944848109653,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:21:00+08:00",
+      "metric": "stress_score",
+      "value": 23,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:22:00+08:00",
+      "metric": "movement",
+      "value": 0.6714725442951037,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:22:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:23:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T04:23:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T04:23:00+08:00",
+      "metric": "sleep_stage",
+      "value": "light",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T04:23:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T04:23:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T04:23:00+08:00",
+      "metric": "movement",
+      "value": 0.7195883597249833,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:24:00+08:00",
+      "metric": "movement",
+      "value": 0.7584644860671547,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:24:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:24:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:25:00+08:00",
+      "metric": "movement",
+      "value": 0.7879661722508688,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:26:00+08:00",
+      "metric": "movement",
+      "value": 0.8068986771362016,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:26:00+08:00",
+      "metric": "heart_rate",
+      "value": 64,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:27:00+08:00",
+      "metric": "movement",
+      "value": 0.8144995274078076,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:27:00+08:00",
+      "metric": "stress_score",
+      "value": 8,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:28:00+08:00",
+      "metric": "movement",
+      "value": 0.8104600026160853,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:28:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:29:00+08:00",
+      "metric": "movement",
+      "value": 0.7949311269314518,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:30:00+08:00",
+      "metric": "movement",
+      "value": 0.7691612529170798,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:30:00+08:00",
+      "metric": "heart_rate",
+      "value": 53,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:30:00+08:00",
+      "metric": "stress_score",
+      "value": 11,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:31:00+08:00",
+      "metric": "movement",
+      "value": 0.7327894914000255,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:32:00+08:00",
+      "metric": "movement",
+      "value": 0.6878262611935378,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:32:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:33:00+08:00",
+      "metric": "movement",
+      "value": 0.6267644776713147,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:33:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:34:00+08:00",
+      "metric": "movement",
+      "value": 0.5832246679688325,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:35:00+08:00",
+      "metric": "movement",
+      "value": 0.5548439727880857,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:36:00+08:00",
+      "metric": "movement",
+      "value": 0.5505555656890974,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:36:00+08:00",
+      "metric": "stress_score",
+      "value": 6,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:37:00+08:00",
+      "metric": "movement",
+      "value": 0.5750043352235599,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:38:00+08:00",
+      "metric": "movement",
+      "value": 0.6260527371071626,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:39:00+08:00",
+      "metric": "movement",
+      "value": 0.6964582704512554,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:39:00+08:00",
+      "metric": "stress_score",
+      "value": 8,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:40:00+08:00",
+      "metric": "movement",
+      "value": 0.7774776809184859,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 52,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:41:00+08:00",
+      "metric": "movement",
+      "value": 0.8611778385738477,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:42:00+08:00",
+      "metric": "movement",
+      "value": 0.9453267756582128,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 52,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:42:00+08:00",
+      "metric": "stress_score",
+      "value": 12,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:43:00+08:00",
+      "metric": "movement",
+      "value": 1.015431049713287,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:44:00+08:00",
+      "metric": "movement",
+      "value": 1.0695877827200253,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:45:00+08:00",
+      "metric": "movement",
+      "value": 1.1148522350257812,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:45:00+08:00",
+      "metric": "stress_score",
+      "value": 18,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:46:00+08:00",
+      "metric": "movement",
+      "value": 1.1466015177304711,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:47:00+08:00",
+      "metric": "movement",
+      "value": 1.1647510217086963,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:48:00+08:00",
+      "metric": "movement",
+      "value": 1.1698203904371731,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 71,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:48:00+08:00",
+      "metric": "stress_score",
+      "value": 14,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:49:00+08:00",
+      "metric": "movement",
+      "value": 1.1628959076138956,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:50:00+08:00",
+      "metric": "movement",
+      "value": 1.1455546872000852,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:51:00+08:00",
+      "metric": "movement",
+      "value": 1.1197478112797328,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:51:00+08:00",
+      "metric": "stress_score",
+      "value": 19,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:52:00+08:00",
+      "metric": "movement",
+      "value": 1.088099618557073,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:53:00+08:00",
+      "metric": "movement",
+      "value": 1.050406674300277,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:54:00+08:00",
+      "metric": "movement",
+      "value": 1.0123441723508324,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:54:00+08:00",
+      "metric": "stress_score",
+      "value": 13,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:55:00+08:00",
+      "metric": "movement",
+      "value": 0.9794111487611585,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:56:00+08:00",
+      "metric": "movement",
+      "value": 0.9523152200747019,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:57:00+08:00",
+      "metric": "movement",
+      "value": 0.9327462265615873,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:57:00+08:00",
+      "metric": "stress_score",
+      "value": 9,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T04:58:00+08:00",
+      "metric": "movement",
+      "value": 0.9212065115708203,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T04:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T04:59:00+08:00",
+      "metric": "movement",
+      "value": 0.9169572732929534,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:00:00+08:00",
+      "metric": "movement",
+      "value": 0.9182193677468756,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:00:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:01:00+08:00",
+      "metric": "movement",
+      "value": 0.9225564647136868,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:02:00+08:00",
+      "metric": "movement",
+      "value": 0.9358585867389944,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:03:00+08:00",
+      "metric": "movement",
+      "value": 0.9369453077907313,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:03:00+08:00",
+      "metric": "stress_score",
+      "value": 19,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:04:00+08:00",
+      "metric": "movement",
+      "value": 0.9322573718337979,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:05:00+08:00",
+      "metric": "movement",
+      "value": 0.9217411271121648,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:06:00+08:00",
+      "metric": "movement",
+      "value": 0.9052460412061685,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:06:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:06:00+08:00",
+      "metric": "stress_score",
+      "value": 15,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:07:00+08:00",
+      "metric": "movement",
+      "value": 0.8825620441829164,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:08:00+08:00",
+      "metric": "movement",
+      "value": 0.8534729244729771,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:08:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:09:00+08:00",
+      "metric": "movement",
+      "value": 0.8178176858788712,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:09:00+08:00",
+      "metric": "stress_score",
+      "value": 8,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:10:00+08:00",
+      "metric": "movement",
+      "value": 0.7755511505832972,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:10:00+08:00",
+      "metric": "heart_rate",
+      "value": 54,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:11:00+08:00",
+      "metric": "movement",
+      "value": 0.7267957965306101,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:12:00+08:00",
+      "metric": "movement",
+      "value": 0.6674670143868894,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:12:00+08:00",
+      "metric": "heart_rate",
+      "value": 55,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:12:00+08:00",
+      "metric": "stress_score",
+      "value": 13,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:13:00+08:00",
+      "metric": "movement",
+      "value": 0.6146680817694798,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:14:00+08:00",
+      "metric": "movement",
+      "value": 0.5699388924514557,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:14:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:15:00+08:00",
+      "metric": "movement",
+      "value": 0.5420732665008153,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:15:00+08:00",
+      "metric": "stress_score",
+      "value": 17,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:16:00+08:00",
+      "metric": "movement",
+      "value": 0.5407055825863092,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:16:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:17:00+08:00",
+      "metric": "movement",
+      "value": 0.5701195021472883,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:18:00+08:00",
+      "metric": "movement",
+      "value": 0.626845041013742,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:18:00+08:00",
+      "metric": "heart_rate",
+      "value": 59,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:18:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:19:00+08:00",
+      "metric": "movement",
+      "value": 0.7023028543768792,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:20:00+08:00",
+      "metric": "movement",
+      "value": 0.7869750561423177,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:20:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:21:00+08:00",
+      "metric": "movement",
+      "value": 0.8726257501984845,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:21:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:22:00+08:00",
+      "metric": "movement",
+      "value": 0.9548316021045177,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:22:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:23:00+08:00",
+      "metric": "movement",
+      "value": 1.0258835429152335,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:24:00+08:00",
+      "metric": "movement",
+      "value": 1.080067188992022,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:24:00+08:00",
+      "metric": "heart_rate",
+      "value": 60,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:24:00+08:00",
+      "metric": "stress_score",
+      "value": 19,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:25:00+08:00",
+      "metric": "movement",
+      "value": 1.1171938828835755,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:26:00+08:00",
+      "metric": "movement",
+      "value": 1.1360638025605498,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:26:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:27:00+08:00",
+      "metric": "movement",
+      "value": 1.1360638025605498,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:27:00+08:00",
+      "metric": "stress_score",
+      "value": 8,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:28:00+08:00",
+      "metric": "movement",
+      "value": 1.1171938828835755,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:28:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:29:00+08:00",
+      "metric": "movement",
+      "value": 1.080067188992022,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:30:00+08:00",
+      "metric": "movement",
+      "value": 1.0258835429152335,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:30:00+08:00",
+      "metric": "heart_rate",
+      "value": 56,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:30:00+08:00",
+      "metric": "stress_score",
+      "value": 14,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:31:00+08:00",
+      "metric": "movement",
+      "value": 0.9559911040368859,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:32:00+08:00",
+      "metric": "movement",
+      "value": 0.8738848515224857,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:32:00+08:00",
+      "metric": "heart_rate",
+      "value": 57,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:33:00+08:00",
+      "metric": "movement",
+      "value": 0.7819816507873174,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:33:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:34:00+08:00",
+      "metric": "movement",
+      "value": 0.6836219959558382,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:34:00+08:00",
+      "metric": "heart_rate",
+      "value": 58,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:35:00+08:00",
+      "metric": "movement",
+      "value": 0.5825731997907181,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:36:00+08:00",
+      "metric": "movement",
+      "value": 0.4800376072106809,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:36:00+08:00",
+      "metric": "heart_rate",
+      "value": 61,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:36:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:37:00+08:00",
+      "metric": "movement",
+      "value": 0.3915267552651083,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:38:00+08:00",
+      "metric": "movement",
+      "value": 0.3246028033520043,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:38:00+08:00",
+      "metric": "heart_rate",
+      "value": 63,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:39:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T05:39:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T05:39:00+08:00",
+      "metric": "sleep_stage",
+      "value": "rem",
+      "unit": "stage"
+    },
+    {
+      "timestamp": "2026-11-19T05:39:00+08:00",
+      "metric": "sleep_segment_start",
+      "value": "2026-11-19T05:39:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T05:39:00+08:00",
+      "metric": "movement",
+      "value": 0.29234163271030006,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:39:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:40:00+08:00",
+      "metric": "movement",
+      "value": 0.30036698939686596,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:40:00+08:00",
+      "metric": "heart_rate",
+      "value": 64,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:41:00+08:00",
+      "metric": "movement",
+      "value": 0.35022041437100154,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:42:00+08:00",
+      "metric": "movement",
+      "value": 0.4056355210602087,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:42:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:42:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:43:00+08:00",
+      "metric": "movement",
+      "value": 0.45847830584768784,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:44:00+08:00",
+      "metric": "movement",
+      "value": 0.5104242757426668,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:44:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:45:00+08:00",
+      "metric": "movement",
+      "value": 0.5603521630256066,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:45:00+08:00",
+      "metric": "stress_score",
+      "value": 16,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:46:00+08:00",
+      "metric": "movement",
+      "value": 0.6071198008984076,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:46:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:47:00+08:00",
+      "metric": "movement",
+      "value": 0.6450399077465626,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:48:00+08:00",
+      "metric": "movement",
+      "value": 0.6882018994301563,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:48:00+08:00",
+      "metric": "heart_rate",
+      "value": 66,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:49:00+08:00",
+      "metric": "movement",
+      "value": 0.72810169493027,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:50:00+08:00",
+      "metric": "movement",
+      "value": 0.7695456705408594,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:50:00+08:00",
+      "metric": "heart_rate",
+      "value": 64,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:51:00+08:00",
+      "metric": "movement",
+      "value": 0.786775929317523,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:51:00+08:00",
+      "metric": "stress_score",
+      "value": 20,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:52:00+08:00",
+      "metric": "movement",
+      "value": 0.8475785487081489,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:52:00+08:00",
+      "metric": "heart_rate",
+      "value": 62,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:53:00+08:00",
+      "metric": "movement",
+      "value": 0.9780499456243633,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:54:00+08:00",
+      "metric": "movement",
+      "value": 1.1896087926749852,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:54:00+08:00",
+      "metric": "heart_rate",
+      "value": 63,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:54:00+08:00",
+      "metric": "stress_score",
+      "value": 21,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:55:00+08:00",
+      "metric": "movement",
+      "value": 1.4783001220844352,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:56:00+08:00",
+      "metric": "movement",
+      "value": 1.833020450015507,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:56:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:57:00+08:00",
+      "metric": "movement",
+      "value": 2.241324832461084,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:57:00+08:00",
+      "metric": "stress_score",
+      "value": 28,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T05:58:00+08:00",
+      "metric": "movement",
+      "value": 2.6911316575398496,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T05:58:00+08:00",
+      "metric": "heart_rate",
+      "value": 65,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T05:59:00+08:00",
+      "metric": "movement",
+      "value": 3.1707959851886462,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:00:00+08:00",
+      "metric": "movement",
+      "value": 3.669086436703739,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:00:00+08:00",
+      "metric": "heart_rate",
+      "value": 72,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T06:01:00+08:00",
+      "metric": "movement",
+      "value": 4.1745782364519775,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:02:00+08:00",
+      "metric": "movement",
+      "value": 4.676694632086472,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:02:00+08:00",
+      "metric": "heart_rate",
+      "value": 73,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T06:03:00+08:00",
+      "metric": "movement",
+      "value": 5.165318605590826,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:03:00+08:00",
+      "metric": "stress_score",
+      "value": 54,
+      "unit": "score"
+    },
+    {
+      "timestamp": "2026-11-19T06:04:00+08:00",
+      "metric": "movement",
+      "value": 5.631193193146469,
+      "unit": "arb"
+    },
+    {
+      "timestamp": "2026-11-19T06:04:00+08:00",
+      "metric": "heart_rate",
+      "value": 71,
+      "unit": "bpm"
+    },
+    {
+      "timestamp": "2026-11-19T06:05:00+08:00",
+      "metric": "wake_time",
+      "value": "2026-11-19T06:05:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T06:05:00+08:00",
+      "metric": "sleep_segment_end",
+      "value": "2026-11-19T06:05:00+08:00",
+      "unit": "datetime"
+    },
+    {
+      "timestamp": "2026-11-19T15:00:00+08:00",
+      "metric": "daily_steps",
+      "value": 46,
+      "unit": "count"
     },
     {
       "timestamp": "2026-11-19T15:00:00+08:00",

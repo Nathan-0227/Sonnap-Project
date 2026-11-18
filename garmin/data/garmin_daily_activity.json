@@ -2534,27 +2534,27 @@
    "stress_uncategorized_sec": 7140
   },
   "2026-11-19": {
-   "steps": null,
+   "steps": 46,
    "step_goal": 7970,
-   "distance_m": null,
+   "distance_m": 31,
    "active_kcal": 0,
-   "highly_active_sec": 0,
-   "active_sec": 0,
-   "sedentary_sec": 1980,
+   "highly_active_sec": 120,
+   "active_sec": 60,
+   "sedentary_sec": 4860,
    "floors_up": 0.0,
-   "stress_rest_sec": 60,
-   "stress_low_sec": 840,
-   "stress_medium_sec": 60,
+   "stress_rest_sec": 16380,
+   "stress_low_sec": 1740,
+   "stress_medium_sec": 480,
    "stress_high_sec": null,
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
    "move_iq": [],
-   "resting_kcal": 32,
-   "total_kcal": 32,
-   "sleeping_sec": 0,
-   "stress_activity_sec": 300,
-   "stress_uncategorized_sec": 720
+   "resting_kcal": 360,
+   "total_kcal": 360,
+   "sleeping_sec": 16860,
+   "stress_activity_sec": 780,
+   "stress_uncategorized_sec": 1920
   }
  }
 }

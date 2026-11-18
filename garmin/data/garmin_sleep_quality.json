@@ -2030,5 +2030,21 @@
     "efficiency_used": 74.44,
     "efficiency_recalled": false,
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-19",
+    "score": 74.6,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 6.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 7.9,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 99.64,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.67 h). Try going to bed earlier; aim for 7.0–9.0 h."
   }
 ]
