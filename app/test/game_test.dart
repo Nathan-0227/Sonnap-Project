@@ -17,6 +17,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/pet2d/pet_catalog.dart' show accessories;
+
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/closet_screen.dart';
 import 'package:app/screens/home_screen.dart';
@@ -454,6 +456,16 @@ void main() {
     testWidgets('沒穿就什麼都不畫', (tester) async {
       await pumpScreen(tester, const Scaffold(body: HomePet(mood: 'happy')));
       expect(find.byKey(const Key('pet-accessory')), findsNothing);
+    });
+
+    test('禮帽、皇冠縮小坐進兩耳之間；其他衣服照錨點原尺寸', () {
+      // 2026-11-19 使用者：硬帽子照睡帽的錨點放會蓋住耳朵。只動這兩頂，
+      // 錨點（隊友在預覽工具裡對好的）一個都不改。
+      for (final a in accessories) {
+        final hard = a.id == 'star_top_hat' || a.id == 'moon_crown';
+        expect(a.fit < 1, hard, reason: a.id);
+        if (!hard) expect(a.drop, 0, reason: a.id);
+      }
     });
 
     test('衣櫃 item_id 對得上六件圖', () {

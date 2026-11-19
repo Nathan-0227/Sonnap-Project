@@ -227,8 +227,11 @@ class _LayeredPetState extends State<LayeredPet>
     final tweak = widget.accessoryTweak;
     final factor = widget.size / pose.designSize;
     final sourceSize = 512.0;
-    final scale = base.scale * tweak.scale;
+    // 這一件自己的大小：以底邊中點縮放（見 AccessoryDefinition.fit）
+    final box = sourceSize * base.scale * tweak.scale;
+    final scale = base.scale * tweak.scale * accessory.fit;
     final size = sourceSize * scale * factor;
+    final fitDropY = box * (1 - accessory.fit) / 2 + box * accessory.drop;
 
     // Head/face accessories follow the head. Neck accessories follow the body,
     // so a scarf stays attached to the chest/neck instead of being pulled by
@@ -241,7 +244,7 @@ class _LayeredPetState extends State<LayeredPet>
     final animatedOffsetY = followsHead
         ? headOffsetY
         : (followsBody ? bodyOffsetY : 0.0);
-    final y = base.position.dy + tweak.dy + animatedOffsetY;
+    final y = base.position.dy + tweak.dy + animatedOffsetY + fitDropY;
     final animatedRotation = followsHead ? headRotationDeg : 0.0;
 
     return Positioned(

@@ -606,11 +606,15 @@ const accessories = <AccessoryDefinition>[
     label: 'Star Top Hat',
     slot: AccessorySlot.head,
     assetPath: 'assets/accessories/head/star_top_hat.png',
+    fit: 0.62,
+    drop: -0.04,
   ),
   AccessoryDefinition(
     id: 'moon_crown',
     label: 'Moon Crown',
     slot: AccessorySlot.head,
     assetPath: 'assets/accessories/head/moon_crown.png',
+    fit: 0.58,
+    drop: -0.04,
   ),
 ];
