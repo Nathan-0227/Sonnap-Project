@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
 import 'friend_night_card.dart'
-    show friendCheckIn, friendStagesStrip, friendTile, openFriendNight;
+    show friendCheckIn, friendStagesRing, friendTile, openFriendNight;
 import 'last_night_art.dart';
 import 'steps_sheet.dart' show StepsArc, stepsFraction;
 import 'home_pet.dart';
@@ -1137,14 +1137,14 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
 /// 標題左上、數字疊在左下；圓環與步數圓弧的數字在圖的正中間。
 /// 沒有圖的格子右上放一個淡淡的大圖示，跟有圖的格子空間感一致。
 /// **圖只畫他有分享的資料**：
-/// - Total sleep：他有分享 Sleep stages 才畫階梯（睡眠目標只存在他手機上，後端沒有，
-///   所以不畫報告那條「睡了多久÷目標」的極光）
+/// - Total sleep：他有分享 Sleep stages 才畫各階段比例的圓環（睡眠目標只存在他手機上，
+///   後端沒有，所以不畫報告那條「睡了多久÷目標」的極光）
 /// - Phone down：他也分享了目標時間才畫半圓鐘（不然「目標」那一點是編的）
 /// - Score、Efficiency：大圓環
 /// - Steps：大圓弧＝步數÷那天 Garmin 的目標，超過就滿、不變色，只寫 Goal
 /// - Sleeping HR：整晚那條慢線
 /// - Movement：他有分享 Movement through the night 才畫光柱；他選了「只寫準時與否」
-///   （沒有時刻）就不畫，不然底下的鐘點是編的
+///   （沒有時刻）時光柱照畫、底下不標整點，只寫 Fell asleep／Woke up（不露幾點）
 /// 不判斷好壞、不變色。
 const kTownTileHeight = 170.0;
 
@@ -1211,9 +1211,40 @@ Widget townCheckInTile(
 
   switch (key) {
     case 'sleep_duration':
-      // 跟 Feed 卡片同一條細階梯（2026-11-19 使用者：原本 64 高太大，一條就好）
-      final strip = friendStagesStrip(items);
-      if (strip != null) art = middle(Center(child: strip));
+      // 各階段比例的圓環、睡多久寫在圓心（2026-11-19 使用者定 A；階梯圖使用者覺得不行）
+      final ring = friendStagesRing(items);
+      if (ring != null) {
+        art = Padding(
+          padding: const EdgeInsets.fromLTRB(14, 36, 14, 14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ring,
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      value,
+                      softWrap: false,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Text(
+                      'asleep',
+                      style: TextStyle(color: Color(0xFFB7BEDC), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+        text = const SizedBox.shrink();
+      }
     case 'phone_down_time':
       final actual = nightMinute(items['phone_down_time']);
       final target = nightMinute(items['target_bedtime']);
@@ -1306,13 +1337,20 @@ Widget townCheckInTile(
       final hm = start is String
           ? RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(start)
           : null;
-      if (pts.isNotEmpty && hm != null) {
-        final t0 = DateTime(2000, 1, 1, int.parse(hm[1]!), int.parse(hm[2]!));
+      if (pts.isNotEmpty) {
+        // 他選了「只寫準時與否」→ 沒有入睡時刻：光柱照畫、不標整點，兩端只寫
+        // Fell asleep／Woke up（同 Feed 點開的頁；2026-11-19 使用者定）。基準時刻只用來排間距
+        final t0 = hm == null
+            ? DateTime(2000)
+            : DateTime(2000, 1, 1, int.parse(hm[1]!), int.parse(hm[2]!));
         art = lastNightArt(
-          CameraBarsPainter([
-            for (final (min, v) in pts)
-              (t0.add(Duration(seconds: (min * 60).round())), v),
-          ]),
+          CameraBarsPainter(
+            [
+              for (final (min, v) in pts)
+                (t0.add(Duration(seconds: (min * 60).round())), v),
+            ],
+            endLabels: hm == null ? ('Fell asleep', 'Woke up') : null,
+          ),
         );
         height = 200;
       }

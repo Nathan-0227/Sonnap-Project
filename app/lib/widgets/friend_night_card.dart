@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
 import '../services/night_compare.dart' show formatMinutes;
+import '../theme/report_style.dart' show reportCard;
 import 'streak_card.dart' show PetWithFlames, StreakWeekRow, speciesOf;
 
 part 'friend_night_sections.dart';
@@ -558,6 +559,72 @@ Widget? friendStagesStrip(Map<String, dynamic> items, {double height = 28}) {
       painter: _StagePainter(segments, stages?['rem_measured'] != false),
     ),
   );
+}
+
+/// 小鎮面板的 Total sleep（2026-11-19 使用者定 A）：一圈照各階段的**時間比例**分段
+/// （深睡 → 淺睡 → REM → 醒著，顏色同階梯），跟同一頁 Score／Efficiency 的圓環同一個樣子。
+/// 只畫比例、不需要入睡時刻（只寫準時與否的人也畫得出來）；不判斷好壞。沒分享 Sleep stages → null。
+Widget? friendStagesRing(Map<String, dynamic> items) {
+  final mins = <String, double>{};
+  for (final (stage, from, to) in _segmentsOf(_stagesOf(items))) {
+    if (to > from) mins[stage] = (mins[stage] ?? 0) + (to - from);
+  }
+  final parts = [
+    for (final k in const ['deep', 'light', 'rem', 'awake'])
+      if ((mins[k] ?? 0) > 0) (_stageColors[k]!, mins[k]!),
+  ];
+  if (parts.isEmpty) return null;
+  return CustomPaint(
+    key: const Key('stages-ring'),
+    painter: _StageRingPainter(parts),
+    child: const SizedBox.expand(),
+  );
+}
+
+class _StageRingPainter extends CustomPainter {
+  final List<(Color, double)> parts;
+  _StageRingPainter(this.parts);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = math.min(size.width, size.height) / 2 - 6;
+    final c = size.center(Offset.zero);
+    final rect = Rect.fromCircle(center: c, radius: r);
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 8
+        ..color = const Color(0x1FFFFFFF),
+    );
+    final total = parts.fold<double>(0, (a, p) => a + p.$2);
+    // 段跟段之間留一點縫；只有一段時不留
+    final gap = parts.length > 1 ? 0.06 : 0.0;
+    var start = -math.pi / 2;
+    for (final (color, m) in parts) {
+      final sweep = 2 * math.pi * m / total;
+      final s = math.max(sweep - gap, 0.02);
+      for (final glow in [true, false]) {
+        canvas.drawArc(
+          rect,
+          start + gap / 2,
+          s,
+          false,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 8
+            ..strokeCap = StrokeCap.round
+            ..color = glow ? color.withValues(alpha: 0.45) : color
+            ..maskFilter = glow ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
+        );
+      }
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StageRingPainter old) => old.parts != parts;
 }
 
 /// 完整頁那幾個區塊會畫的項目（見 friend_night_sections.dart）。

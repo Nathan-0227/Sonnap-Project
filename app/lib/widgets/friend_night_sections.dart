@@ -6,7 +6,6 @@ part of 'friend_night_card.dart';
 // 每一段只在他有分享對應項目時才出現；沒值的那一列不畫、不畫成 0。
 // ⚠️ 只寫事實：不寫 Normal／High、不分好壞、不用紅綠；準時與否照抄後端的 on_time。
 
-const _sectionBand = Color(0xFF0A1028);
 const _rowLabel = TextStyle(color: Color(0xB3FFFFFF), fontSize: 15);
 const _rowValue = TextStyle(
   color: Colors.white,
@@ -310,12 +309,14 @@ class _Section extends StatelessWidget {
   const _Section({super.key, required this.title, required this.children});
 
   @override
+  // 每一段是一張半透明紫的卡（同早晨報告的格子），夜空背景透得上來（2026-11-19 使用者定）
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Container(height: 8, color: _sectionBand, margin: const EdgeInsets.only(top: 24)),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 4),
+      Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+        decoration: reportCard(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

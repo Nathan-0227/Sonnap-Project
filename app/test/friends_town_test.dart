@@ -472,6 +472,15 @@ void main() {
       for (final k in ['sleep_duration', 'phone_down_time', 'score', 'steps', 'camera_moves']) {
         expect(find.byKey(Key('town-sheet-tile-$k'), skipOffstage: false), findsOneWidget, reason: k);
       }
+      // 有時刻 → 光柱底下照標整點（不是兩端那種）
+      final bars = tester
+          .widgetList<CustomPaint>(find.descendant(
+            of: find.byKey(const Key('town-sheet-tile-camera_moves')),
+            matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CameraBarsPainter),
+          ))
+          .first
+          .painter as CameraBarsPainter;
+      expect(bars.endLabels, isNull);
       // 心率是健康資料，不放在第一眼（留在 See last night）
       expect(find.byKey(const Key('town-sheet-tile-sleeping_hr'), skipOffstage: false), findsNothing);
       // Movement 獨佔一整列、寫明不進分數
@@ -489,7 +498,7 @@ void main() {
       expect(find.byKey(const Key('town-visit-pet')), findsOneWidget);
     });
 
-    testWidgets('小圖只畫他有分享的：沒有時刻（只寫準時與否）→ 不畫攝影機光柱；沒有目標時間 → 不畫半圓鐘', (tester) async {
+    testWidgets('小圖只畫他有分享的：沒有時刻（只寫準時與否）→ 光柱照畫但不標鐘點；沒有目標時間 → 不畫半圓鐘', (tester) async {
       await pump(tester, stubWith(richCard(times: false)));
       await tester.tap(townie('EAR111'));
       await settle(tester);
@@ -507,7 +516,15 @@ void main() {
       await settle(tester);
       // 那一格本身在（不然「沒有光柱」會是因為整格沒建出來而假性通過）
       expect(find.byKey(const Key('town-sheet-tile-camera_moves')), findsOneWidget);
-      expect(hasPainter<CameraBarsPainter>('camera_moves'), isFalse);
+      expect(hasPainter<CameraBarsPainter>('camera_moves'), isTrue);
+      final bars = tester
+          .widgetList<CustomPaint>(find.descendant(
+            of: find.byKey(const Key('town-sheet-tile-camera_moves')),
+            matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CameraBarsPainter),
+          ))
+          .first
+          .painter as CameraBarsPainter;
+      expect(bars.endLabels, ('Fell asleep', 'Woke up'), reason: '沒有時刻 → 不標整點，只寫兩端');
       expect(find.byKey(const Key('town-sheet-tile-phone_down_time'), skipOffstage: false), findsOneWidget);
       expect(hasPainter<ClockArcPainter>('phone_down_time'), isFalse);
       // 反向對照：有資料的照畫
@@ -560,6 +577,51 @@ void main() {
       expect(find.byKey(const Key('town-sheet-tile-phone_down_time')), findsOneWidget);
       expect(find.byKey(const Key('town-sheet-tile-morning_rating')), findsNothing, reason: '第 3 格單出來 → 不放');
       expect(find.byKey(const Key('town-sheet-tile-camera_moves')), findsOneWidget);
+    });
+
+    testWidgets('Total sleep 是各階段比例的圓環；沒分享 Sleep stages 就不畫', (tester) async {
+      Finder ring() => find.descendant(
+        of: find.byKey(const Key('town-sheet-tile-sleep_duration')),
+        matching: find.byKey(const Key('stages-ring')),
+      );
+      await pump(
+        tester,
+        stubWith({
+          'date': '2026-09-03',
+          'items': {
+            'sleep_duration': 400,
+            'morning_rating': {'rested': 4, 'label': 'Rested'},
+            'stages': {
+              'segments': [
+                {'stage': 'light', 'from': 0, 'to': 200},
+                {'stage': 'deep', 'from': 200, 'to': 280},
+                {'stage': 'rem', 'from': 280, 'to': 400},
+              ],
+            },
+          },
+        }),
+      );
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      expect(find.byKey(const Key('town-sheet-tile-sleep_duration')), findsOneWidget);
+      expect(ring(), findsOneWidget);
+    });
+
+    testWidgets('Total sleep 沒有 stages → 沒有圓環', (tester) async {
+      await pump(
+        tester,
+        stubWith({
+          'date': '2026-09-03',
+          'items': {
+            'sleep_duration': 400,
+            'morning_rating': {'rested': 4, 'label': 'Rested'},
+          },
+        }),
+      );
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      expect(find.byKey(const Key('town-sheet-tile-sleep_duration')), findsOneWidget);
+      expect(find.byKey(const Key('stages-ring')), findsNothing);
     });
 
     testWidgets('Felt 那格畫他早上選的那張臉（跟起床自評卡同一組圖）', (tester) async {
