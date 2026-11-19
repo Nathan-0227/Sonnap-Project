@@ -630,7 +630,7 @@ const accessories = <AccessoryDefinition>[
     drop: -0.04,
     shadowAt: 0.82,
     poseFits: {
-      'dog01.happy': AccessoryFit(fit: 0.52, drop: -0.16, dx: -0.04),
+      'dog01.happy': AccessoryFit(fit: 0.74, drop: -0.12, dx: -0.04),
       'dog01.bored': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
       'dog01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
       'dog01.anxious': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.07),
