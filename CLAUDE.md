@@ -423,6 +423,21 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 背景兩張圖（山丘、湖面）是使用者以 prompt 生成的原創圖，左右翻轉過；**只鋪到內容結束**（Positioned） | 不用 Positioned 的話頁面被圖撐長，底下多一大段空白 |
 | 星星與流星是程式畫的；系統開「減少動態效果」時靜止 | — |
 
+### ✅ 好友頁的即時狀態（2026-11-19，`feature/friends-live-status`，疊在 `feature/friends-sharing` 上）
+
+Friends 分頁照參考圖：All · Asleep · Still up · This Week（排行榜搬進 This Week、心情篩選拿掉），
+卡片＝頭像（睡著畫 tired）＋大字（睡著寫睡了多久、其他寫昨晚放下手機）＋狀態一行＋7 晚放下手機小長條（越晚越高、一個顏色）。
+
+| 規則 | 理由 |
+|---|---|
+| 訊號只有**按鈕當下**：Start Sleep／Out of bed（含 I already got up）／Cancel 各送一次 `POST /sleep-status`（表 `live_sleep_status`），**只試一次、不補送、不擋睡覺** | 沒有背景服務、手錶不即時；半夜補送「我在睡」沒有意義 |
+| 四種狀態**只在後端判**（`social/live_status.py`）：asleep（14 小時失效）／up（到當天 18:00）／past_bedtime（目標後 6 小時內，跨午夜用 `adherence_minutes`）／awake。14／18／6 是**設計決策**，各自沿用睡覺畫面、18:00 切夜、守門的值 | Dart 判就是第二個定義處 |
+| past_bedtime **只寫「No Start Sleep yet · 40m past bedtime」，不寫 staying up**；Still up 不含 up、不含沒分享的人 | 「不按也沒關係」——沒按的人可能早就睡了 |
+| 分享設定 `live_status` **預設關**；只寫準時與否時狀態照給、時刻與分鐘數拿掉；目標時刻本身不分享（後端只送分鐘數） | 即時狀態等於讓好友知道你此刻在不在睡 |
+| 卡片**不放手錶睡眠時長**（參考圖的 8h 12m 不照做） | 生理資料不在好友白名單 |
+| 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來 |
+| 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
+
 ### ✅ 轉盤＋鬧鐘（2026-11-12，`feature/alarm-dial`）
 
 點首頁時鐘卡或設定頁的目標就寢時間 → 滑出轉盤（月亮＝就寢、太陽＝起床，5 分鐘一格）＋ Alarm 開關。
@@ -1648,6 +1663,7 @@ python tests/test_db_show.py
 python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
+python tests/test_live_status.py         # 2026-11-19 新增：四種狀態與三個時間邊界、分享預設關、只寫準時與否拿掉時刻、Cancel 刪整列、不碰 nightly_behavior、刪帳號一起刪
 python tests/test_friend_sharing.py      # 2026-11-15 新增：預設只給行為、沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪、場景跟著動態卡帶出去且不認得的 422
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉
