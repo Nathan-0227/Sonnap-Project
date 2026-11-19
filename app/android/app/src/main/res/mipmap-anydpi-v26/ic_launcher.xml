@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App 圖示（Android 8+ 的自適應圖示）。圖案來源 app/branding/sonnap_logo.png，
+     只取月亮＋小狗、不放 "Sonnap" 字樣（圖示下面系統已經寫 App 名稱）。 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>
