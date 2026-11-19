@@ -780,6 +780,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           service: service,
           mood: mood,
           growthStage: _game?.value?.growthStage,
+          displayName: widget.displayName,
         ),
       ),
     );

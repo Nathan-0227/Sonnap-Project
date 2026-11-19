@@ -599,4 +599,45 @@ const accessories = <AccessoryDefinition>[
     slot: AccessorySlot.neck,
     assetPath: 'assets/accessories/neck/pink_bow.png',
   ),
+  // 2026-11-19 使用者生成，取代 top_hat／crown 原本的 emoji。都是 head 插槽，
+  // 沿用睡帽那組頭部錨點（小狗、貓各一組），不另外對位。
+  AccessoryDefinition(
+    id: 'star_top_hat',
+    label: 'Star Top Hat',
+    slot: AccessorySlot.head,
+    assetPath: 'assets/accessories/head/star_top_hat.png',
+    fit: 0.62,
+    drop: -0.04,
+    shadowAt: 0.887,
+    // 使用者 2026-11-19 逐格挑的戴法（每種姿勢一組）
+    poseFits: {
+      'dog01.happy': AccessoryFit(fit: 0.86, drop: -0.03, dx: 0.06, rotationDeg: 16),
+      'dog01.bored': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
+      'dog01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
+      'dog01.anxious': AccessoryFit(fit: 0.86, drop: -0.16, dx: 0.0),
+      'cat01.happy': AccessoryFit(fit: 0.8, drop: -0.02, dx: 0.0),
+      'cat01.bored': AccessoryFit(fit: 0.74, drop: -0.02, dx: -0.12),
+      'cat01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
+      'cat01.anxious': AccessoryFit(fit: 0.72, drop: -0.09, dx: -0.06),
+    },
+  ),
+  AccessoryDefinition(
+    id: 'moon_crown',
+    label: 'Moon Crown',
+    slot: AccessorySlot.head,
+    assetPath: 'assets/accessories/head/moon_crown.png',
+    fit: 0.58,
+    drop: -0.04,
+    shadowAt: 0.82,
+    poseFits: {
+      'dog01.happy': AccessoryFit(fit: 0.74, drop: -0.12, dx: -0.04),
+      'dog01.bored': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
+      'dog01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
+      'dog01.anxious': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.07),
+      'cat01.happy': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
+      'cat01.bored': AccessoryFit(fit: 0.72, drop: -0.10, dx: -0.06, rotationDeg: -8),
+      'cat01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
+      'cat01.anxious': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
+    },
+  ),
 ];
