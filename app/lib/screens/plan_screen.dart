@@ -332,9 +332,17 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
                 // 底部要讓出系統導覽列，不然最後一張卡的 Claim 會壓在手勢列底下
                 padding: EdgeInsets.fromLTRB(18, 14, 18, 32 + pad.bottom),
                 children: [
-                  _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
+                  // 有 Journey 時作息跟路合成一張卡（11-19 使用者定）
                   if (widget.journey != null)
-                    JourneySection(controller: widget.journey!, onStart: () => unawaited(_startJourney())),
+                    JourneySection(
+                      controller: widget.journey!,
+                      onStart: () => unawaited(_startJourney()),
+                      bedtime: _bedtime,
+                      wake: wake,
+                      onEditSchedule: _editSchedule,
+                    )
+                  else
+                    _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
                   _habitHeader(today),
                   const SizedBox(height: 10),
                   if (today != null) ..._habitRows(today, wake!),

@@ -4,6 +4,7 @@ import 'package:app/screens/plan_screen.dart';
 import 'package:app/services/alarm.dart';
 import 'package:app/services/journey_service.dart';
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/pet_choice.dart';
 import 'package:app/services/plan_reminders.dart';
 import 'package:app/services/sleep_plan.dart';
 import 'package:app/widgets/journey_section.dart';
@@ -200,7 +201,7 @@ void main() {
 
   group('計畫頁', () {
     Future<(JourneyController, _FakeApi)> pump(WidgetTester tester, JourneyInfo? info,
-        {bool noBackend = false}) async {
+        {bool noBackend = false, bool reduceMotion = false, bool seen = false}) async {
       tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -208,9 +209,14 @@ void main() {
       final plan = PlanStore(kv);
       await plan.load();
       final api = _FakeApi(info);
+      if (seen && info?.journey != null) await kv.setString(kJourneySeenKey, info!.journey!.noticeKey);
       final c = JourneyController(store: kv, api: noBackend ? null : api);
       await c.refresh();
       await tester.pumpWidget(MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         home: PlanScreen(
           plan: plan,
           bedtime: const TimeOfDay(hour: 4, minute: 0),
@@ -233,14 +239,56 @@ void main() {
       expect(find.byKey(const Key('journey-sun-1-on')), findsOneWidget);
       expect(find.byKey(const Key('journey-sun-2-off')), findsOneWidget);
       expect(find.byKey(const Key('journey-here')), findsOneWidget);
-      expect(tester.widget<Text>(find.byKey(const Key('journey-current-bed'))).data, '03:00');
       expect(find.textContaining('on-time mornings'), findsNothing, reason: '少字（使用者 11-19）');
+      expect(find.byKey(const Key('plan-schedule')), findsNothing,
+          reason: '作息跟路合成一張卡，不再另外一張作息條');
       expect(find.byKey(const Key('journey-goal')), findsOneWidget);
       expect(find.byKey(const Key('journey-notice')), findsOneWidget, reason: '剛前進到第 2 站');
       expect(tester.widget<Text>(find.byKey(const Key('plan-bedtime'))).data, '03:00',
           reason: '這一站就是目標');
       expect(tester.widget<Text>(find.byKey(const Key('plan-wake'))).data, '10:00');
       expect(find.textContaining('XP'), findsNothing);
+    });
+
+    testWidgets('點路上的點：冒出那一站的起床時間；再點一次收起來', (tester) async {
+      await pump(tester, _info(_state(idx: 1)));
+      await settle(tester);
+      expect(find.byKey(const Key('journey-bubble')), findsNothing, reason: '點了才顯示');
+      await tester.tapAt(tester.getCenter(find.byKey(const Key('journey-goal'))));
+      await tester.pump();
+      expect(tester.widget<Text>(find.byKey(const Key('journey-bubble-text'))).data, '09:50');
+      await tester.tapAt(tester.getCenter(find.byKey(const Key('journey-road-start'))));
+      await tester.pump();
+      expect(tester.widget<Text>(find.byKey(const Key('journey-bubble-text'))).data, '11:00',
+          reason: '起點寫開始時的起床時間');
+      await tester.tapAt(tester.getCenter(find.byKey(const Key('journey-road-start'))));
+      await tester.pump();
+      expect(find.byKey(const Key('journey-bubble')), findsNothing);
+    });
+
+    testWidgets('剛前進：寵物從上一站走過來；減少動態效果時不走', (tester) async {
+      await pump(tester, _info(_state(idx: 1)));
+      final first = tester.getRect(find.byKey(const Key('journey-here'))).left;
+      await settle(tester);
+      final last = tester.getRect(find.byKey(const Key('journey-here'))).left;
+      expect(last, greaterThan(first + 20), reason: '從第 1 站走到第 2 站');
+
+      await pump(tester, _info(_state(idx: 1)), reduceMotion: true);
+      final a = tester.getRect(find.byKey(const Key('journey-here'))).left;
+      await settle(tester);
+      expect(tester.getRect(find.byKey(const Key('journey-here'))).left, a);
+    });
+
+    testWidgets('看過的那一站不再走；寵物的頭跟著選的小狗或貓', (tester) async {
+      await pump(tester, _info(_state(idx: 1)), seen: true);
+      final a = tester.getRect(find.byKey(const Key('journey-here'))).left;
+      await settle(tester);
+      expect(tester.getRect(find.byKey(const Key('journey-here'))).left, a);
+      expect(find.byKey(const Key('journey-head-dog')), findsOneWidget);
+      PetChoice.current.value = PetSpecies.cat;
+      addTearDown(() => PetChoice.current.value = PetSpecies.dog);
+      await tester.pump();
+      expect(find.byKey(const Key('journey-head-cat')), findsOneWidget);
     });
 
     testWidgets('沒有 Journey：Start a journey；沒有後端寫 Needs the backend', (tester) async {

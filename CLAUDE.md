@@ -489,7 +489,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 #### Journey（2026-11-19 grill，`feature/journey`）：起床一站一站往前移
 
-計畫頁作息條底下（`widgets/journey_section.dart`）。進行中是**一條路**（11-19 使用者給參考圖、要少字）：上面「Stop 2 of 5」＋今晚就寢／起床，中間起點 ━ 🐾 ┄•┄ 🏁，下面三顆太陽＝連續幾天準時；說明與 Stop 收進 ⋯。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
+計畫頁作息條底下（`widgets/journey_section.dart`）。**作息條與 Journey 合成一張卡**（11-19 使用者定）：上半是作息（點了開轉盤），下半進行中是**一條路**（參考圖、少字）：「Stop 2 of 5」，起點 ━ 寵物的頭 ┄•┄ 🏁，**點一個點冒出那一站的起床時間**，下面三顆太陽＝連續幾天準時；說明與 Stop 收進 ⋯；剛前進時寵物沿路走過來一次（減少動態效果不走）。寵物的頭是 `assets/plan/journey_dog.png`／`journey_cat.png`（使用者生成，**側面走路、不帶心情**——心情臉只代表後端心情），缺圖退回 🐾。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
 
 | 規則 | 不遵守的後果 |
 |---|---|

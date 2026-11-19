@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/journey_service.dart';
+import '../services/pet_choice.dart';
 import '../theme/report_style.dart';
 import 'report_sheet.dart';
 import 'sleep_dial.dart' show SleepDial, hhmm, sleepSpan;
@@ -19,222 +20,250 @@ String journeyNoticeText(JourneyState j) => j.status == JourneyStatus.done
     ? 'You reached your goal schedule'
     : 'Next stop from tonight: bed ${hhmm(j.current!.bedtime)} · up ${hhmm(j.current!.wake)}';
 
+/// 寵物在路上走的頭（使用者生成，2026-11-19）。**不是心情臉**：狗頭表情在 App 裡固定代表
+/// 後端判的心情（一週心情列），這裡要的是側面走路、沒有明顯情緒的樣子。缺圖退回 🐾。
+String journeyHeadAsset(PetSpecies s) => s == PetSpecies.cat
+    ? 'assets/plan/journey_cat.png'
+    : 'assets/plan/journey_dog.png';
+
+/// 作息＋Journey 合成一張卡（11-19 使用者定：作息條本來就寫今晚幾點，路直接畫在它下面）。
+///
+///   🌙 03:00   ☀ 10:00               7h ›     ← 點了開轉盤（Journey 進行中是鎖住的）
+///   ─────────────────────────────────────
+///   進行中：Stop 2 of 5                    ⋯
+///          🌅 ━━━ 🐶 ┄┄ • ┄┄ • ┄┄ 🏁       ← 點一個點看那一站幾點起床
+///                 ☀ ☀ ○                    ← 連續幾天準時
+///   沒有：  🚩 Start a journey               ›
 class JourneySection extends StatelessWidget {
   final JourneyController controller;
 
   /// 按 Start a journey（開設定面板）。
   final VoidCallback onStart;
 
+  /// 作息（進行中時就是這一站）。點上半部開轉盤。
+  final TimeOfDay bedtime;
+  final TimeOfDay? wake;
+  final VoidCallback onEditSchedule;
+
   const JourneySection({
     super.key,
     required this.controller,
     required this.onStart,
+    required this.bedtime,
+    required this.wake,
+    required this.onEditSchedule,
   });
 
   @override
   Widget build(BuildContext context) {
     final info = controller.info;
     final j = info?.journey;
-    final noBackend = controller.api == null;
-    return Container(
+    return Material(
       key: const Key('journey-section'),
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xF2262C66),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: ReportColors.border),
+      color: const Color(0xF2262C66),
+      elevation: 6,
+      shadowColor: Colors.black54,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: ReportColors.border),
       ),
-      child: j != null && j.active
-          ? _active(context, j, info!)
-          : _idle(context, j, info, noBackend),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _schedule(),
+          const Divider(height: 1, thickness: 1, color: ReportColors.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 6, 10),
+            child: j != null && j.active ? _active(context, j) : _idle(j, info),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _title(String text, {Widget? trailing}) => Row(
-    children: [
-      const Icon(Icons.route_rounded, color: ReportColors.gold, size: 20),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-      ?trailing,
-    ],
-  );
-
-  Widget _notice(JourneyState j) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Text(
-      journeyNoticeText(j),
-      key: const Key('journey-notice'),
-      style: const TextStyle(
-        color: ReportColors.gold,
-        fontSize: 14,
-        fontWeight: FontWeight.w800,
-      ),
-    ),
-  );
-
-  Widget _idle(
-    BuildContext context,
-    JourneyState? j,
-    JourneyInfo? info,
-    bool noBackend,
-  ) {
-    final step = info?.stepMinutes ?? 30;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _title('Journey'),
-        if (j != null &&
-            j.status == JourneyStatus.done &&
-            controller.showNotice)
-          _notice(j),
-        const SizedBox(height: 6),
-        Text(
-          'Move your wake time earlier, $step minutes at a time. '
-          'Your bedtime moves with it.',
-          style: const TextStyle(
-            color: ReportColors.muted,
-            fontSize: 13,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (noBackend)
-          const Text(
-            'Needs the backend',
-            key: Key('journey-no-backend'),
-            style: TextStyle(
-              color: ReportColors.dim,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          )
-        // 有後端但還沒問到（連不上）：照實說，不要只是一顆灰掉的按鈕（11-19 實機：看不出為什麼按不了）
-        else if (info == null)
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  "Can't reach the backend right now",
-                  key: Key('journey-unreachable'),
-                  style: TextStyle(
-                    color: ReportColors.dim,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              TextButton(
-                key: const Key('journey-retry'),
-                onPressed: () => unawaited(controller.refresh()),
-                child: const Text('Try again'),
-              ),
-            ],
-          )
-        else
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              key: const Key('journey-start'),
-              onPressed: onStart,
-              icon: const Icon(Icons.flag_rounded, size: 18),
-              label: const Text(
-                'Start a journey',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: ReportColors.purple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: const StadiumBorder(),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  /// 進行中（11-19 使用者給參考圖改版：一條路、少字）：
-  ///   上：第幾站 ……… 今晚 🌙 就寢 ☀ 起床  ⋯
-  ///   中：起點 ━━ 🐾 ┄┄•┄┄• 🏁（走過實線、還沒到虛線＋小點）
-  ///   下：三顆太陽＝連續幾天準時（亮的是做到的）
-  /// 說明與 Stop 收進 ⋯。
-  Widget _active(BuildContext context, JourneyState j, JourneyInfo info) {
-    final n = j.stops.length;
-    final cur = j.current!;
-    Widget time(IconData icon, Color color, TimeOfDay t, Key key) => Row(
+  Widget _schedule() {
+    final w = wake;
+    final span = w == null ? null : sleepSpan(bedtime, w);
+    Widget part(IconData icon, Color color, String value, Key key) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 3),
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 6),
         Text(
-          hhmm(t),
+          value,
           key: key,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 22,
             fontWeight: FontWeight.w900,
           ),
         ),
       ],
     );
+    return InkWell(
+      key: const Key('journey-schedule'),
+      onTap: onEditSchedule,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 10, 12),
+        child: Row(
+          children: [
+            part(
+              Icons.bedtime_rounded,
+              ReportColors.gold,
+              hhmm(bedtime),
+              const Key('plan-bedtime'),
+            ),
+            const SizedBox(width: 16),
+            part(
+              Icons.wb_sunny_rounded,
+              ReportColors.gold,
+              w == null ? '—' : hhmm(w),
+              const Key('plan-wake'),
+            ),
+            const Spacer(),
+            // 只寫事實：幾小時。不判斷夠不夠。
+            if (span != null)
+              Text(
+                reportHm(span.inMinutes),
+                style: const TextStyle(
+                  color: ReportColors.muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            const Icon(Icons.chevron_right_rounded, color: ReportColors.accent),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _idle(JourneyState? j, JourneyInfo? info) {
+    final noBackend = controller.api == null;
+    const small = TextStyle(
+      color: ReportColors.dim,
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+    );
+    if (noBackend) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 6),
+        child: Text(
+          'Journey needs the backend',
+          key: Key('journey-no-backend'),
+          style: small,
+        ),
+      );
+    }
+    // 有後端但還沒問到（連不上）：照實說，不要只是一顆灰掉的按鈕
+    if (info == null) {
+      return Row(
+        children: [
+          const Expanded(
+            child: Text(
+              "Can't reach the backend right now",
+              key: Key('journey-unreachable'),
+              style: small,
+            ),
+          ),
+          TextButton(
+            key: const Key('journey-retry'),
+            onPressed: () => unawaited(controller.refresh()),
+            child: const Text('Try again'),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (controller.showNotice)
+        if (j != null &&
+            j.status == JourneyStatus.done &&
+            controller.showNotice)
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: ReportColors.gold.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'New stop from tonight',
-                key: Key('journey-notice'),
-                style: TextStyle(
-                  color: ReportColors.gold,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
+            padding: const EdgeInsets.only(top: 4, bottom: 2),
+            child: Text(
+              journeyNoticeText(j),
+              key: const Key('journey-notice'),
+              style: const TextStyle(
+                color: ReportColors.gold,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
+        InkWell(
+          key: const Key('journey-start'),
+          onTap: onStart,
+          borderRadius: BorderRadius.circular(14),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.flag_rounded, color: ReportColors.gold, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Start a journey',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: ReportColors.accent),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _active(BuildContext context, JourneyState j) {
+    final n = j.stops.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Row(
           children: [
+            const Icon(
+              Icons.route_rounded,
+              size: 16,
+              color: ReportColors.faint,
+            ),
+            const SizedBox(width: 6),
             Text(
               'Stop ${j.stopIndex + 1} of $n',
               key: const Key('journey-title'),
               style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+                color: ReportColors.soft,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
             ),
+            if (controller.showNotice) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ReportColors.gold.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'New stop',
+                  key: Key('journey-notice'),
+                  style: TextStyle(
+                    color: ReportColors.gold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
             const Spacer(),
-            time(
-              Icons.bedtime_rounded,
-              ReportColors.lilac,
-              cur.bedtime,
-              const Key('journey-current-bed'),
-            ),
-            const SizedBox(width: 10),
-            time(
-              Icons.wb_sunny_rounded,
-              ReportColors.gold,
-              cur.wake,
-              const Key('journey-current-wake'),
-            ),
             PopupMenuButton<String>(
               key: const Key('journey-menu'),
               icon: const Icon(
@@ -268,8 +297,14 @@ class JourneySection extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        _JourneyRoad(journey: j),
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: JourneyRoad(
+            journey: j,
+            // 剛前進、還沒看過：🐾 從上一站走過來（一次）
+            walkFromPrevious: controller.showNotice && j.stopIndex > 0,
+          ),
+        ),
         const SizedBox(height: 8),
         Center(
           child: Semantics(
@@ -316,6 +351,7 @@ class JourneySection extends StatelessWidget {
             'Get up within an hour of ${hhmm(j.current!.wake)} for '
             '${j.onTimeNeeded} mornings in a row and the next stop starts. '
             'A missed morning starts the count again. '
+            'Tap a dot on the road to see its wake time. '
             'Your goal: up at ${hhmm(j.endWake)}.',
             key: const Key('journey-how-text'),
             style: const TextStyle(color: ReportColors.muted, height: 1.4),
@@ -367,92 +403,196 @@ class JourneySection extends StatelessWidget {
   }
 }
 
-/// 一條路（照使用者給的參考圖）：左邊起點、🐾＝這一站、右邊 🏁＝終點。
-/// 走過的那段實線，還沒走的虛線，中間每一站一個小點。位置只照抄 stop_index／stops 的個數。
-class _JourneyRoad extends StatelessWidget {
+/// 一條路（照使用者給的參考圖）：左邊 🌅 起點、寵物＝這一站、右邊 🏁 終點。
+/// 走過的實線、還沒走的虛線，每一站一個小點；**點一個點（含兩端）在上面冒出那一站的起床時間**，
+/// 再點一次或點別處收起來。位置只照抄 stop_index 與 stops 的個數。
+///
+/// [walkFromPrevious]：剛前進一站時，寵物從上一站沿著路走過來（一次，約 1.2 秒）；
+/// 系統開「減少動態效果」時直接在這一站、不走。
+class JourneyRoad extends StatefulWidget {
   final JourneyState journey;
-  const _JourneyRoad({required this.journey});
+  final bool walkFromPrevious;
+  const JourneyRoad({
+    super.key,
+    required this.journey,
+    this.walkFromPrevious = false,
+  });
 
+  @override
+  State<JourneyRoad> createState() => _JourneyRoadState();
+}
+
+class _JourneyRoadState extends State<JourneyRoad>
+    with SingleTickerProviderStateMixin {
   static const double _end = 30; // 兩端圓的直徑
-  static const double _marker = 36;
+  static const double _marker = 40;
+  static const double _height = 46;
+
+  late final AnimationController _walk = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+  int? _selected; // -1＝起點，0..n-1＝第幾站
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (widget.walkFromPrevious && !MediaQuery.disableAnimationsOf(context)) {
+      _walk.forward(from: 0);
+    } else {
+      _walk.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _walk.dispose();
+    super.dispose();
+  }
+
+  TimeOfDay _wakeAt(int i) =>
+      i < 0 ? widget.journey.startWake : widget.journey.stops[i].wake;
 
   @override
   Widget build(BuildContext context) {
-    final j = journey;
+    final j = widget.journey;
     final n = j.stops.length;
-    // 起點在 0、第 i 站在 (i+1)/n、最後一站＝終點在 1
-    final here = n == 0 ? 0.0 : (j.stopIndex + 1) / n;
-    final atGoal = j.stopIndex >= n - 1;
+    double frac(int i) => n == 0 ? 0 : (i + 1) / n; // 起點 i=-1 → 0；最後一站 → 1
     return SizedBox(
-      height: _marker + 4,
+      height: _height,
       child: LayoutBuilder(
         builder: (context, box) {
           final left = _end / 2, right = box.maxWidth - _end / 2;
-          double x(double f) => left + (right - left) * f;
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _RoadPainter(
-                    from: left,
-                    to: right,
-                    here: x(here),
-                    dots: [
-                      for (var i = j.stopIndex + 1; i < n - 1; i++)
-                        x((i + 1) / n),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                top: (_marker + 4 - _end) / 2,
-                child: _circle(
-                  _end,
-                  ReportColors.lilac.withValues(alpha: 0.25),
-                  ReportColors.lilac,
-                  const Icon(
-                    Icons.wb_twilight_rounded,
-                    size: 16,
-                    color: ReportColors.lilac,
-                  ),
-                  const Key('journey-road-start'),
-                ),
-              ),
-              if (!atGoal)
-                Positioned(
-                  left: right - _end / 2,
-                  top: (_marker + 4 - _end) / 2,
-                  child: _circle(
-                    _end,
-                    ReportColors.gold.withValues(alpha: 0.18),
-                    ReportColors.gold,
-                    const Icon(
-                      Icons.flag_rounded,
-                      size: 16,
-                      color: ReportColors.gold,
+          double x(int i) => left + (right - left) * frac(i);
+          final cy = _height / 2;
+
+          void tapAt(Offset p) {
+            int? best;
+            var bestD = 22.0;
+            for (var i = -1; i < n; i++) {
+              final d = (p.dx - x(i)).abs();
+              if (d < bestD) {
+                bestD = d;
+                best = i;
+              }
+            }
+            setState(
+              () =>
+                  _selected = (best == null || best == _selected) ? null : best,
+            );
+          }
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (d) => tapAt(d.localPosition),
+            child: AnimatedBuilder(
+              animation: _walk,
+              builder: (context, _) {
+                final t = Curves.easeInOut.transform(_walk.value);
+                final from = widget.walkFromPrevious
+                    ? x(j.stopIndex - 1)
+                    : x(j.stopIndex);
+                final hereX = from + (x(j.stopIndex) - from) * t;
+                // 走的時候上下輕輕晃（像在走路），停下來就不晃
+                final bob = _walk.isAnimating
+                    ? (1 - (2 * ((t * 6) % 1) - 1).abs()) * 4
+                    : 0.0;
+                final atGoal = j.stopIndex >= n - 1 && !_walk.isAnimating;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _RoadPainter(
+                          from: left,
+                          to: right,
+                          here: hereX,
+                          dots: [
+                            for (var i = j.stopIndex + 1; i < n - 1; i++) x(i),
+                          ],
+                        ),
+                      ),
                     ),
-                    const Key('journey-goal'),
-                  ),
-                ),
-              Positioned(
-                left: x(here) - _marker / 2,
-                top: 2,
-                child: _circle(
-                  _marker,
-                  ReportColors.gold,
-                  Colors.white,
-                  const Icon(
-                    Icons.pets_rounded,
-                    size: 20,
-                    color: ReportColors.navy,
-                  ),
-                  const Key('journey-here'),
-                  glow: true,
-                ),
-              ),
-            ],
+                    Positioned(
+                      left: 0,
+                      top: cy - _end / 2,
+                      child: _circle(
+                        _end,
+                        ReportColors.lilac.withValues(alpha: 0.25),
+                        ReportColors.lilac,
+                        const Icon(
+                          Icons.wb_twilight_rounded,
+                          size: 16,
+                          color: ReportColors.lilac,
+                        ),
+                        const Key('journey-road-start'),
+                      ),
+                    ),
+                    if (!atGoal)
+                      Positioned(
+                        left: right - _end / 2,
+                        top: cy - _end / 2,
+                        child: _circle(
+                          _end,
+                          ReportColors.gold.withValues(alpha: 0.18),
+                          ReportColors.gold,
+                          const Icon(
+                            Icons.flag_rounded,
+                            size: 16,
+                            color: ReportColors.gold,
+                          ),
+                          const Key('journey-goal'),
+                        ),
+                      ),
+                    Positioned(
+                      key: const Key('journey-here'),
+                      left: hereX - _marker / 2,
+                      top: cy - _marker / 2 - bob,
+                      child: const _PetHead(size: _marker),
+                    ),
+                    if (_selected != null)
+                      Positioned(
+                        left: x(_selected!) - 30,
+                        width: 60,
+                        top: -30,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: Container(
+                              key: const Key('journey-bubble'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black38,
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                hhmm(_wakeAt(_selected!)),
+                                key: const Key('journey-bubble-text'),
+                                style: const TextStyle(
+                                  color: ReportColors.navy,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           );
         },
       ),
@@ -464,9 +604,8 @@ class _JourneyRoad extends StatelessWidget {
     Color fill,
     Color border,
     Widget child,
-    Key key, {
-    bool glow = false,
-  }) => Container(
+    Key key,
+  ) => Container(
     key: key,
     width: size,
     height: size,
@@ -474,11 +613,43 @@ class _JourneyRoad extends StatelessWidget {
       shape: BoxShape.circle,
       color: fill,
       border: Border.all(color: border, width: 2),
-      boxShadow: glow
-          ? const [BoxShadow(color: Color(0x88FFD772), blurRadius: 12)]
-          : null,
     ),
     child: Center(child: child),
+  );
+}
+
+/// 自己選的寵物（小狗／貓）的頭；缺圖時是金色圓圈＋🐾。
+class _PetHead extends StatelessWidget {
+  final double size;
+  const _PetHead({required this.size});
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<PetSpecies>(
+    valueListenable: PetChoice.current,
+    builder: (context, species, _) => SizedBox(
+      width: size,
+      height: size,
+      child: Image.asset(
+        journeyHeadAsset(species),
+        key: Key('journey-head-${species.name}'),
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: ReportColors.gold,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(color: Color(0x88FFD772), blurRadius: 12),
+            ],
+          ),
+          child: const Icon(
+            Icons.pets_rounded,
+            size: 20,
+            color: ReportColors.navy,
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -509,7 +680,7 @@ class _RoadPainter extends CustomPainter {
     }
     final dot = Paint()..color = const Color(0xCCFFFFFF);
     for (final d in dots) {
-      canvas.drawCircle(Offset(d, y), 4, dot);
+      if (d > here + 6) canvas.drawCircle(Offset(d, y), 4, dot);
     }
   }
 
