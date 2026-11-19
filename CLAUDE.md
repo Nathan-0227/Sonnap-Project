@@ -1582,6 +1582,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   睡眠階段由 `demo_sleep.night_segments()` 排（固定種子、決定性），**分數交給既有評分器**
   （`healthconnect_adapter.to_wearable_row`），不是手寫的數字；`/home` 要畫階梯圖時用存下來的分鐘數再排一次，
   得到同一份（`test_demo_accounts.py`【6】守著）。成果展前一天重跑 `--create`，日期才會是最新的。
+  ⚠️ 好友頁的即時狀態（Mia 睡著、Leo 起床了）**以執行當下為準**，Asleep 14 小時、Up 到 18:00 就失效 → **展示前幾分鐘跑 `--live`**（只重設即時狀態，不重建）。Yuki／Ken 刻意沒有紀錄，狀態看時鐘（白天兩個都是 Awake，Past bedtime 只在他們目標後 6 小時內出現）。
 - **`export_teammate.py`（2026-11-19 新增）— 給隊友在她自己電腦上跑後端用的資料庫副本。**
   手機帳號＋它的好友整份複製成一個 SQLite 檔（連片段），**每個帳號都換新 id**：
   user_id 是憑證，而且 App 沒有唯讀模式，用你的 id 的話她手機一打開就會把她的資料整列蓋進你的夜晚。

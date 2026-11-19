@@ -7,6 +7,7 @@ demo_accounts.py —— 成果展用的示範帳號。
     python demo_accounts.py --create          # 建立（已存在就先刪掉重建）
     python demo_accounts.py --status          # 看現在有哪些示範帳號
     python demo_accounts.py --remove          # 全部刪掉（好友關係一起消失）
+    python demo_accounts.py --live            # 只重設好友頁的即時狀態（demo 前幾分鐘跑）
 
 要寫進 MariaDB 就先設 SONNAP_DB_URL（跟啟動後端同一個），否則寫進 SQLite。
 腳本一開始會印出它寫的是哪一個。
@@ -30,6 +31,10 @@ demo_accounts.py —— 成果展用的示範帳號。
    - friend_visits（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪手機帳號一次，
      成果展上自己的卡才看得到「🐾 2 paws · See who」。**這是唯一寫進本人帳號的示範資料**：
      送的人是示範帳號，刪示範帳號時 CASCADE 一起刪，--remove 之後本人一筆都不剩
+   - live_sleep_status（2026-11-19 使用者同意）：好友頁的即時狀態，**以執行當下為準**——
+     Mia 睡了 1 小時 32 分、Leo 40 分鐘前起床（18:00 以後或剛過午夜改成 25 分鐘前睡著）、
+     Yuki／Ken 沒有紀錄（狀態看時鐘：過了他們的目標就是 past_bedtime，不然是 awake）。
+     ⚠️ Asleep 14 小時後自己失效、Up 到 18:00 為止，所以**展示前幾分鐘跑一次 --live**
 ⚠️ 假的生理資料有被誤算進統計的風險，所以：source 一律 "demo"、帳號一律 DEMO_COHORT；
    評分與匯入只認 source = "garmin"（migrate_garmin_to_db 的 _garmin_windows 等）。
 
@@ -46,6 +51,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import db
 import db_backend
 import demo_sleep
+from social import live_status
 from social import sharing as social_sharing
 from behavior import adherence
 from behavior.sleep_efficiency import evaluate_efficiency
@@ -271,6 +277,38 @@ def write_day(uid, day, p, rng, db_path=None):
 DEMO_PAWS = {"Mia (demo)": "pet", "Leo (demo)": "sleep_well"}
 
 
+# 好友頁即時狀態的劇本（Yuki、Ken 刻意沒有：他們的狀態看時鐘，現場才看得到 Still up 的兩種）
+DEMO_LIVE = {"Mia (demo)": "asleep", "Leo (demo)": "up"}
+
+
+def set_live_demo(now=None, db_path=None):
+    """
+    依 DEMO_LIVE 重設示範帳號的即時狀態（以 now 為準），回傳 {暱稱: 實際會顯示的狀態}。
+    ⚠️ 只動示範帳號的 live_sleep_status；不碰本人、不碰任何一晚的資料。
+    """
+    now = (now or datetime.now(TZ)).replace(tzinfo=None, microsecond=0)
+    out = {}
+    for uid, name in demo_users(db_path):
+        db.clear_live_sleep_status(uid, db_path=db_path)
+        plan = DEMO_LIVE.get(name)
+        if plan == "up":
+            ended = now - timedelta(minutes=40)
+            if ended.date() == now.date() and now.hour < live_status.UP_UNTIL_HOUR:
+                db.set_live_sleep_status(uid, started_at=(ended - timedelta(hours=7, minutes=20)).isoformat(),
+                                         db_path=db_path)
+                db.set_live_sleep_status(uid, ended_at=ended.isoformat(), db_path=db_path)
+            else:
+                plan = "asleep_recent"  # 18:00 以後「起床了」不成立 → 改成剛睡著
+        if plan == "asleep":
+            db.set_live_sleep_status(uid, started_at=(now - timedelta(minutes=92)).isoformat(), db_path=db_path)
+        elif plan == "asleep_recent":
+            db.set_live_sleep_status(uid, started_at=(now - timedelta(minutes=25)).isoformat(), db_path=db_path)
+        user = db.get_user(uid, db_path=db_path)
+        out[name] = live_status.live_state(db.get_live_sleep_status(uid, db_path=db_path),
+                                           user.get("target_bedtime"), now)["state"]
+    return out
+
+
 def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
                friend_of=None, db_path=None):
     """
@@ -338,7 +376,9 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
             if kind:
                 db.add_friend_visit(r["uid"], friend_of, end.isoformat(), kind, keep_since, db_path=db_path)
                 r["pawed"] = kind
+    live = set_live_demo(db_path=db_path)
     for r in summary:
+        r["live"] = live.get(r["name"])
         r.pop("uid")  # 不讓 user_id 流到會印出來的地方
     return summary
 
@@ -349,6 +389,7 @@ def main():
     g.add_argument("--create", action="store_true")
     g.add_argument("--status", action="store_true")
     g.add_argument("--remove", action="store_true")
+    g.add_argument("--live", action="store_true", help="只重設好友頁的即時狀態（以現在為準）")
     ap.add_argument("--nights", type=int, default=DEFAULT_NIGHTS)
     ap.add_argument("--end", type=date.fromisoformat, default=None,
                     help="最後一晚的起床日，預設今天（成果展前一天重跑一次，日期就會是最新的）")
@@ -361,6 +402,14 @@ def main():
         print(f"已刪除 {remove_all()} 個示範帳號。")
         return
 
+    if args.live:
+        live = set_live_demo()
+        if not live:
+            print("沒有示範帳號，先跑 --create。")
+        for name, state in live.items():
+            print(f"  {name:<12} {state}")
+        return
+
     if args.status:
         users = demo_users()
         print(f"示範帳號 {len(users)} 個：{', '.join(n for _, n in users) or '（無）'}")
@@ -371,7 +420,7 @@ def main():
         print("⚠️ 找不到手機帳號（resolve_phone_account 分不出來），沒有加好友。")
     for r in rows:
         print(f"  {r['name']:<12} 目標 {r['target']}  行為 {r['nights']:>2} 晚、手錶 {r['watch_nights']:>2} 晚、"
-              f"熬夜 {r['late']:>2} 晚  邀請碼 {r['code']}" + (f"  🐾 給你（{r['pawed']}）" if r.get("pawed") else ""))
+              f"熬夜 {r['late']:>2} 晚  現在 {r.get('live')}  邀請碼 {r['code']}" + (f"  🐾 給你（{r['pawed']}）" if r.get("pawed") else ""))
     print("🔴 這些是示範資料，不是受測者。畫面上出現時要標 Demo accounts。")
 
 
