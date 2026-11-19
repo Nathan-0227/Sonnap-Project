@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../services/friends_service.dart';
 import 'friend_night_card.dart'
-    show friendCheckIn, friendStagesStrip, openFriendNight;
+    show friendCheckIn, friendStagesStrip, friendTile, openFriendNight;
 import 'last_night_art.dart';
 import 'steps_sheet.dart' show StepsArc, stepsFraction;
 import 'home_pet.dart';
+import '../services/morning_rating.dart' show restedFaceAsset;
 import 'report_tiles.dart';
 import '../theme/report_style.dart';
 import 'streak_card.dart' show StreakWeekRow, speciesOf;
@@ -823,7 +824,7 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                if (tiles.isEmpty)
+                if (tiles.isEmpty && p.card?.items['camera_moves'] == null)
                   const Text(
                     'Nothing to show for last night.',
                     key: Key('town-sheet-empty'),
@@ -833,14 +834,17 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
                   // 攝影機那格（光柱）跟早晨報告一樣獨佔最後一整列：放半格太窄
                   reportTileGrid([
                     for (final t in tiles)
-                      if (t.$1 != 'camera_moves')
-                        townCheckInTile(t, p.card?.items ?? const {}),
+                      townCheckInTile(t, p.card?.items ?? const {}),
                   ]),
-                for (final t in tiles)
-                  if (t.$1 == 'camera_moves') ...[
-                    const SizedBox(height: 12),
-                    townCheckInTile(t, p.card?.items ?? const {}),
-                  ],
+                // Movement 一定放（2026-11-19 使用者定），固定獨佔最下面一整列（同早晨報告）
+                if (friendTile('camera_moves', p.card?.items['camera_moves'])
+                    case (final icon, final value, final label)) ...[
+                  if (tiles.isNotEmpty) const SizedBox(height: 12),
+                  townCheckInTile(
+                    ('camera_moves', icon, value, label),
+                    p.card?.items ?? const {},
+                  ),
+                ],
                 if (p.card != null)
                   Align(
                     alignment: Alignment.centerLeft,
@@ -1001,21 +1005,24 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
 
   Widget _visitButtons() => Column(
     mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final (i, (key, label)) in widget.kinds.indexed)
-            _chip(key, label, primary: i == 0),
+            _visitButton(key, label, primary: i == 0),
         ],
       ),
       if (_sent != null) ...[
         const SizedBox(height: 8),
-        const Text(
+        Text(
+          '${widget.kinds.where((k) => k.$1 == _sent).firstOrNull?.$2 ?? _sent} sent · '
           'You can visit again tomorrow.',
-          style: TextStyle(color: _dim, fontSize: 13),
+          key: const Key('town-sheet-sent'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _dim, fontSize: 13),
         ),
       ],
       if (_error != null) ...[
@@ -1060,32 +1067,63 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
     ],
   );
 
-  Widget _chip(String key, String label, {required bool primary}) {
+  /// 按鈕上的字照抄後端（"Good night 🌙"）：最後一段不是字母就當成圓圈裡的符號、前面當名字；
+  /// 沒有符號就用第一個字。
+  static (String, String) _split(String label) {
+    final parts = label.trim().split(RegExp(r'\s+'));
+    if (parts.length > 1 && !RegExp(r'[A-Za-z0-9]').hasMatch(parts.last)) {
+      return (parts.last, parts.sublist(0, parts.length - 1).join(' '));
+    }
+    return (label.isEmpty ? '?' : label.characters.first, label);
+  }
+
+  Widget _visitButton(String key, String label, {required bool primary}) {
     final sentThis = _sent == key;
     final disabled = _busy || _sent != null;
-    return Material(
-      color: sentThis
-          ? const Color(0x22FFFFFF)
-          : disabled
-          ? const Color(0x14FFFFFF)
-          : primary
-          ? const Color(0xFF7B61FF)
-          : const Color(0xFF2A3570),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        key: Key('town-visit-$key'),
-        borderRadius: BorderRadius.circular(18),
-        onTap: disabled ? null : () => _send(key),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Text(
-            sentThis ? '$label · Sent ✓' : label,
-            style: TextStyle(
-              color: disabled && !sentThis
-                  ? const Color(0x66FFFFFF)
-                  : Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+    final (symbol, name) = _split(label);
+    return Expanded(
+      child: Opacity(
+        opacity: disabled && !sentThis ? 0.4 : 1,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: GestureDetector(
+            key: Key('town-visit-$key'),
+            behavior: HitTestBehavior.opaque,
+            onTap: disabled ? null : () => _send(key),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: sentThis
+                        ? const Color(0x33FFD27A)
+                        : primary
+                        ? const Color(0xFF7B61FF)
+                        : const Color(0xFF2A3570),
+                    border: Border.all(
+                      color: sentThis ? kTownGold : const Color(0x33FFFFFF),
+                      width: sentThis ? 2 : 1,
+                    ),
+                  ),
+                  child: Text(symbol, style: const TextStyle(fontSize: 22)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: sentThis ? kTownGold : const Color(0xDDFFFFFF),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1094,36 +1132,42 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
   }
 }
 
-/// 面板裡的一格：照早晨報告的格子（2026-11-19 使用者定）——每一項自己的顏色、
-/// 左上圖示＋名稱、大數字，底下的小圖跟報告同一套。**小圖只畫他有分享的資料**：
-/// - Total sleep：他有分享 Sleep stages 才畫那條階梯（睡眠目標只存在他手機上，後端沒有，
+/// 面板裡的一格（2026-11-19 使用者定第二版：「有些塞太滿、有些空太多」）。
+/// 照早晨報告 Last night 的格子：**每格一樣高、圖鋪滿整格**（ReportArtTile），
+/// 標題左上、數字疊在左下；圓環與步數圓弧的數字在圖的正中間。
+/// 沒有圖的格子右上放一個淡淡的大圖示，跟有圖的格子空間感一致。
+/// **圖只畫他有分享的資料**：
+/// - Total sleep：他有分享 Sleep stages 才畫階梯（睡眠目標只存在他手機上，後端沒有，
 ///   所以不畫報告那條「睡了多久÷目標」的極光）
 /// - Phone down：他也分享了目標時間才畫半圓鐘（不然「目標」那一點是編的）
-/// - Score、Efficiency：圓環
-/// - Steps：圓弧＝步數÷那天 Garmin 的目標，超過就滿、不變色，只寫 Goal
-/// - Sleeping HR：整晚那條慢線（同一個開關，後端本來就給）
-/// - Movement：他有分享 Movement through the night 才畫光柱；時間軸要知道幾點睡著，
-///   他選了「只寫準時與否」（沒有時刻）就不畫，不然底下的鐘點是編的
+/// - Score、Efficiency：大圓環
+/// - Steps：大圓弧＝步數÷那天 Garmin 的目標，超過就滿、不變色，只寫 Goal
+/// - Sleeping HR：整晚那條慢線
+/// - Movement：他有分享 Movement through the night 才畫光柱；他選了「只寫準時與否」
+///   （沒有時刻）就不畫，不然底下的鐘點是編的
 /// 不判斷好壞、不變色。
+const kTownTileHeight = 170.0;
+
 Widget townCheckInTile(
   (String, IconData, String, String) tile,
   Map<String, dynamic> items,
 ) {
   final (key, icon, value, label) = tile;
   final (title, color, unit) = switch (key) {
-    'sleep_duration' => ('Total sleep', const Color(0xFFB9A6FF), null),
+    'sleep_duration' => ('Total sleep', const Color(0xFFB9A6FF), 'asleep'),
     'phone_down_time' => ('Phone down', const Color(0xFF6FE3D0), null),
     'score' => ('Score', const Color(0xFFFFD27A), null),
     'camera_moves' => ('Movement', const Color(0xFFFFD96A), 'moves / hour'),
     'steps' => ('Steps', const Color(0xFFFFB37A), null),
     'sleeping_hr' => ('Sleeping HR', const Color(0xFF8C9BFF), 'bpm'),
     'awake' => ('Awake', const Color(0xFFFFC27A), label),
+    'morning_rating' => ('Felt', const Color(0xFFFF9EC7), 'this morning'),
     'efficiency' => ('Efficiency', const Color(0xFF7EC8FF), null),
-    'time_in_bed' => ('Time in bed', const Color(0xFF8FA8FF), null),
+    'time_in_bed' => ('Time in bed', const Color(0xFF8FA8FF), 'in bed'),
     'fell_asleep' => ('Fell asleep', const Color(0xFFB9A6FF), 'to fall asleep'),
     'stress' => ('Stress', const Color(0xFFA996FF), 'high stress'),
     'resting_hr' => ('Resting HR', const Color(0xFFFF8AB8), 'bpm'),
-    'active_time' => ('Active', const Color(0xFFFFD96A), null),
+    'active_time' => ('Active', const Color(0xFFFFD96A), 'active'),
     'calories' => ('Calories', const Color(0xFFFF8A6B), 'active kcal'),
     _ => (
       label.isEmpty ? label : label[0].toUpperCase() + label.substring(1),
@@ -1131,15 +1175,7 @@ Widget townCheckInTile(
       null,
     ),
   };
-  Widget? graphic;
   double? n(dynamic v) => v is num ? v.toDouble() : null;
-  int? nightMinute(dynamic v) {
-    if (v is! String) return null;
-    final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(v);
-    if (m == null) return null;
-    return ((int.parse(m[1]!) * 60 + int.parse(m[2]!)) - 18 * 60) % 1440;
-  }
-
   Map<String, dynamic> m(String k) =>
       items[k] is Map ? (items[k] as Map).cast<String, dynamic>() : const {};
   List<(double, double)> offsets(dynamic pts) => [
@@ -1147,19 +1183,119 @@ Widget townCheckInTile(
       if (p is Map && n(p['m']) != null && n(p['v']) != null)
         (n(p['m'])!, n(p['v'])!),
   ];
-  var graphicHeight = 52.0;
+  int? nightMinute(dynamic v) {
+    if (v is! String) return null;
+    final hm = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(v);
+    if (hm == null) return null;
+    return ((int.parse(hm[1]!) * 60 + int.parse(hm[2]!)) - 18 * 60) % 1440;
+  }
+
+  // 圖放在標題與數字中間那塊（上 36、下 [bottom]），左右留一點邊
+  Widget middle(Widget child, {double bottom = 58, double side = 14}) =>
+      Padding(
+        padding: EdgeInsets.fromLTRB(side, 38, side, bottom),
+        child: child,
+      );
+
+  Widget? art;
+  Widget text = key == 'camera_moves'
+      // 攝影機動作只呈現：驗證過跟睡眠好壞沒有相關，寫明不進分數，免得被讀成睡得不好
+      ? ReportArtText(
+          value: value,
+          line: unit,
+          extra: const [Text('Camera · not part of the score')],
+        )
+      : ReportArtText(value: value, line: unit);
+  var height = kTownTileHeight;
+  var centerText = false;
+
   switch (key) {
     case 'sleep_duration':
-      graphic = friendStagesStrip(items, height: 40);
-      graphicHeight = 40;
+      final strip = friendStagesStrip(items, height: 64);
+      if (strip != null) art = middle(Center(child: strip));
+    case 'phone_down_time':
+      final actual = nightMinute(items['phone_down_time']);
+      final target = nightMinute(items['target_bedtime']);
+      if (actual != null && target != null) {
+        art = middle(
+          paintBox(ClockArcPainter(target.toDouble(), actual.toDouble(), color)),
+          side: 20,
+        );
+        text = ReportArtText(value: value, line: 'target ${items['target_bedtime']}');
+      }
+    case 'score' || 'efficiency':
+      final v = key == 'score'
+          ? n(m('score')['score'])
+          : n(m('efficiency')['value']);
+      if (v != null) {
+        art = Padding(
+          padding: const EdgeInsets.fromLTRB(14, 36, 14, 14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              paintBox(RingPainter(v, color)),
+              Center(
+                child: Text(
+                  value,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        text = const SizedBox.shrink();
+      }
+    case 'steps':
+      final st = n(m('steps')['steps']);
+      final goal = n(m('steps')['goal']);
+      if (st != null) {
+        art = Padding(
+          padding: EdgeInsets.fromLTRB(14, 34, 14, goal != null ? 26 : 12),
+          child: StepsArc(
+            steps: st.round(),
+            fraction: stepsFraction(st.round(), goal?.round()),
+            color: color,
+            numberSize: 20,
+          ),
+        );
+        text = goal == null
+            ? const SizedBox.shrink()
+            : ReportArtText(value: null, line: 'Goal ${_comma(goal.round())}', center: true);
+        centerText = true;
+      }
+    case 'morning_rating':
+      // 他早上選的那張臉（跟起床自評卡同一組圖，2026-11-19 使用者要求）；讀不到圖退回淡的圖示
+      final r = n(m('morning_rating')['rested'])?.round();
+      if (r != null && r >= 1 && r <= 5) {
+        art = Align(
+          alignment: const Alignment(0.82, -0.45),
+          child: Image.asset(
+            restedFaceAsset(r),
+            key: Key('town-sheet-felt-$r'),
+            width: 78,
+            height: 78,
+            errorBuilder: (_, _, _) =>
+                Icon(icon, size: 74, color: color.withValues(alpha: 0.16)),
+          ),
+        );
+      }
     case 'sleeping_hr':
       final pts = offsets(m('sleeping_hr')['curve']);
       if (pts.length >= 2) {
         final last = pts.last.$1;
-        graphic = paintBox(
-          SleepHrWavePainter([for (final (x, v) in pts) (last > 0 ? x / last : 0, v)], color),
+        art = middle(
+          paintBox(
+            SleepHrWavePainter([
+              for (final (x, v) in pts) (last > 0 ? x / last : 0, v),
+            ], color),
+          ),
+          side: 0,
         );
-        graphicHeight = 64;
       }
     case 'camera_moves':
       final pts = offsets(m('camera_timeline')['points']);
@@ -1169,53 +1305,29 @@ Widget townCheckInTile(
           : null;
       if (pts.isNotEmpty && hm != null) {
         final t0 = DateTime(2000, 1, 1, int.parse(hm[1]!), int.parse(hm[2]!));
-        graphic = paintBox(
+        art = lastNightArt(
           CameraBarsPainter([
             for (final (min, v) in pts)
               (t0.add(Duration(seconds: (min * 60).round())), v),
           ]),
         );
-        graphicHeight = 110;
-      }
-    case 'steps':
-      final st = n(m('steps')['steps']);
-      if (st != null) {
-        graphic = StepsArc(
-          steps: st.round(),
-          fraction: stepsFraction(st.round(), n(m('steps')['goal'])?.round()),
-          color: color,
-        );
-        graphicHeight = 118;
-      }
-    case 'score':
-      final sc = n((items['score'] as Map?)?['score']);
-      if (sc != null) graphic = paintBox(RingPainter(sc, color));
-    case 'efficiency':
-      final e = n((items['efficiency'] as Map?)?['value']);
-      if (e != null) graphic = paintBox(RingPainter(e, color));
-    case 'phone_down_time':
-      final actual = nightMinute(items['phone_down_time']);
-      final target = nightMinute(items['target_bedtime']);
-      if (actual != null && target != null) {
-        graphic = paintBox(
-          ClockArcPainter(target.toDouble(), actual.toDouble(), color),
-        );
+        height = 200;
       }
   }
-  return ReportTile(
+  // 沒有圖：右上角一個淡淡的大圖示，跟有圖的格子空間感一致
+  art ??= Align(
+    alignment: const Alignment(0.85, -0.05),
+    child: Icon(icon, size: 74, color: color.withValues(alpha: 0.16)),
+  );
+  return ReportArtTile(
     key: Key('town-sheet-tile-$key'),
     icon: icon,
     color: color,
     title: title,
-    // 步數的數字已經在圓弧中間，大字不再寫一次（同早晨報告）
-    value: key == 'steps' && graphic != null ? null : value,
-    graphic: graphic,
-    graphicHeight: graphicHeight,
-    lines: [
-      if (unit != null) Text(unit),
-      if (key == 'steps' && n(m('steps')['goal']) != null)
-        Text('Goal ${_comma(n(m('steps')['goal'])!.round())}'),
-    ],
+    art: art,
+    text: text,
+    height: height,
+    centerText: centerText,
   );
 }
 

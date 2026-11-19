@@ -15,6 +15,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
+import 'package:app/widgets/friend_night_card.dart' show friendCheckIn;
+import 'package:app/services/morning_rating.dart' show restedFaceAsset;
 import 'package:app/widgets/friends_town.dart';
 import 'package:app/widgets/home_pet.dart';
 import 'package:app/widgets/last_night_art.dart';
@@ -309,8 +311,8 @@ void main() {
     await tester.tap(find.byKey(const Key('town-visit-pet')));
     await settle(tester);
     expect(stub.visitCalls, [('EAR111', 'pet')]);
-    expect(find.text('Pet 🐾 · Sent ✓'), findsOneWidget);
-    expect(find.text('You can visit again tomorrow.'), findsOneWidget);
+    // 11-19 起按鈕是一排圓圈：送過的那一顆變金色，下面一行照抄後端的字＋sent
+    expect(find.text('Pet 🐾 sent · You can visit again tomorrow.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('town-visit-good_night')));
     await settle(tester);
     expect(stub.visitCalls, hasLength(1));
@@ -333,7 +335,7 @@ void main() {
     );
     await pump(tester, stub);
     await tapTownie(tester, 'EAR111');
-    expect(find.text('Sleep well 💤 · Sent ✓'), findsOneWidget);
+    expect(find.text('Sleep well 💤 sent · You can visit again tomorrow.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('town-visit-pet')));
     await settle(tester);
     expect(stub.visitCalls, isEmpty);
@@ -351,7 +353,7 @@ void main() {
     await tester.tap(find.byKey(const Key('town-visit-proud')));
     await settle(tester);
     expect(find.text('ALREADY-FROM-BACKEND'), findsOneWidget);
-    expect(find.textContaining('Sent ✓'), findsNothing);
+    expect(find.byKey(const Key('town-sheet-sent')), findsNothing);
   });
 
   testWidgets('【5】小卡：心情只有分享才有；準時才有 ✨；有卡才有 See last night', (tester) async {
@@ -466,9 +468,18 @@ void main() {
       await settle(tester);
       await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -900));
       await settle(tester);
-      for (final k in ['sleep_duration', 'phone_down_time', 'score', 'steps', 'sleeping_hr', 'camera_moves']) {
+      // 上面 4 格照順序補位（他沒分享起床自評 → Steps 補上），Movement 一定在最下面
+      for (final k in ['sleep_duration', 'phone_down_time', 'score', 'steps', 'camera_moves']) {
         expect(find.byKey(Key('town-sheet-tile-$k'), skipOffstage: false), findsOneWidget, reason: k);
       }
+      // 心率是健康資料，不放在第一眼（留在 See last night）
+      expect(find.byKey(const Key('town-sheet-tile-sleeping_hr'), skipOffstage: false), findsNothing);
+      // Movement 獨佔一整列、寫明不進分數
+      expect(
+        tester.getSize(find.byKey(const Key('town-sheet-tile-camera_moves'))).width,
+        greaterThan(tester.getSize(find.byKey(const Key('town-sheet-tile-score'), skipOffstage: false)).width * 1.8),
+      );
+      expect(find.text('Camera · not part of the score'), findsOneWidget);
       // 小鎮上沒發光的原因不能從面板看出來：準時／晚了不做成格子
       expect(find.byKey(const Key('town-sheet-tile-on_time'), skipOffstage: false), findsNothing);
       expect(find.text('Late', skipOffstage: false), findsNothing);
@@ -499,9 +510,95 @@ void main() {
       expect(hasPainter<CameraBarsPainter>('camera_moves'), isFalse);
       expect(find.byKey(const Key('town-sheet-tile-phone_down_time'), skipOffstage: false), findsOneWidget);
       expect(hasPainter<ClockArcPainter>('phone_down_time'), isFalse);
-      // 反向對照：有曲線的照畫
-      expect(hasPainter<SleepHrWavePainter>('sleeping_hr'), isTrue);
+      // 反向對照：有資料的照畫
       expect(hasPainter<RingPainter>('score'), isTrue);
+    });
+
+    testWidgets('格子第二版：每格一樣高（有圖、沒圖都一樣）；拜訪按鈕一排，後端的字拆成圓圈裡的符號＋底下的名字', (tester) async {
+      final card = richCard();
+      (card['items'] as Map)['awake'] = {'count': 2, 'minutes': 9};
+      await pump(tester, stubWith(card));
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -400));
+      await settle(tester);
+      double h(String k) => tester.getSize(find.byKey(Key('town-sheet-tile-$k'))).height;
+      expect(h('sleep_duration'), kTownTileHeight);
+      expect(h('phone_down_time'), kTownTileHeight);
+      expect(h('score'), kTownTileHeight);
+      expect(h('steps'), kTownTileHeight);
+      // 拜訪按鈕：一排（四顆的上緣一樣高）
+      final tops = {
+        for (final k in ['pet', 'good_night', 'sleep_well', 'proud'])
+          tester.getTopLeft(find.byKey(Key('town-visit-$k'))).dy,
+      };
+      expect(tops, hasLength(1));
+      expect(find.descendant(of: find.byKey(const Key('town-visit-good_night')), matching: find.text('🌙')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('town-visit-good_night')), matching: find.text('Good night')), findsOneWidget);
+      // 沒有符號的字（PROUD-FROM-BACKEND）整串照寫
+      expect(find.descendant(of: find.byKey(const Key('town-visit-proud')), matching: find.text('PROUD-FROM-BACKEND')), findsOneWidget);
+    });
+
+    testWidgets('上面的格子一律雙數（只分享 3 項 → 放 2 格）；Movement 照樣在；起床自評排在步數前面', (tester) async {
+      await pump(
+        tester,
+        stubWith({
+          'date': '2026-09-03',
+          'items': {
+            'sleep_duration': 400,
+            'phone_down_time': '23:10',
+            'morning_rating': {'rested': 4, 'label': 'Rested'},
+            'camera_moves': 12.0,
+          },
+        }),
+      );
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      await tester.drag(find.byKey(const Key('town-sheet')), const Offset(0, -400));
+      await settle(tester);
+      expect(find.byKey(const Key('town-sheet-tile-sleep_duration')), findsOneWidget);
+      expect(find.byKey(const Key('town-sheet-tile-phone_down_time')), findsOneWidget);
+      expect(find.byKey(const Key('town-sheet-tile-morning_rating')), findsNothing, reason: '第 3 格單出來 → 不放');
+      expect(find.byKey(const Key('town-sheet-tile-camera_moves')), findsOneWidget);
+    });
+
+    testWidgets('Felt 那格畫他早上選的那張臉（跟起床自評卡同一組圖）', (tester) async {
+      await pump(
+        tester,
+        stubWith({
+          'date': '2026-09-03',
+          'items': {
+            'sleep_duration': 400,
+            'morning_rating': {'rested': 4, 'label': 'Rested'},
+          },
+        }),
+      );
+      await tester.tap(townie('EAR111'));
+      await settle(tester);
+      final face = find.descendant(
+        of: find.byKey(const Key('town-sheet-tile-morning_rating')),
+        matching: find.byKey(const Key('town-sheet-felt-4')),
+      );
+      expect(face, findsOneWidget);
+      expect(((tester.widget<Image>(face)).image as AssetImage).assetName, restedFaceAsset(4));
+    });
+
+    test('格子的補位順序：起床自評在步數前面、最多 4 格、雙數', () {
+      List<String> keys(Map<String, dynamic> items) => [for (final t in friendCheckIn(items)) t.$1];
+      expect(
+        keys({
+          'sleep_duration': 400,
+          'phone_down_time': '23:10',
+          'score': {'score': 80},
+          'morning_rating': {'label': 'Rested'},
+          'steps': {'steps': 9000},
+          'sleeping_hr': {'avg': 55},
+          'on_time': true,
+        }),
+        ['sleep_duration', 'phone_down_time', 'score', 'morning_rating'],
+      );
+      expect(keys({'score': {'score': 80}, 'steps': {'steps': 9000}, 'awake': {'count': 2}}), ['score', 'steps']);
+      expect(keys({'on_time': false, 'sleeping_hr': {'avg': 55}}), isEmpty, reason: '準時與否、心率都不進這幾格');
     });
 
     testWidgets('點自己：同一個面板（What friends see），最下面是今天誰來看過你，沒有拜訪按鈕', (tester) async {

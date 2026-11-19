@@ -263,34 +263,34 @@ const _tileOrder = [
 ];
 const kMaxTiles = 3;
 
-/// 小鎮資訊面板的「Last night」格子（2026-11-19 使用者定）：照這個順序挑他有分享的前 [max] 個。
+/// 小鎮資訊面板的「Last night」格子（2026-11-19 使用者定）：照這個順序挑他有分享的，
+/// 最多 [max] 格、**一律湊成雙數**（單數時最後一格不放，不然會有一格獨佔一整列、空空的）。
+/// Movement 不在這裡：它固定獨佔最下面一整列（使用者定一定要放），見 friends_town。
 /// ⚠️ 不放 on_time：小鎮上「沒發光」的三種原因（晚了、沒資料、沒分享）要看起來一樣，
 /// 面板一打開就寫 Late 等於把原因講出來。
+/// ⚠️ 心率、壓力是健康資料，不放在第一眼，留在 See last night 的完整頁。
 const _checkInOrder = [
   'sleep_duration',
   'phone_down_time',
   'score',
-  'camera_moves',
+  'morning_rating',
   'steps',
-  'sleeping_hr',
-  'awake',
   'efficiency',
+  'awake',
   'time_in_bed',
-  'fell_asleep',
-  'stress',
-  'resting_hr',
-  'active_time',
-  'calories',
 ];
 
 List<(String, IconData, String, String)> friendCheckIn(
   Map<String, dynamic> items, {
-  int max = 6,
-}) => [
-  for (final k in _checkInOrder)
-    if (friendTile(k, items[k]) case (final icon, final value, final label))
-      (k, icon, value, label),
-].take(max).toList();
+  int max = 4,
+}) {
+  final all = [
+    for (final k in _checkInOrder)
+      if (friendTile(k, items[k]) case (final icon, final value, final label))
+        (k, icon, value, label),
+  ].take(max).toList();
+  return all.length.isOdd ? all.sublist(0, all.length - 1) : all;
+}
 
 /// 一項 → 小格（圖示, 數字, 小標籤）；沒值 → null。不判斷好壞、不變色。
 (IconData, String, String)? friendTile(String key, dynamic v) {
