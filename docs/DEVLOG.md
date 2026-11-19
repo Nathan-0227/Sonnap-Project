@@ -11,6 +11,60 @@
 
 ---
 
+## 📌 2026-11-19 用手機上的紀錄查證三個功能的實機狀況
+
+文件從 2026-09-11 起一直寫著「提醒、守門、Health Connect 三個都沒有在實機驗證過」。
+這一輪不靠記憶、改用**手機自己留下的紀錄**查證，結果三個狀況完全不同。
+
+### 怎麼查的
+
+debug build 可以用 `run-as` 讀自己的 SharedPreferences，不需要 root：
+
+```bash
+MSYS_NO_PATHCONV=1 adb shell run-as com.example.app ls shared_prefs
+MSYS_NO_PATHCONV=1 adb shell run-as com.example.app cat shared_prefs/sonnap_guard.xml
+MSYS_NO_PATHCONV=1 adb shell run-as com.example.app cat shared_prefs/sonnap_store.xml
+MSYS_NO_PATHCONV=1 adb shell settings get secure enabled_accessibility_services
+```
+
+### 查到什麼
+
+| 功能 | 結論 | 證據 |
+|---|---|---|
+| Health Connect | ✅ 2026-11-17 整條通了 | `health_uploaded_sessions` 有 3 段；11-19 早晨匯入印出 `Replaced Health Connect data with Garmin on 1 nights`——**能被蓋掉就表示那一列先存在過** |
+| 就寢守門 | ⚠️ 只有 Reminder 模式 | 兩筆 `reminded:<套件名>` = 2026-09-13 05:02:27 與 05:02:10（兩個不同的 App） |
+| 就寢提醒 | 🔴 仍然沒驗過 | 手機上找不到任何痕跡 |
+
+⚠️ **日期跟我原本以為的不一樣**：守門是 **09-13**（不是 11-17），而且驗到的是
+**Reminder 模式**——`reminded:` 這個鍵只在 reminder 模式寫（`BedtimeGuardService.kt:42-44`），
+`block`（回桌面）模式**什麼都不寫**，所以它在手機上留不下痕跡、不能宣稱。
+而現在設定就是 `block`。
+
+### 兩個只有查手機才看得到的事實
+
+1. 🔴 **重裝 APK 會把無障礙服務關掉，而且 App 不會說。**
+   今天 06:14 重裝之後 `enabled_accessibility_services` 是 `null`、`accessibility_enabled` 是 `0`，
+   但 `sonnap_guard.xml` 裡的模式、名單、時間窗**都還在**——設定看起來完好，服務沒在跑，
+   **完全不會擋**。要再走一次「應用程式資訊 → 允許受限設定」。
+2. ✅ **Dart 推的時間窗與「往後捲一天」是對的。**
+   11-19 當下存的是 `start` 00:40 → `end` 07:10，正好 6.5 小時
+   （目標就寢 01:10 的前 30 分 + 後 6 小時），日期是當天的。
+
+### 另一件順便確認的
+
+送上去的 Health Connect 視窗與 Garmin 自己量的**逐分相同**
+（11-18 的 23:30→02:30、11-19 的 01:24→06:05）。這證實了 09-13 訂「Garmin 優先」時
+的推測：**實機上兩者就是同一支錶**（Garmin Connect 同步進 Health Connect，Sonnap 再讀一次）。
+那條規則這一次是在真實資料上被觸發，不是測試情境。
+
+### 改了哪些文件
+
+`docs/BEDTIME_GUARD.md`、`docs/HEALTH_CONNECT.md`、`CLAUDE.md`、
+`docs/PPT_NUMBERS_2026-10-01.md`、`docs/VIDEO_SCRIPT_INNOSERVE.md`。
+⚠️ `docs/DEMO_CHECKLIST_0917.md` **刻意沒改**：那是 09-17 當天的清單，屬過程記錄。
+
+---
+
 ## 📌 2026-11-17 就寢時刻改正正式寫入；MariaDB 第二次同樣的壞法
 
 ### MariaDB 又壞一次，同一個原因

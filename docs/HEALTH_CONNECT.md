@@ -26,11 +26,20 @@ Settings → Health Connect：
 
 ## ⚠️ 已知限制
 
-1. **沒有在實機驗證過**（2026-09-11 只驗證了 `flutter build apk --debug` 編得過、Dart 端測試全過）。要實機確認的：
-   - 設定頁狀態正確（有／沒有／要更新）
-   - 按「Connect and sync」會跳 Health Connect 授權畫面，而且畫面上「這個 App 怎麼使用你的資料」點得開（`HealthPrivacyActivity`）
-   - 授權後送出，後端 `wearable_nightly` 多一列 `source=health_connect`
-   - 手錶那晚有分期時後端給分；只有「睡著／醒著」沒有深淺睡的裝置也要送得進去（adapter 把 `sleeping` 算進總睡眠）
+1. ✅ **實機驗證過：2026-11-17 第一次真的送出，整條通了。**
+
+   | 事實 | 證據 |
+   |---|---|
+   | 手機真的讀到 Health Connect 並送出去 | 手機本機的 `health_uploaded_sessions` 有 3 段：`2026-11-17 06:00→11:22`、`2026-11-17 23:30→11-18 02:30`、`2026-11-19 01:24→06:05`（`adb shell run-as com.example.app cat shared_prefs/sonnap_store.xml`） |
+   | 後端真的收下、寫成 `source=health_connect` | 2026-11-19 早晨匯入印出 `Replaced Health Connect data with Garmin on 1 nights (Garmin takes priority): ['2026-11-19']`——能被蓋掉就表示那一列先存在過 |
+   | **Garmin 優先那條規則在真實資料上生效了** | 同上那一行。這是 2026-09-13 定的規則第一次被真的觸發，不是測試情境 |
+   | 「同一支錶兩個來源」真的會發生 | 送出的兩段與 Garmin 自己量的視窗**逐分相同**（11-18 的 23:30→02:30、11-19 的 01:24→06:05）。Garmin Connect 把睡眠同步進 Health Connect，Sonnap 再讀一次——這正是當初訂優先權的理由 |
+
+   ⚠️ **還沒驗到的**：
+   - 授權畫面上「這個 App 怎麼使用你的資料」點不點得開（`HealthPrivacyActivity`）
+   - 設定頁在「沒有 Health Connect」「要更新」兩種手機上的狀態
+   - **只有「睡著／醒著」沒有深淺睡的裝置**送不送得進去（本人這支是 Garmin，一直有分期）
+   - 第一段 `2026-11-17 06:00→11:22` 是白天那一覺，落在 11-17 這個起床日。它後來被 Garmin 蓋掉了，所以「午覺會被當成那天的睡眠」（限制 4）這件事**在真實資料上發生過一次**，只是剛好有 Garmin 接手
 2. **心率沒有送。** 後端那一欄是「睡眠期間」的平均心率，要算對得先知道入睡時刻（那是後端從分期推出來的），在 Dart 重算就有第二個定義處。Tier3 對 Health Connect 來源本來就是 0（見 adapter 的 `HC_MODIFIER_NOTE`），所以分數不受影響。
 3. **最低 Android 版本從 7.0 拉到 8.0**（`minSdk` 24 → 26）：Health Connect 的函式庫要求的。Health Connect 本身要 Android 9 以上，更舊的手機 App 照樣能用，只是設定頁顯示「沒有 Health Connect」。
 4. **只有午覺、沒有夜間睡眠的那一天**，午覺會被當成那天的睡眠送出去。要擋就得訂「多短不算一晚」的門檻，那個門檻沒有文獻依據，所以沒訂。
