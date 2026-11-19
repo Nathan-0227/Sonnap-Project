@@ -506,7 +506,7 @@ class _TimelineStep extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: hollow ? const Color(0xFF111A3A) : const Color(0xFF7657FF),
+                    color: hollow ? const Color(0xFF0E1B4D) : const Color(0xFF7657FF),
                     border: Border.all(color: const Color(0xFFA48BFF), width: 2),
                   ),
                   child: Icon(icon, size: 13, color: Colors.white),

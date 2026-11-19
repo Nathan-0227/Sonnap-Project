@@ -1089,7 +1089,8 @@ class FriendNightPage extends StatefulWidget {
 
 class _FriendNightPageState extends State<FriendNightPage> {
   static const _page = Color(0xFF081326);
-  static const _sheet = Color(0xFF111A3A);
+  // 跟夜空圖下半的底色接起來（同小鎮面板）
+  static const _sheet = Color(0xFF0E1B4D);
 
   /// 資訊卡現在佔畫面多少（0–1）。拉到最上面時整個畫面都是它（同 Strava，2026-11-16 使用者定）。
   double? _extent;
@@ -1197,7 +1198,26 @@ class _FriendNightPageState extends State<FriendNightPage> {
                     BoxShadow(color: Color(0x66000000), blurRadius: 16),
                   ],
                 ),
-                child: ListView(
+                // 背景是小鎮面板同一張夜空（2026-11-19 使用者定），圖固定在資訊卡頂端、內容在上面捲
+                child: ClipRRect(
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(24 * (1 - full)),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: Image.asset(
+                          'assets/backgrounds/town_sheet_sky.jpg',
+                          key: const Key('night-sheet-sky'),
+                          fit: BoxFit.fitWidth,
+                          alignment: Alignment.topCenter,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                      ListView(
                   key: const Key('night-detail'),
                   controller: controller,
                   padding: EdgeInsets.only(top: 10, bottom: inset.bottom + 32),
@@ -1414,6 +1434,9 @@ class _FriendNightPageState extends State<FriendNightPage> {
                     // 往下捲：Strava 式的一段一段（睡眠圖、心率、攝影機、就寢、早上、遊戲）
                     ...friendNightSections(items),
                   ],
+                ),
+                    ],
+                  ),
                 ),
               ),
             ),

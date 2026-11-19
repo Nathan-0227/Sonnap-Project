@@ -1211,7 +1211,8 @@ Widget townCheckInTile(
 
   switch (key) {
     case 'sleep_duration':
-      final strip = friendStagesStrip(items, height: 64);
+      // 跟 Feed 卡片同一條細階梯（2026-11-19 使用者：原本 64 高太大，一條就好）
+      final strip = friendStagesStrip(items);
       if (strip != null) art = middle(Center(child: strip));
     case 'phone_down_time':
       final actual = nightMinute(items['phone_down_time']);
@@ -1272,15 +1273,17 @@ Widget townCheckInTile(
       // 他早上選的那張臉（跟起床自評卡同一組圖，2026-11-19 使用者要求）；讀不到圖退回淡的圖示
       final r = n(m('morning_rating')['rested'])?.round();
       if (r != null && r >= 1 && r <= 5) {
-        art = Align(
-          alignment: const Alignment(0.82, -0.45),
-          child: Image.asset(
-            restedFaceAsset(r),
-            key: Key('town-sheet-felt-$r'),
-            width: 78,
-            height: 78,
-            errorBuilder: (_, _, _) =>
-                Icon(icon, size: 74, color: color.withValues(alpha: 0.16)),
+        // 臉放在格子正中間（標題與數字之間那塊），2026-11-19 使用者定
+        art = middle(
+          Center(
+            child: Image.asset(
+              restedFaceAsset(r),
+              key: Key('town-sheet-felt-$r'),
+              width: 72,
+              height: 72,
+              errorBuilder: (_, _, _) =>
+                  Icon(icon, size: 72, color: color.withValues(alpha: 0.16)),
+            ),
           ),
         );
       }
