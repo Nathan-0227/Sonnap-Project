@@ -206,22 +206,13 @@ void main() {
           ],
         );
 
-    testWidgets('挑戰那一行：Day 與 Week 最底下都有，點開是清單、整句照抄', (tester) async {
+    testWidgets('挑戰搬到睡眠計畫頁了：Insights 不再有那一行（只在一個地方出現）',
+        (tester) async {
       final nightly = NightlySync(bedMarks: BedMarkStore(InMemoryKeyValueStore()))
         ..challenges = challenges(ChallengeState.inProgress);
       await pump(tester, nightly: nightly);
-      final list = find.byKey(const Key('report-list'));
-      await tester.scrollUntilVisible(find.byKey(const Key('challenges-row')), 400,
-          scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
-      expect(find.text('0 of 1 completed'), findsOneWidget,
-          reason: '只數後端判達成的，不自己判「快達成」');
-      await tester.tap(find.byKey(const Key('challenges-row')));
-      for (var i = 0; i < 6; i++) {
-        await tester.pump(const Duration(milliseconds: 60));
-      }
-      expect(find.byKey(const Key('challenges-sheet')), findsOneWidget);
-      expect(find.text('SENTINEL-DETAIL from backend'), findsOneWidget);
-      expect(find.text('3/7 nights'), findsOneWidget, reason: '分母一定要在');
+      expect(find.byKey(const Key('challenges-row')), findsNothing);
+      expect(find.text('SENTINEL-DETAIL from backend'), findsNothing);
     });
 
     testWidgets('資料不足：不畫 0%，寫 not enough data yet', (tester) async {

@@ -176,7 +176,20 @@ class AccountService {
   Future<bool> updateTargetBedtime({
     required String userId,
     required String targetBedtime,
-  }) async {
+  }) =>
+      _patchUser(userId, 'target_bedtime', targetBedtime);
+
+  /// 把目標起床時間送去後端（2026-11-19，睡眠計畫的「準時起床」）。成功回 true。
+  ///
+  /// 原本起床時間只存在手機上（鬧鐘用）。判「準時起床」要在後端（跨午夜只算一份，
+  /// 同就寢達成度），所以跟就寢時間走同一條路：失敗不拋例外，下次開 App 補送。
+  Future<bool> updateTargetWake({
+    required String userId,
+    required String targetWake,
+  }) =>
+      _patchUser(userId, 'target_wake', targetWake);
+
+  Future<bool> _patchUser(String userId, String field, String value) async {
     if (baseUrl.trim().isEmpty || userId.isEmpty) return false;
 
     final uri = Uri.parse('$baseUrl/users/$userId');
@@ -185,22 +198,20 @@ class AccountService {
     try {
       final request = await client.patchUrl(uri).timeout(timeout);
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({'target_bedtime': targetBedtime}));
+      request.write(jsonEncode({field: value}));
 
       final response = await request.close().timeout(timeout);
       final body = await response.transform(utf8.decoder).join();
 
       if (response.statusCode != 200) {
         // ⚠️ 不印 user_id（它是憑證），也不印整個 uri（裡面就有它）。
-        debugPrint(
-          'AccountService: PATCH target_bedtime -> ${response.statusCode} $body',
-        );
+        debugPrint('AccountService: PATCH $field -> ${response.statusCode} $body');
         return false;
       }
-      debugPrint('AccountService: target_bedtime synced ($targetBedtime)');
+      debugPrint('AccountService: $field synced ($value)');
       return true;
     } catch (error) {
-      debugPrint('AccountService: updateTargetBedtime failed - $error');
+      debugPrint('AccountService: PATCH $field failed - $error');
       return false;
     } finally {
       client.close(force: true);

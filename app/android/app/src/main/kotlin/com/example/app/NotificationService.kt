@@ -56,6 +56,16 @@ class NotificationService(private val context: Context) {
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"
         const val EXTRA_TRIGGER_AT = "triggerAtMillis"
+        // 睡眠計畫（2026-11-19）：每條習慣一個位置。0＝就寢提醒（原本那一則，
+        // request code 與通知 id 都不變）；1..MAX_SLOT＝計畫裡的習慣。
+        const val EXTRA_SLOT = "slot"
+        // 哪幾天要響：bit0＝星期一 … bit6＝星期日（同 Dart 的 DateTime.weekday − 1）。
+        // 0x7F＝每天，就寢提醒一律每天。
+        const val EXTRA_DAYS = "days"
+        const val EVERY_DAY = 0x7F
+        const val MAX_SLOT = 40
+
+        fun requestCodeFor(slot: Int) = REQUEST_CODE + slot
     }
 
     private val alarms: AlarmManager
@@ -88,9 +98,15 @@ class NotificationService(private val context: Context) {
      * 在 triggerAtMillis 發一則通知，取代先前排的那一則。
      * 回傳「現在能不能發通知」——false 代表排了但使用者關了權限。
      */
-    fun schedule(triggerAtMillis: Long, title: String, body: String): Boolean {
+    fun schedule(
+        triggerAtMillis: Long,
+        title: String,
+        body: String,
+        slot: Int = 0,
+        days: Int = EVERY_DAY,
+    ): Boolean {
         ensureChannel()
-        val operation = pendingIntent(triggerAtMillis, title, body)
+        val operation = pendingIntent(triggerAtMillis, title, body, slot, days)
         if (canScheduleExact()) {
             alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
         } else {
@@ -113,18 +129,26 @@ class NotificationService(private val context: Context) {
      * ⚠️ PendingIntent 相等的判準是 request code + Intent 的 action/component
      *    （**不看 extras**），所以這裡隨便帶什麼 extras 都取消得到同一則。
      */
-    fun cancel() {
-        alarms.cancel(pendingIntent(0L, "", ""))
+    fun cancel(slot: Int = 0) {
+        alarms.cancel(pendingIntent(0L, "", "", slot, EVERY_DAY))
     }
 
-    private fun pendingIntent(triggerAtMillis: Long, title: String, body: String): PendingIntent {
+    private fun pendingIntent(
+        triggerAtMillis: Long,
+        title: String,
+        body: String,
+        slot: Int,
+        days: Int,
+    ): PendingIntent {
         val intent = Intent(context, BedtimeReminderReceiver::class.java)
             .putExtra(EXTRA_TRIGGER_AT, triggerAtMillis)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_BODY, body)
+            .putExtra(EXTRA_SLOT, slot)
+            .putExtra(EXTRA_DAYS, days)
         return PendingIntent.getBroadcast(
             context,
-            REQUEST_CODE,
+            requestCodeFor(slot),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

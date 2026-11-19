@@ -61,6 +61,11 @@ class UserSettingsStore {
   static const String syncedBedtimeKey = 'target_bedtime_synced';
   static const String reminderKey = 'reminder_on';
 
+  /// 最後一次成功 PATCH 到後端的**目標起床時間**（2026-11-19）。
+  /// 起床時間本身存在鬧鐘那邊（`alarm.dart` 的 [kWakeTimeKey]，沒設過時是
+  /// 就寢 + 8 小時）；這裡只記「後端已經知道的是哪一個」，不同就補送。
+  static const String syncedWakeKey = 'target_wake_synced';
+
   final KeyValueStore store;
 
   const UserSettingsStore(this.store);
@@ -91,6 +96,16 @@ class UserSettingsStore {
   /// PATCH 成功之後才呼叫。
   Future<void> markSynced(String hhmm) async {
     await store.setString(syncedBedtimeKey, hhmm);
+  }
+
+  Future<String?> syncedWake() async {
+    final v = await store.getString(syncedWakeKey);
+    return isValidBedtime(v) ? v : null;
+  }
+
+  /// PATCH target_wake 成功之後才呼叫。
+  Future<void> markWakeSynced(String hhmm) async {
+    await store.setString(syncedWakeKey, hhmm);
   }
 
   Future<void> saveReminder(bool on) async {

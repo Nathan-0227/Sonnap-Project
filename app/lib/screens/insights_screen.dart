@@ -14,7 +14,6 @@ import '../services/sleep_repository.dart';
 import '../theme/report_style.dart';
 import '../services/nightly_sync.dart';
 import '../widgets/before_bed_apps.dart';
-import '../widgets/challenges_sheet.dart';
 import '../widgets/insights_period_view.dart';
 import 'morning_report_screen.dart';
 
@@ -274,12 +273,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
-  /// 挑戰那一行：四個分頁共用、不屬於任何一個期間。拿不到就不出現。
-  Widget? _challengesRow() {
-    final r = widget.nightly?.challenges;
-    return ChallengesRow.shows(r) ? ChallengesRow(result: r) : null;
-  }
-
   /// 睡前 App 只有「最近一次放下手機」那一晚有（手機只留得住那一段的事件），
   /// 所以只在那一晚的 Phone down 頁出現；別的晚上不放，不拿這一晚的冒充。
   Widget? _beforeBedFor(String date) {
@@ -303,7 +296,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
       anchor: _anchor,
       today: today,
       online: _online,
-      footer: _challengesRow(),
     );
   }
 
@@ -332,7 +324,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
           pending: date == reportDateKey(today),
           isNotesRead: (version) => _notesReads.isRead(date, version),
           onNotesOpened: (version) => _notesReads.markRead(date, version),
-          footer: _challengesRow(),
           phoneDownFooter: _beforeBedFor(date),
         );
       },

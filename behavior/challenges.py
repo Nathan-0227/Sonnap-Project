@@ -17,6 +17,11 @@ behavior/challenges.py — 挑戰引擎（Tier A）
    （深睡幾分鐘）。使用者控制得了前者，控制不了後者——
    拿後者當挑戰目標等於懲罰使用者的生理。
 
+⚠️ 唯一的例外是「準時起床」（wake_time，2026-11-19）：沒按 Out of bed 時
+   用手錶的**起床時刻**。那是一個時刻（鬧鐘訂幾點、幾點下床），不是生理結果；
+   而且本模組仍然不碰 wearable_nightly——main.py 先用 behavior/wake.py
+   把起床判定併進每一列，這裡只讀併好的 `up_on_time`。
+
 ⚠️ 同時這也是 8.7 那條紅線（遊戲化層不得回寫評分層）的結構保證：
    評分器根本不在本模組的呼叫路徑上。驗收指令見 behavior/__init__.py。
 
@@ -236,6 +241,35 @@ def _progress_time(rows, challenge, as_of):
     return minutes, (1 if achieved else 0), len(measured), bool(achieved), detail
 
 
+def _progress_wake(rows, challenge, as_of):
+    """
+    wake_time：最近一晚有沒有在目標起床時間 ±60 分鐘內起床。
+
+    讀 behavior/wake.py 併進來的 `up_on_time`（True／False／None）。
+    ⚠️ 沒有那個鍵（呼叫端忘了併）與「沒量到」看起來一樣是 None——
+       所以 main.py 的兩個呼叫端都經過同一支 `_behavior_rows_with_wake()`。
+    """
+    scoped, _ = window_rows(rows, challenge["window_days"], as_of)
+    measured = [r for r in scoped if r.get("up_on_time") is not None]
+
+    if not measured:
+        return None, 0, 0, False, (
+            "No wake time yet - tap Out of bed when you get up, "
+            "or it will come from your watch."
+        )
+
+    latest = measured[-1]
+    minutes = latest["wake_adherence_minutes"]
+    achieved = bool(latest["up_on_time"])
+    if abs(minutes) < 1:
+        detail = "Up right at your wake time."
+    elif minutes < 0:
+        detail = f"Up {abs(minutes):.0f} min before your wake time."
+    else:
+        detail = f"Up {minutes:.0f} min after your wake time."
+    return minutes, (1 if achieved else 0), len(measured), achieved, detail
+
+
 def _progress_streak(rows, challenge, as_of):
     """
     streak：連續達成幾晚。
@@ -354,6 +388,7 @@ PROGRESS_FUNCS = {
     "streak": _progress_streak,
     "consistency": _progress_consistency,
     "phone_in_bed": _progress_phone_in_bed,
+    "wake_time": _progress_wake,
 }
 
 # 哪些型別是「數字越小越好」。UI 畫進度條要用。
@@ -384,7 +419,7 @@ def _progress_ratio(kind, current_value, target_value, completed):
     """
     if current_value is None:
         return None
-    if kind == "time":
+    if kind in ("time", "wake_time"):
         return 1.0 if completed else 0.0
     if kind == "streak":
         if target_value <= 0:

@@ -108,6 +108,10 @@ class HomeScreen extends StatefulWidget {
   /// 好友頁的即時狀態（`POST /sleep-status`）。null＝這支 build 沒有後端。
   final SleepStatusSink? sleepStatus;
 
+  /// 睡眠計畫的「Today's plan」小卡（2026-11-19）。放在「不按也沒關係」那句底下、
+  /// 分數卡上面。null＝不畫（測試、或沒接上計畫的地方）。
+  final Widget? planCard;
+
   const HomeScreen({
     super.key,
     this.usageStats = const UsageStatsService(),
@@ -122,6 +126,7 @@ class HomeScreen extends StatefulWidget {
     this.startSleepRequests,
     this.onOpenSettings,
     this.sleepStatus,
+    this.planCard,
     this.clock = DateTime.now,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
@@ -1204,6 +1209,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 14),
                       _buildSleepNotes(),
+                      if (widget.planCard != null) ...[
+                        const SizedBox(height: 12),
+                        widget.planCard!,
+                      ],
                       const SizedBox(height: 18),
                       // 點分數卡：最近 7 晚的分數長條圖（照抄後端每晚的 final_score）。
                       GestureDetector(
