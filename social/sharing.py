@@ -259,6 +259,9 @@ ITEMS = (
     ("phone_down_time", "sleep", True, "Phone-down time", _phone_down_time),
     ("on_time", "sleep", True, "On time or late", _on_time),
     ("pet_mood", "sleep", True, "Pet mood", lambda c: c.get("behavior_mood")),
+    # 即時狀態（2026-11-19 使用者定，預設關）：按了 Start Sleep 好友就看到 Asleep。
+    # 不是某一晚的值，所以 picker 回 None、不進動態卡；只在好友摘要（social/friends.py）用
+    ("live_status", "sleep", False, "Live status (asleep now, past bedtime)", lambda c: None),
     ("target_bedtime", "sleep", False, "Target bedtime",
      lambda c: _g(c["home"], "behavior", "target_bedtime")),
     ("phone_after_start", "sleep", False, "Phone use after Start Sleep",

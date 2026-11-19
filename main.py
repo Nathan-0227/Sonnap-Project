@@ -1782,13 +1782,27 @@ def _sharing(user_id):
     return social_sharing.effective(db.get_friend_sharing(user_id))
 
 
+def _user_now(user):
+    """那個人所在時區的牆鐘時間（users.timezone，例如 "+08:00"）。讀不懂就用伺服器的。"""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    tz = str((user or {}).get("timezone") or "")
+    try:
+        sign = -1 if tz.startswith("-") else 1
+        hh, mm = tz.lstrip("+-").split(":")
+        offset = _td(hours=int(hh), minutes=int(mm)) * sign
+    except ValueError:
+        return _dt.now()
+    return (_dt.now(_tz.utc) + offset).replace(tzinfo=None)
+
+
 def _friend_summary(friend_id, masked=True):
     user = db.get_user(friend_id)
     handle = db.ensure_invite_code(friend_id)
     rows = db.get_nightly_behavior(friend_id, days=FRIEND_HISTORY_DAYS)
     settings = _sharing(friend_id)
     summary = social_friends.build_friend_summary(
-        user, handle, rows, pet_species=settings["pet_species"])
+        user, handle, rows, pet_species=settings["pet_species"],
+        live_row=db.get_live_sleep_status(friend_id), now=_user_now(user))
     return social_friends.apply_sharing(summary, settings) if masked else summary
 
 
@@ -1839,6 +1853,43 @@ async def _cards_for(user_id, days=FEED_DAYS):
 def _require_sharing_user(user_id):
     require_user(user_id)
     return _sharing(user_id)
+
+
+class SleepStatusRequest(BaseModel):
+    user_id: str
+    # start＝按了 Start Sleep、end＝按了 Out of bed、cancel＝按了 Cancel（整列刪掉）
+    event: str
+    # 手機的牆鐘時間（ISO，不帶時區也可以）；cancel 不用給
+    at: Optional[str] = None
+
+
+@app.post("/sleep-status")
+async def post_sleep_status(req: SleepStatusRequest):
+    """
+    好友頁的即時狀態（2026-11-19）。App 按 Start Sleep／Out of bed／Cancel 的當下各送一次，
+    **連不到就算了、不補送**（半夜補送「我在睡」沒有意義）。
+    ⚠️ 不進評分、不給 XP、不碰 nightly_behavior——上床／下床的正式紀錄照舊早上跟 POST /nightly 一起送。
+    ⚠️ 好友看不看得到由分享設定的 live_status 決定（預設關）；這裡照樣收，開了之後下一次按就看得到。
+    """
+    require_user(req.user_id)
+    if req.event not in ("start", "end", "cancel"):
+        raise HTTPException(status_code=422, detail="event must be start, end or cancel.")
+    if req.event == "cancel":
+        db.clear_live_sleep_status(req.user_id)
+        return {"ok": True}
+    from datetime import datetime as _dt
+    try:
+        at = _dt.fromisoformat(str(req.at)).replace(tzinfo=None) if req.at else None
+    except ValueError:
+        at = None
+    if at is None:
+        raise HTTPException(status_code=422, detail="at must be an ISO time.")
+    at_iso = at.replace(microsecond=0).isoformat()
+    if req.event == "start":
+        db.set_live_sleep_status(req.user_id, started_at=at_iso)
+    else:
+        db.set_live_sleep_status(req.user_id, ended_at=at_iso)
+    return {"ok": True}
 
 
 @app.get("/sharing")
