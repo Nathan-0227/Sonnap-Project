@@ -361,7 +361,7 @@ Garmin 回報那幾晚睡眠期間內零清醒），那些不是壞資料，不�
 ✅ **手機端的 UsageStats 與 `lights_out_at` 2026-09-03 完成**（PR #30），
 連同暱稱制帳號——**D2 需要的最小組合已經齊了**。
 
-✅ **睡前 App 分布**已接上（`app/lib/services/pre_bed_apps.dart`，Insights 頁）。
+✅ **睡前 App 分布**已接上（`app/lib/services/pre_bed_apps.dart`；2026-11-19 起在 Phone down 詳細頁最底下，只有最近一次放下手機那一晚）。
 
 ### ✅ 產品迴圈（PR #51，2026-09-12 合併）
 
@@ -385,6 +385,30 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 ⚠️ **要動評分邏輯或新增遊戲化功能（挑戰／獎勵／寵物成長／貨幣）之前，
 先讀「🚧 設計紅線」那一節**——那五條紅線是拿外部同類專案對照後定的，
 其中第 4、5 條防的是我們還沒踩但下一步最可能踩的坑。
+
+### ✅ Insights 改版（2026-11-19，`feature/insights-tabs`）
+
+頂端 **Day／Week／Month／Year**＋「‹ 期間 ›」（`screens/insights_screen.dart`）。示意圖與決定記錄見記憶 `insights-dwmy-redesign`。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| **Day＝早晨報告本體**（`MorningReportScreen.fromLoader(embedded: true)`，跟起床後看到的同一個元件）；不畫經驗條、關閉鈕、底部兩顆按鈕 | 兩份「這一晚」遲早各說各的 |
+| 組一晚報告的程式**只有一份**：`services/report_loader.dart`（首頁與 Insights 共用） | 一邊多接一個詳細頁的資料，另一邊點了沒反應 |
+| 🔴 Insights 的 notes **一律 generate=false**（`ReportLoader.notesLoader(allowGenerate: false)`） | 打開 Insights 就花 AI 額度、而且寫出來的不含自評 |
+| 期間：週一起的日曆週、日曆月、日曆年；右到本期、左到帳號第一筆資料 | — |
+| W/M/Y：上面心情（Week 7 顆狗頭、Month 月曆、Year 365 格熱圖，照抄每晚 `pet_mood`）＋中位分數＋星星；下面**鏡像格子**（跟 Day 同一項同一位置）。加總在 `services/insights_periods.dart`（純函式） | — |
+| 大字是**中位數**；Year 每欄是那個月的中位數；沒資料是「—」不是 0；**0 步＝沒戴錶** | 平均會被一兩晚拉走；0 會被讀成走了 0 步 |
+| 跟上一期比**只代表方向**：上升紅、下降綠，**分數也一樣**；Sleeping HR、Sleep phases、卡路里、活動、壓力不比 | 在 Dart 判斷好壞 |
+| **效率所有種類合在一起**算中位數與比較（使用者 11-19 定、知情：按按鈕多的週看起來會比較低） | — |
+| 熬夜「N of M nights late」**照抄後端每晚 `is_late`**；12:00–18:00 的放下手機不算 | 跨午夜只在 adherence.py 算 |
+| 攝影機 W/M/Y 畫「一小時動幾次」，**不畫文獻常模**、寫 not part of your score | 事件率跨夜不穩 3.1 倍 |
+| 星星＝後端 `wearable.quality_bands`（照抄 `GRADE_THRESHOLDS`）換算；**舊版後端沒有就不畫星星**，Dart 不寫切點 | 第二份切點 |
+| 資料：App 一次要 `/insights?days=365`（`_insightsYear`，等 8 秒）；連不到後端時 Week 用打包檔、**Month／Year 照實寫 Needs the backend** | 拿 30 晚冒充一年 |
+| **分數組成與警語不在 App 上**（使用者 11-19 定，只留書面報告） | — |
+| 舊卡去處：挑戰＝Day 與 W/M/Y 最底下一行（`widgets/challenges_sheet.dart`）；睡前 App＝Phone down 詳細頁最底下、**只有最近一次放下手機那一晚**；資料即時與否／昨晚送到沒／來源＝設定頁「Data」；Sleep basics＝助理頁（預設收合） | — |
+| 🔴 **偵測就寢＋上傳＋問挑戰在 App 層的 `services/nightly_sync.dart`**：開 App（帳號解析完之後）與每次回到前景都跑，**跟停在哪一頁無關**。原本藏在舊 Insights 頁的 initState | 漏跑不會報錯，只是昨晚沒上傳、熬夜與挑戰少一晚 |
+| 手機使用權限沒開時**首頁**寵物下方一條提示（`usage-access-banner`），點了去系統設定、回來開了就消失 | 原本按鈕在舊 Insights 卡裡，新使用者找不到 |
+| W/M/Y 的格子**點了還沒有反應**；詳細頁補 Month／Year 是下一個 PR（在那之前詳細頁只有 Day、Week 兩種內容） | — |
 
 ### ✅ 首頁改版（2026-11-12，`feature/home-day-night`）
 
@@ -525,7 +549,7 @@ garmin_connect_fetch.py（同一次登入）→ garmin/data/garmin_daily_activit
 **圖形格子**（2026-11-14 使用者定，參考圖：每一格的圖就是那個數字，`widgets/report_tiles.dart`）：
 **Last night 的格子（11-15 使用者定 Q1–Q7）**：同 Yesterday，`ReportArtTile` 整張是圖、標題左上、字左下（圖在 `widgets/last_night_art.dart`，**圖就是那個數字**）：Total sleep＝極光光帶從左往右填（睡了多久÷目標，超過就滿、不變色；**不放月亮**；手錶還沒到是虛線框＋暗光帶＋「—」）；Time in bed＝**12 小時鐘面**（使用者給參考圖：12 在上、順時針，上床＝月亮圖示、下床＝鬧鐘圖示，那段亮；多久寫在圓心、時刻寫在底下；超過 12 小時畫滿一圈）；Phone down＝半圓鐘面，空心圈＝目標、亮點＝實際（同一色不分好壞）；**點開頁最上面「This night」一塊**：「Start Sleep 03:20 → phone down 03:27」＋「7m after Start Sleep」（11-15 使用者定放在點開的頁、不放格子上：照抄後端 `phone_in_bed_minutes`＝lights_out − bed_start，是下界、滑到睡著的晚上偏大；沒按 Start Sleep 整塊不出現、不寫 0）；Awake＝星河上醒著的幾段亮琥珀色；Sleeping HR＝**靛藍慢線、不跳、不放月亮**（跟會跳的珊瑚紅 Awake HR 分開，靜止心率只在這一格；**點開的頁也用同一個靛藍**，使用者：裡面的顏色不統一）；Movement (camera)＝**光柱**（使用者給參考圖）：每 5 分鐘一根、高度＝那 5 分鐘有幾成時間在動（後端 motion_curve 照抄、不平滑），越高越從淡紫轉金色、帶光暈；0＝沒動是真的值，畫很淡的短柱；底下時間軸標整點（夜長 ≥4 小時每 3 小時）、兩個下角淡雲；**大字＝一小時動幾次**（11-15 使用者定：後端 `events_per_hour` 四捨五入，「18 moves / hour」），後端那句「跟平常比」照抄成小字、沒有次數時退回那句當大字；🔴 **不放文獻常模**（Montini 11 次／小時）——事件率跨夜不穩 3.1 倍、我們的「一次」跟文獻不是同一個構念，並列會被讀成「比一般人多」；**點開頁的「Movement through the night」也是同一套光柱**（柱頂＝原本的線高，片段的點與點選泡泡位置不變）；**排最後佔整列、高 210**；**Efficiency 維持「從底下填滿」**（使用者喜歡，只嫌靜態）→ 頂端水面輕輕晃、光點往上浮（`LiquidFill`），減少動態效果時靜止，填多高照舊＝效率；跟上一晚比的箭頭在大字右邊（`ReportArtText.valueTrailing`）。順序 Total sleep · Time in bed／Phone down · Awake／Sleeping HR · Efficiency／Camera。這一輪**只換格子，點開的頁不動**。以下是各格點開的頁：
 Last night＝睡多久（格子標題 **Total sleep**，11-15 使用者定，原本的 Time asleep 讀起來怪；波浪光帶＝睡了多久÷目標；**點開是一週圖**，同首頁 Sleep 小卡，`widgets/sleep_week_sheet.dart`：這一晚往回 7 個日曆晚上、沒資料的晚上寫「—」且**不算進平均**（寫「5 of 7 nights with data」）、目標畫虛線、長條**不依達標變色**；這一晚的數字以報告為準，11-14 使用者定。樣子照參考圖：膠囊長條＋底槽到頂、左邊 0–12 h 刻度、底下圓環＝平均÷目標；**參考圖的「Your sleep improved by 6%」不照做**（improved 是判斷），改寫「↓ 3m vs the week before」，只代表方向、上升紅下降綠；標題跟外面那張卡同圖示同顏色同字型）、臥床（18:00→12:00 時間軸上的上床／下床；**點開是一週上床圖**，`widgets/bed_week_sheet.dart`：左邊是時鐘、每晚一根膠囊從上床畫到起床，看幾點睡的規律性；**按鈕上床＋下床都有才用按鈕、不然退回手錶入睡→醒來**（使用者定），手錶的晚上畫空心並在底下說明幾晚是手錶的——兩個不是同一個量；11-15 使用者試過 B 案（淡色帶＋月亮＋四項圖例）覺得太複雜，簡化成：**數字放最上面**「Usually in bed 03:02 → 08:00」（上床、起床各自的**中間值**——平均會被一兩個特別早或晚的晚上拉走，那週平均是 02:14）＋平均臥床多久；圖上**兩條白色虛線就是那兩個數字**（時刻寫在**圖裡、線的左端**，**只有淡白色的字、不加框**（使用者定：框會擋住最左邊那根長條；字再淡一點不搶膠囊，加一點陰影才讀得到；虛線從字的右邊開始、不穿過字）；**左邊刻度照常全部顯示**——使用者兩個都要，放右邊外面又會讓圖上下空空的，≥3 晚才畫；淡色帶不放——兩條線＋膠囊已經看得出哪晚偏離，帶子要另外解釋）；只留一行小字「Hollow = watch」；按鈕與手錶的晚上一起算；**不說規律好壞**；按鈕時間由 `/insights` 的 `behavior.history` 順便帶回（`CameraInsightsResult.bedButtons`），這一晚以報告上的為準；**躺多久才睡著**（11-15 grill 定）：按鈕的晚上從上床到**手錶認定睡著**那段畫淡、交界一條白線，最上面「This night」寫「Start Sleep 03:20 → asleep 03:33」＋「Fell asleep 12m after Start Sleep」；當下按、事後補的都算不另外標；**手錶在按鈕之前就睡著（負數）那晚不畫、不寫**；不套文獻 30 分鐘切點、不說好壞。手錶入睡時刻來自 `/insights` 的 `wearable.history[].sleep_start_time`（`CameraInsightsResult.watchSleep`，比打包檔新），這一晚用報告的。⚠️ **只比牆鐘**：手錶時刻是 parseWallClock 的 UTC 標記牆鐘、按鈕是本地時間，直接相減差 8 小時（11-15 真資料預覽抓到，每晚都被當成入睡晚於下床））、Phone down（半圓弧上目標與實際兩點；**點開是一週放下手機圖**，`widgets/phone_week_sheet.dart`，11-15 使用者定：第一版是一晚一列、橫的時間軸，使用者覺得不好看，改成 **B：跟 Total sleep／Time in bed 同一套**——7 欄、左邊時鐘刻度（上早下晚）、每欄一條底槽，每晚一個點＋點到目標虛線的細棒（離目標多遠），時刻寫在點旁邊（遠離目標那一側），目標的時刻用白色粗字寫在刻度上，舊的在左、這一晚在最右邊；最上面「Usually phone down 03:03」（中間值）＋「N of M nights over 30m past your 03:00 target」（11-15 使用者定寫出 30m：只寫 later 的話 03:26 晚於 03:00 卻沒被算，像算錯；那個 30 是 `kLateThresholdMinutes`，只用來寫字，`phone_week_test` 直接讀 adherence.py 比對）——**晚不晚只照抄後端每一晚的 `is_late`**（跨午夜只在 adherence.py 算；後端沒判的晚上不進 M）；圖上只有一條目標虛線（現在的目標）；**點全部同一個顏色、不分紅綠**，這一晚亮一點；沒資料寫「— no data」不畫 0；**12:00–18:00 的放下手機不算那一晚的就寢**（11-15 使用者定，實例 10-05 偵測成 14:07、晚 607 分鐘），當作沒資料、不進中間值與晚幾晚；11-15 使用者另選 A＋C：A＝按了 Start Sleep 之後手機還在用多久（照抄後端 `phone_in_bed_minutes`），11-15 grill 改成**圖底下一排小長條**「Phone use after Start Sleep」（取代原本星期底下的「+7m」）：欄位跟上面對齊、**這一排自己的刻度**（最長那晚＝滿、至少 5 分鐘高）、數字寫在柱子上、一個顏色、不分紅綠、沒有目標線；事後補的上床也算；**沒按 Start Sleep 寫「—」不畫 0**，一晚都沒按整排不出現（⚠️ 不畫成點上方的一段線——實際多半只有幾分鐘，在圖上 2–3 px 整段藏在點後面），**標題下「↑ 14m later than the week before」**（這週中間值 vs 前 7 晚中間值，同 Total sleep 只代表方向、晚了紅早了綠，前一週沒資料不寫）；時刻由 `/insights` 的 `behavior.history` 順便帶回（`CameraInsightsResult.phoneDowns`），這一晚以報告上的為準）、
-Awake（整晚一條、只亮清醒段；**點開是 `widgets/awake_week_sheet.dart`**，11-15 使用者定：上半**這一晚**——大數字是手錶的總數（不是段落加總），入睡→起床一條時間軸亮出清醒段落，下面每段一個小標籤「03:42 · 1m」（照時間排、多了換行不藏，不到 1 分寫 <1m），**醒了幾次**（11-15 grill 改：原本不寫）——大數字底下「Woke up 2 times · 2m in total」、一週每根長條底下「×2」，**0 次寫 ×0、沒資料（Health Connect 的晚上）寫「—」**；次數＝**還原的時間軸上清醒的段數**（`garmin/sleep_stages.awake_count`，跟畫出來的段落同一份），存在 `wearable_nightly.awake_count`，由 `/home` 的 `metrics.awake_count` 與 `/insights` 的 `wearable.history[].awake_count` 帶出；🔴 **不是 summary 的 `awake_count`**：那個把入睡時刻的整晚摘要也算成一次，**每晚多 1**（11-15 真資料預覽發現，124/124 晚都正好差 1；Tier3 是跟自己平常比，固定多 1 互相抵掉，評分不動）。舊夜晚回填：`migrate_garmin_to_db.py --awake-count-only [--standard 原始檔]`，只補這一欄、寫完逐晚重算核對；沒有時間軸的晚上只寫總數＋「No timeline for this night」。下半**這一週**——同 Total sleep 的 7 欄膠囊，平均／幾晚有資料／跟前一週比**直接用 sleep_week_sheet 的函式**，**0 分寫「0m」算進平均、沒資料寫「—」不算**，沒有目標線；一週資料來自 `/insights` 的 `wearable.history[].waso_minutes`（`CameraInsightsResult.awakeMinutes`），連不到後端整段不出現。不判斷好壞、不掛手錶準確度警語）、Efficiency（**11-15 使用者定照參考圖（Battery 卡）改成從底下往上填滿**（`ReportFillTile`，填多高＝效率、取代圓環，數字左下、% 小一號，下面一行是那一種的名字）；**點開是 `widgets/efficiency_sheet.dart`**，11-15 使用者定：上半**這一晚**——數字照抄（只把 100.0 寫成 100），下面是那一種的**名字**（`composition.efficiency_label`，字只在 `score_claim.EFFICIENCY_BASIS_LABELS`，**機器標籤 `Basis: …` 拿掉**），一條「算進去的時間＝整條、睡著＝亮的」＋「6h 16m asleep of 6h 18m counted」＋分母那兩個時刻（① 兩個按鈕、② Start sleep→手錶醒來、③ 手錶入睡→醒來；**百分比不在 Dart 重算**，分鐘只是說明），**只有 ③ 多一行請按按鈕的提示**；**不放警語**（使用者定：上面的分子分母已經說明怎麼算的，警語仍在 Insights 分數卡）；**不畫 85% 線**。下半**這一週**——0–100%、**畫面上只分兩種**（11-15 使用者定）：有按按鈕（①②）**實心**、沒按（③）**空心**（同「空心＝手錶」）——② 只按了 Start sleep 也算有按，後端給 ①② **同一個名字 `Sleep button`**、③ 是 `Watch only`，**計分照舊三段式**，② 的分母差在哪由那一行「Start sleep → watch wake」交代；數字照抄；**不算平均、不比前一週**（三種不是同一個量，③ 幾乎都 100%），標題是**一個名字一行**、各幾晚（同名就合成一行，Dart 不寫死哪幾種算一組）；**後端沒給名字的那一種不寫，Dart 不自己取名**。種類靠那晚 behavior 自己帶的 `*_basis` 對出來（`efficiencyKindOf`，不寫死 basis）；每晚的數字跟格子**同一支** `scoredEfficiency`，這一晚的長條用報告的數字蓋過去）、心率（睡著那段的小折線；**格子標題 Sleeping HR**（11-15 使用者定：講清楚不是整天的；格子窄寫縮寫，點開的標題寫全名 Sleeping heart rate）；**點開是 `widgets/heart_rate_sheet.dart`**：上半**這一晚**——大數字＝睡著那段的平均（同格子），「Lowest 46 at 03:48 · 18m after falling asleep」（最低與那一刻都是**原始讀數**，後端 `min_at`；5 分鐘平均的最低會跟 min 對不上）＋「Resting 55 (all day)」；線**依那一刻的睡眠階段上色**（同 Sleep Stages 的顏色），虛線＝平均、白點＝最低，點／滑看那一刻；下面各階段的平均心率（線上的點照階段分組，沒量到 REM 不給）。⚠️ **參考圖的運動心率區間不照做**：那是最大心率的百分比，睡著全落在最低一區以下，且睡眠心率沒有文獻門檻（紅線 2）；**不寫 Normal／High、不寫最高**（最高多半是短暫醒來）。「夜間心率下降幅度」（<10% 有死亡率關聯，但證據主要來自糖尿病族群）11-15 討論過、**這一輪不做**，要做先寫進研究文件。下半**這一週**——7 欄，實心點＝平均、空心點＝最低；「Usually 56 bpm」＝7 晚平均的**中間值**，跟前一週比只代表方向；靜止心率是整天的另一個量，**不進一週圖**。一週來自 `/insights` 的 `wearable.history.sleep_heart_rate`（跟格子**同一支** `night_heart_rate`，只有 Garmin 來源有），這一晚那一欄用報告的數字蓋過去）、攝影機（小折線＋後端那句；**點開是 `widgets/movement_sheet.dart`**，11-15 使用者定（照參考的監視器 App 版面）：**順序是 摘要 → 播放器 → 動作線 → 每小時 → 一週 → 片段列表**；後端那句「跟你平常比」＋「105 movements · 25m moving in total」（次數照抄 `events_total`，11-15 使用者改：原本 11-09 定不寫；總共動多久＝每段秒數加起來；**不寫每小時平均、不跟常模並列**）＋not part of your score；**動作線**（11-15 使用者改回：線比膠囊好看；畫**整段錄影**那條＝`/insights` 的 `camera.history[].motion_curve`，不剪成睡著那段，才跟每小時次數涵蓋同一段時間；每 5 分鐘有幾成在動，片段時刻的點**畫在線上那一刻**（不是貼底線）、白線＝正在看的；**按住左右滑有泡泡**「03:42 · moving 12 sec · Light」（同 chart_probe 的規則：吸到最近的真實讀數、不內插）；**滑到或點到某段動作 3 分鐘內，泡泡吸到那段的點、寫那段動作，影片跟著換成那段**（11-15 使用者：原本滑的時候影片不動，泡泡跟正在播的像兩個不同的點）；沒有線才退回膠囊時間軸）；段落之間有細線分隔；**每個鐘頭動幾次**（頭尾不滿一小時的畫淡、寫涵蓋幾分鐘）；**播放器**循環播選到的那段，影片上有**觀景窗框**（四角括號、左上「● 04:10」、右上「2 / 10」；**不寫 REC**，是錄好的片段），點畫面全螢幕、兩指放大；底下一條圓角**控制列**（照使用者給的參考圖）：⏮ ⏯ ⏭（中間是暫停／繼續：GIF 停在當下那一格、畫面左下寫 Paused，**換一段就從頭播**）＋一顆主色的 Full screen 大鈕，選到沒有片段的動作寫「No clip for this movement」（**不跳去播別段**）；**片段列表**照時間排（縮圖＋大的時刻＋「moved for 21 s · Light」）。每段動作來自 `camera_nightly.motion_episodes`（`tapo_sleep_onset.motion_episodes()`，**跟 events_total 同一個定義**，個數一定一樣；`/insights` 的 `camera.history[].episodes` 帶標籤，**跟片段同一支 `camera_clips.label_for`**；舊夜晚用 `migrate_camera_to_db.py --curves-only` 回填，只補曲線與每段動作）。片段的 `start_at` 就是那段動作的開始，可以直接配對。標籤後面接**那一刻手錶的睡眠階段**（三種時間基準要換成同一種）。下半一週——7 欄每晚的 `usual.delta_pct` 從中線往上／往下，灰帶＝「差不多」，**寬度照抄後端 `usual.same_as_usual_pct`**（Dart 不寫 25，舊版後端沒給就不畫）；**只用一個顏色**（動得多不代表睡不好）。不做「最長靜止多久」、不放整夜錄影（一晚約 460 MB、只在電腦上、要另裝播放器外掛）；
+Awake（整晚一條、只亮清醒段；**點開是 `widgets/awake_week_sheet.dart`**，11-15 使用者定：上半**這一晚**——大數字是手錶的總數（不是段落加總），入睡→起床一條時間軸亮出清醒段落，下面每段一個小標籤「03:42 · 1m」（照時間排、多了換行不藏，不到 1 分寫 <1m），**醒了幾次**（11-15 grill 改：原本不寫）——大數字底下「Woke up 2 times · 2m in total」、一週每根長條底下「×2」，**0 次寫 ×0、沒資料（Health Connect 的晚上）寫「—」**；次數＝**還原的時間軸上清醒的段數**（`garmin/sleep_stages.awake_count`，跟畫出來的段落同一份），存在 `wearable_nightly.awake_count`，由 `/home` 的 `metrics.awake_count` 與 `/insights` 的 `wearable.history[].awake_count` 帶出；🔴 **不是 summary 的 `awake_count`**：那個把入睡時刻的整晚摘要也算成一次，**每晚多 1**（11-15 真資料預覽發現，124/124 晚都正好差 1；Tier3 是跟自己平常比，固定多 1 互相抵掉，評分不動）。舊夜晚回填：`migrate_garmin_to_db.py --awake-count-only [--standard 原始檔]`，只補這一欄、寫完逐晚重算核對；沒有時間軸的晚上只寫總數＋「No timeline for this night」。下半**這一週**——同 Total sleep 的 7 欄膠囊，平均／幾晚有資料／跟前一週比**直接用 sleep_week_sheet 的函式**，**0 分寫「0m」算進平均、沒資料寫「—」不算**，沒有目標線；一週資料來自 `/insights` 的 `wearable.history[].waso_minutes`（`CameraInsightsResult.awakeMinutes`），連不到後端整段不出現。不判斷好壞、不掛手錶準確度警語）、Efficiency（**11-15 使用者定照參考圖（Battery 卡）改成從底下往上填滿**（`ReportFillTile`，填多高＝效率、取代圓環，數字左下、% 小一號，下面一行是那一種的名字）；**點開是 `widgets/efficiency_sheet.dart`**，11-15 使用者定：上半**這一晚**——數字照抄（只把 100.0 寫成 100），下面是那一種的**名字**（`composition.efficiency_label`，字只在 `score_claim.EFFICIENCY_BASIS_LABELS`，**機器標籤 `Basis: …` 拿掉**），一條「算進去的時間＝整條、睡著＝亮的」＋「6h 16m asleep of 6h 18m counted」＋分母那兩個時刻（① 兩個按鈕、② Start sleep→手錶醒來、③ 手錶入睡→醒來；**百分比不在 Dart 重算**，分鐘只是說明），**只有 ③ 多一行請按按鈕的提示**；**不放警語**（使用者定：上面的分子分母已經說明怎麼算的；⚠️ 2026-11-19 起分數卡也拿掉了，**警語只留在書面報告**，App 上一處都沒有）；**不畫 85% 線**。下半**這一週**——0–100%、**畫面上只分兩種**（11-15 使用者定）：有按按鈕（①②）**實心**、沒按（③）**空心**（同「空心＝手錶」）——② 只按了 Start sleep 也算有按，後端給 ①② **同一個名字 `Sleep button`**、③ 是 `Watch only`，**計分照舊三段式**，② 的分母差在哪由那一行「Start sleep → watch wake」交代；數字照抄；**不算平均、不比前一週**（三種不是同一個量，③ 幾乎都 100%），標題是**一個名字一行**、各幾晚（同名就合成一行，Dart 不寫死哪幾種算一組）；**後端沒給名字的那一種不寫，Dart 不自己取名**。種類靠那晚 behavior 自己帶的 `*_basis` 對出來（`efficiencyKindOf`，不寫死 basis）；每晚的數字跟格子**同一支** `scoredEfficiency`，這一晚的長條用報告的數字蓋過去）、心率（睡著那段的小折線；**格子標題 Sleeping HR**（11-15 使用者定：講清楚不是整天的；格子窄寫縮寫，點開的標題寫全名 Sleeping heart rate）；**點開是 `widgets/heart_rate_sheet.dart`**：上半**這一晚**——大數字＝睡著那段的平均（同格子），「Lowest 46 at 03:48 · 18m after falling asleep」（最低與那一刻都是**原始讀數**，後端 `min_at`；5 分鐘平均的最低會跟 min 對不上）＋「Resting 55 (all day)」；線**依那一刻的睡眠階段上色**（同 Sleep Stages 的顏色），虛線＝平均、白點＝最低，點／滑看那一刻；下面各階段的平均心率（線上的點照階段分組，沒量到 REM 不給）。⚠️ **參考圖的運動心率區間不照做**：那是最大心率的百分比，睡著全落在最低一區以下，且睡眠心率沒有文獻門檻（紅線 2）；**不寫 Normal／High、不寫最高**（最高多半是短暫醒來）。「夜間心率下降幅度」（<10% 有死亡率關聯，但證據主要來自糖尿病族群）11-15 討論過、**這一輪不做**，要做先寫進研究文件。下半**這一週**——7 欄，實心點＝平均、空心點＝最低；「Usually 56 bpm」＝7 晚平均的**中間值**，跟前一週比只代表方向；靜止心率是整天的另一個量，**不進一週圖**。一週來自 `/insights` 的 `wearable.history.sleep_heart_rate`（跟格子**同一支** `night_heart_rate`，只有 Garmin 來源有），這一晚那一欄用報告的數字蓋過去）、攝影機（小折線＋後端那句；**點開是 `widgets/movement_sheet.dart`**，11-15 使用者定（照參考的監視器 App 版面）：**順序是 摘要 → 播放器 → 動作線 → 每小時 → 一週 → 片段列表**；後端那句「跟你平常比」＋「105 movements · 25m moving in total」（次數照抄 `events_total`，11-15 使用者改：原本 11-09 定不寫；總共動多久＝每段秒數加起來；**不寫每小時平均、不跟常模並列**）＋not part of your score；**動作線**（11-15 使用者改回：線比膠囊好看；畫**整段錄影**那條＝`/insights` 的 `camera.history[].motion_curve`，不剪成睡著那段，才跟每小時次數涵蓋同一段時間；每 5 分鐘有幾成在動，片段時刻的點**畫在線上那一刻**（不是貼底線）、白線＝正在看的；**按住左右滑有泡泡**「03:42 · moving 12 sec · Light」（同 chart_probe 的規則：吸到最近的真實讀數、不內插）；**滑到或點到某段動作 3 分鐘內，泡泡吸到那段的點、寫那段動作，影片跟著換成那段**（11-15 使用者：原本滑的時候影片不動，泡泡跟正在播的像兩個不同的點）；沒有線才退回膠囊時間軸）；段落之間有細線分隔；**每個鐘頭動幾次**（頭尾不滿一小時的畫淡、寫涵蓋幾分鐘）；**播放器**循環播選到的那段，影片上有**觀景窗框**（四角括號、左上「● 04:10」、右上「2 / 10」；**不寫 REC**，是錄好的片段），點畫面全螢幕、兩指放大；底下一條圓角**控制列**（照使用者給的參考圖）：⏮ ⏯ ⏭（中間是暫停／繼續：GIF 停在當下那一格、畫面左下寫 Paused，**換一段就從頭播**）＋一顆主色的 Full screen 大鈕，選到沒有片段的動作寫「No clip for this movement」（**不跳去播別段**）；**片段列表**照時間排（縮圖＋大的時刻＋「moved for 21 s · Light」）。每段動作來自 `camera_nightly.motion_episodes`（`tapo_sleep_onset.motion_episodes()`，**跟 events_total 同一個定義**，個數一定一樣；`/insights` 的 `camera.history[].episodes` 帶標籤，**跟片段同一支 `camera_clips.label_for`**；舊夜晚用 `migrate_camera_to_db.py --curves-only` 回填，只補曲線與每段動作）。片段的 `start_at` 就是那段動作的開始，可以直接配對。標籤後面接**那一刻手錶的睡眠階段**（三種時間基準要換成同一種）。下半一週——7 欄每晚的 `usual.delta_pct` 從中線往上／往下，灰帶＝「差不多」，**寬度照抄後端 `usual.same_as_usual_pct`**（Dart 不寫 25，舊版後端沒給就不畫）；**只用一個顏色**（動得多不代表睡不好）。不做「最長靜止多久」、不放整夜錄影（一晚約 460 MB、只在電腦上、要另裝播放器外掛）；
 Yesterday＝步數（**11-15 使用者定照參考圖 Step Counter 改成圓弧**：填多少＝步數÷那天的目標，**超過就滿圈、不變色、不打勾、不寫 reached**；中間人形＋大字、下面「Goal 9,540」、最底「3.7 km · 10 floors」；**點開是 `widgets/steps_sheet.dart`**：上半那一天——大圓弧、「Goal set by Garmin, changes daily」（Garmin 每天自己調目標）、距離／活動卡路里／活動時間／爬樓，**每個鐘頭走幾步**（24 根，點／滑出「14:00 · 1,230 steps」；沒戴錶的鐘頭空著不畫成 0、有戴走 0 步畫細線；不寫加總——大數字已是官方總數。2026-11-15 實抓 30 天：照當地日期切後 96 格加起來與官方**逐天相同**；「none＝沒戴錶」那 30 天沒出現過，還沒在真資料上驗證）；下半這一週——7 根，**目標畫成一根淡色空長條、走了多少從底下往上填**（11-15 使用者：原本只有一條目標線太空；超過目標就長出空條上緣、不變色；沒資料的那天只剩空條），「Usually」＝中間值，跟前一週比只代表方向；**0 步＝沒戴錶 → 「—」不算**；只用一個顏色。不放 Move IQ（有自己的格子））、**活動卡路里**（11-15 使用者定拆出來自成一格，緊接 Steps 右邊：大字＋最近 7 天小長條，小字「active only, not total burn」，**點開是 `widgets/kcal_sheet.dart`**（11-15 使用者定，參考圖 My Diary）：上半右邊圓環＝一整天總消耗（淡＝靜止代謝、亮＝活動），左邊 Resting／Active 兩行，底下寫明兩個都是 Garmin 估的；**參考圖的 Eaten／kcal left 不做**（沒有飲食資料，「還剩多少」是好壞判斷）——不給目標、不寫剩多少；靜止代謝與總消耗是同一個 `get_stats` 的 `bmrKilocalories`／`totalKilocalories`（`garmin_daily.resting_kcal`／`total_kcal`，**舊日子不特地重抓**，沒有就不畫圓環、只畫活動大數字）；下半一週 7 根活動卡路里，Usually＝中間值、比前一週只代表方向、0＝沒資料寫「—」；不做三餐卡片）、**活動時間**（11-15 使用者定，參考圖 Activity：**一座山＝一整天 24 小時**，漸層由下往上 睡（深藍）→ 坐（淺藍）→ 活動（橘）→ 高強度（山尖），**每一段的面積＝那段的比例**——照面積切不照高度切（三角形分界在 √累積比例；照高度切的話 5% 的活動只剩山尖一個點），段之間只留很短的過渡；太陽只是裝飾；大字＝高強度＋活動，小字「high 12m · still 16h 20m」，**參考圖的 Perfect day 不照做**。**點開是 `widgets/active_sheet.dart`**：24 小時圓環四段＋左邊四行、**一整天的時間軸**（每 15 分鐘一格依 Garmin 的程度上色，沒戴錶空著；Move IQ 是上面的白線；點／滑出「09:00–09:15 · Active · 736 steps」；Garmin 的 `generic` 意思不明，照實標 Unlabeled）、一週（高強度疊在下面、Usually＝中間值、比前一週只代表方向、0＝沒資料寫「—」）。⚠️ **睡是 Garmin 以日曆日切的 `sleepingSeconds`**，跟「昨晚睡多久」不是同一個數字：只當顏色、四行裡標 `Asleep (this day)`，不在別處寫。舊日子沒存這欄時後端用「86400 − 其他三種」補（Garmin 四種加起來剛好一天，實測兩天）。⚠️ **不放強度分鐘與 150 分鐘週目標**：這支錶給 0，而且那是 WHO 對中高強度運動的建議，Garmin 的活動時間不是同一個量。久坐只寫時間、不寫坐太久。每 15 分鐘的程度存在 `garmin_daily.activity_quarters`（同 steps_hourly：只在 /home，打包檔不帶）。第五輪：**鋪滿整張卡、山胖一點（兩邊 t^0.7 往外鼓）、不要太陽**、字在左下。同日第二輪（照參考圖）：**輪廓不規則**（`mountainEdges()`，分界改成對實際輪廓數值積分，測試直接積分驗算每段面積）、邊緣一圈淡淡的亮光、大字小字**疊在山的中間**、過渡柔一點、顏色換成珊瑚橘→桃→淡紫藍→藍）、**壓力**（11-15 使用者定，參考圖 Stress 卡：**半圓從底邊長出來、置中、比半張卡大（半徑 0.62 個卡片高，窄卡片時左右被卡片邊緣切掉），平均數字在半圓左邊**（第六輪定案；之前試過右上方露一角、貼底、上半、字在圓心。**圖鋪滿整張卡**——`ReportArtTile`，**底色維持報告的半透明紫**（第四輪試過近黑，使用者要回半透明紫）、標題疊左上；半圓像打了光的球：外圈光暈、左上亮、右下暗、亮邊，色帶過渡柔一點但每段面積不變。⚠️ **貼底之後不准讓底邊淡出**：會吃掉最下面「休息」那段（通常最大），比例就不準），由上往下 高 → 中 → 低 → 休息，**每一段的面積＝量到的時間裡各程度的比例**（對實際形狀數值積分）；**紫色系、不用紅黃**（11-13 的規矩，參考圖的橘紅不照做）；大字＝平均壓力，**不加 %**（Garmin 的是 0–100 分數，加 % 會被讀成「56% 的時間有壓力」）、**不寫 Elevated**。**點開是 `widgets/stress_sheet.dart`**：圓環（只算量到的時間）＋四行＋「Not measured …（moving or watch off）」（`activityStressDuration`＋`uncategorizedStressDuration`，舊日子沒存就不寫）；**一整天的壓力線**（`sleep_heart_rate.day_stress()`，每 3 分鐘＝Garmin 原本的間隔、不平均；量不到的空檔斷開；25／50／75 淡線標 Garmin 自己的四個名稱；睡著的時段淡底色、來自 activity_quarters；點／滑出「14:21 · 62 · Medium」，離讀數超過 3 分鐘寫 no reading、不內插）；一週（各程度疊起來、高在最下面最亮、Usually avg＝中間值、比前一週只代表方向）。⚠️ **平均是「每 3 分鐘讀數的平均」**（`stress_day_averages()`），14 天實測比 Garmin App 自己的平均常少 1（11/14 天），Garmin 的算法對不上四捨五入／進位／不算 0——只用一套（從讀數算，05-28 起每天都有、跟那條線同一份資料），畫面寫明。不提睡眠分數、不給呼吸之類的建議）、
 Body Battery（**兩根柱子不畫電池**：只有充／耗、沒有剩幾 %）、**Awake HR**（11-15 使用者定，參考 Apple Watch：**發光的珊瑚紅愛心跟著醒著的平均心率跳**，減少動態效果時靜止；大字「78 BPM」、小字「peak 150 at 17:20」。**只放醒著的平均、最高、各區間時間**——**不放靜止心率、最低**（靜止心率在報告上半部已經有）、**不寫 Normal／High、不比平常**：`Research-Background/心率門檻.md` 查過，醒著的平均心率沒有結果關聯的切點（臨床「>80」套上去本人 76 天裡 47 天會是 High），又主要取決於那天走了多少路。醒著＝那個日曆日扣掉**手錶那兩晚的入睡→起床**聯集 **activity_quarters 標 sleep 的格子**（`sleep_heart_rate.awake_heart_rate()`）；跟上面的 Sleeping HR 分開、不混。區間是 **Garmin Connect 裡本人的設定**（`GARMIN_HR_ZONES`：最大 199、下緣 100／119／139／159／179），不是文獻門檻、畫面寫明「max 199」、不說哪一區好；⚠️ 只對本人成立，換人戴要重讀 Garmin 的設定。**點開是 `widgets/awake_hr_sheet.dart`**：平均＋最高、整天的線（每 2 分鐘的原始讀數、空檔斷開、睡著那段畫淡寫 Asleep · see Sleeping HR、Move IQ 底下細線、點／滑出「17:20 · 150 bpm」，離讀數超過 2 分鐘寫 no reading）、各區間幾分鐘、一週（點＝醒著平均、線到最高，**沒有 Usually、沒有跟前一週比**）。`awake_heart_rate` 只在 /home（打包檔沒有每晚的入睡時刻）；沒有時退回原本的整天心率格子）、**Move IQ**（11-15 使用者定：**24 小時鐘面**、00 在上、有動的時段亮一段弧（走路綠、其他藍），大字「2 walks」（混了別的寫 moves）、小字總分鐘數；🔴 **騎車（cycling）不顯示**：使用者多半騎機車，手錶分不出機車與腳踏車——08-28 起 79 段騎車每分鐘步數中間值 22、多數時段 Garmin 標坐著（走路是 90），放進來會把騎機車讀成運動。**資料照存、後端照給，只在畫面濾掉，一處：`move_iq_sheet.moveIqShown()`**（Awake HR 線圖底下的標記也走它）。代價：78 天裡 52 天剩不到一段 → 那天整格不畫，使用者知情。其他類型**照 Garmin 寫、不用步數改**（一段每分鐘 156 步的 swimming 照寫 Swim）。**點開是 `widgets/move_iq_sheet.dart`**：說明一句（Rides are left out — most are scooter trips）、那天的清單「Walk 17:42–17:56 · 14m」、最近 7 天每天幾分鐘；**不寫每段走了幾步**（只有 15 分鐘的格子，會把前後沒動的時間算進去）、**不比平常**。history 的 `move_iq` 只在 /home）。
 ⚠️ 底下那行只寫事實（參考圖的 Elevated／Perfect day 不照做）；沒值的格子不畫、不畫成 0；兩個一列一樣高，單數的最後一格佔整列。
@@ -1246,21 +1270,21 @@ Ohayon 2017 的 ≥85% 卻是為**臥床時間**訂的。最直接的證據：�
 API 讀資料庫，拿不到同一份資料），由 `tests/test_score_composition.py` 逐夜比對守著。
 
 ⚠️ **警語與那段 note 的文字只有一個定義處：`score_claim.py`。**
-三個消費端（API、打包檔、App 畫面）全部照抄它：
+兩個消費端（API、打包檔）照抄它。🔴 **2026-11-19 起 App 不顯示分數組成與深睡／REM／效率警語**
+（使用者定：Insights 改版拿掉舊分數卡，警語只留在書面報告 `REPORT_CAVEATS.md`）。
+API 與打包檔照舊輸出，之後要放回 App 時照抄它們，不在 Dart 產生：
 
 | 哪一端 | 怎麼拿到 | 判準寫在哪 |
 |---|---|---|
 | `main.py`（API） | `score_claim.compose(...)` | 從資料庫原始度量**推論**哪幾項有算 |
 | `build_app_payload.py`（打包檔） | 同上 | 直接讀 pipeline 的 `{項目}_score` 是否為 None |
-| `report_screen.dart`（Insights 頁分數卡） | 照抄 payload／API 的字串 | 不判斷，**一個字都不在 Dart 產生** |
 
 ⚠️ `build_app_payload.py` **不能 import `main.py`**（反向已經 import 了
 `map_pet_mood`，會循環），這就是文字單獨抽成 `score_claim.py` 的原因。
 ⚠️ 打包檔的分項得分只在 `garmin_sleep_quality.json` 裡（`*_final.json` 沒有），
 所以打包腳本要**多讀那一份檔**。
 ⚠️ Dart 端刻意**沒有**配分表：`scored_weight` 照抄後端。在 Dart 把
-30+25 加起來就是第二份配分表，而兩份漂移時不會有任何錯誤訊息
-（`app/test/score_composition_test.dart` 有一條守著）。
+30+25 加起來就是第二份配分表，而兩份漂移時不會有任何錯誤訊息。
 ⚠️ 判斷一律用 `is not None` **不可用真假值**——WASO 0 分鐘拿滿分 25、深睡 0 分鐘拿 0 分，
 兩者都是「有測到」。實測真實資料有 **16 晚 WASO 是 0**，用真假值會誤報那 16 晚。
 
@@ -1667,7 +1691,7 @@ python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**915 條全過**，2026-11-16 實測）：
+Flutter（在 `app/` 底下跑，**883 條全過**，2026-11-19 實測；少掉的是舊 Insights 頁的畫面測試）：
 
 ```bash
 flutter test
@@ -1682,13 +1706,12 @@ flutter analyze     # No issues found
 | `nightly_uploader_test.dart` | 三種「沒上傳」的原因要分得開；body 不含 `target_bedtime`；達成度照抄後端 |
 | `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
 | `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚）。⚠️ 釘住日期的那兩條隨效率計不計分改過兩次期望值（10-01 停止計分：08-09 Poor→Bad、08-23 Good→Normal；11-07 恢復計分又改回 Poor／Good），**真正要守的那件事改成由資料推導**（anxious 要橫跨多個品質等級），下次分數位移時才不會又無預警地紅 |
-| `score_composition_test.dart` | 分數卡那段警語。四個壞掉時不會報錯的地方：警語文字必須照抄後端（用哨兵字串驗）、`caveats` 與 `unscored` 要分開呈現、`primary_component` 不得寫死成 duration、沒有 `composition` 時整段不顯示（**不准退回「四項等權」那種預設敘述**）。六條都用「把 bug 重新引入、確認測試會紅」驗證過 |
-| `measured_efficiency_test.dart` | 手錶實測效率那張卡（**兩個效率並列**，見上方五個效率那張表）。兩個數字**各自**都要講一次「不影響分數」（少一個，使用者會以為另一個有進分數）、各自的 basis 都要在；舊版後端沒有第二組欄位時那一段整個不出現。算不出來時**不得畫成 0%**（0% 會被讀成「整夜沒睡著」，真相是沒量到）；那句「不影響分數」與 `basis` 都不能省（App 裡有四個叫「效率」的數字，只有 basis 分得開）；百分比照抄不四捨五入掉小數。⚠️ **不要在這裡驗「畫面上沒有底線」**——`Basis: watch_tst__phone_tats` 是刻意保留的機器標籤，那條守則在後端的 `test_sleep_efficiency.py`【6b】 |
-| `usage_stats_test.dart` | 卡片標題不得把日彙總說成睡前使用（**含反面**：有睡前資料時標題與說明都要換）；沒有後端回應時不得顯示達成度；上床／下床按鈕是**加分項不是取代品**（沒按不得擋住上傳） |
+| `measured_efficiency_test.dart` | 只剩服務層：兩個效率的欄位解析得出來、算不出來是 null 不是 0（舊 Insights 那張卡 2026-11-19 拿掉了） |
+| `usage_stats_test.dart` | 服務層的解析與合併；上傳規則改測 `NightlySync`：按過的標記要送、**沒按不得擋住上傳**、後端沒收下（`marksStored`）或進佇列都**不清**標記、送的是待送格就只清待送格 |
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
-| `camera_card_test.dart`（動作片段那組） | 標籤與「為什麼沒有片段」照抄後端（哨兵字串）；網址接上 baseUrl、不出現 `//`；舊版後端沒有 `clips` 欄位時整段不出現（講「沒有片段」是假話）；點了某一晚卻沒有那晚的錄影時**不退回最近一晚** |
+| `camera_night_parse_test.dart` | 攝影機每晚資料的解析：相對網址接上 baseUrl、clips／usual 欄位有沒有、點了某一晚沒有錄影時**不退回最近一晚**（2026-11-19 舊攝影機卡拿掉，畫面那一半刪了） |
 | `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」。衣櫃（2026-11-18 改版）另守三條：**點一下只是試穿、Confirm 才送後端**（壞掉會變成點到就存進後端，畫面看起來一樣正常）、沒解鎖的連試穿都不行、**`kClosetSlotFor` 要含沒有真圖的那兩件**（top_hat／crown；漏了就點分類整件消失、不報錯）。⚠️ 衣櫃的預覽用 `HomePet`，不另開一份「現在選哪隻寵物」的狀態——隊友原版自帶 `PetAppearance`，那會是第二個定義處 |
 | `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
 | `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |
@@ -1748,7 +1771,7 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 只產一份檔的理由：兩份就會有「App 顯示的跟 API 回傳的對不上」這種最難查的 bug。
 之後要接 HTTP 只要實作 `sleep_repository.dart` 裡預留的 `ApiSleepRepository`。
 
-✅ **四個有資料的分頁都接上真實資料了**：`home_screen` / `report_screen`（PR #16）/
+✅ **四個有資料的分頁都接上真實資料了**：`home_screen` / `insights_screen`（2026-11-19 取代 `report_screen`）/
 `assistant_screen`（PR #51 起改問 Claude）/ `friends_screen`（PR #51 起接好友後端）。
 ⚠️ 好友、助理、遊戲化**需要後端**；沒給 `SONNAP_API_BASE` 的 build 會照實說「需要後端」。
 
@@ -1756,7 +1779,10 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 
 | 檔案 | 做什麼 |
 |---|---|
-| `sleep_repository.dart` | 睡眠資料。asset / API 兩種來源 + 失敗退回，來源顯示在 Insights 頁 |
+| `sleep_repository.dart` | 睡眠資料。asset / API 兩種來源 + 失敗退回，來源顯示在設定頁「Data」 |
+| `nightly_sync.dart` | 偵測就寢＋上傳＋問挑戰，App 層在跑（開 App、回到前景）。2026-11-19 從舊 Insights 頁搬出來 |
+| `report_loader.dart` | 組一晚的早晨報告（首頁與 Insights 的 Day 共用同一份） |
+| `insights_periods.dart` | Insights W/M/Y 的期間切法與加總（中位數、上一期、熬夜照抄 is_late）。純函式 |
 | `usage_stats.dart` | 包 `sonnap/usage` channel：手機使用時間 + 就寢時刻查詢 |
 | `lights_out.dart` | **純函式**：把互動事件流變成一個就寢時刻。沒有 I/O，測得到 |
 | `pre_bed_apps.dart` | 睡前 60 分鐘的 App 切段 |
