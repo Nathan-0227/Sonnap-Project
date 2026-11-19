@@ -1,3 +1,4 @@
+import 'live_sleep_status.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -68,6 +69,19 @@ class FriendSummary {
   /// 這一週（週一→週日）每天的狀態；null＝沒公開準時與否。
   final List<StreakDay>? streakWeek;
 
+  /// 即時狀態（2026-11-19，後端 social/live_status.py 判的，Dart 不重判）：
+  /// 'asleep'／'up'／'past_bedtime'／'awake'；null＝他沒打開分享（預設關）。
+  final String? liveState;
+
+  /// 那個狀態從幾點開始（牆鐘 ISO，⚠️ 一律 parseWallClock）；awake 是 null。
+  final String? liveSince;
+
+  /// 只有 past_bedtime 有：過了他自己的目標幾分鐘（後端算好，目標時刻不分享）。
+  final int? minutesPastBedtime;
+
+  /// 最近 7 晚每晚幾點放下手機（舊的在前）；null＝沒公開時刻。
+  final List<LightsOutDay>? recentLightsOut;
+
   const FriendSummary({
     required this.handle,
     required this.displayName,
@@ -82,6 +96,10 @@ class FriendSummary {
     required this.recordedNights,
     this.petSpecies,
     this.streakWeek,
+    this.liveState,
+    this.liveSince,
+    this.minutesPastBedtime,
+    this.recentLightsOut,
   });
 
   factory FriendSummary.fromJson(Map<String, dynamic> json) => FriendSummary(
@@ -107,7 +125,24 @@ class FriendSummary {
                   ),
               ]
             : null,
+        liveState: json['live_state'] as String?,
+        liveSince: json['live_since'] as String?,
+        minutesPastBedtime: (json['minutes_past_bedtime'] as num?)?.toInt(),
+        recentLightsOut: json['recent_lights_out'] is List
+            ? [
+                for (final d in (json['recent_lights_out'] as List)
+                    .whereType<Map<String, dynamic>>())
+                  LightsOutDay((d['date'] as String?) ?? '', d['time'] as String?),
+              ]
+            : null,
       );
+}
+
+/// 好友卡右邊那排小長條的一晚：time 是 "HH:MM"，null＝那晚沒資料（不畫成 0）。
+class LightsOutDay {
+  final String date;
+  final String? time;
+  const LightsOutDay(this.date, this.time);
 }
 
 /// Streak 卡那一排的一天：'on_time'／'late'／'none'（沒資料）／'future'（還沒到）。
@@ -662,6 +697,16 @@ class FriendsService {
     final r = await _request('DELETE', '/friends/${Uri.encodeComponent(handle)}');
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: (r.value!['removed'] as String?) ?? handle);
+  }
+
+  /// 即時狀態（[SleepStatusSink] 的實作）。短逾時、只試一次；結果不重要（不補送）。
+  Future<void> sendSleepStatus(String event, DateTime? at) async {
+    await _request(
+      'POST',
+      '/sleep-status',
+      body: {'event': event, if (at != null) 'at': wallClockIso(at)},
+      wait: const Duration(seconds: 5),
+    );
   }
 
   /// ⚠️ user_id：GET／DELETE 放 query、POST 放 body（後端定的介面）。

@@ -3,10 +3,11 @@ import 'package:intl/intl.dart';
 
 import '../models/wall_clock.dart';
 import '../services/friends_service.dart';
+import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
+import '../widgets/friend_live_card.dart';
 import '../widgets/friend_night_card.dart';
 import '../widgets/friends_town.dart';
-import '../widgets/mood_filter_bar.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/leaderboard_section.dart';
 import 'friend_sharing_screen.dart';
@@ -37,47 +38,44 @@ import 'friend_sharing_screen.dart';
 /// 2026-11-18：Town 改成**整個畫面都是地圖**（照 Finch），標題與分頁浮在上面，連續晚數、✨ 說明、
 /// 誰來看過你收成左下／右下的小圓鈕。載入中、連不到後端時退回一般的版面照實說。
 /// 朋友沒公開的值是 null，畫面就不畫那一項，不寫成 0。
+/// 好友頁存在手機上的鍵。
+abstract final class FriendsScreenKeys {
+  /// 「要不要讓好友看到即時狀態」問過了沒（只問一次）。值：'on'／'off'。
+  static const liveAsked = 'friends_live_status_asked';
+}
+
 class FriendsScreen extends StatefulWidget {
   /// null = 這支 build 沒有後端，畫面會老實講要連上後端。
   final FriendsService? service;
 
-  const FriendsScreen({super.key, this.service});
+  /// 現在幾點（卡片上「睡了多久」「12m ago」用）。測試注入。
+  final DateTime Function() clock;
+
+  /// 「要不要分享即時狀態」只問一次：問過了記在這裡。測試注入記憶體版。
+  final KeyValueStore store;
+
+  const FriendsScreen({
+    super.key,
+    this.service,
+    this.clock = DateTime.now,
+    this.store = const PlatformKeyValueStore(),
+  });
 
   @override
   State<FriendsScreen> createState() => _FriendsScreenState();
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  String selectedMood = "All";
-
   /// 2026-11-17 使用者定：Town · Feed · Friends，打開預設在 Town。
   _Tab _tab = _Tab.town;
   FriendsResult<FriendsState>? _result;
   FriendsResult<TownState>? _town;
   List<FriendNightCard> _feed = const [];
 
-  /// 好友畫面的篩選選項。⚠️ 沒有「Sick」，理由見類別說明。
-  static const List<Map<String, String>> moodOptions = [
-    {"label": "All", "emoji": ""},
-    {"label": "Happy", "emoji": "🙂"},
-    {"label": "Normal", "emoji": "😐"},
-    {"label": "Tired", "emoji": "😟"},
-    {"label": "No record", "emoji": "❔"},
-  ];
+  /// Friends 分頁裡的子分頁（2026-11-19）：All · Asleep · Still up · This Week。
+  _LiveTab _live = _LiveTab.all;
 
-  /// 後端的心情值 → 篩選列的標籤。純查表，判斷在後端（pet_state.py）。
-  static String moodLabel(String? mood) {
-    switch (mood) {
-      case 'happy':
-        return 'Happy';
-      case 'bored':
-        return 'Normal';
-      case 'tired':
-        return 'Tired';
-      default:
-        return 'No record';
-    }
-  }
+  bool _liveAsking = false;
 
   @override
   void initState() {
@@ -415,9 +413,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ];
     }
 
-    final visible = selectedMood == "All"
-        ? state.friends
-        : state.friends.where((f) => moodLabel(f.petMood) == selectedMood).toList();
+    final visible = switch (_live) {
+      _LiveTab.asleep => state.friends.where((f) => liveFilterOf(f) == 'asleep').toList(),
+      _LiveTab.stillUp => state.friends.where((f) => liveFilterOf(f) == 'still_up').toList(),
+      _ => state.friends,
+    };
 
     return [
       _tabs(),
@@ -433,6 +433,70 @@ class _FriendsScreenState extends State<FriendsScreen> {
             style: const TextStyle(color: Color(0xFF8498B7), fontSize: 11, height: 1.4)),
       ],
     ];
+  }
+
+  void _selectTab(_Tab t) {
+    setState(() => _tab = t);
+    if (t == _Tab.friends) _maybeAskLiveSharing();
+  }
+
+  /// 第一次進 Friends 分頁時問一次要不要分享即時狀態（2026-11-19 使用者定 Q3：預設關、問一次）。
+  /// ⚠️ 不在 initState 問：好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來。
+  /// ⚠️ 連不到後端、舊版後端沒有這一項、按旁邊關掉 → **不記成問過**，下次再問
+  ///    （同建帳號那條：暫時的失敗不能記成永久的決定）。
+  Future<void> _maybeAskLiveSharing() async {
+    final service = widget.service;
+    if (service == null || _liveAsking) return;
+    _liveAsking = true;
+    try {
+      if (await widget.store.getString(FriendsScreenKeys.liveAsked) != null) return;
+      final r = await service.fetchSharing();
+      if (!mounted || !r.isOk || r.value == null) return;
+      final item = r.value!.groups
+          .expand((g) => g.items)
+          .where((i) => i.key == 'live_status')
+          .firstOrNull;
+      if (item == null) return;
+      if (item.enabled) {
+        await widget.store.setString(FriendsScreenKeys.liveAsked, 'on');
+        return;
+      }
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          key: const Key('live-ask'),
+          backgroundColor: const Color(0xFF1B2350),
+          title: const Text("Show friends when you're asleep?",
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: const Text(
+            "When you tap Start Sleep, friends see \"Asleep since 23:40\". "
+            "If you haven't tapped it after your bedtime, they see how long it's been. "
+            "You can change this anytime in What friends see.",
+            style: TextStyle(color: Colors.white70, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              key: const Key('live-ask-no'),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Not now'),
+            ),
+            FilledButton(
+              key: const Key('live-ask-yes'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Share'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || yes == null) return;
+      if (yes) {
+        final saved = await service.patchSharing(items: {'live_status': true});
+        if (!saved.isOk) return;
+      }
+      await widget.store.setString(FriendsScreenKeys.liveAsked, yes ? 'on' : 'off');
+    } finally {
+      _liveAsking = false;
+    }
   }
 
   Widget _tabs() {
@@ -467,7 +531,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return Row(
       children: [
         for (final (t, label) in [(_Tab.town, 'Town'), (_Tab.feed, 'Feed'), (_Tab.friends, 'Friends')]) ...[
-          tab(label, _tab == t, () => setState(() => _tab = t), Key('tab-${t.name}')),
+          tab(label, _tab == t, () => _selectTab(t), Key('tab-${t.name}')),
           const SizedBox(width: 20),
         ],
       ],
@@ -501,7 +565,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             key: _townMap,
             town: town,
             onTap: _tapTownie,
-            onAddFriend: town.friends.length < kTownMaxFriends ? () => setState(() => _tab = _Tab.friends) : null,
+            onAddFriend: town.friends.length < kTownMaxFriends ? () => _selectTab(_Tab.friends) : null,
             covered: EdgeInsets.only(top: pad.top + headerH, bottom: pad.bottom + 70),
           ),
         ),
@@ -648,24 +712,96 @@ class _FriendsScreenState extends State<FriendsScreen> {
       _inviteCard(state.myInviteCode),
       _circleCard(state.friends),
       // 七個排行榜（第二批）：名次、門檻都照抄後端（舊的只有連續天數那張換掉了）
-      if (widget.service != null) LeaderboardSection(service: widget.service!),
-      MoodFilterBar(
-        options: moodOptions,
-        selectedMood: selectedMood,
-        onMoodSelected: (mood) => setState(() => selectedMood = mood),
-      ),
-      if (state.friends.isEmpty)
+      // 2026-11-19 使用者定（參考圖）：All · Asleep · Still up · This Week。
+      // This Week＝原本的排行榜（名次、門檻照抄後端）
+      _liveTabs(),
+      const SizedBox(height: 14),
+      if (_live == _LiveTab.week)
+        if (widget.service != null)
+          LeaderboardSection(service: widget.service!)
+        else
+          const SizedBox.shrink()
+      else if (state.friends.isEmpty)
         _card(const Text(
           "No friends yet. Share your invite code, or add a friend with theirs.",
           key: Key('friends-empty'),
           style: TextStyle(color: Colors.white70, height: 1.4),
         ))
       else if (visible.isEmpty)
-        _card(const Text("No friends found with this mood.",
-            style: TextStyle(color: Colors.white70)))
-      else
-        for (final f in visible) _friendRow(f),
+        _card(Text(
+          _live == _LiveTab.asleep
+              ? "Nobody has tapped Start Sleep yet."
+              : "Nobody here right now.",
+          key: const Key('friends-filter-empty'),
+          style: const TextStyle(color: Colors.white70),
+        ))
+      else ...[
+        for (final f in visible)
+          FriendLiveCard(friend: f, now: widget.clock(), onTap: () => _showFriend(f)),
+        // 狀態只來自按鈕：沒按的人不代表醒著（「不按也沒關係」）
+        const Padding(
+          padding: EdgeInsets.only(top: 2, bottom: 8),
+          child: Text(
+            "Asleep means they tapped Start Sleep. Friends who skip the button may already be asleep. "
+            "Bars: when they put the phone down, last 7 nights — taller is later.",
+            key: Key('live-note'),
+            style: TextStyle(color: Color(0xFF8498B7), fontSize: 11, height: 1.4),
+          ),
+        ),
+      ],
     ];
+  }
+
+  /// 照參考圖的膠囊分頁：選中的是實心紫。
+  Widget _liveTabs() {
+    Widget pill(_LiveTab t, String label) {
+      final selected = _live == t;
+      return Expanded(
+        child: InkWell(
+          key: Key('live-tab-${t.name}'),
+          onTap: () => setState(() => _live = t),
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: selected
+                  ? const LinearGradient(colors: [Color(0xFF8B6CFF), Color(0xFF6A4DF0)])
+                  : null,
+            ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xCCFFFFFF),
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 14,
+                    )),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B45),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          pill(_LiveTab.all, 'All'),
+          pill(_LiveTab.asleep, 'Asleep'),
+          pill(_LiveTab.stillUp, 'Still up'),
+          pill(_LiveTab.week, 'This Week'),
+        ],
+      ),
+    );
   }
 
   Widget _card(Widget child) => Container(
@@ -757,45 +893,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ],
     ));
   }
-
-  Widget _friendRow(FriendSummary f) => InkWell(
-        key: Key('friend-${f.handle}'),
-        onTap: () => _showFriend(f),
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF10265A),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 24,
-                backgroundColor: Color(0xFF233A73),
-                child: Text("🐶", style: TextStyle(fontSize: 24)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(f.displayName,
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    Text(lightsOutLine(f), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                    if (f.currentStreak != null)
-                      Text('Streak ${f.currentStreak}',
-                          style: const TextStyle(color: Color(0xFF8498B7), fontSize: 12)),
-                  ],
-                ),
-              ),
-              Text(moodLabel(f.petMood), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            ],
-          ),
-        ),
-      );
 }
 
 enum _Tab { town, feed, friends }
+
+enum _LiveTab { all, asleep, stillUp, week }

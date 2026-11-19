@@ -19,7 +19,6 @@ import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/friend_night_card.dart' show FriendNightPage;
-import 'package:app/widgets/mood_filter_bar.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 
@@ -32,6 +31,10 @@ Map<String, dynamic> friendJson(
   int streak = 2,
   int best = 3,
   List<String>? week,
+  String? live,
+  String? liveSince,
+  int? pastBedtime,
+  List<String?>? recent,
 }) => {
   'handle': handle,
   'display_name': name,
@@ -44,6 +47,14 @@ Map<String, dynamic> friendJson(
   'late_night_ratio': 0.25,
   'late_nights': 1,
   'recorded_nights': 4,
+  'live_state': ?live,
+  'live_since': ?liveSince,
+  'minutes_past_bedtime': ?pastBedtime,
+  if (recent != null)
+    'recent_lights_out': [
+      for (final (i, t) in recent.indexed)
+        {'date': '2026-09-${(i + 1).toString().padLeft(2, '0')}', 'time': t},
+    ],
   if (week != null)
     'streak_week': [
       for (final (i, st) in week.indexed)
@@ -92,6 +103,9 @@ Map<String, dynamic> stateJson({
 };
 
 class _StubFriends implements FriendsService {
+  @override
+  Future<void> sendSleepStatus(String event, DateTime? at) async {}
+
   LeaderboardBoard? board;
   final List<(String, String?)> boardCalls = [];
   @override
@@ -370,7 +384,8 @@ void main() {
 
     testWidgets('放下手機的時刻是牆鐘時間，不是 UTC', (tester) async {
       await pump(tester, _StubFriends());
-      expect(find.textContaining('Phone down 23:05'), findsOneWidget);
+      // 2026-11-19 起卡片上的大字就是放下手機的時刻
+      expect(find.text('23:05'), findsOneWidget);
       expect(
         find.textContaining('15:05'),
         findsNothing,
@@ -423,6 +438,8 @@ void main() {
         'me': {'status': 'not_sharing', 'share_label': 'On time or late'},
       });
       await pump(tester, stub);
+      // 2026-11-19 起排行榜在 This Week 子分頁
+      await tester.tap(find.byKey(const Key('live-tab-week')));
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -437,18 +454,61 @@ void main() {
       expect(carol, greaterThan(bob)); // 後端的第一名站中間
     });
 
-    testWidgets('篩選列沒有「Sick」', (tester) async {
-      await pump(tester, _StubFriends());
-      final bar = tester.widget<MoodFilterBar>(find.byType(MoodFilterBar));
-      expect(bar.options!.map((m) => m['label']), isNot(contains('Sick')));
-    });
-
-    testWidgets('篩 Tired 只剩熬夜的那位', (tester) async {
-      await pump(tester, _StubFriends());
-      await tester.tap(find.textContaining('Tired').first);
+    testWidgets('四個子分頁：Asleep 只剩按了 Start Sleep 的、Still up 是過了就寢與醒著的', (tester) async {
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(stateJson(friends: [
+            friendJson('BOB234', 'Bob', live: 'asleep', liveSince: '2026-09-03T23:40:00'),
+            friendJson('CAR567', 'Carol', live: 'past_bedtime',
+                liveSince: '2026-09-03T23:30:00', pastBedtime: 40),
+            friendJson('DAV890', 'Dave', live: 'up', liveSince: '2026-09-04T07:30:00'),
+            friendJson('EVE111', 'Eve'), // 沒分享即時狀態
+          ])),
+        ),
+      );
+      await pump(tester, stub);
+      expect(find.byKey(const Key('live-tab-all')), findsOneWidget);
+      expect(find.byKey(const Key('live-tab-stillUp')), findsOneWidget);
+      for (final h in ['BOB234', 'CAR567', 'DAV890', 'EVE111']) {
+        expect(find.byKey(Key('friend-$h')), findsOneWidget, reason: 'All 有每一個人');
+      }
+      await tester.tap(find.byKey(const Key('live-tab-asleep')));
+      await tester.pump();
+      expect(find.byKey(const Key('friend-BOB234')), findsOneWidget);
+      expect(find.byKey(const Key('friend-CAR567')), findsNothing);
+      await tester.tap(find.byKey(const Key('live-tab-stillUp')));
       await tester.pump();
       expect(find.byKey(const Key('friend-CAR567')), findsOneWidget);
       expect(find.byKey(const Key('friend-BOB234')), findsNothing);
+      expect(find.byKey(const Key('friend-DAV890')), findsNothing, reason: '起床了不是 still up');
+      expect(find.byKey(const Key('friend-EVE111')), findsNothing, reason: '沒分享的不猜');
+    });
+
+    testWidgets('過了就寢沒按：寫事實不寫熬夜；狀態照抄後端的分鐘數', (tester) async {
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(stateJson(friends: [
+            friendJson('CAR567', 'Carol', live: 'past_bedtime',
+                liveSince: '2026-09-03T23:30:00', pastBedtime: 95),
+          ])),
+        ),
+      );
+      await pump(tester, stub);
+      final line = tester.widget<Text>(find.byKey(const Key('friend-status-CAR567'))).data!;
+      expect(line, 'No Start Sleep yet · 1h 35m past bedtime');
+      expect(find.textContaining(RegExp('staying up|up late', caseSensitive: false)), findsNothing);
+    });
+
+    testWidgets('沒有後端的即時欄位（舊版後端）：不出現狀態圖示的分鐘數、照常畫放下手機', (tester) async {
+      await pump(tester, _StubFriends());
+      expect(
+        tester.widget<Text>(find.byKey(const Key('friend-status-BOB234'))).data,
+        'Live status not shared',
+      );
+      expect(find.byKey(const Key('friend-ago-BOB234')), findsNothing);
+      expect(find.byKey(const Key('friend-bars-BOB234')), findsNothing, reason: '沒給 7 晚就不畫');
     });
 
     testWidgets('加好友：輸入邀請碼 → 呼叫後端', (tester) async {

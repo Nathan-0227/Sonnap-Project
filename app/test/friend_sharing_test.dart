@@ -64,6 +64,9 @@ Widget host(Widget child, {bool reduce = false}) => MaterialApp(
 
 class _Stub implements FriendsService {
   @override
+  Future<void> sendSleepStatus(String event, DateTime? at) async {}
+
+  @override
   Future<FriendsResult<TownState>> fetchTown() async =>
       const FriendsResult(FriendsStatus.failed);
 
