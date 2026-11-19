@@ -103,7 +103,7 @@ class JourneySection extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.icon(
               key: const Key('journey-start'),
-              onPressed: info == null ? null : onStart,
+              onPressed: onStart,
               icon: const Icon(Icons.flag_rounded, size: 18),
               label: const Text('Start a journey', style: TextStyle(fontWeight: FontWeight.w800)),
               style: FilledButton.styleFrom(
