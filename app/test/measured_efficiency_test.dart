@@ -17,18 +17,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/models/sleep_session.dart';
-import 'package:app/screens/report_screen.dart';
-import 'package:app/services/bed_marks.dart';
 import 'package:app/services/home_service.dart';
-import 'package:app/services/key_value_store.dart';
-import 'package:app/services/lights_out.dart';
-import 'package:app/services/pre_bed_apps.dart';
-import 'package:app/services/sleep_repository.dart';
-import 'package:app/services/usage_stats.dart';
 import 'package:app/services/user_identity.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
@@ -138,65 +129,9 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-class _ImmediateRepository implements SleepRepository {
-  final SleepSession session;
-  const _ImmediateRepository(this.session);
 
-  @override
-  Future<SleepSession> load() async => session;
-}
 
-class _StubHome implements HomeService {
-  final HomeResult result;
-  const _StubHome(this.result);
 
-  @override
-  Future<HomeResult> fetch() async => result;
-
-  @override
-  String get baseUrl => 'stub';
-
-  @override
-  UserIdentity get identity => const BuildTimeUserIdentity(overrideId: 'stub');
-
-  @override
-  Duration get timeout => const Duration(seconds: 1);
-}
-
-/// ⚠️ 三個方法都要攔，少攔一個就會打到真的 MethodChannel，而它在測試
-/// 環境裡**永遠不會完成**——`_loadHome()` 根本不會跑，症狀是「整張卡不見」
-/// 而錯誤訊息完全不指向這裡（照抄 `late_nights_test.dart` 的說明）。
-class _SilentUsageStats extends UsageStatsService {
-  const _SilentUsageStats();
-
-  @override
-  Future<UsageStatsResult> queryYesterday({int limit = 5}) async =>
-      const UsageStatsResult(UsageStatsStatus.unsupported);
-
-  @override
-  Future<LightsOutResult> lightsOut({
-    Duration window = kLightsOutWindow,
-    int minQuietMinutes = kMinQuietMinutes,
-    DateTime? now,
-  }) async =>
-      const LightsOutResult(LightsOutStatus.unsupported);
-
-  @override
-  Future<PreBedResult> preBed({
-    required LightsOutResult lightsOut,
-    Map<String, String> labels = const {},
-    Duration window = kPreBedWindow,
-  }) async =>
-      const PreBedResult();
-}
-
-HomeResult _parsed(Map<String, dynamic> source) => HomeResult(
-      HomeStatus.ok,
-      behavior: BehaviorSummary.fromJson(
-        source['behavior'] as Map<String, dynamic>,
-        windowDays: HomeService.historyDays,
-      ),
-    );
 
 void main() {
   group('【1】服務層', () {
@@ -242,125 +177,4 @@ void main() {
     });
   });
 
-  group('卡片', () {
-    late SleepSession sample;
-
-    setUpAll(() async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      sample = await const AssetSleepRepository().load();
-    });
-
-    Future<void> pump(WidgetTester tester, HomeService? home) async {
-      tester.view.physicalSize = const Size(1200, 4000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(MaterialApp(
-        home: ReportScreen(
-          repository: _ImmediateRepository(sample),
-          usageStats: const _SilentUsageStats(),
-          bedMarks: BedMarkStore(InMemoryKeyValueStore()),
-          home: home,
-        ),
-      ));
-      for (var i = 0; i < 6; i++) {
-        await tester.pump();
-      }
-    }
-
-    testWidgets('【2】有數字 → 百分比照抄（不四捨五入掉小數）', (tester) async {
-      await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
-
-      expect(find.text('91.7%'), findsOneWidget,
-          reason: '後端給 91.7，畫面就是 91.7——印成 92% 會讓人以為它比實際精確');
-    });
-
-    testWidgets('【3】那句「跟分數的關係」與 basis 都必須在', (tester) async {
-      await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
-
-      // ⚠️ **兩個**數字各自都要講一次它跟分數的關係。少任何一個，使用者就會
-      //    猜錯「是哪一個進了分數」。（2026-11-07 前兩個都不進；之後①優先、②備用。）
-      expect(find.textContaining('Your sleep score uses this figure'),
-          findsNWidgets(2),
-          reason: '照抄後端。改寫成「參考值」就是自己發明了一種說法');
-      expect(find.textContaining('never affects'), findsNothing,
-          reason: '11-07 起效率進分數，再說「不影響」就是假話');
-      expect(find.textContaining('you were trying to sleep'), findsOneWidget,
-          reason: '分母是自述的那段窗，這句話是唯一講出來的地方');
-      expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget,
-          reason: '四個「效率」只有 basis 分得開，省掉就會被拿去比另外三個');
-    });
-
-    testWidgets('【4】算不出來 → 說原因，**不得**出現 0%', (tester) async {
-      await pump(tester, _StubHome(_parsed(kHomeWithoutMarks)));
-
-      expect(find.textContaining('Tap Start sleep when you get into bed'),
-          findsOneWidget,
-          reason: '原因照抄後端，而且要讓人照著做——那兩個按鈕的字要出現在畫面上');
-      // ⚠️ 這裡**不能**驗「畫面上沒有底線」：`Basis: watch_tst__phone_tats`
-      //    是刻意保留的機器可讀標籤，本來就該出現。
-      //    「note 不得出現欄位名」那條守則在後端
-      //    （`tests/test_sleep_efficiency.py`【6b】），那裡驗的是函式的輸出
-      //    本身，不會被畫面上別的元素干擾。
-      expect(find.text('0.0%'), findsNothing);
-      expect(find.text('0%'), findsNothing,
-          reason: '0% 會被讀成「整夜沒睡著」，而真相是我們沒量到');
-      // basis 在算不出來時照樣要有——那一列講的是「這個欄位是什麼」，
-      // 不是「這一晚的值」。
-      expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget);
-    });
-
-    testWidgets('【5】舊版後端沒有這幾個欄位 → 整張卡不出現', (tester) async {
-      await pump(tester, _StubHome(_parsed(kHomeOldBackend)));
-
-      expect(find.text('Sleep Efficiency (measured)'), findsNothing,
-          reason: '沒有 note 代表後端還沒有這個欄位，不是「這一晚沒有」');
-    });
-
-    testWidgets('【7】兩個效率並列，各自帶 basis', (tester) async {
-      await pump(tester, _StubHome(_parsed(kHomeWithEfficiency)));
-
-      expect(find.text('91.7%'), findsOneWidget, reason: '兩端自述的那個');
-      expect(find.text('91.5%'), findsOneWidget, reason: '終點用手錶的那個');
-      expect(find.textContaining('watch_tst__phone_tats'), findsOneWidget);
-      expect(find.textContaining('phone_bed_start__watch_wake'), findsOneWidget,
-          reason: '⚠️ 兩個 basis 都要在——它們是唯一分得開這兩個數字的東西');
-      expect(find.textContaining("Counted to your watch's wake time"),
-          findsOneWidget,
-          reason: '要講出第二個是換了什麼算的，否則看起來只是同一個數字出現兩次');
-    });
-
-    testWidgets('🔴【8】沒按 Out of bed 時，第二個仍然有數字', (tester) async {
-      // 這一條就是新增這個欄位的全部理由：實測 22 晚裡有 2 晚只按了
-      // Start sleep，再加上 09-20 那種按完又睡著的，3 晚 → 6 晚。
-      await pump(tester, _StubHome(_parsed(kHomeOnlyWatchWake)));
-
-      expect(find.text('95.2%'), findsOneWidget,
-          reason: '忘了按 Out of bed 不該讓整晚沒有數字');
-      expect(find.textContaining('Tap Start sleep when you get into bed'),
-          findsOneWidget,
-          reason: '上面那個仍然要照實說它為什麼算不出來');
-      expect(find.text('0.0%'), findsNothing);
-    });
-
-    testWidgets('⚠️【9】舊版後端沒有第二個欄位 → 只顯示第一個，不留空殼',
-        (tester) async {
-      // kHomeWithoutMarks 沒有 watch_wake_* 三個鍵。
-      await pump(tester, _StubHome(_parsed(kHomeWithoutMarks)));
-
-      expect(find.text('Sleep Efficiency (measured)'), findsOneWidget,
-          reason: '第一個照常顯示');
-      expect(find.textContaining("Counted to your watch's wake time"),
-          findsNothing,
-          reason: '沒有資料就整段不出現，不要畫一個空的標題');
-      expect(find.textContaining('phone_bed_start__watch_wake'), findsNothing);
-    });
-
-    testWidgets('【6】反向對照：沒有後端時整張卡不存在', (tester) async {
-      await pump(tester, null);
-
-      expect(find.text('Sleep Efficiency (measured)'), findsNothing,
-          reason: '單機模式是預期行為，不是降級');
-    });
-  });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/sleep_basics_card.dart';
+
 import '../services/account_service.dart';
 import '../services/chat_service.dart';
 import '../widgets/assistant_header.dart';
@@ -114,6 +116,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AssistantHeader(username: widget.username),
+                const SizedBox(height: 18),
+                // 小知識（2026-11-19 從舊 Insights 搬來，預設收合）
+                const SleepBasicsCard(),
                 const SizedBox(height: 18),
                 ChatInputCard(onSend: _sendQuestion, onHistory: _openHistory),
                 const SizedBox(height: 18),

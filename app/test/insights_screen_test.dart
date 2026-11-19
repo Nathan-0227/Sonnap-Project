@@ -4,10 +4,13 @@
 //   1. 期間的切法（日曆週從週一起、月底往前翻夾到最後一天、不翻到未來）
 //   2. Day 用的是早晨報告的嵌入模式：沒有經驗條、沒有 Back to home／關閉鈕
 //   3. 🔴 Insights 絕不觸發 AI：notes 一律 generate=false
-//   4. ⚠️ 舊頁（負責上傳）停在 Day 時也要一直掛著
+//   4. 挑戰那一行（Day 與 W/M/Y 最底下）照抄後端、拿不到就不出現
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/insights_screen.dart';
 import 'package:app/services/bed_marks.dart';
+import 'package:app/services/challenges_service.dart';
+import 'package:app/services/nightly_sync.dart';
+import 'package:app/widgets/challenges_sheet.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/morning_rating.dart';
 import 'package:app/services/morning_report.dart';
@@ -40,32 +43,6 @@ class _FakeReportSource implements MorningReportSource {
     summaryGenerate.add(generate);
     return null;
   }
-}
-
-/// 假的舊頁：記錄有沒有被建起來（真的舊頁 initState 會開始偵測與上傳）。
-class _Legacy extends StatefulWidget {
-  final List<String> log;
-  const _Legacy(this.log);
-
-  @override
-  State<_Legacy> createState() => _LegacyState();
-}
-
-class _LegacyState extends State<_Legacy> {
-  @override
-  void initState() {
-    super.initState();
-    widget.log.add('init');
-  }
-
-  @override
-  void dispose() {
-    widget.log.add('dispose');
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => const Text('legacy-insights');
 }
 
 void main() {
@@ -147,16 +124,15 @@ void main() {
       sample = await const AssetSleepRepository().load();
     });
 
-    Future<({_FakeReportSource source, List<String> legacyLog})> pump(
-        WidgetTester tester) async {
+    Future<({_FakeReportSource source})> pump(WidgetTester tester,
+        {NightlySync? nightly}) async {
       tester.view.physicalSize = const Size(1200, 3600);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
       final source = _FakeReportSource();
-      final log = <String>[];
       await tester.pumpWidget(MaterialApp(
         home: InsightsScreen(
-          legacy: _Legacy(log),
+          nightly: nightly,
           repository: _ImmediateRepository(sample),
           bedMarks: BedMarkStore(InMemoryKeyValueStore()),
           morningReport: source,
@@ -167,7 +143,7 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
-      return (source: source, legacyLog: log);
+      return (source: source);
     }
 
     testWidgets('四個分頁，預設 Day＝今天那一晚', (tester) async {
@@ -212,14 +188,57 @@ void main() {
       expect(next.onPressed, isNull);
     });
 
-    testWidgets('⚠️ 停在 Day 時舊頁也掛著，切分頁不會重建', (tester) async {
-      final r = await pump(tester);
-      expect(r.legacyLog, ['init'], reason: '舊頁負責偵測就寢與上傳，不能等點到 Week 才開始');
-      await tester.tap(find.byKey(const Key('insights-tab-week')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('insights-tab-day')));
-      await tester.pump();
-      expect(r.legacyLog, ['init'], reason: '切來切去不能讓上傳重跑');
+    ChallengesResult challenges(ChallengeState state) => ChallengesResult(
+          ChallengesStatus.ok,
+          challenges: [
+            ChallengeProgress(
+              challengeId: 'c1',
+              kind: 'streak',
+              title: 'Lights out on time',
+              description: '',
+              detail: 'SENTINEL-DETAIL from backend',
+              state: state,
+              progress: state == ChallengeState.insufficientData ? null : 0.6,
+              recordedNights: 3,
+              windowDays: 7,
+              lowerIsBetter: false,
+            ),
+          ],
+        );
+
+    testWidgets('挑戰那一行：Day 與 Week 最底下都有，點開是清單、整句照抄', (tester) async {
+      final nightly = NightlySync(bedMarks: BedMarkStore(InMemoryKeyValueStore()))
+        ..challenges = challenges(ChallengeState.inProgress);
+      await pump(tester, nightly: nightly);
+      final list = find.byKey(const Key('report-list'));
+      await tester.scrollUntilVisible(find.byKey(const Key('challenges-row')), 400,
+          scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
+      expect(find.text('0 of 1 completed'), findsOneWidget,
+          reason: '只數後端判達成的，不自己判「快達成」');
+      await tester.tap(find.byKey(const Key('challenges-row')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      expect(find.byKey(const Key('challenges-sheet')), findsOneWidget);
+      expect(find.text('SENTINEL-DETAIL from backend'), findsOneWidget);
+      expect(find.text('3/7 nights'), findsOneWidget, reason: '分母一定要在');
+    });
+
+    testWidgets('資料不足：不畫 0%，寫 not enough data yet', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ChallengesList(result: challenges(ChallengeState.insufficientData)),
+        ),
+      ));
+      expect(find.text('not enough data yet'), findsOneWidget);
+      expect(find.text('0%'), findsNothing);
+    });
+
+    testWidgets('拿不到挑戰 → 那一行不出現（不畫空的）', (tester) async {
+      await pump(tester,
+          nightly: NightlySync(bedMarks: BedMarkStore(InMemoryKeyValueStore()))
+            ..challenges = const ChallengesResult(ChallengesStatus.failed));
+      expect(find.byKey(const Key('challenges-row')), findsNothing);
     });
   });
 }

@@ -15,6 +15,10 @@ class SettingsScreen extends StatefulWidget {
   final String appVersion;
 
   final bool initialReminderOn;
+
+  /// 「Data」那一段（資料是不是即時的、昨晚送到了沒、來源；2026-11-19 從舊 Insights 搬來）。
+  /// null＝不畫那一段。
+  final Widget? dataSection;
   final TimeOfDay initialTargetBedtime;
 
   final ValueChanged<bool>? onReminderChanged;
@@ -58,6 +62,7 @@ class SettingsScreen extends StatefulWidget {
     this.onBedtimeGuardTap,
     this.onHealthConnectTap,
     this.store = const PlatformKeyValueStore(),
+    this.dataSection,
     this.alarmScheduler = const PlatformAlarmScheduler(),
   });
 
@@ -334,6 +339,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       widget.onLanguageTap ??
                       () => _showComingSoon("Language settings"),
                 ),
+
+                if (widget.dataSection != null) ...[
+                  const SizedBox(height: 24),
+                  const _SectionTitle(title: "Data"),
+                  const SizedBox(height: 12),
+                  Container(
+                    key: const Key('settings-data'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0A2142),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: widget.dataSection,
+                  ),
+                ],
 
                 const SizedBox(height: 24),
 

@@ -19,7 +19,11 @@ class InsightsPeriodView extends StatelessWidget {
   /// false＝只有打包檔（連不到後端）。Month／Year 照實說要後端，不拿 30 晚冒充。
   final bool online;
 
+  /// 最底下那一行（挑戰）。null＝不放。
+  final Widget? footer;
+
   const InsightsPeriodView({
+    this.footer,
     super.key,
     required this.series,
     required this.period,
@@ -198,6 +202,7 @@ class InsightsPeriodView extends StatelessWidget {
         const SizedBox(height: 18),
         reportSectionTitle('Days'),
         _grid(dayTiles),
+        if (footer != null) ...[const SizedBox(height: 8), footer!],
       ],
     );
   }

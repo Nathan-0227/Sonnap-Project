@@ -19,18 +19,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/models/sleep_session.dart';
-import 'package:app/screens/report_screen.dart';
 import 'package:app/services/home_service.dart';
-import 'package:app/services/sleep_repository.dart';
-import 'package:app/services/bed_marks.dart';
-import 'package:app/services/key_value_store.dart';
-import 'package:app/services/lights_out.dart';
-import 'package:app/services/pre_bed_apps.dart';
-import 'package:app/services/usage_stats.dart';
 import 'package:app/services/user_identity.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
@@ -95,68 +86,9 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-class _ImmediateRepository implements SleepRepository {
-  final SleepSession session;
-  const _ImmediateRepository(this.session);
 
-  @override
-  Future<SleepSession> load() async => session;
-}
 
-class _StubHome implements HomeService {
-  final HomeResult result;
-  const _StubHome(this.result);
 
-  @override
-  Future<HomeResult> fetch() async => result;
-
-  @override
-  String get baseUrl => 'stub';
-
-  @override
-  UserIdentity get identity => const BuildTimeUserIdentity(overrideId: 'stub');
-
-  @override
-  Duration get timeout => const Duration(seconds: 1);
-}
-
-/// 什麼都不回的使用時間服務——這兩組不驗那張卡。
-///
-/// ⚠️ **三個方法都要攔。** 少攔任何一個，widget test 就會打到真的
-/// MethodChannel，而它在測試環境裡**永遠不會完成**——`_loadUsage()`
-/// 整個卡在那個 await 上，後面的 `_loadChallenges()` / `_loadHome()`
-/// 根本不會跑。症狀是「卡片整張不見」，錯誤訊息完全不指向這裡。
-class _SilentUsageStats extends UsageStatsService {
-  const _SilentUsageStats();
-
-  @override
-  Future<UsageStatsResult> queryYesterday({int limit = 5}) async =>
-      const UsageStatsResult(UsageStatsStatus.unsupported);
-
-  @override
-  Future<LightsOutResult> lightsOut({
-    Duration window = kLightsOutWindow,
-    int minQuietMinutes = kMinQuietMinutes,
-    DateTime? now,
-  }) async =>
-      const LightsOutResult(LightsOutStatus.unsupported);
-
-  @override
-  Future<PreBedResult> preBed({
-    required LightsOutResult lightsOut,
-    Map<String, String> labels = const {},
-    Duration window = kPreBedWindow,
-  }) async =>
-      const PreBedResult();
-}
-
-HomeResult _parsed([Map<String, dynamic> source = kHomeResponse]) => HomeResult(
-      HomeStatus.ok,
-      behavior: BehaviorSummary.fromJson(
-        source['behavior'] as Map<String, dynamic>,
-        windowDays: HomeService.historyDays,
-      ),
-    );
 
 void main() {
   group('服務層', () {
@@ -269,87 +201,4 @@ void main() {
     });
   });
 
-  group('卡片', () {
-    late SleepSession sample;
-
-    setUpAll(() async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      sample = await const AssetSleepRepository().load();
-    });
-
-    Future<void> pump(WidgetTester tester, HomeService? home) async {
-      tester.view.physicalSize = const Size(1200, 4000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(MaterialApp(
-        home: ReportScreen(
-          repository: _ImmediateRepository(sample),
-          usageStats: const _SilentUsageStats(),
-          // ⚠️ 預設是 PlatformKeyValueStore，在 widget test 裡永遠不回應。
-          bedMarks: BedMarkStore(InMemoryKeyValueStore()),
-          home: home,
-        ),
-      ));
-      await tester.pump();
-      await tester.pump();
-    }
-
-    testWidgets('比率與分母都顯示出來', (tester) async {
-      await pump(tester, _StubHome(_parsed()));
-
-      expect(find.text('44%'), findsOneWidget);
-      expect(
-        find.text('late on 12 of 27 recorded nights'),
-        findsOneWidget,
-        reason: '沒有分母的話，44% 看起來像「30 天裡有 13 天」，'
-            '但它也可能是「5 晚裡有 2 晚」',
-      );
-    });
-
-    testWidgets('那句「不是日曆天」的說明一定要在', (tester) async {
-      await pump(tester, _StubHome(_parsed()));
-      expect(
-        find.textContaining('not over calendar days'),
-        findsOneWidget,
-        reason: '分母的意義本身就是這張卡最容易被誤讀的地方',
-      );
-    });
-
-    testWidgets('沒有記錄 → 說「還沒有」，不得畫成 0%', (tester) async {
-      await pump(tester, _StubHome(_parsed(kEmptyHomeResponse)));
-
-      expect(find.textContaining('No nights recorded yet'), findsOneWidget);
-      expect(
-        find.text('0%'),
-        findsNothing,
-        reason: '0% 的意思是「你一晚都沒熬夜」——那是在恭喜一個我們根本'
-            '沒測到的人',
-      );
-    });
-
-    testWidgets('拿不到就整張卡不出現', (tester) async {
-      await pump(tester, const _StubHome(HomeResult(HomeStatus.failed)));
-      expect(find.text('Late Nights'), findsNothing);
-    });
-
-    testWidgets('連不上但手上還有上一次的數字 → 也不顯示', (tester) async {
-      // ⚠️ 這一條才是「只看 behavior != null 就畫」會漏掉的情況。
-      //    連不上時把上次的比率繼續掛在畫面上，使用者會以為那是今天的。
-      await pump(
-        tester,
-        _StubHome(HomeResult(
-          HomeStatus.failed,
-          behavior: _parsed().behavior,
-        )),
-      );
-      expect(find.text('Late Nights'), findsNothing);
-      expect(find.text('44%'), findsNothing);
-    });
-
-    testWidgets('沒有後端的 build 完全不受影響', (tester) async {
-      await pump(tester, null);
-      expect(find.text('Late Nights'), findsNothing);
-    });
-  });
 }

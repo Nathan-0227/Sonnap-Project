@@ -11,14 +11,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app/widgets/sleep_basics_card.dart';
 
 import 'package:app/content/sleep_basics.dart';
-import 'package:app/models/sleep_session.dart';
-import 'package:app/screens/report_screen.dart';
-import 'package:app/services/lights_out.dart';
-import 'package:app/services/pre_bed_apps.dart';
-import 'package:app/services/sleep_repository.dart';
-import 'package:app/services/usage_stats.dart';
 
 List<String> verifiedLines() => [
       ...File('../Research-Background/Garmin手錶分數.md').readAsLinesSync(),
@@ -29,38 +24,7 @@ List<String> verifiedLines() => [
 bool startsWithAuthor(String line, String author) =>
     RegExp(r'^\W*' + RegExp.escape(author) + r'\b').hasMatch(line);
 
-class _ImmediateRepository implements SleepRepository {
-  final SleepSession session;
-  const _ImmediateRepository(this.session);
 
-  @override
-  Future<SleepSession> load() async => session;
-}
-
-/// 三個方法都要攔，少一個 widget test 就會卡在真的 MethodChannel 上。
-class _SilentUsageStats extends UsageStatsService {
-  const _SilentUsageStats();
-
-  @override
-  Future<UsageStatsResult> queryYesterday({int limit = 5}) async =>
-      const UsageStatsResult(UsageStatsStatus.unsupported);
-
-  @override
-  Future<LightsOutResult> lightsOut({
-    Duration window = kLightsOutWindow,
-    int minQuietMinutes = kMinQuietMinutes,
-    DateTime? now,
-  }) async =>
-      const LightsOutResult(LightsOutStatus.unsupported);
-
-  @override
-  Future<PreBedResult> preBed({
-    required LightsOutResult lightsOut,
-    Map<String, String> labels = const {},
-    Duration window = kPreBedWindow,
-  }) async =>
-      const PreBedResult();
-}
 
 void main() {
   group('出處', () {
@@ -107,34 +71,22 @@ void main() {
     });
   });
 
-  group('Insights 頁', () {
-    late SleepSession sample;
-
-    setUpAll(() async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      sample = await const AssetSleepRepository().load();
-    });
-
-    testWidgets('每一條的標題與出處都顯示出來', (tester) async {
+  group('助理頁的小知識卡（2026-11-19 從舊 Insights 搬來）', () {
+    testWidgets('展開後每一條的標題與出處都顯示出來', (tester) async {
       tester.view.physicalSize = const Size(1200, 6000);
-      tester.view.devicePixelRatio = 1.0;
+      tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(MaterialApp(
-        home: ReportScreen(
-          repository: _ImmediateRepository(sample),
-          usageStats: const _SilentUsageStats(),
-        ),
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: SleepBasicsCard())),
       ));
-      await tester.pump();
-      await tester.pump();
-
       expect(find.text('Sleep basics'), findsOneWidget);
+      await tester.tap(find.text('Sleep basics'));
+      await tester.pumpAndSettle();
       for (final b in kSleepBasics) {
         expect(find.text(b.title), findsOneWidget, reason: b.id);
-        expect(find.text(b.source), findsOneWidget,
-            reason: '${b.id}: 出處一定要跟著顯示——沒有出處的「小知識」就只是一句話');
+        expect(find.text(b.source), findsOneWidget, reason: b.id);
       }
     });
   });
+
 }

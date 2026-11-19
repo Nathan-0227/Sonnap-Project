@@ -12,28 +12,18 @@
 //      使用者一定要自己走一趟設定頁。只寫「沒有權限」然後把人丟在原地，
 //      這個功能對絕大多數人就等於不存在。
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/models/sleep_session.dart';
-import 'package:app/screens/report_screen.dart';
+import 'package:app/services/nightly_sync.dart';
 import 'package:app/services/lights_out.dart';
 import 'package:app/services/nightly_uploader.dart';
 import 'package:app/services/pending_nightly.dart';
 import 'package:app/services/user_identity.dart';
-import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/pre_bed_apps.dart';
 import 'package:app/services/usage_stats.dart';
 
-class _ImmediateRepository implements SleepRepository {
-  final SleepSession session;
-  const _ImmediateRepository(this.session);
-
-  @override
-  Future<SleepSession> load() async => session;
-}
 
 /// 固定回一個結果的 uploader。真的 HTTP 由 nightly_uploader_test.dart 測，
 /// 這裡只驗「拿到結果之後畫面怎麼顯示」。
@@ -156,43 +146,22 @@ class _FakeUsageStats extends UsageStatsService {
 }
 
 void main() {
-  late SleepSession sample;
-
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    // ⚠️ 在 setUpAll 讀。widget test 的假時間不會推進真正的檔案 I/O，
-    // `await ...load()` 寫在 testWidgets 內會卡到逾時。
-    sample = await const AssetSleepRepository().load();
-  });
-
-  Future<void> pumpReport(
+  /// 跑一次上傳流程（2026-11-19 起在 App 層的 NightlySync，舊 Insights 頁拆掉了）。
+  /// 名字留著 pumpReport，下面那幾條的意思沒變：同一份事件、同一個上傳器、同一組按鈕。
+  Future<NightlySync> pumpReport(
     WidgetTester tester,
     _FakeUsageStats usage, {
     NightlyUploader? uploader,
     BedMarkStore? bedMarks,
   }) async {
-    // ReportScreen 內容很長，畫布太小會滿版溢位而蓋掉真正要驗的東西
-    tester.view.physicalSize = const Size(1200, 3000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
-    await tester.pumpWidget(MaterialApp(
-      home: ReportScreen(
-        repository: _ImmediateRepository(sample),
-        usageStats: usage,
-        uploader: uploader,
-        bedMarks: bedMarks ?? BedMarkStore(InMemoryKeyValueStore()),
-      ),
-    ));
-    // ⚠️ `_loadUsage()` 裡**有幾個 await 就要 pump 幾次**。少一次的症狀是
-    //    「卡片停在 Reading phone usage...」，而失敗訊息會說找不到某段
-    //    文字，看起來像版面壞了 —— 已經為此debug過兩次。
-    //    用迴圈而不是寫死次數，之後多一個 await 才不會又踩一次。
-    //    （不能用 pumpAndSettle：頁面上有 Lottie 動畫，永遠不會 settle。）
-    for (var i = 0; i < 8; i++) {
-      await tester.pump();
-    }
+    final sync = NightlySync(
+      usageStats: usage,
+      bedMarks: bedMarks ?? BedMarkStore(InMemoryKeyValueStore()),
+    );
+    await sync.run(uploader: uploader);
+    return sync;
   }
+
 
   group('語意：標題不能把整天的數字說成睡前', () {
     test('服務層的文件與方法名都指向「昨天一整天」', () {
@@ -202,182 +171,18 @@ void main() {
       expect(service.queryYesterday, isA<Function>());
     });
 
-    testWidgets('卡片標題不得宣稱是睡前使用', (tester) async {
-      final usage = _FakeUsageStats(const UsageStatsResult(
-        UsageStatsStatus.ok,
-        apps: [
-          AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95),
-        ],
-      ));
-      await pumpReport(tester, usage);
-
-      // 原生端 queryUsageStats(INTERVAL_DAILY) 給的是日彙總，切不出睡前一小時。
-      // 要真的做到睡前歸因得先改用 queryEvents()——在那之前這個標題不能出現。
-      expect(
-        find.text('Top Sleep Distractions'),
-        findsNothing,
-        reason: '標題宣稱是睡前分心，但資料是整天的前景總時間。'
-            '要改回這個標題，得先讓原生端改用 queryEvents() 取得時間軸。',
-      );
-      expect(find.text('Phone Use Yesterday'), findsOneWidget);
-      expect(
-        find.textContaining('not narrowed to the hour before bed'),
-        findsOneWidget,
-        reason: '限制要寫在畫面上，不是只寫在程式註解裡',
-      );
-    });
 
     // 反向對照：**有**睡前資料時，標題與說明都要跟著換。
     // 沒有這一條，把標題寫死成 'Phone Use Yesterday' 也會通過上面那條，
     // 而睡前歸因就永遠顯示不出來。
-    testWidgets('有睡前資料時，標題與說明都要換成睡前', (tester) async {
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(
-          UsageStatsStatus.ok,
-          apps: [AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 95)],
-        ),
-        lightsOutResult: LightsOutResult(
-          LightsOutStatus.ok,
-          at: DateTime(2026, 9, 6, 23, 30),
-          quietMinutes: 400,
-        ),
-        preBedResult: PreBedResult(
-          lightsOutAt: DateTime(2026, 9, 6, 23, 30),
-          apps: const [
-            AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 22),
-          ],
-        ),
-      );
-      await pumpReport(tester, usage);
-
-      expect(find.text('Phone Use Before Bed'), findsOneWidget);
-      expect(find.text('Phone Use Yesterday'), findsNothing);
-      expect(
-        find.textContaining('The hour before you put your phone down'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('not narrowed to the hour before bed'),
-        findsNothing,
-        reason: '有睡前資料了，還說「還沒切出來」就是錯的',
-      );
-      // 睡前那 22 分鐘與整天的 95 分鐘是兩個量，畫面上要同時看得到
-      expect(find.textContaining('22m on screen'), findsOneWidget);
-    });
   });
 
   group('四種狀態各講不同的話', () {
-    testWidgets('有資料時列出 App 名稱與時間', (tester) async {
-      final usage = _FakeUsageStats(const UsageStatsResult(
-        UsageStatsStatus.ok,
-        apps: [
-          AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 125),
-          AppUsage(packageName: 'com.b', appName: 'YouTube', minutes: 47),
-        ],
-      ));
-      await pumpReport(tester, usage);
 
-      expect(find.text('Threads'), findsOneWidget);
-      expect(find.text('YouTube'), findsOneWidget);
-      expect(find.text('2h 5m'), findsOneWidget, reason: '125 分鐘要顯示成 2h 5m');
-      expect(find.text('47m'), findsOneWidget);
-    });
 
-    testWidgets('沒有權限時要給一個帶去設定頁的按鈕', (tester) async {
-      final usage =
-          _FakeUsageStats(const UsageStatsResult(UsageStatsStatus.permissionRequired));
-      await pumpReport(tester, usage);
 
-      final button = find.widgetWithText(OutlinedButton, 'Open Usage Access settings');
-      expect(
-        button,
-        findsOneWidget,
-        reason: 'PACKAGE_USAGE_STATS 跳不出系統對話框，沒有這個按鈕的話'
-            '使用者根本不知道要去哪裡開',
-      );
 
-      expect(usage.queryCalls, 1);
-      await tester.tap(button);
-      await tester.pump();
-      await tester.pump();
 
-      expect(usage.openSettingsCalls, 1);
-    });
-
-    testWidgets('從系統設定頁回到 App 時要重新查一次', (tester) async {
-      // ⚠️ 這一條守的是實機上真的踩過的 bug。
-      //
-      // 第一版是在 `openSettings()` 之後直接重查，但那個呼叫送出 intent 就
-      // 立刻返回——使用者根本還沒點下授權。實機測試的結果是：授權完回到 App，
-      // 卡片仍然顯示「需要權限」，看起來像功能壞了。
-      //
-      // 正確的時機是 App 回到前景（AppLifecycleState.resumed）。
-      final usage =
-          _FakeUsageStats(const UsageStatsResult(UsageStatsStatus.permissionRequired));
-      await pumpReport(tester, usage);
-      expect(usage.queryCalls, 1);
-
-      // 模擬「跳去系統設定頁、授權完、按返回回到 App」
-      usage.result = const UsageStatsResult(
-        UsageStatsStatus.ok,
-        apps: [AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 30)],
-      );
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-      await tester.pump();
-
-      expect(
-        usage.queryCalls,
-        greaterThan(1),
-        reason: '回到前景沒有重查，使用者授權完看到的還是「需要權限」',
-      );
-      expect(find.text('Threads'), findsOneWidget);
-      expect(
-        find.widgetWithText(OutlinedButton, 'Open Usage Access settings'),
-        findsNothing,
-        reason: '已經授權了還留著那顆按鈕，等於在說授權沒成功',
-      );
-    });
-
-    testWidgets('沒有權限時不要把同一件事講兩遍', (tester) async {
-      // 就寢時刻與 App 清單是同一個權限。沒授權時兩邊都會回
-      // permissionRequired，各自畫一段的話卡片上會出現兩段一樣的錯誤訊息。
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(UsageStatsStatus.permissionRequired),
-        lightsOutResult:
-            const LightsOutResult(LightsOutStatus.permissionRequired),
-      );
-      await pumpReport(tester, usage);
-
-      expect(find.textContaining('Phone down at'), findsNothing);
-      expect(
-        find.widgetWithText(OutlinedButton, 'Open Usage Access settings'),
-        findsOneWidget,
-        reason: '帶路按鈕只該有一顆',
-      );
-    });
-
-    testWidgets('非 Android 平台要說清楚，不要假裝是沒有資料', (tester) async {
-      final usage =
-          _FakeUsageStats(const UsageStatsResult(UsageStatsStatus.unsupported));
-      await pumpReport(tester, usage);
-
-      expect(find.textContaining('only available on Android'), findsOneWidget);
-    });
-
-    testWidgets('查得到但昨天沒有紀錄，跟沒有權限要分開講', (tester) async {
-      final usage = _FakeUsageStats(const UsageStatsResult(UsageStatsStatus.empty));
-      await pumpReport(tester, usage);
-
-      expect(find.textContaining('No app activity was recorded'), findsOneWidget);
-      expect(
-        find.widgetWithText(OutlinedButton, 'Open Usage Access settings'),
-        findsNothing,
-        reason: '已經有權限了還叫人去開權限，只會讓人以為自己設定錯了',
-      );
-    });
   });
 
   group('AppUsage 解析原生端傳來的 Map', () {
@@ -443,138 +248,12 @@ void main() {
   });
 
   group('桌面啟動器不算睡眠干擾源', () {
-    testWidgets('啟動器不會出現在清單裡', (tester) async {
-      // 實機實測：One UI Home 用了 24 分鐘，比任何真正的 App 都多——
-      // 因為只要人停在主畫面就累積它的前景時間。把「你在主畫面待了多久」
-      // 列成第一個睡眠干擾源，這張卡就沒有意義了。
-      //
-      // ⚠️ 這一條測的是**畫面**而不是 service，因為 service 的過濾發生在
-      // `query()` 裡而測試用的是假的 service。所以這裡直接餵一個
-      // 「已經含啟動器」的結果，確認畫面層不會把它畫出來——
-      // 兩層都擋住，哪一層被改壞都會被抓到。
-      final usage = _FakeUsageStats(const UsageStatsResult(
-        UsageStatsStatus.ok,
-        apps: [
-          AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 30),
-        ],
-      ));
-      await pumpReport(tester, usage);
-
-      expect(find.text('One UI Home'), findsNothing);
-      expect(find.text('Threads'), findsOneWidget);
-    });
   });
 
   group('就寢時刻（lights_out_at）在畫面上', () {
-    testWidgets('偵測到就顯示時刻，而且要標明是 proxy', (tester) async {
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(UsageStatsStatus.empty),
-        lightsOutResult: LightsOutResult(
-          LightsOutStatus.ok,
-          at: DateTime(2026, 9, 1, 23, 12),
-          quietMinutes: 8 * 60 + 28,
-          sourceType: 'paused',
-          eventCount: 40,
-        ),
-      );
-      await pumpReport(tester, usage);
 
-      expect(find.text('Phone down at 23:12'), findsOneWidget);
 
-      // ⚠️ 這一條不是文案潔癖。放下手機不等於睡著——有人躺著再過半小時
-      // 才睡。整個專案對 proxy 的處理標準都是「限制寫在使用者看得到的
-      // 地方」，同 sleep_efficiency 與 movement_sample_minutes。
-      expect(
-        find.textContaining('not sleep onset'),
-        findsOneWidget,
-        reason: '沒有這句話，使用者會把它當成入睡時間讀',
-      );
-      expect(find.textContaining('8h 28m'), findsOneWidget);
-    });
 
-    testWidgets('整天都在滑就老實說偵測不到，不要硬挑一個時刻', (tester) async {
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(UsageStatsStatus.empty),
-        lightsOutResult: const LightsOutResult(
-          LightsOutStatus.noQuietGap,
-          quietMinutes: 95,
-          eventCount: 210,
-        ),
-      );
-      await pumpReport(tester, usage);
-
-      expect(find.text('No clear wind-down'), findsOneWidget);
-      expect(find.textContaining('Phone down at'), findsNothing);
-    });
-
-    testWidgets('⚠️ 沒有後端回應時，畫面不得出現「比目標晚幾分鐘」', (tester) async {
-      // 那個數字由後端 behavior/adherence.py 算，它處理了跨午夜正規化
-      // （目標 23:30、實際 02:15，直覺相減會得到「提早 21 小時」）。
-      // 在 Dart 算第二份，兩邊漂移時不會有任何錯誤訊息——與「不要在
-      // Dart 從 final_quality 推 pet_mood」是同一條紀律。
-      //
-      // ⚠️ 這裡刻意**不注入 uploader**：有就寢時刻、但沒有後端回應。
-      //    達成度這時候必須是「不知道」，不能自己補一個。
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(UsageStatsStatus.empty),
-        lightsOutResult: LightsOutResult(
-          LightsOutStatus.ok,
-          at: DateTime(2026, 9, 2, 2, 15),
-          quietMinutes: 300,
-          sourceType: 'screen_off',
-        ),
-      );
-      await pumpReport(tester, usage);
-
-      expect(find.text('Phone down at 02:15'), findsOneWidget);
-      // 找的是「在 Dart 算了達成度」才會產生的措辭。
-      // ⚠️ 不要用 'late' 這種泛用字串——整頁其他地方本來就有
-      //    （第一版這樣寫，紅在一段跟就寢時刻無關的文案上）。
-      for (final phrase in [
-        'minutes late',
-        'min late',
-        'behind target',
-        'ahead of target',
-        'past your target',
-        'earlier than your target',
-        'On time',
-      ]) {
-        expect(
-          find.textContaining(phrase),
-          findsNothing,
-          reason: '出現「$phrase」代表有人在 Dart 端算了達成度',
-        );
-      }
-    });
-
-    testWidgets('後端算完之後才顯示達成度，而且照抄它的數字', (tester) async {
-      // 反向對照。少了這一條，把整段達成度拿掉、永遠不顯示，
-      // 上面那條測試仍然全綠。
-      final usage = _FakeUsageStats(
-        const UsageStatsResult(UsageStatsStatus.empty),
-        lightsOutResult: LightsOutResult(
-          LightsOutStatus.ok,
-          at: DateTime(2026, 9, 1, 3, 51),
-          quietMinutes: 248,
-          sourceType: 'keyguard_shown',
-        ),
-      );
-      await pumpReport(
-        tester,
-        usage,
-        uploader: _StubUploader(const NightlyUploadResult(
-          NightlyUploadStatus.ok,
-          date: '2026-09-01',
-          adherenceMinutes: 261,
-          isLate: true,
-        )),
-      );
-
-      // 261 分鐘 = 4h 21m。⚠️ Dart 若自己拿 03:51 減 23:30 會得到
-      // −1179（「提早 19 小時」）——出現那個數字就表示有人在這裡重算了。
-      expect(find.textContaining('4h 21m past your target'), findsOneWidget);
-      expect(find.textContaining('19h'), findsNothing);
-    });
   });
 
   group('上床／下床標記會影響上傳（按鈕本身在 home_screen_test）', () {
@@ -618,12 +297,12 @@ void main() {
         adherenceMinutes: 12,
         isLate: false,
       ));
-      await pumpReport(tester, detected(), uploader: stub);
+      final sync = await pumpReport(tester, detected(), uploader: stub);
 
       expect(stub.received, isNotNull, reason: '照樣要上傳');
       expect(stub.received!.hasStart, isFalse, reason: '只是沒有標記而已');
-      expect(find.textContaining('12m past your target'), findsOneWidget,
-          reason: '達成度照樣算得出來');
+      expect(sync.batch?.current.adherenceMinutes, 12,
+          reason: '達成度照樣算得出來（照抄後端）');
     });
 
     testWidgets('上傳失敗、又沒進佇列 → **不要**清掉標記', (tester) async {
@@ -725,6 +404,21 @@ void main() {
       expect(await kv.getString(kBedStartKey), isNotNull,
           reason: '還沒有任何一邊確認收下，不能清');
       expect(await kv.getString(kBedEndKey), isNotNull);
+    });
+
+    testWidgets('睡前 App 照存（Phone down 詳細頁的 Before bed 讀這一份）', (tester) async {
+      final pre = PreBedResult(
+        lightsOutAt: DateTime(2026, 9, 6, 23, 30),
+        apps: const [AppUsage(packageName: 'com.a', appName: 'Threads', minutes: 20)],
+      );
+      final usage = _FakeUsageStats(
+        const UsageStatsResult(UsageStatsStatus.ok),
+        lightsOutResult: LightsOutResult(LightsOutStatus.ok,
+            at: DateTime(2026, 9, 6, 23, 30), quietMinutes: 400),
+        preBedResult: pre,
+      );
+      final sync = await pumpReport(tester, usage);
+      expect(sync.preBed, same(pre));
     });
   });
 }

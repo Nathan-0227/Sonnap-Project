@@ -113,8 +113,16 @@ class MorningReportScreen extends StatefulWidget {
   /// 不畫底部 View sleep insights／Back to home（在 Insights 裡沒有地方可去）。
   final bool embedded;
 
+  /// 嵌入時接在報告最底下（Insights 的挑戰那一行）。
+  final Widget? footer;
+
+  /// Phone down 點開的頁面最底下多放的（Insights 的「Before bed」）。
+  final Widget? phoneDownFooter;
+
   const MorningReportScreen({
     this.embedded = false,
+    this.footer,
+    this.phoneDownFooter,
     super.key,
     required this.initial,
     this.load,
@@ -145,6 +153,8 @@ class MorningReportScreen extends StatefulWidget {
     this.onNotesOpened,
     this.isNotesRead,
     this.embedded = false,
+    this.footer,
+    this.phoneDownFooter,
   })  : loadSleepSeries = loader.sleepSeries,
         loadBedTimes = loader.bedTimes,
         loadPhoneDowns = loader.phoneDowns,
@@ -387,6 +397,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(color: ReportColors.muted, fontSize: 12),
                     ),
+                  ],
+                  if (widget.footer != null) ...[
+                    const SizedBox(height: 18),
+                    widget.footer!,
                   ],
                   if (!widget.embedded) ...[
                   const SizedBox(height: 14),
@@ -1852,6 +1866,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
       startSleepAt: r.bedStart,
       phoneDownAt: r.lightsOutAt,
       afterStartMinutes: r.phoneAfterStartMinutes,
+      footer: widget.phoneDownFooter,
     );
   }
 

@@ -21,18 +21,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/models/sleep_session.dart';
-import 'package:app/screens/report_screen.dart';
 import 'package:app/services/challenges_service.dart';
-import 'package:app/services/sleep_repository.dart';
-import 'package:app/services/bed_marks.dart';
-import 'package:app/services/key_value_store.dart';
-import 'package:app/services/lights_out.dart';
-import 'package:app/services/pre_bed_apps.dart';
-import 'package:app/services/usage_stats.dart';
 import 'package:app/services/user_identity.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
@@ -145,70 +136,9 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-class _ImmediateRepository implements SleepRepository {
-  final SleepSession session;
-  const _ImmediateRepository(this.session);
 
-  @override
-  Future<SleepSession> load() async => session;
-}
 
-/// 直接回一份固定結果，不碰 HTTP。widget test 要驗的是「拿到之後怎麼畫」。
-class _StubChallenges implements ChallengesService {
-  final ChallengesResult result;
-  const _StubChallenges(this.result);
 
-  @override
-  Future<ChallengesResult> fetch() async => result;
-
-  @override
-  String get baseUrl => 'stub';
-
-  @override
-  UserIdentity get identity => const BuildTimeUserIdentity(overrideId: 'stub');
-
-  @override
-  Duration get timeout => const Duration(seconds: 1);
-}
-
-/// 什麼都不回的使用時間服務——這兩組不驗那張卡。
-///
-/// ⚠️ **三個方法都要攔。** 少攔任何一個，widget test 就會打到真的
-/// MethodChannel，而它在測試環境裡**永遠不會完成**——`_loadUsage()`
-/// 整個卡在那個 await 上，後面的 `_loadChallenges()` / `_loadHome()`
-/// 根本不會跑。症狀是「卡片整張不見」，錯誤訊息完全不指向這裡。
-class _SilentUsageStats extends UsageStatsService {
-  const _SilentUsageStats();
-
-  @override
-  Future<UsageStatsResult> queryYesterday({int limit = 5}) async =>
-      const UsageStatsResult(UsageStatsStatus.unsupported);
-
-  @override
-  Future<LightsOutResult> lightsOut({
-    Duration window = kLightsOutWindow,
-    int minQuietMinutes = kMinQuietMinutes,
-    DateTime? now,
-  }) async =>
-      const LightsOutResult(LightsOutStatus.unsupported);
-
-  @override
-  Future<PreBedResult> preBed({
-    required LightsOutResult lightsOut,
-    Map<String, String> labels = const {},
-    Duration window = kPreBedWindow,
-  }) async =>
-      const PreBedResult();
-}
-
-ChallengesResult _parsed([Map<String, dynamic> source = kSampleResponse]) =>
-    ChallengesResult(
-      ChallengesStatus.ok,
-      challenges: (source['challenges'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(ChallengeProgress.fromJson)
-          .toList(),
-    );
 
 void main() {
   group('服務層：照抄後端，不重算', () {
@@ -347,117 +277,4 @@ void main() {
     });
   });
 
-  group('卡片：三條紅線', () {
-    late SleepSession sample;
-
-    setUpAll(() async {
-      TestWidgetsFlutterBinding.ensureInitialized();
-      sample = await const AssetSleepRepository().load();
-    });
-
-    Future<void> pump(WidgetTester tester, ChallengesService? challenges) async {
-      tester.view.physicalSize = const Size(1200, 4000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(MaterialApp(
-        home: ReportScreen(
-          repository: _ImmediateRepository(sample),
-          usageStats: const _SilentUsageStats(),
-          // ⚠️ 預設是 PlatformKeyValueStore，在 widget test 裡永遠不回應。
-          bedMarks: BedMarkStore(InMemoryKeyValueStore()),
-          challenges: challenges,
-        ),
-      ));
-      await tester.pump();
-      await tester.pump();
-    }
-
-    testWidgets('三個挑戰的標題都出現', (tester) async {
-      await pump(tester, _StubChallenges(_parsed()));
-      expect(find.text('Lights out on time'), findsOneWidget);
-      expect(find.text('Three nights in a row'), findsOneWidget);
-      expect(find.text('Steady bedtime'), findsOneWidget);
-    });
-
-    testWidgets('紅線 2：insufficient_data 不得畫成 0%', (tester) async {
-      await pump(tester, _StubChallenges(_parsed(kSparseResponse)));
-
-      expect(
-        find.text('not enough data yet'),
-        findsOneWidget,
-        reason: '「還不知道」要有自己的講法，不能跟「完全沒進展」共用一條空進度條',
-      );
-      expect(
-        find.text('0%'),
-        findsNothing,
-        reason: '畫成 0% 就等於對使用者說「你表現很差」，而事實是我們還沒'
-            '收到他的資料——兩者要講的話完全相反',
-      );
-    });
-
-    testWidgets('紅線 3：recorded_nights 要當分母顯示出來', (tester) async {
-      await pump(tester, _StubChallenges(_parsed()));
-
-      expect(
-        find.text('9/14 nights'),
-        findsOneWidget,
-        reason: '沒有分母的話，「連續 1 晚」看不出是 1/1 還是 1/14',
-      );
-      expect(find.text('6/7 nights'), findsOneWidget);
-    });
-
-    testWidgets('紅線 1：百分比照抄後端，不是 Dart 從 current/target 算的',
-        (tester) async {
-      // 作息收斂：離散 90 分、目標 60 分。
-      //   後端（目標 ÷ 實際）→ 0.667 → **67%，而且沒達成**
-      //   照直覺（實際 ÷ 目標）→ 1.5   → 截成 100%，看起來達成了
-      // 兩個數字差這麼多，而畫面上長得一樣正常——這就是為什麼進度
-      // 一格都不能在 Dart 算。
-      // 只放這一項——「準時上床」那一項真的達成了、本來就顯示 100%，
-      // 放在一起的話下面那條 findsNothing 會撞到它。
-      await pump(
-        tester,
-        _StubChallenges(ChallengesResult(
-          ChallengesStatus.ok,
-          challenges: [_parsed().challenges[2]],
-        )),
-      );
-      expect(find.text('67%'), findsOneWidget);
-      expect(
-        find.text('100%'),
-        findsNothing,
-        reason: '90 分的離散度沒有達成 60 分的目標，不該顯示 100%',
-      );
-    });
-
-    testWidgets('後端回的那句 detail 原樣顯示', (tester) async {
-      await pump(tester, _StubChallenges(_parsed()));
-      expect(find.text('1 night(s) so far - 2 more to finish.'), findsOneWidget);
-      expect(
-        find.text(
-          'Bedtimes over the last 6 nights varied by up to 90 min from '
-          'your average; the target is within 60 min.',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('拿不到就整張卡不出現，不畫一張空的', (tester) async {
-      await pump(
-        tester,
-        const _StubChallenges(ChallengesResult(ChallengesStatus.failed)),
-      );
-      expect(
-        find.text('Challenges'),
-        findsNothing,
-        reason: '顯示一張空的或上次的，會讓人以為那是今天的進度',
-      );
-    });
-
-    testWidgets('沒有後端的 build 完全不受影響', (tester) async {
-      await pump(tester, null);
-      expect(find.text('Challenges'), findsNothing);
-    });
-  });
 }

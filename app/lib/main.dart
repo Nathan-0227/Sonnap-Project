@@ -11,7 +11,6 @@ import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
 import 'widgets/moon_nav_bar.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/report_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/bedtime_guard.dart';
@@ -26,6 +25,10 @@ import 'services/home_service.dart';
 import 'services/morning_rating.dart';
 import 'services/morning_report.dart';
 import 'services/key_value_store.dart';
+import 'services/bed_marks.dart';
+import 'models/sleep_session.dart';
+import 'widgets/data_status_section.dart';
+import 'services/nightly_sync.dart';
 import 'widgets/sleep_dial.dart';
 import 'services/alarm.dart';
 import 'screens/insights_screen.dart';
@@ -104,7 +107,35 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
+  /// 偵測昨晚幾點放下手機 → 上傳 → 問挑戰（2026-11-19 從舊 Insights 頁搬到 App 層）。
+  /// ⚠️ 一打開、每次回到前景都跑，**跟停在哪一頁無關**——漏跑不會報錯，只是昨晚沒上傳。
+  late final NightlySync _nightly = NightlySync(
+    bedMarks: BedMarkStore(widget.store ?? const PlatformKeyValueStore()),
+  );
+
+  void _runNightly() => unawaited(_nightly.run(
+        uploader: _uploader,
+        challengesService: _challenges,
+        homeService: _home,
+      ));
+
+  /// 設定頁「Data」那一段的來源清單（打包檔或後端那一份的 data_sources）。
+  late final Future<SleepSession> _sessionForData = _repository.load();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 從系統設定開完使用權限回來、或隔天早上打開，都要重跑一次
+    if (state == AppLifecycleState.resumed && _account != null) _runNightly();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _nightly.dispose();
+    super.dispose();
+  }
+
   int currentIndex = 0;
 
   /// 目標就寢時間與提醒開關的**唯一擁有者**。
@@ -301,6 +332,7 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
@@ -332,6 +364,8 @@ class _MainPageState extends State<MainPage> {
     // ⚠️ 排在帳號之後（要 user_id 才送得出去），而且不 await、不問授權：
     //    沒授權就什麼都不做，授權只在設定頁使用者按了按鈕才問。
     unawaited(_healthSync.sync());
+    // 要 user_id 才傳得出去，所以排在帳號之後
+    _runNightly();
   }
 
   Future<void> _restoreSettings() async {
@@ -502,9 +536,9 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
       ),
       FriendsScreen(service: _friends),
-      // Insights（2026-11-19 改版：頂端 Day／Week／Month／Year）。舊頁包在裡面一直掛著——
-      // 它背後負責偵測就寢時刻與上傳，見 InsightsScreen 的註解。
+      // Insights（2026-11-19 改版：頂端 Day／Week／Month／Year）。
       InsightsScreen(
+        nightly: _nightly,
         repository: _repository,
         cameraInsights: _insightsYear,
         morningReport: _morningReport,
@@ -514,13 +548,6 @@ class _MainPageState extends State<MainPage> {
               .wakeTime(targetBedtime);
           return sleepSpan(targetBedtime, wake).inMinutes;
         },
-        legacy: ReportScreen(
-          repository: _repository,
-          uploader: _uploader,
-          cameraInsights: _cameraInsights,
-          challenges: _challenges,
-          home: _home,
-        ),
       ),
       AssistantScreen(
         chat: _chat,
@@ -534,6 +561,17 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
         onBedtimeGuardTap: _openGuard,
         onHealthConnectTap: _openHealth,
+        dataSection: FutureBuilder<SleepSession>(
+          future: _sessionForData,
+          builder: (context, snap) => ListenableBuilder(
+            listenable: _nightly,
+            builder: (context, _) => DataStatusSection(
+              repository: _repository,
+              nightly: _nightly,
+              sources: snap.data?.dataSources ?? const [],
+            ),
+          ),
+        ),
       ),
     ];
   }

@@ -12,6 +12,9 @@ import '../services/pet_notes.dart';
 import '../services/report_loader.dart';
 import '../services/sleep_repository.dart';
 import '../theme/report_style.dart';
+import '../services/nightly_sync.dart';
+import '../widgets/before_bed_apps.dart';
+import '../widgets/challenges_sheet.dart';
 import '../widgets/insights_period_view.dart';
 import 'morning_report_screen.dart';
 
@@ -30,11 +33,11 @@ export '../services/insights_periods.dart'
 ///   embedded：不畫經驗條、關閉鈕、底部兩顆按鈕）。🔴 notes 一律 generate=false：
 ///   AI 只在起床流程、自評之後生成，Insights 打開絕不花額度。
 /// - Week／Month／Year：上面一塊心情、下面鏡像格子（`widgets/insights_period_view.dart`）。
-/// - ⚠️ 舊頁 [legacy] **一定要一直掛著**（Offstage，不顯示）：它背後負責偵測就寢時刻、
-///   上傳 `POST /nightly`、補傳漏掉的夜晚，不能因為使用者停在 Day 就沒跑。
+/// - 偵測就寢與上傳不在這一頁：在 App 層的 [NightlySync]（舊 Insights 頁拆掉時搬出去的），
+///   這一頁只讀它的挑戰與睡前 App。
 class InsightsScreen extends StatefulWidget {
-  /// 舊的 Insights 頁（含上傳邏輯）。
-  final Widget legacy;
+  /// 偵測就寢＋上傳＋挑戰（App 層在跑，這裡只讀結果）。null＝測試或沒有。
+  final NightlySync? nightly;
 
   final SleepRepository repository;
   final BedMarkStore bedMarks;
@@ -49,7 +52,7 @@ class InsightsScreen extends StatefulWidget {
 
   const InsightsScreen({
     super.key,
-    required this.legacy,
+    this.nightly,
     required this.repository,
     required this.goalMinutes,
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
@@ -167,16 +170,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
               _nav(today),
               Expanded(
-                child: Stack(
-                  children: [
-                    // ⚠️ 舊頁一直掛著、但不顯示（見 class 註解）
-                    Offstage(child: widget.legacy),
-                    Positioned.fill(
-                      child: _period == InsightsPeriod.day
-                          ? _day(today)
-                          : _periodView(today),
-                    ),
-                  ],
+                child: ListenableBuilder(
+                  listenable: widget.nightly ?? _noNightly,
+                  builder: (context, _) => _period == InsightsPeriod.day
+                      ? _day(today)
+                      : _periodView(today),
                 ),
               ),
             ],
@@ -276,6 +274,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
+  /// 挑戰那一行：四個分頁共用、不屬於任何一個期間。拿不到就不出現。
+  Widget? _challengesRow() {
+    final r = widget.nightly?.challenges;
+    return ChallengesRow.shows(r) ? ChallengesRow(result: r) : null;
+  }
+
+  /// 睡前 App 只有「最近一次放下手機」那一晚有（手機只留得住那一段的事件），
+  /// 所以只在那一晚的 Phone down 頁出現；別的晚上不放，不拿這一晚的冒充。
+  Widget? _beforeBedFor(String date) {
+    final pre = widget.nightly?.preBed;
+    final at = pre?.lightsOutAt;
+    if (pre == null || at == null || !pre.hasData) return null;
+    if (reportDateKey(nightDateOf(at)) != date) return null;
+    return BeforeBedApps(preBed: pre);
+  }
+
   Widget _periodView(DateTime today) {
     final series = _series;
     if (series == null) {
@@ -289,6 +303,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
       anchor: _anchor,
       today: today,
       online: _online,
+      footer: _challengesRow(),
     );
   }
 
@@ -317,8 +332,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
           pending: date == reportDateKey(today),
           isNotesRead: (version) => _notesReads.isRead(date, version),
           onNotesOpened: (version) => _notesReads.markRead(date, version),
+          footer: _challengesRow(),
+          phoneDownFooter: _beforeBedFor(date),
         );
       },
     );
   }
 }
+
+/// 沒給 [InsightsScreen.nightly] 時給 ListenableBuilder 的空殼。
+final _noNightly = ChangeNotifier();
