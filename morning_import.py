@@ -4,7 +4,7 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
     ① 資料庫連得上嗎                                   ← 沒過就停，什麼都沒動
     ② 昨晚的錄影：還在錄？太短？後半夜斷線？中間斷成好幾段？ ← 沒過就停，什麼都沒動
     ③ 手錶：備份 → 抓 Garmin（最近幾天，併進既有的）→ 評分 → 晚數檢查 ← 沒過就還原檔案再停
-    ④ 全部過了才寫：手錶 → DB、攝影機 → DB、補夢境、重建 App 資料檔
+    ④ 全部過了才寫：手錶 → DB、攝影機 → DB、重建 App 資料檔
 
 ═══════════════════════════════════════════════════════════════════
 為什麼要包成一支
@@ -50,7 +50,7 @@ morning_import.py — 每天早上一條指令：把昨晚的手錶與攝影機�
 
     --skip-camera          昨晚沒錄、或錄壞了，只匯手錶
     --camera-csv <路徑>    指定要匯入哪一份錄影（預設挑昨晚最長的那份）
-    --no-ai                不補夢境（夢境要花 Claude API 額度）
+    --no-ai                已經沒有作用（夢境 2026-11-17 退場），留著只為了舊的指令不會報錯
     --check-camera <路徑>  只檢查一份錄影的連續性就結束，不匯入任何東西
 """
 import argparse
@@ -567,22 +567,24 @@ def _run(args, paths, now, runner, db_check, env, analyse):
 
     section("④ 寫入")
     if runner(["migrate_garmin_to_db.py"]) != 0:
-        raise Stop("手錶資料寫入資料庫失敗（上面有錯誤訊息）。攝影機、夢境都還沒跑。\n"
+        raise Stop("手錶資料寫入資料庫失敗（上面有錯誤訊息）。攝影機還沒跑。\n"
                    "  修好之後整支重跑就好，兩支匯入腳本都可以重複執行。")
+    # 手錶寫完之後才有裁判：用手錶認定的入睡時刻重挑就寢時刻
+    # （手機端挑最長的那一段，半夜起來用幾分鐘手機就會挑錯）。
+    # ⚠️ 一定要排在 migrate_garmin_to_db.py 之後、build_app_payload.py 之前，
+    #    不然打包檔帶出去的還是沒校正的值。
+    # 失敗不讓已經寫好的手錶資料作廢（比照下面的攝影機片段）。
+    if runner(["resolve_lights_out.py"]) != 0:
+        print("  ⚠ 就寢時刻重挑失敗（上面有錯誤訊息），其餘不受影響。"
+              "之後可以單獨跑 resolve_lights_out.py 補")
     if camera_csv is not None:
         if runner(["migrate_camera_to_db.py", "--csv", str(camera_csv)]) != 0:
             raise Stop("攝影機寫入資料庫失敗（上面有錯誤訊息）。手錶那份已經寫進去了。\n"
                        "  修好之後整支重跑就好。")
-        # 動作片段是附加的：做不成不該讓已經寫好的手錶與攝影機資料作廢
-        # （比照下面夢境的處理）。
+        # 動作片段是附加的：做不成不該讓已經寫好的手錶與攝影機資料作廢。
         if runner(["camera_clips.py", "--csv", str(camera_csv)]) != 0:
             print("  ⚠ 動作片段沒做成（上面有錯誤訊息），其餘不受影響。之後可以單獨跑 "
                   f"camera_clips.py --csv {camera_csv} 補")
-    if args.no_ai:
-        print("\n● --no-ai：這次不補夢境")
-    elif runner(["ai/generate_advice.py"]) != 0:
-        # 比照 run_pipeline.py：LLM 掛掉不該讓已經算好、寫好的資料作廢
-        print("  ⚠ 夢境生成失敗，其餘不受影響。之後可以單獨跑 ai/generate_advice.py 補")
     if runner(["build_app_payload.py"]) != 0:
         raise Stop("重建 App 資料檔失敗（上面有錯誤訊息）。資料庫那邊已經寫好了。")
 
@@ -637,7 +639,7 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="每天早上：手錶與攝影機 → 資料庫（有檢查、沒過就停）")
     ap.add_argument("--skip-camera", action="store_true", help="不匯入攝影機")
     ap.add_argument("--camera-csv", help="指定要匯入的錄影 CSV（預設挑昨晚最長的那份）")
-    ap.add_argument("--no-ai", action="store_true", help="不補夢境（夢境要花 Claude API 額度）")
+    ap.add_argument("--no-ai", action="store_true", help="已經沒有作用（夢境 2026-11-17 退場）")
     ap.add_argument("--check-camera",
                     help="只檢查一份錄影的連續性就結束，不匯入任何東西")
     ap.add_argument("--backup-dir", type=Path,

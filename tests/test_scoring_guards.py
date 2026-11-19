@@ -8,7 +8,7 @@ tests/test_scoring_guards.py
   【1】summary 的有效性判準不得在兩支腳本之間漂移
   【2】沒量到睡眠的夜晚，睡眠衍生的量不得進 baseline
   【3】baseline 窗格是「日曆天」不是「筆數」
-  【4】MOTIF_FAMILIES 必須與夢境調色盤的選項一對一
+  【4】（2026-11-18 移除：夢境日記退場，意象去重跟著刪掉。編號保留，CLAUDE.md 有引用【6】）
   【5】階段時長超出睡眠視窗的夜晚必須被排除
   【6】壓力修正值依個人波動換算（2026-10-22）
 
@@ -18,7 +18,6 @@ import copy
 import csv
 import importlib.util
 import io
-import re
 import sys
 from pathlib import Path
 
@@ -47,7 +46,6 @@ def load_script(path):
 
 arm = load_script(ROOT / "garmin" / "apply_recovery_modifier.py")
 esf = load_script(ROOT / "garmin" / "extract_sleep_features.py")
-gad = load_script(ROOT / "ai" / "generate_advice.py")
 
 SUMMARY = ROOT / "garmin" / "data" / "garmin_sleep_summary.csv"
 
@@ -155,50 +153,6 @@ check("窗外湊數不算（窗內只有 4 筆）",
 ok("常數已改名，舊名稱不該還在",
    hasattr(arm, "MAX_BASELINE_DAYS") and not hasattr(arm, "MAX_BASELINE_NIGHTS"),
    f"MAX_BASELINE_DAYS={getattr(arm, 'MAX_BASELINE_DAYS', None)}")
-
-print()
-print("=" * 78)
-print("【4】MOTIF_FAMILIES 必須與夢境調色盤一對一")
-print("=" * 78)
-# 家族一合併，去重就會把「沒用過的選項」連坐排除，把模型逼向剩下那一個
-# ——那正是「棉被與雪佔 37%」的成因。新增調色盤選項卻忘了加家族，
-# 不會有任何錯誤訊息，只會讓意象重新開始集中。
-palette_options = re.findall(r"^  [a-f]\. ", gad.SYSTEM_PROMPT_HEAD, re.M)
-check("調色盤選項數 == 家族數",
-      len(gad.MOTIF_FAMILIES), len(palette_options))
-
-# 關鍵字不得重複：兩個家族共用同一個關鍵字，等於它們仍然是連坐的
-seen = {}
-dupes = []
-for fam, kws in gad.MOTIF_FAMILIES.items():
-    for k in kws:
-        if k in seen:
-            dupes.append((k, seen[k], fam))
-        seen[k] = fam
-check("沒有兩個家族共用同一個關鍵字", len(dupes), 0)
-if dupes:
-    for d in dupes[:5]:
-        print(f"      {d}")
-
-# 真實資料回歸：既有夢境對不到任何家族的比例。對不到 = 去重對那晚完全失效。
-advice = ROOT / "ai" / "data" / "ai_advice.json"
-if advice.exists():
-    import json
-    raw = json.load(io.open(advice, encoding="utf-8"))
-    ent = raw.get("entries", raw)
-    entries = list(ent.values()) if isinstance(ent, dict) else ent
-    dreams = [e["dream_summary"].lower() for e in entries
-              if e.get("source") == "llm" and e.get("dream_summary")]
-    unmatched = [d for d in dreams
-                 if not any(any(k in d for k in kw)
-                            for kw in gad.MOTIF_FAMILIES.values())]
-    # 2026-08-28 修正後是 1/51。留一點餘裕給往後新增的夜晚，但守住量級——
-    # 修正前是 10/51，所以這個門檻擋得住那個回歸。
-    ratio = len(unmatched) / len(dreams) if dreams else 0
-    ok("既有夢境對不到家族的比例 < 10%",
-       ratio < 0.10, f"{len(unmatched)} / {len(dreams)} = {ratio*100:.1f}%")
-else:
-    print("  - 跳過真實資料回歸（ai/data/ai_advice.json 不存在）")
 
 print()
 print("=" * 78)

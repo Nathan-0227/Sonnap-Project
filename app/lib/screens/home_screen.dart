@@ -23,8 +23,9 @@ import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
 import '../widgets/day_heart_rate_chart.dart';
 import '../models/yesterday_activity.dart';
-import '../widgets/dream_book.dart';
-import '../widgets/dream_diary.dart';
+import '../services/pet_notes.dart';
+import '../widgets/notes_book.dart';
+import '../widgets/pet_notes_sheet.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/info_tile.dart';
 import '../widgets/night_sky_effects.dart';
@@ -168,10 +169,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       MorningRatingStore(widget.bedMarks.store);
 
   /// 夢境看過了沒（小狗旁的對話框縮成 💭 用），也存在同一個儲存裡。
-  late final DreamReadStore _dreamReads = DreamReadStore(widget.bedMarks.store);
+  late final NotesReadStore _notesReads = NotesReadStore(widget.bedMarks.store);
 
   /// 已經看過的那一晚夢境的日期。跟最新那一晚相同 → 對話框縮成 💭。
-  String? _dreamReadDate;
+  /// 今天早上那一晚的寵物 notes（`/night-summary?generate=false`）。沒有後端、沒有內容 → null，
+  /// 日記本不出現。
+  PetNotes? _notes;
+
+  /// 問過「這個 version 看過沒」了（問到之前先不抖，免得看過的人一打開先抖一下）。
+  String? _notesAskedVersion;
+
+  /// 看過的那個 version。內容換了就不一樣，紅點再亮。
+  String? _notesReadVersion;
 
   /// 起床 6 小時內、還沒填自評 → 首頁出現補填小卡（使用者定）。null = 不出現。
   BedMarks? _restedMakeUp;
@@ -192,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _bedtime = widget.targetBedtime;
     _sessionFuture = widget.repository.load();
-    _loadDreamRead();
+    _loadNotes();
     _loadGame();
     _loadCamera();
     _loadMarks();
@@ -456,7 +465,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         report: reportF,
         fallback: initial,
         mood: mood,
-        loadSummary: source == null ? null : () => source.fetchSummary(date),
+        loadSummary: source == null
+            ? null
+            : ({bool generate = true}) =>
+                source.fetchSummary(date, generate: generate),
         onClose: () => navigator.removeRoute(loadingRoute),
         onView: (prepared) async {
           if (viewing) return;
@@ -467,11 +479,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             initial: prepared.report,
             loadSummary: prepared.pendingSummary == null
                 ? null
-                : () => prepared.pendingSummary!,
+                : ({bool generate = true}) => prepared.pendingSummary!,
           );
           final result = navigator.push<String>(route);
           removeWhenCovered(route, loadingRoute);
           final r = await result;
+          // 報告流程可能剛生成了 AI 寫的那一份 → 首頁的日記本跟著換（version 變了紅點會再亮）
+          _loadNotes();
           if (loadingRoute.isActive) navigator.removeRoute(loadingRoute);
           if (!finished.isCompleted) finished.complete(r);
         },
@@ -621,7 +635,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String date, {
     required MorningReport initial,
     Future<MorningReport> Function()? load,
-    Future<Map<String, dynamic>?> Function()? loadSummary,
+    NotesLoader? loadSummary,
   }) =>
       MaterialPageRoute<String>(
         fullscreenDialog: true,
@@ -630,11 +644,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           pending: date == reportDateKey(widget.clock()),
           canOpenInsights: widget.onOpenInsights != null,
           // 在報告裡看過夢 → 首頁的對話框也縮成 💭
-          onDreamOpened: () {
-            _dreamReads.markRead(date);
-            if (mounted) setState(() => _dreamReadDate = date);
+          onNotesOpened: (version) {
+            _notesReads.markRead(date, version);
+            if (mounted && _notes?.date == date && _notes?.version == version) {
+              setState(() => _notesReadVersion = version);
+            }
           },
-          isDreamRead: () => _dreamReads.isRead(date),
+          isNotesRead: (version) => _notesReads.isRead(date, version),
           loadBedTimes: _bedTimes,
                     loadEfficiencyNights: () async {
             var camera = _camera;
@@ -705,8 +721,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       date,
       initial: _initialReport(date, inputs),
       load: () => _fetchReport(date, inputs),
-      loadSummary: source == null ? null : () => source.fetchSummary(date),
+      loadSummary: source == null
+          ? null
+          : ({bool generate = true}) =>
+              source.fetchSummary(date, generate: generate),
     ));
+    _loadNotes();
     if (result == kReportOpenInsights && mounted) widget.onOpenInsights?.call();
   }
 
@@ -757,9 +777,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _openCloset() async {
     final service = widget.game;
     if (service == null) return _showNeedsBackend("Closet");
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => ClosetScreen(service: service)));
+    // 衣櫃裡的預覽要跟首頁那隻是同一隻：心情與成長階段都照抄後端，
+    // 不在這裡挑。拿不到心情就讓 HomePet 走它自己的預設（bored）。
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClosetScreen(
+          service: service,
+          mood: mood,
+          growthStage: _game?.value?.growthStage,
+        ),
+      ),
+    );
     // 回來時重讀：剛換的衣服要出現在寵物身上。
     if (mounted) await _loadGame();
   }
@@ -800,50 +835,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _sessionFuture = widget.repository.load();
     });
-    _loadDreamRead();
+    _loadNotes();
   }
 
-  /// 有夢境的那一晚：打包檔最新那一晚（同早晨報告的判斷）。沒有夢境 → null。
-  static String? _dreamDate(SleepSession s) =>
-      s.aiContent.hasDream && s.history.isNotEmpty ? s.history.last.date : null;
-
-  Future<void> _loadDreamRead() async {
-    try {
-      final date = _dreamDate(await _sessionFuture);
-      if (date == null) return;
-      final read = await _dreamReads.isRead(date);
-      if (mounted && read) setState(() => _dreamReadDate = date);
-    } catch (_) {
-      // 讀不到 session 時本來就沒有對話框
+  /// 今天早上那一晚的寵物 notes；**沒有內容就退回前一晚**（[homeNotesDates]）。
+  /// 🔴 一律 generate=false：首頁**絕不觸發 AI**——
+  /// AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤），那只發生在報告流程。
+  Future<void> _loadNotes() async {
+    final source = widget.morningReport;
+    if (source == null) return;
+    PetNotes? found;
+    for (final date in homeNotesDates(widget.clock())) {
+      Map<String, dynamic>? json;
+      try {
+        json = await source.fetchSummary(date, generate: false);
+      } catch (_) {
+        json = null;
+      }
+      found = PetNotes.fromJson(json, date: date);
+      if (found != null) break;
     }
+    final notes = found;
+    if (!mounted) return;
+    setState(() => _notes = notes);
+    if (notes == null) return;
+    final read = await _notesReads.isRead(notes.date, notes.version);
+    if (!mounted || _notes?.version != notes.version) return;
+    setState(() {
+      _notesAskedVersion = notes.version;
+      if (read) _notesReadVersion = notes.version;
+    });
   }
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("$feature will be available later.")),
-    );
-  }
-
-  /// 夢境日記。
-  ///
-  /// ⚠️ 標題必須寫成「寵物的夢」——Garmin 完全沒有量測夢境內容，
-  /// 寫成「你的夢」就是誤述資料支持的範圍。disclaimer 一併顯示。
-  void _showDream(SleepSession session) {
-    final ai = session.aiContent;
-    final date = _dreamDate(session);
-    if (!ai.hasDream || date == null) {
-      _showComingSoon("Dream Diary");
-      return;
-    }
-    showDreamDiary(
-      context,
-      text: ai.dreamSummary!,
-      date: date,
-      mood: session.history.last.petMood,
-      disclaimer: session.disclaimer,
-    );
-    _dreamReads.markRead(date);
-    setState(() => _dreamReadDate = date);
+  void _showNotes(PetNotes notes, String mood) {
+    showPetNotes(context, notes: notes, mood: mood);
+    _notesReads.markRead(notes.date, notes.version);
+    setState(() => _notesReadVersion = notes.version);
   }
 
   /// 點卡片跳出的彈窗：最近 7 晚的長條圖（當晚那根特別亮）、跟上一晚差多少，
@@ -1382,7 +1409,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ── 寵物：照後端的心情，右下角掛心情標籤 ─────────────────────────
 
   Widget _buildPet(String mood, GameState? game, SleepSession session) {
-    final dreamDate = _dreamDate(session);
+    final notes = _notes;
     final color = moodColor(mood);
     final pet = SizedBox(
       height: kHomePetSize,
@@ -1431,10 +1458,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
-    // 夢境入口：草地上一本攤開的日記，跟早晨報告同一個（2026-11-15 使用者定，取代原本的雲朵）。
-    // 沒看過就抖＋紅點，點開看完整夢境；只有真的有夢才出現。
+    // notes 入口：草地上一本攤開的日記，跟早晨報告同一個（2026-11-15 使用者定，取代原本的雲朵；
+    // 11-17 起裡面是寵物 notes）。沒看過這個 version 就抖＋紅點；沒有內容就不出現。
     // ⚠️ 位置照整個畫面寬度算（小狗那個框只有 230 寬）：放在小狗右下的草地上、心情標籤的右邊。
-    final petWithDream = dreamDate == null
+    final petWithNotes = notes == null
         ? pet
         : LayoutBuilder(
             builder: (context, constraints) {
@@ -1447,13 +1474,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     Center(child: pet),
                     Positioned(
-                      key: const Key('home-dream'),
+                      key: const Key('home-notes'),
                       right: 6,
                       // 貼在草地上（使用者定：再往下靠近草地）
                       bottom: 2,
-                      child: DreamBook(
-                        unread: _dreamReadDate != dreamDate,
-                        onTap: () => _showDream(session),
+                      child: NotesBook(
+                        unread: _notesAskedVersion == notes.version &&
+                            _notesReadVersion != notes.version,
+                        onTap: () => _showNotes(notes, mood),
                       ),
                     ),
                   ],
@@ -1463,13 +1491,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           );
     // 等級在寵物上面（2026-11-13 使用者定）。照抄後端（GET /game），Dart 不從 XP 反推；
     // 點了開獎勵。沒有後端就不畫。
-    if (game == null) return petWithDream;
+    if (game == null) return petWithNotes;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _levelBadge(game.level),
         const SizedBox(height: 4),
-        petWithDream,
+        petWithNotes,
       ],
     );
   }
@@ -2597,3 +2625,17 @@ class _ReportFetch {
 
   const _ReportFetch({this.home, this.game});
 }
+
+/// 首頁日記本最多往回找幾晚（2026-11-19 使用者定：只往回 1 晚）。
+const kHomeNotesLookbackNights = 1;
+
+/// 首頁日記本要依序問哪幾晚：今天日曆日，再往回 [kHomeNotesLookbackNights] 晚。
+///
+/// 為什麼要往回：使用者凌晨 3–6 點才睡。只問「今天」的話，一過午夜問的是還沒開始的那一晚，
+/// 從午夜到起床（約十小時）日記本整個消失，昨晚的 notes 明明還在。
+/// 只往回 1 晚：前一晚也沒有（例如沒戴錶）就不顯示，不冒出好幾天前的舊 notes。
+/// 用日曆日相減（`DateTime(y, m, d - i)`），不用減 24 小時。
+List<String> homeNotesDates(DateTime now) => [
+      for (var i = 0; i <= kHomeNotesLookbackNights; i++)
+        reportDateKey(DateTime(now.year, now.month, now.day - i)),
+    ];

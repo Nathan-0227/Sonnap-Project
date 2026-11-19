@@ -12,6 +12,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 81.96,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.48 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -27,6 +28,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -42,6 +44,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.7,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -57,6 +60,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.09,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -72,6 +76,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.76,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -87,6 +92,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.14,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -102,6 +108,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.82,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -117,6 +124,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -132,6 +140,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 95.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -147,6 +156,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.09,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -162,6 +172,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.93,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -177,6 +188,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.41,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -192,6 +204,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.74,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -207,6 +220,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.53,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -222,6 +236,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.12,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -237,6 +252,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 92.55,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -252,6 +268,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -267,6 +284,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 93.19,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
@@ -282,6 +300,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.68,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -297,6 +316,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -312,6 +332,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.66,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -327,6 +348,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -342,6 +364,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.88,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -357,6 +380,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.32,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -372,6 +396,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.74,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -387,6 +412,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -402,6 +428,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.03,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -417,6 +444,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.81,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -432,6 +460,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.87,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -447,6 +476,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -462,6 +492,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 96.95,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -477,6 +508,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.27,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -492,6 +524,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.35,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
@@ -507,6 +540,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.51,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -522,6 +556,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.25,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -537,6 +572,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 92.36,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -552,6 +588,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 94.77,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -567,6 +604,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.37,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -582,6 +620,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 90.86,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
@@ -597,6 +636,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.38,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -612,6 +652,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -627,6 +668,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.34,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -642,6 +684,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
@@ -657,6 +700,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 95.29,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -672,6 +716,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 86.99,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Time awake during the night was high. Check your sleep environment (light, noise, temperature) and avoid caffeine before bed."
   },
   {
@@ -687,6 +732,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 93.03,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -702,6 +748,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.76,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -717,6 +764,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 95.8,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -732,6 +780,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.42,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -747,6 +796,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -762,6 +812,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 85.45,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.13 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -777,6 +828,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -792,6 +844,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.25 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -807,6 +860,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.37,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.22 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -822,6 +876,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.79,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -837,6 +892,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.32,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.88 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -852,6 +908,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.42 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -867,6 +924,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.75,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -882,6 +940,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.78,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.38 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -897,6 +956,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.46,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -912,6 +972,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -927,6 +988,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.59,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.03 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -942,6 +1004,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.47,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -957,6 +1020,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.97 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -972,6 +1036,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.5,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (3.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -987,6 +1052,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 92.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.12 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1002,6 +1068,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 94.35,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -1017,6 +1084,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 91.7,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1032,6 +1100,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 95.2,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.05 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1047,6 +1116,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.13 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1062,6 +1132,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.7,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1077,6 +1148,7 @@
     "rem_measured": false,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 93.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.65 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1092,6 +1164,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.78,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1107,6 +1180,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 74.6,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep efficiency was low, meaning a fair amount of time in bed was spent awake. Avoid using your phone in bed."
   },
   {
@@ -1122,6 +1196,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 91.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -1137,6 +1212,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.59,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.0 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1152,6 +1228,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 96.3,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (3.47 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1167,6 +1244,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.64,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.63 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1182,6 +1260,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 94.21,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1197,6 +1276,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.69,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -1212,6 +1292,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.5,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1227,6 +1308,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 93.48,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep ran long. Keep a regular schedule; aim for 7.0–9.0 h."
   },
   {
@@ -1242,6 +1324,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.23,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1257,6 +1340,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 84.85,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (3.73 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1272,6 +1356,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 88.5,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -1287,6 +1372,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.22,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.25 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1302,6 +1388,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 98.9,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1317,6 +1404,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.29,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1332,6 +1420,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 93.6,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1347,6 +1436,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.56,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.8 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1362,6 +1452,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 90.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.53 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1377,6 +1468,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.02 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1392,6 +1484,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.78,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1407,6 +1500,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.07,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -1422,6 +1516,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 96.42,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -1437,6 +1532,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.6,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.15 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1452,6 +1548,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.5,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1467,6 +1564,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 97.49,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1482,6 +1580,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1497,6 +1596,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.56,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1512,6 +1612,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.35,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.07 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1527,6 +1628,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1542,6 +1644,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.65,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.73 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1557,6 +1660,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 77.6,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -1572,6 +1676,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1587,6 +1692,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 67.4,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep efficiency was low, meaning a fair amount of time in bed was spent awake. Avoid using your phone in bed."
   },
   {
@@ -1602,6 +1708,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 88.5,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1617,6 +1724,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 99.05,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.22 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1632,6 +1740,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.95,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1647,6 +1756,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.42 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1662,6 +1772,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.84,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1677,6 +1788,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 98.12,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
   },
   {
@@ -1692,6 +1804,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Deep sleep share fell outside the usual range. Regular exercise and a consistent bedtime help raise deep sleep."
   },
   {
@@ -1707,6 +1820,7 @@
     "rem_measured": true,
     "efficiency_basis": "phone_bed_start__watch_wake",
     "efficiency_used": 97.1,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1720,8 +1834,9 @@
     "deep_score": 9.4,
     "rem_score": 10.0,
     "rem_measured": true,
-    "efficiency_basis": "watch_tst__watch_onset_to_wake",
-    "efficiency_used": 99.73,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 97.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   },
   {
@@ -1737,6 +1852,7 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 82.3,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.3 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1750,8 +1866,9 @@
     "deep_score": 9.9,
     "rem_score": 9.2,
     "rem_measured": true,
-    "efficiency_basis": "watch_tst__watch_onset_to_wake",
-    "efficiency_used": 100.0,
+    "efficiency_basis": "phone_bed_start__watch_wake",
+    "efficiency_used": 90.7,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (2.6 h). Try going to bed earlier; aim for 7.0–9.0 h."
   },
   {
@@ -1767,6 +1884,167 @@
     "rem_measured": true,
     "efficiency_basis": "watch_tst__watch_onset_to_wake",
     "efficiency_used": 100.0,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.92 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-09",
+    "score": 94.0,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 24.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 10.0,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 93.2,
+    "efficiency_recalled": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-11-10",
+    "score": 83.4,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 21.8,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 1.6,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 95.9,
+    "efficiency_recalled": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-11-11",
+    "score": 63.7,
+    "quality": "Poor",
+    "age_band": "young_adult",
+    "duration_score": 1.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 4.7,
+    "rem_score": 7.2,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 95.42,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was below average; consider adjusting your routine. Sleep was short (4.17 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-12",
+    "score": 70.0,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 10.0,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 100.0,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (3.58 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-13",
+    "score": 67.7,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 9.8,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 7.6,
+    "rem_score": 0.3,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 100.0,
+    "efficiency_recalled": true,
+    "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+  },
+  {
+    "date": "2026-11-14",
+    "score": 80.2,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 22.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 7.0,
+    "rem_score": 0.4,
+    "rem_measured": true,
+    "efficiency_basis": "phone_bed_start__watch_wake",
+    "efficiency_used": 96.2,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-11-16",
+    "score": 70.9,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 13.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 6.6,
+    "rem_score": 0.6,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 96.8,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
+  },
+  {
+    "date": "2026-11-17",
+    "score": 75.3,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 13.2,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 5.4,
+    "rem_score": 6.8,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 99.07,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (5.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-18",
+    "score": 17.8,
+    "quality": "Bad",
+    "age_band": "young_adult",
+    "duration_score": 0.0,
+    "efficiency_score": 7.2,
+    "waso_score": 2.0,
+    "deep_score": 6.8,
+    "rem_score": null,
+    "rem_measured": false,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 74.44,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-19",
+    "score": 74.6,
+    "quality": "Normal",
+    "age_band": "young_adult",
+    "duration_score": 6.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 10.0,
+    "rem_score": 7.9,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 99.64,
+    "efficiency_recalled": false,
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.67 h). Try going to bed earlier; aim for 7.0–9.0 h."
   }
 ]

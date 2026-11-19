@@ -103,16 +103,23 @@ Map<String, dynamic> homeWaiting(String date) => {
 Map<String, dynamic> summaryOk(String date, {String kind = 'tip'}) => {
       'date': date,
       'status': 'ok',
-      'text': 'SENTINEL-summary',
+      'summary': 'SENTINEL-summary',
       'source': 'llm',
-      'tip': {'id': 'T1', 'kind': kind, 'text': 'SENTINEL-tip'},
+      'version': 'v1',
+      'tips': [
+        {'id': 'T1', 'kind': kind, 'text': 'SENTINEL-tip', 'original': 'orig'},
+      ],
     };
 
 class _Source implements MorningReportSource {
   final Map<String, dynamic>? json;
   final Map<String, dynamic>? summary;
   final List<String> asked = [];
+  /// 要求生成（generate=true）的那幾次——「AI 那段」。
   final List<String> askedSummary = [];
+
+  /// 只讀不生成（generate=false）的那幾次：首頁、手錶還沒到。
+  final List<String> askedNotesOnly = [];
   /// AI 那段要等多久才回來（模擬第一次生成）。
   final Duration summaryDelay;
   _Source(this.json, {this.summary, this.summaryDelay = Duration.zero});
@@ -123,8 +130,9 @@ class _Source implements MorningReportSource {
   }
 
   @override
-  Future<Map<String, dynamic>?> fetchSummary(String date) async {
-    askedSummary.add(date);
+  Future<Map<String, dynamic>?> fetchSummary(String date,
+      {bool generate = true}) async {
+    (generate ? askedSummary : askedNotesOnly).add(date);
     if (summaryDelay > Duration.zero) await Future<void>.delayed(summaryDelay);
     return summary;
   }
@@ -311,17 +319,15 @@ void main() {
       expect(r.hasScore, isFalse);
     });
 
-    test('連不到後端 → 用打包檔那一晚；只有最新那晚才有夢境', () {
+    test('連不到後端 → 用打包檔那一晚；只有最新那晚才有 Sleep Stages', () {
       final latest = session.history.last;
       final r = buildMorningReport(date: latest.date, session: session);
       expect(r.source, ReportSource.bundled);
       expect(r.score, latest.finalScore);
       expect(r.mood, latest.petMood, reason: '心情照抄 history，不從分數推');
-      expect(r.dream, session.aiContent.dreamSummary);
 
       final older = session.history[session.history.length - 2];
       final o = buildMorningReport(date: older.date, session: session);
-      expect(o.dream, isNull, reason: '打包檔的夢境只屬於最新那一晚');
       expect(o.stages, isNull);
       expect(o.moodDescription, isNull,
           reason: '打包檔的那句話只屬於最新那一晚，舊夜晚不能借用');
@@ -374,26 +380,26 @@ void main() {
       expect(otherNight.rating, isNull);
     });
 
-    test('⚠️ /night-summary：只收 status ok 而且是同一晚的', () {
+    test('⚠️ /night-summary（寵物 notes）：只收同一晚的；waiting 也收（行為原句）', () {
       final base = buildMorningReport(
           date: '2026-11-12', home: homeWithScore('2026-11-12'));
-      final ok = base.withSummary(summaryOk('2026-11-12'));
-      expect(ok.summaryText, 'SENTINEL-summary');
-      expect(ok.tip!.text, 'SENTINEL-tip');
-      expect(ok.tip!.isNote, isFalse);
-      expect(base.withSummary(summaryOk('2026-11-11')).summaryText, isNull);
+      final ok = base.withNotes(summaryOk('2026-11-12'));
+      expect(ok.notes!.summary, 'SENTINEL-summary');
+      expect(ok.notes!.tips.single.text, 'SENTINEL-tip');
+      expect(ok.notes!.tips.single.isNote, isFalse);
+      expect(base.withNotes(summaryOk('2026-11-11')).notes, isNull);
       expect(
-        base.withSummary({
-          'date': '2026-11-12',
+        base.withNotes({
+          ...summaryOk('2026-11-12'),
           'status': 'waiting',
-          'text': null,
-          'tip': null,
-        }).summaryText,
-        isNull,
+          'source': null,
+          'summary': null,
+        }).notes!.waiting,
+        isTrue,
       );
-      expect(base.withSummary(null).summaryText, isNull);
-      // 之後再接 extras 不會把 AI 那段弄丟
-      expect(ok.withExtras(goalMinutes: 480).summaryText, 'SENTINEL-summary');
+      expect(base.withNotes(null).notes, isNull);
+      // 之後再接 extras 不會把 notes 弄丟
+      expect(ok.withExtras(goalMinutes: 480).notes!.summary, 'SENTINEL-summary');
     });
 
     test('達成度那一行只照抄後端的分鐘數', () {
@@ -575,39 +581,15 @@ void main() {
       expect(find.byKey(const Key('report-duration-change-down')), findsNothing);
     });
 
-    testWidgets('From your buddy：AI 那段與小建議逐字照抄；note 用不同圖示',
+    testWidgets('⚠️ From your buddy 那張卡不再出現：notes 整段在草地上的日記本裡',
         (tester) async {
       final base = buildMorningReport(
           date: '2026-11-12', home: homeWithScore('2026-11-12'));
-      await pumpReport(tester, base.withSummary(summaryOk('2026-11-12')));
-      expect(textOf(tester, 'report-summary'), 'SENTINEL-summary');
-      expect(find.text('SENTINEL-tip'), findsOneWidget);
-      expect(find.byKey(const Key('report-tip-tip')), findsOneWidget);
-
-      await pumpReport(
-          tester, base.withSummary(summaryOk('2026-11-12', kind: 'note')));
-      expect(find.byKey(const Key('report-tip-note')), findsOneWidget);
-      expect(find.byKey(const Key('report-tip-tip')), findsNothing);
-    });
-
-    testWidgets('⚠️ AI 寫不出來（fallback）→ 卡片不再放一次上面那句話，只留小建議',
-        (tester) async {
-      final base = buildMorningReport(
-          date: '2026-11-12', home: homeWithScore('2026-11-12'));
-      final fallback = {
-        ...summaryOk('2026-11-12'),
-        'source': 'fallback',
-        'text': 'SENTINEL-mood-description',
-      };
-      await pumpReport(tester, base.withSummary(fallback));
-      expect(find.text('SENTINEL-mood-description'), findsOneWidget,
-          reason: '同一句話只能出現一次');
-      expect(find.byKey(const Key('report-summary')), findsNothing);
-      expect(find.text('SENTINEL-tip'), findsOneWidget);
-
-      // fallback 又沒有小建議 → 整張卡不畫
-      await pumpReport(tester, base.withSummary({...fallback, 'tip': null}));
+      await pumpReport(tester, base.withNotes(summaryOk('2026-11-12')));
       expect(find.byKey(const Key('report-buddy')), findsNothing);
+      expect(find.text('From your buddy'), findsNothing);
+      expect(find.text('SENTINEL-summary'), findsNothing);
+      expect(find.byKey(const Key('report-notes')), findsOneWidget);
     });
 
     testWidgets('⚠️ 放下手機：有後端時照抄達成度；沒有後端時不出現任何達成度措辭',
@@ -891,7 +873,7 @@ void main() {
             {'date': date, 'total': 30},
           ]),
         );
-        if (!waiting) r = r.withSummary(summaryOk(date));
+        if (!waiting) r = r.withNotes(summaryOk(date));
         await pumpReport(tester, r,
             size: const Size(1080, 2340), canOpenInsights: true);
         expect(tester.takeException(), isNull);
@@ -1267,8 +1249,8 @@ void main() {
         await settle(tester, 10);
         expect(find.byType(MorningReportScreen), findsOneWidget);
         expect(textOf(tester, 'report-score'), '62');
-        expect(textOf(tester, 'report-summary'), 'SENTINEL-summary',
-            reason: '等到的 AI 那段一進去就在');
+        expect(find.byKey(const Key('report-notes')), findsOneWidget,
+            reason: '等到的 notes 一進去就在');
         expect(source.askedSummary, hasLength(1), reason: '報告畫面不再要一次');
       });
 
@@ -1288,9 +1270,9 @@ void main() {
         await settle(tester, 10);
         expect(find.byType(MorningReportScreen), findsOneWidget);
         expect(textOf(tester, 'report-score'), '62');
-        expect(find.byKey(const Key('report-summary')), findsNothing);
+        expect(find.byKey(const Key('report-notes')), findsNothing);
         await settle(tester, 160);
-        expect(textOf(tester, 'report-summary'), 'SENTINEL-summary',
+        expect(find.byKey(const Key('report-notes')), findsOneWidget,
             reason: '還在路上的那一個回來了就補上');
         expect(source.askedSummary, hasLength(1));
       });
@@ -1494,7 +1476,7 @@ void main() {
       expect(source.asked, [latest.date]);
       expect(source.askedSummary, [latest.date]);
       expect(textOf(tester, 'report-score'), '62');
-      expect(textOf(tester, 'report-summary'), 'SENTINEL-summary');
+      expect(find.byKey(const Key('report-notes')), findsOneWidget);
     });
   });
 }

@@ -61,11 +61,15 @@ PetMood petMoodFromBackend(String? mood) => switch (mood) {
 };
 
 /// 衣櫃的 item_id（`game/inventory.py`）→ 隊友畫好的衣服圖。
-/// 不在表上的（bow、top_hat、crown）沒有圖，改疊 emoji。
+/// 不在表上的（top_hat、crown）沒有圖，改疊 emoji。
+/// ⚠️ 後端那 6 件的 item_id 與這裡的圖檔 id **刻意不同名**（cap / glasses /
+///    scarf / bow ←→ sleep_hat / round_glasses / night_scarf / pink_bow），
+///    所以新增一件真圖要同時改這張表，光加 AccessoryDefinition 不會生效。
 const Map<String, String> kLayeredAccessoryFor = {
   'cap': 'sleep_hat',
   'glasses': 'round_glasses',
   'scarf': 'night_scarf',
+  'bow': 'pink_bow',
 };
 
 AccessoryDefinition? layeredAccessoryFor(String? itemId) {

@@ -148,13 +148,12 @@ def make_project(tmp, dates, standard=ORIGINAL_STANDARD):
 class FakeRunner:
     """記下每一次呼叫；抓取與評分那兩步照指定的方式改檔。"""
 
-    def __init__(self, paths, after_dates, fetch_rc=0, pipeline_rc=0, ai_rc=0, clips_rc=0,
+    def __init__(self, paths, after_dates, fetch_rc=0, pipeline_rc=0, clips_rc=0,
                  export_rc=0):
         self.paths = paths
         self.after_dates = after_dates
         self.rc = {"garmin/garmin_connect_fetch.py": fetch_rc,
                    "garmin/run_pipeline.py": pipeline_rc,
-                   "ai/generate_advice.py": ai_rc,
                    "camera_clips.py": clips_rc,
                    "export_bed_marks.py": export_rc}
         self.calls = []
@@ -354,7 +353,7 @@ with tempfile.TemporaryDirectory() as d:
     rc, out = quiet(mi.run, args(skip_camera=True), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
     ok("exit code 不是 0", rc != 0, str(rc))
     ok("沒有跑任何寫入", not {"migrate_garmin_to_db.py", "migrate_camera_to_db.py",
-                          "ai/generate_advice.py", "build_app_payload.py"} & set(runner.scripts()),
+                          "build_app_payload.py"} & set(runner.scripts()),
        str(runner.scripts()))
     ok("評分結果還原成跑之前的", paths.final_json.read_bytes() == original_final)
     ok("手錶原始資料也還原了",
@@ -383,12 +382,15 @@ with tempfile.TemporaryDirectory() as d:
     runner = FakeRunner(paths, AFTER)
     rc, out = quiet(mi.run, args(), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
     ok("exit code 0", rc == 0, str(rc))
-    ok("順序：抓 → 匯出按鈕 → 評分 → 手錶入庫 → 攝影機入庫 → 動作片段 → 夢境 → App 資料檔",
+    # ⚠️ resolve_lights_out.py 一定要在 migrate_garmin_to_db.py **之後**
+    #    （裁判是手錶，手錶沒寫進去就沒得挑）、build_app_payload.py **之前**
+    #    （不然打包檔帶出去的還是沒校正的值）。
+    ok("順序：抓 → 匯出按鈕 → 評分 → 手錶入庫 → 重挑就寢時刻 → 攝影機入庫 → 動作片段 → App 資料檔",
        runner.scripts() == ["garmin/garmin_connect_fetch.py", "export_bed_marks.py",
                             "garmin/run_pipeline.py",
-                            "migrate_garmin_to_db.py", "migrate_camera_to_db.py",
-                            "camera_clips.py",
-                            "ai/generate_advice.py", "build_app_payload.py"],
+                            "migrate_garmin_to_db.py", "resolve_lights_out.py",
+                            "migrate_camera_to_db.py",
+                            "camera_clips.py", "build_app_payload.py"],
        str(runner.scripts()))
     fetch = runner.calls[0]
     ok("抓資料從 7 天前抓起（今天 09-14 → 09-07）",
@@ -397,14 +399,14 @@ with tempfile.TemporaryDirectory() as d:
     ok("  --end-date 是今天", "--end-date" in fetch and fetch[fetch.index("--end-date") + 1] == "2026-09-14")
     ok("  沒有 --replace（那會把整份歷史換成這幾天）", "--replace" not in fetch)
     ok("任何一步都沒有 --fetch", all("--fetch" not in c for c in runner.calls))
-    cam = runner.calls[4]
+    cam = runner.calls[5]
     ok("攝影機只匯入挑中的那一份", cam == ["migrate_camera_to_db.py", "--csv", str(csv_path)], str(cam))
-    ok("動作片段做的也是同一份", runner.calls[5] == ["camera_clips.py", "--csv", str(csv_path)],
-       str(runner.calls[5]))
+    ok("動作片段做的也是同一份", runner.calls[6] == ["camera_clips.py", "--csv", str(csv_path)],
+       str(runner.calls[6]))
     ok("有列出新增的夜晚", "2026-09-14" in out)
 
 
-# 動作片段是附加的：做不成照樣往下跑（比照夢境），已寫好的資料不作廢
+# 動作片段是附加的：做不成照樣往下跑，已寫好的資料不作廢
 with tempfile.TemporaryDirectory() as d:
     d = Path(d)
     paths = make_project(d, BEFORE)
@@ -413,8 +415,8 @@ with tempfile.TemporaryDirectory() as d:
     runner = FakeRunner(paths, AFTER, clips_rc=1)
     rc, out = quiet(mi.run, args(), paths, NOW, DB_ENV, runner=runner, db_check=db_ok)
     ok("動作片段失敗 → exit code 仍是 0", rc == 0, str(rc))
-    ok("  之後的夢境與 App 資料檔照跑",
-       runner.scripts()[-2:] == ["ai/generate_advice.py", "build_app_payload.py"],
+    ok("  之後的 App 資料檔照跑",
+       runner.scripts()[-1] == "build_app_payload.py",
        str(runner.scripts()))
     ok("  有講出怎麼補", "camera_clips.py --csv" in out)
 
@@ -459,11 +461,11 @@ rc, out, start, runner = start_for("{ not json")
 ok("資料檔讀不出來 → 停，一支都沒跑（不退回從頭抓）", rc != 0 and runner.calls == [], str(runner.scripts()))
 ok("  有講是哪個檔", "garmin_standard_data.json" in out)
 
-print("\n【7】不擋的狀況：分數變了、沒有新夜晚、夢境失敗")
+print("\n【7】不擋的狀況：分數變了、沒有新夜晚")
 with tempfile.TemporaryDirectory() as d:
     d = Path(d)
     paths = make_project(d, BEFORE)
-    runner = FakeRunner(paths, after_dates=BEFORE, ai_rc=1)       # 沒新夜晚、夢境失敗
+    runner = FakeRunner(paths, after_dates=BEFORE)       # 沒新夜晚
     # 讓 09-12 的分數變掉
     orig = runner.__call__
 
@@ -476,10 +478,10 @@ with tempfile.TemporaryDirectory() as d:
         return rc
 
     rc, out = quiet(mi.run, args(skip_camera=True), paths, NOW, DB_ENV, runner=rescoring, db_check=db_ok)
-    ok("exit code 0（這三件事都只警告）", rc == 0, str(rc))
+    ok("exit code 0（這兩件事都只警告）", rc == 0, str(rc))
     ok("  有警告分數變了", "分數和上次不同" in out)
     ok("  有提醒手錶可能沒同步", "同步" in out)
-    ok("  夢境失敗之後 App 資料檔照樣重建", runner.scripts()[-1] == "build_app_payload.py",
+    ok("  App 資料檔照樣重建", runner.scripts()[-1] == "build_app_payload.py",
        str(runner.scripts()))
 
 print("\n【8】--skip-camera、--no-ai")
@@ -490,9 +492,10 @@ with tempfile.TemporaryDirectory() as d:
     runner = FakeRunner(paths, AFTER)
     rc, _ = quiet(mi.run, args(skip_camera=True, no_ai=True), paths, NOW, DB_ENV,
                   runner=runner, db_check=db_ok)
-    ok("不跑攝影機入庫、不跑夢境",
-       rc == 0 and "migrate_camera_to_db.py" not in runner.scripts()
-       and "ai/generate_advice.py" not in runner.scripts(), str(runner.scripts()))
+    ok("不跑攝影機入庫；--no-ai 已經沒有作用但照樣收（舊的指令不會報錯）",
+       rc == 0 and "migrate_camera_to_db.py" not in runner.scripts(), str(runner.scripts()))
+    ok("⚠️ 早晨匯入不再生成夢境（2026-11-17 退場）",
+       not any("generate_advice" in c for c in runner.scripts()), str(runner.scripts()))
 
 print("\n【9】資料庫：沒設或連不上 → 什麼都不跑；訊息裡沒有密碼")
 with tempfile.TemporaryDirectory() as d:

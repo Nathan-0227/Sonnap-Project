@@ -1,6 +1,6 @@
 # Sonnap: AI Sleep Companion 🌙
 
-Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用。我們透過影像辨識技術分析使用者的睡眠狀態，並由 AI 生成專屬的夢境日記，讓睡眠不再只是休息，更是一場療癒的體驗。
+Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用。我們透過影像辨識技術分析使用者的睡眠狀態，並由寵物以 AI 每天早上寫一段總結與建議（寵物 notes），陪你一步步把睡眠調整好。
 
 ## 👥 團隊成員與分工
 - 李嘉友：專案經理 (PM) / 系統整合
@@ -14,7 +14,7 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 | | 項目 | 狀態 |
 |---|---|---|
 | ✅ | 睡眠品質評分 | **57 晚實測**（2026-05-29 ~ 09-01），文獻加權。⚠️ 跨 **3 名配戴者**，見下 |
-| ✅ | AI 夢境生成 | 57 晚全數由 Claude 生成（`claude-sonnet-5`），**0 晚退回規則式** |
+| ✅ | 寵物 notes（AI 總結＋建議） | 2026-11-17 取代夢境日記：AI 寫總結、從有出處的清單挑建議（`ai/night_summary.py`） |
 | ✅ | UI 原型設計 (Figma) | 五個分頁已實作 |
 | ✅ | 後端多使用者 API | 11 個端點、七張表、暱稱制免註冊，含行為介入迴圈 |
 | ✅ | Flutter APK | 能自己建置並裝進實體手機；**暱稱制帳號已實作**，一支 APK 給所有人用 |
@@ -102,7 +102,7 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 - **`pet_mood`** (String)：寵物心情，支援 `happy` / `tired` / `bored` / `anxious`。
 - **`current_activity`** (String)：動畫狀態，支援 `sleeping` / `dreaming` / `waking_up`。
 - **`motion_count`** (Integer)：翻身次數，由影像組提供之偵測數據。
-- **`dream_summary`** (String)：AI 生成的夢境描述文字。
+- **`dream_summary`** (String)：**2026-11-17 起一律 `null`**（夢境日記退場；每晚的 AI 內容改走 `GET /night-summary`）。
 - **`energy_level`** (Integer)：0–100，用於影響寵物動畫的活躍度。
 
 ### ⚠️ 實作與這份契約的差異（2026-09-04 對照實際 payload）
@@ -118,13 +118,13 @@ Sonnap 是一款結合「睡眠監測」與「AI 寵物陪伴」的創新應用�
 > **UI 遇到 `null` 應顯示「—」或隱藏該欄，不要顯示 0。**
 > 「沒量到」和「量到是 0」是兩件事。
 
-**另外**：`dream_summary` 最初規劃用 Gemini，**實際採用 Claude API**
+**另外**：AI 最初規劃用 Gemini，**實際採用 Claude API**
 （用標準庫 `urllib.request` 直接呼叫，不裝 SDK，沒有增加任何相依）。
 實際 payload 還擴充了 `scoring` / `display` / `streak` / `history` / `data_sources`
 等區塊——沿用原有的頂層結構往下加，沒有另開一套。
 
 ⚠️ **輸出字串一律英文**（2026-08-26 決定）：payload 欄位、API 訊息、評分建議、
-AI 夢境都是英文。**程式碼註解與 docstring 維持中文**——那是給團隊讀的說明不是輸出。
+寵物 notes 都是英文。**程式碼註解與 docstring 維持中文**——那是給團隊讀的說明不是輸出。
 
 🛠 開發規範 (Workflow)
 

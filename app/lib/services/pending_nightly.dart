@@ -54,10 +54,18 @@ class PendingNight {
   /// ＝不知道（送出時就不帶這個欄位，後端存 NULL，不是 0）。
   final int? bridgedUnlocks;
 
+  /// 那一晚所有 ≥ 60 分鐘的安靜期（`QuietCandidate.toJson()` 的原樣）。
+  ///
+  /// ⚠️ **一起存進佇列**，不然離線補送的夜晚後端就沒有候選可以挑，
+  /// 會永遠留著當初挑錯的那個時刻——而那正是這個機制要修的東西。
+  /// 舊格式讀回來是空清單＝「不知道」，送出時就不帶這個欄位。
+  final List<Map<String, dynamic>> candidates;
+
   const PendingNight(
     this.lightsOutIso, {
     this.marks = BedMarks.none,
     this.bridgedUnlocks,
+    this.candidates = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +77,7 @@ class PendingNight {
         if (marks.startRecalled) 'bed_start_kind': 'recalled',
         if (marks.endRecalled) 'bed_end_kind': 'recalled',
         if (bridgedUnlocks != null) 'bridged_unlocks': bridgedUnlocks,
+        if (candidates.isNotEmpty) 'quiet_candidates': candidates,
       };
 
   static PendingNight? fromJson(Object? raw) {
@@ -91,6 +100,10 @@ class PendingNight {
       bridgedUnlocks: switch (raw['bridged_unlocks']) {
         final int v when v >= 0 => v,
         _ => null,
+      },
+      candidates: switch (raw['quiet_candidates']) {
+        final List<dynamic> v => v.whereType<Map>().map(Map<String, dynamic>.from).toList(),
+        _ => const [],
       },
     );
   }

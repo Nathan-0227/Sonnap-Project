@@ -32,6 +32,10 @@ TMP = Path(tempfile.mkdtemp()) / "test_friend_sharing.db"
 db.DB_PATH = TMP
 
 import main  # noqa: E402
+
+# 「那一晚」是真的昨天，而電腦上的 Garmin 原始檔可能剛好有昨天那晚的心率（重抓之後就有），
+# 假帳號也會拿到真的曲線，「沒曲線退回 avg_hr」那條就測不到。這裡一律當作原始檔沒有讀數。
+main._hr_records_near = lambda *a, **k: []
 from fastapi.testclient import TestClient  # noqa: E402
 from behavior.challenges import night_achieved  # noqa: E402
 from social import sharing  # noqa: E402

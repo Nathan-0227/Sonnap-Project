@@ -94,19 +94,7 @@ PAYLOAD_STEP = (
     ROOT_DIR / "app" / "assets" / "data" / "app_payload.json",
 )
 
-# AI 步驟也單獨定義，預設不執行（比照 --fetch 的模式）。
-#
-# 為什麼是 opt-in：設成必跑會破壞 3 秒的開發循環，而且違反本腳本自己的契約
-# （任一步失敗即中止）——API 掛掉不該中止一個根本不需要 LLM 的評分重算。
-# 但設成完全獨立的腳本又會重演 2026-08-10 那個坑（沒人記得跑，然後安靜地
-# 產出過期內容），所以掛在這裡當可選步驟。
-#
-# 位置在 payload 之前：這樣當晚生成的建議可以直接被 payload 收進去。
-AI_STEP = (
-    ROOT_DIR / "ai" / "generate_advice.py",
-    "Generate AI sleep advice and pet dream diaries (needs ANTHROPIC_API_KEY in ai/.env)",
-    ROOT_DIR / "ai" / "data" / "ai_advice.json",
-)
+# （原本的 --ai 步驟〔夢境日記〕2026-11-18 拿掉：每晚的 AI 內容改由後端 /night-summary 依使用者生成。）
 
 # 步驟 1 單獨定義，因為它預設不執行（要連 Garmin 伺服器）
 FETCH_STEP = (
@@ -130,12 +118,6 @@ def parse_args():
         type=int,
         default=None,
         help="Use with --fetch to set how many recent days to pull (passed to garmin_connect_fetch.py).",
-    )
-    parser.add_argument(
-        "--ai",
-        action="store_true",
-        help="Generate AI sleep advice (needs ANTHROPIC_API_KEY). Off by default; "
-             "failure in this step does not stop the pipeline.",
     )
     return parser.parse_args()
 
@@ -202,8 +184,6 @@ def main():
 
     # 組出這次要跑的步驟清單
     steps = list(STEPS)
-    if args.ai:
-        steps.append(AI_STEP)  # 要在 payload 之前，當晚的建議才進得了 payload
     steps.append(PAYLOAD_STEP)
     if args.fetch:
         steps.insert(0, FETCH_STEP)
@@ -220,9 +200,7 @@ def main():
         if script == FETCH_STEP[0] and args.days is not None:
             extra = ["--days", str(args.days)]
 
-        # AI 步驟允許失敗：LLM 掛掉不該中止一個不需要 LLM 的評分重算
-        if not run_step(i, total, script, description, output, extra,
-                        allow_failure=(script == AI_STEP[0])):
+        if not run_step(i, total, script, description, output, extra):
             # 任一步失敗就整條中止，並用非零 exit code 讓外部（CI、批次檔）也知道失敗
             sys.exit(1)
 

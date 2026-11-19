@@ -39,6 +39,7 @@ main.py — Sonnap 後端 API
 """
 
 import bisect
+import hashlib
 import json
 from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
@@ -54,7 +55,8 @@ import camera_usual
 import demo_sleep
 import db
 import score_claim
-from behavior import (adherence, challenges as challenge_engine, morning_tips,
+from behavior import (adherence, challenges as challenge_engine,
+                      lights_out_resolve, morning_tips,
                       pet_state, sleep_efficiency)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
@@ -220,6 +222,17 @@ class NightlyRequest(BaseModel):
     bridged_unlocks: Optional[int] = Field(None, ge=0)
     # 那一晚用的手機（App 給的顯示名稱）；好友頁「用了哪些設備」用
     phone_model: Optional[str] = Field(None, max_length=60)
+    # 2026-11-16：那一晚**所有** ≥60 分鐘的安靜期。手機端的規則是「挑最長的
+    # 那一段」，半夜起來用幾分鐘手機就會挑錯（11-16 挑到晚 88 分鐘的那段）。
+    # 早晨匯入寫完手錶之後，resolve_lights_out.py 會拿手錶認定的入睡時刻當裁判
+    # 重挑一次（behavior/lights_out_resolve.py）。
+    # ⚠️ 沒送（舊版 App）存 NULL，**不是空陣列**——「不知道有沒有別的候選」
+    #    與「確定只有這一段」是兩件事，後者會讓那一晚被判成 unresolved。
+    quiet_candidates: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="All quiet periods >= 60 min, as detected on the phone. "
+                    "The backend re-picks using the watch's sleep onset.",
+    )
 
 
 class WearableRequest(BaseModel):
@@ -952,6 +965,12 @@ async def post_nightly(req: NightlyRequest):
         bed_end_kind=end_kind,
         bridged_unlocks=req.bridged_unlocks,
         phone_model=(req.phone_model or "").strip() or None,
+        # ⚠️ 原樣存起來、這裡**不挑**：上傳是早上你開 App 的時候，
+        #    那時候手錶那一晚還沒進資料庫（要等 morning_import.py），
+        #    裁判不在場。挑選在 resolve_lights_out.py，匯入手錶之後才跑。
+        quiet_candidates=(None if req.quiet_candidates is None
+                          else json.dumps(req.quiet_candidates, ensure_ascii=False)),
+        lights_out_pick=lights_out_resolve.PICK_PHONE,
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
@@ -1230,9 +1249,8 @@ async def get_home(
                 "would let people build streaks by only opening the app on good days."
             ),
         },
-        # ⚠️ AI 夢境／建議目前只為研究者本人批次生成（ai/data/ai_advice.json），
-        #    還沒有 per-user 的生成流程，所以這條路徑一律 null。
-        #    留 null 而不省略欄位，是讓這個缺口對 App 端可見。
+        # 夢境日記 2026-11-17 退場；每晚的 AI 內容改走 GET /night-summary（寵物 notes）。
+        #    留 null 而不省略欄位：舊版 App 讀得到這個鍵。
         "ai_content": None,
         "data_sources": data_sources,
         "notes": {
@@ -2125,8 +2143,7 @@ async def remove_friend(handle: str, user_id: str = Query(...)):
 # ⚠️ 會花錢：每問一次就是一次 Claude API 呼叫（ai/llm_client.py，標準庫 urllib，不裝 SDK）。
 # ⚠️ 回答要通過 ai/chat.py 的四道驗證才回給 App；兩次都沒過就 503，
 #    不把沒過驗證的回答交出去。
-# ⚠️ `ai.chat` 在函式裡才 import：它會連帶 import ai/generate_advice.py，
-#    而那一支在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
+# ⚠️ `ai.chat` 在函式裡才 import：它在 import 時就讀 ai/.env、把真的金鑰放進環境變數。放在檔案頂端的話，
 #    任何一支 import main 的測試都會帶著真的金鑰在跑。
 
 
@@ -2213,15 +2230,28 @@ SUMMARY_RETRY_MINUTES = 60
 def get_night_summary(
     user_id: str = Query(...),
     date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    generate: bool = Query(True),
 ):
     """
-    早晨報告那張「From your buddy」卡：AI 寫的兩三句（寵物口吻）＋一句從清單挑的小建議。
+    寵物 notes（2026-11-17 起取代夢境日記與「From your buddy」）：AI 的總結＋0–3 條建議。
 
-    - 手錶資料還沒到 → status "waiting"，**不呼叫 AI**（使用者定）。
+    generate=false：**絕不呼叫 AI**，只回已經存好的那一份，沒有就回原句（不存）。
+    首頁用這個——🔴 AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤），
+    首頁一打開就生成的話，寫出來的不含自評，補了自評又要再花一次額度。
+
+    回傳：
+      status   "ok" | "waiting"（手錶資料還沒到）
+      source   "llm" | "fallback" | None
+      summary  AI 寫的總結；waiting 與 fallback 都是 None（**不拿模板假裝是 AI 寫的**）
+      tips     [{id, kind, text, original}]：text 是寵物口吻（llm）或原句（其他），original 一律是原句
+      version  內容變了就換（App 用它決定紅點要不要再亮）
+      text/tip 舊版 App 讀的欄位（= summary／第一條原句），App 換版後拿掉
+
+    - 手錶資料還沒到 → waiting，只放**行為**那幾條原句，**不呼叫 AI**（使用者定）。
     - 每晚只生成一次；事實變了（手錶晚到、補了自評）才重生。
-    - AI 沒設定／連不上／兩次沒過驗證 → 退回 /home 那兩句話（score_message + mood_description），
-      source = "fallback"；過 SUMMARY_RETRY_MINUTES 才再試。
-    - 小建議 tip 由 behavior/morning_tips.pick_tip() 挑，**逐字**；AI 碰不到它。
+    - AI 沒設定／連不上／兩次沒過驗證 → fallback：只給 applicable_tips() 的原句；
+      過 SUMMARY_RETRY_MINUTES 才再試。
+    - 行動只能來自 behavior/morning_tips.TIPS（驗證在 ai/night_summary.validate_notes）。
 
     ⚠️ 用同步的 def：AI 呼叫最多等 60 秒，async 會卡住整個事件迴圈（同 /chat）。
     """
@@ -2233,49 +2263,76 @@ def get_night_summary(
     w_row = _row_for(wearable_rows, date)
     b_row = _row_for(behavior_rows, date)
     rating = db.get_morning_rating(user_id, date)
+    tags = rating["tags"] if rating else ()
+    adherence = b_row.get("adherence_minutes") if b_row else None
+
+    def tip_out(tip_id, text=None):
+        kind, original = morning_tips.TIPS[tip_id]
+        return {"id": tip_id, "kind": kind, "text": text or original, "original": original}
+
+    def reply(status, source, summary, tips):
+        # version 依**實際回傳的內容**算：fallback 換成 AI 寫好的那一份時事實沒變，
+        # 用事實的雜湊的話 version 不會變、紅點就不會再亮。
+        version = hashlib.sha256(json.dumps([summary, [(t["id"], t["text"]) for t in tips]],
+                                            ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+        return {"date": date, "status": status, "source": source, "summary": summary,
+                "tips": tips, "version": version,
+                # 舊版 App 讀的欄位
+                "text": summary, "tip": ({k: tips[0][k] for k in ("id", "kind")}
+                                         | {"text": tips[0]["original"]}) if tips else None}
 
     if not w_row or w_row.get("final_score") is None:
-        return {"date": date, "status": "waiting", "text": None, "source": None, "tip": None}
+        waiting = [tip_out(t["id"]) for t in morning_tips.applicable_tips(tags, adherence)]
+        return reply("waiting", None, None, waiting)
 
-    tip = morning_tips.pick_tip(
-        rating["tags"] if rating else (),
-        b_row.get("adherence_minutes") if b_row else None,
-    )
+    prev = _previous(wearable_rows, date, "final_score")
+    judged = ns.judge_night(w_row, prev, user)
+    fallback_tips = [tip_out(t["id"])
+                     for t in morning_tips.applicable_tips(tags, adherence, judged)]
+    yesterday = db.get_garmin_daily(
+        user_id, (datetime.fromisoformat(date) - timedelta(days=1)).date().isoformat())
     facts = ns.build_night_facts(
-        date, user, w_row, _previous(wearable_rows, date, "final_score"), b_row,
+        date, user, w_row, prev, b_row,
         rating_label=morning_tips.RESTED_LABELS.get(rating["rested"]) if rating else None,
-        tag_labels=[morning_tips.TAGS[t] for t in (rating["tags"] if rating else [])
-                    if t in morning_tips.TAGS],
+        tag_labels=[morning_tips.TAGS[t] for t in tags if t in morning_tips.TAGS],
+        yesterday=yesterday,
     )
-    digest = ns.facts_hash(facts)
+    tip_list = ns.tip_list(t["id"] for t in fallback_tips)
+    digest = ns.facts_hash(facts, tip_list)
 
-    mood, _, driver = resolve_mood(b_row, w_row)
-    shown = display_for(mood, driver, w_row)
-    fallback_text = " ".join(x for x in (shown.get("score_message"), shown.get("mood_description")) if x)
+    def from_llm(notes):
+        return reply("ok", "llm", notes["summary"],
+                     [tip_out(t["id"], t["text"]) for t in notes["tips"]])
 
-    def reply(text, source):
-        return {"date": date, "status": "ok", "text": text, "source": source, "tip": tip}
+    def fallback():
+        return reply("ok", "fallback", None, fallback_tips)
 
     stored = db.get_night_summary(user_id, date)
     if stored and stored["facts_hash"] == digest:
         if stored["source"] == "llm":
-            return reply(stored["text"], "llm")
-        try:
-            age = (datetime.now(datetime.fromisoformat(stored["created_at"]).tzinfo)
-                   - datetime.fromisoformat(stored["created_at"])).total_seconds() / 60
-        except (TypeError, ValueError):
-            age = SUMMARY_RETRY_MINUTES
-        if age < SUMMARY_RETRY_MINUTES:
-            return reply(fallback_text, "fallback")
+            try:
+                return from_llm(json.loads(stored["text"]))
+            except (TypeError, ValueError, KeyError):
+                pass                          # 舊格式（純文字）：當作沒存過，重生一次
+        else:
+            try:
+                age = (datetime.now(datetime.fromisoformat(stored["created_at"]).tzinfo)
+                       - datetime.fromisoformat(stored["created_at"])).total_seconds() / 60
+            except (TypeError, ValueError):
+                age = SUMMARY_RETRY_MINUTES
+            if age < SUMMARY_RETRY_MINUTES:
+                return fallback()
 
-    if not ns.key_available():
-        # 沒設定金鑰：一次都沒試，不寫進資料庫（設定好之後下一次打開就會生成）
-        return reply(fallback_text, "fallback")
+    if not generate or not ns.key_available():
+        # 不准生成（首頁）／沒設定金鑰：一次都沒試，不寫進資料庫
+        return fallback()
     try:
-        result = ns.summarize_night(facts)
+        result = ns.summarize_night(facts, tip_list)
     except ns.SummaryUnavailable as exc:
         print(f"night-summary: fallback for one night - {exc}")   # 不印 user_id
-        db.save_night_summary(user_id, date, fallback_text, "fallback", digest)
-        return reply(fallback_text, "fallback")
-    db.save_night_summary(user_id, date, result["text"], "llm", digest, result.get("model"))
-    return reply(result["text"], "llm")
+        db.save_night_summary(user_id, date, json.dumps({"fallback": True}), "fallback", digest)
+        return fallback()
+    notes = {"summary": result["summary"], "tips": result["tips"]}
+    db.save_night_summary(user_id, date, json.dumps(notes, ensure_ascii=False), "llm",
+                          digest, result.get("model"))
+    return from_llm(notes)

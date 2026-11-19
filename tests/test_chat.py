@@ -193,6 +193,23 @@ check("太長 → 422", client.post("/chat", json={"user_id": alice, "message": 
 check("沒有這個人 → 404", client.post("/chat", json={"user_id": "nobody", "message": "hi"}).status_code, 404)
 
 # ═══════════════════════════════════════════════════════════════════
+section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")
+# ═══════════════════════════════════════════════════════════════════
+import ast  # noqa: E402
+
+chat_src = (ROOT / "ai" / "chat.py").read_text(encoding="utf-8")
+calls = [n for n in ast.walk(ast.parse(chat_src))
+         if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "load_env_file"]
+ok("chat.py 在 import 時讀 ai/.env（原本靠 generate_advice 讀；少了它助理與 notes 永遠沒有金鑰）",
+   len(calls) == 1, f"呼叫了 {len(calls)} 次")
+defs = [p.relative_to(ROOT).as_posix() for p in (ROOT / "ai").glob("*.py")
+        if "BANNED_WORDS = [" in p.read_text(encoding="utf-8")]
+check("禁用字清單只有一份（ai/text_guards.py）", defs, ["ai/text_guards.py"])
+import text_guards  # noqa: E402  ai/ 已在 sys.path（chat 加的）
+from ai import chat as _chat  # noqa: E402
+ok("助理用的就是那一份（不是抄一份）", _chat.BANNED_WORDS is text_guards.BANNED_WORDS)
+
+# ═══════════════════════════════════════════════════════════════════
 section("【7】保險有效：整支測試一次都沒碰到網路")
 # ═══════════════════════════════════════════════════════════════════
 check("urlopen 被呼叫的次數", len(NETWORK_CALLS), 0)

@@ -17,7 +17,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1809,
+   "sleeping_sec": 19920,
+   "stress_activity_sec": 23340,
+   "stress_uncategorized_sec": 5460
   },
   "2026-08-29": {
    "steps": 5543,
@@ -35,7 +40,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1658,
+   "sleeping_sec": 18900,
+   "stress_activity_sec": 21720,
+   "stress_uncategorized_sec": 5580
   },
   "2026-08-30": {
    "steps": 5294,
@@ -59,7 +69,12 @@
      "start": "20:45",
      "minutes": 25
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1631,
+   "sleeping_sec": 18900,
+   "stress_activity_sec": 20880,
+   "stress_uncategorized_sec": 5460
   },
   "2026-08-31": {
    "steps": 9567,
@@ -83,7 +98,12 @@
      "start": "20:27",
      "minutes": 13
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1816,
+   "sleeping_sec": 24420,
+   "stress_activity_sec": 27420,
+   "stress_uncategorized_sec": 4560
   },
   "2026-09-01": {
    "steps": 7644,
@@ -107,7 +127,12 @@
      "start": "15:47",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1766,
+   "sleeping_sec": 17700,
+   "stress_activity_sec": 18720,
+   "stress_uncategorized_sec": 11460
   },
   "2026-09-02": {
    "steps": 10242,
@@ -136,7 +161,12 @@
      "start": "14:27",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1722,
+   "sleeping_sec": 19500,
+   "stress_activity_sec": 27120,
+   "stress_uncategorized_sec": 6060
   },
   "2026-09-03": {
    "steps": 9285,
@@ -165,7 +195,12 @@
      "start": "19:49",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1744,
+   "sleeping_sec": 23580,
+   "stress_activity_sec": 27300,
+   "stress_uncategorized_sec": 8280
   },
   "2026-09-04": {
    "steps": 10341,
@@ -183,7 +218,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1954,
+   "sleeping_sec": 19620,
+   "stress_activity_sec": 27420,
+   "stress_uncategorized_sec": 6900
   },
   "2026-09-05": {
    "steps": 7531,
@@ -207,7 +247,12 @@
      "start": "18:42",
      "minutes": 15
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1662,
+   "sleeping_sec": 22140,
+   "stress_activity_sec": 23460,
+   "stress_uncategorized_sec": 7260
   },
   "2026-09-06": {
    "steps": 7287,
@@ -241,7 +286,12 @@
      "start": "21:22",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1817,
+   "sleeping_sec": 20100,
+   "stress_activity_sec": 20700,
+   "stress_uncategorized_sec": 8640
   },
   "2026-09-07": {
    "steps": 13129,
@@ -259,7 +309,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1920,
+   "sleeping_sec": 14580,
+   "stress_activity_sec": 26160,
+   "stress_uncategorized_sec": 8280
   },
   "2026-09-08": {
    "steps": 7415,
@@ -277,7 +332,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1619,
+   "sleeping_sec": 22500,
+   "stress_activity_sec": 20640,
+   "stress_uncategorized_sec": 10800
   },
   "2026-09-09": {
    "steps": 6871,
@@ -295,7 +355,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1770,
+   "sleeping_sec": 17880,
+   "stress_activity_sec": 22200,
+   "stress_uncategorized_sec": 10020
   },
   "2026-09-10": {
    "steps": 6732,
@@ -319,7 +384,12 @@
      "start": "17:50",
      "minutes": 24
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1676,
+   "sleeping_sec": 12000,
+   "stress_activity_sec": 17520,
+   "stress_uncategorized_sec": 9660
   },
   "2026-09-11": {
    "steps": 14899,
@@ -343,7 +413,12 @@
      "start": "19:07",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 2150,
+   "sleeping_sec": 18420,
+   "stress_activity_sec": 26520,
+   "stress_uncategorized_sec": 6060
   },
   "2026-09-12": {
    "steps": 2269,
@@ -372,7 +447,12 @@
      "start": "20:00",
      "minutes": 39
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1593,
+   "sleeping_sec": 36120,
+   "stress_activity_sec": 16020,
+   "stress_uncategorized_sec": 6660
   },
   "2026-09-13": {
    "steps": 5421,
@@ -390,7 +470,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1695,
+   "sleeping_sec": 28800,
+   "stress_activity_sec": 16140,
+   "stress_uncategorized_sec": 5940
   },
   "2026-09-14": {
    "steps": 9207,
@@ -414,7 +499,12 @@
      "start": "16:32",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1899,
+   "sleeping_sec": 14640,
+   "stress_activity_sec": 16860,
+   "stress_uncategorized_sec": 6960
   },
   "2026-09-15": {
    "steps": 7371,
@@ -443,7 +533,12 @@
      "start": "19:21",
      "minutes": 26
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1664,
+   "sleeping_sec": 14880,
+   "stress_activity_sec": 15720,
+   "stress_uncategorized_sec": 11460
   },
   "2026-09-16": {
    "steps": 9466,
@@ -461,7 +556,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1791,
+   "sleeping_sec": 16200,
+   "stress_activity_sec": 19500,
+   "stress_uncategorized_sec": 8340
   },
   "2026-09-17": {
    "steps": 7621,
@@ -495,7 +595,12 @@
      "start": "19:52",
      "minutes": 18
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1891,
+   "sleeping_sec": 18000,
+   "stress_activity_sec": 16800,
+   "stress_uncategorized_sec": 7680
   },
   "2026-09-18": {
    "steps": 8902,
@@ -519,7 +624,12 @@
      "start": "21:27",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1730,
+   "sleeping_sec": 24540,
+   "stress_activity_sec": 22680,
+   "stress_uncategorized_sec": 8880
   },
   "2026-09-19": {
    "steps": 5033,
@@ -543,7 +653,12 @@
      "start": "17:57",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1595,
+   "sleeping_sec": 28200,
+   "stress_activity_sec": 14520,
+   "stress_uncategorized_sec": 5520
   },
   "2026-09-20": {
    "steps": 13159,
@@ -572,7 +687,12 @@
      "start": "21:09",
      "minutes": 21
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1971,
+   "sleeping_sec": 32520,
+   "stress_activity_sec": 18780,
+   "stress_uncategorized_sec": 4560
   },
   "2026-09-21": {
    "steps": 8058,
@@ -606,7 +726,12 @@
      "start": "19:29",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1760,
+   "sleeping_sec": 14460,
+   "stress_activity_sec": 20520,
+   "stress_uncategorized_sec": 6660
   },
   "2026-09-22": {
    "steps": 13222,
@@ -630,7 +755,12 @@
      "start": "21:15",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1845,
+   "sleeping_sec": 14400,
+   "stress_activity_sec": 26700,
+   "stress_uncategorized_sec": 11100
   },
   "2026-09-23": {
    "steps": 10481,
@@ -664,7 +794,12 @@
      "start": "16:09",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1730,
+   "sleeping_sec": 11820,
+   "stress_activity_sec": 19800,
+   "stress_uncategorized_sec": 13020
   },
   "2026-09-24": {
    "steps": 9296,
@@ -688,7 +823,12 @@
      "start": "18:09",
      "minutes": 16
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1759,
+   "sleeping_sec": 33180,
+   "stress_activity_sec": 16740,
+   "stress_uncategorized_sec": 10260
   },
   "2026-09-25": {
    "steps": 11421,
@@ -722,7 +862,12 @@
      "start": "21:03",
      "minutes": 25
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 2543,
+   "sleeping_sec": 22860,
+   "stress_activity_sec": 26280,
+   "stress_uncategorized_sec": 7260
   },
   "2026-09-26": {
    "steps": 7223,
@@ -756,7 +901,12 @@
      "start": "16:39",
      "minutes": 19
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1735,
+   "sleeping_sec": 25200,
+   "stress_activity_sec": 18360,
+   "stress_uncategorized_sec": 12900
   },
   "2026-09-27": {
    "steps": 1332,
@@ -774,7 +924,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1469,
+   "sleeping_sec": 48660,
+   "stress_activity_sec": 5940,
+   "stress_uncategorized_sec": 8460
   },
   "2026-09-28": {
    "steps": 4691,
@@ -803,7 +958,12 @@
      "start": "18:41",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1621,
+   "sleeping_sec": 31020,
+   "stress_activity_sec": 13920,
+   "stress_uncategorized_sec": 9120
   },
   "2026-09-29": {
    "steps": 9084,
@@ -827,7 +987,12 @@
      "start": "17:59",
      "minutes": 28
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1701,
+   "sleeping_sec": 15840,
+   "stress_activity_sec": 26880,
+   "stress_uncategorized_sec": 12240
   },
   "2026-09-30": {
    "steps": 7704,
@@ -851,7 +1016,12 @@
      "start": "17:02",
      "minutes": 16
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1749,
+   "sleeping_sec": 19440,
+   "stress_activity_sec": 14940,
+   "stress_uncategorized_sec": 10440
   },
   "2026-10-01": {
    "steps": 5930,
@@ -869,7 +1039,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1753,
+   "sleeping_sec": 15420,
+   "stress_activity_sec": 14040,
+   "stress_uncategorized_sec": 6600
   },
   "2026-10-02": {
    "steps": 2025,
@@ -893,7 +1068,12 @@
      "start": "18:19",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1512,
+   "sleeping_sec": 31380,
+   "stress_activity_sec": 13680,
+   "stress_uncategorized_sec": 10140
   },
   "2026-10-03": {
    "steps": 5468,
@@ -927,7 +1107,12 @@
      "start": "22:40",
      "minutes": 27
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1668,
+   "sleeping_sec": 25440,
+   "stress_activity_sec": 21180,
+   "stress_uncategorized_sec": 4560
   },
   "2026-10-04": {
    "steps": 4142,
@@ -956,7 +1141,12 @@
      "start": "20:54",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1671,
+   "sleeping_sec": 28680,
+   "stress_activity_sec": 14160,
+   "stress_uncategorized_sec": 9600
   },
   "2026-10-05": {
    "steps": 8776,
@@ -974,7 +1164,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1799,
+   "sleeping_sec": 0,
+   "stress_activity_sec": 22980,
+   "stress_uncategorized_sec": 11460
   },
   "2026-10-06": {
    "steps": 11873,
@@ -1008,7 +1203,12 @@
      "start": "22:58",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1932,
+   "sleeping_sec": 13740,
+   "stress_activity_sec": 24600,
+   "stress_uncategorized_sec": 6060
   },
   "2026-10-07": {
    "steps": 8990,
@@ -1032,7 +1232,12 @@
      "start": "18:28",
      "minutes": 21
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1698,
+   "sleeping_sec": 0,
+   "stress_activity_sec": 21600,
+   "stress_uncategorized_sec": 24540
   },
   "2026-10-08": {
    "steps": 10336,
@@ -1071,7 +1276,12 @@
      "start": "22:42",
      "minutes": 14
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1854,
+   "sleeping_sec": 16500,
+   "stress_activity_sec": 19320,
+   "stress_uncategorized_sec": 10440
   },
   "2026-10-09": {
    "steps": 16147,
@@ -1105,7 +1315,12 @@
      "start": "18:49",
      "minutes": 45
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 2107,
+   "sleeping_sec": 18060,
+   "stress_activity_sec": 23940,
+   "stress_uncategorized_sec": 18300
   },
   "2026-10-10": {
    "steps": 14215,
@@ -1139,7 +1354,12 @@
      "start": "17:05",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1979,
+   "sleeping_sec": 0,
+   "stress_activity_sec": 21480,
+   "stress_uncategorized_sec": 40740
   },
   "2026-10-11": {
    "steps": 8774,
@@ -1157,7 +1377,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1837,
+   "sleeping_sec": 27660,
+   "stress_activity_sec": 19440,
+   "stress_uncategorized_sec": 7020
   },
   "2026-10-12": {
    "steps": 7592,
@@ -1191,7 +1416,12 @@
      "start": "18:57",
      "minutes": 16
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1809,
+   "sleeping_sec": 19260,
+   "stress_activity_sec": 19380,
+   "stress_uncategorized_sec": 8340
   },
   "2026-10-13": {
    "steps": 7390,
@@ -1225,7 +1455,12 @@
      "start": "18:17",
      "minutes": 14
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1671,
+   "sleeping_sec": 16740,
+   "stress_activity_sec": 16740,
+   "stress_uncategorized_sec": 7920
   },
   "2026-10-14": {
    "steps": 9119,
@@ -1249,7 +1484,12 @@
      "start": "19:32",
      "minutes": 13
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1837,
+   "sleeping_sec": 15000,
+   "stress_activity_sec": 17940,
+   "stress_uncategorized_sec": 12060
   },
   "2026-10-15": {
    "steps": 10508,
@@ -1278,7 +1518,12 @@
      "start": "17:41",
      "minutes": 16
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1763,
+   "sleeping_sec": 19920,
+   "stress_activity_sec": 14640,
+   "stress_uncategorized_sec": 9540
   },
   "2026-10-16": {
    "steps": 10909,
@@ -1322,7 +1567,12 @@
      "start": "20:55",
      "minutes": 31
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1779,
+   "sleeping_sec": 13560,
+   "stress_activity_sec": 18660,
+   "stress_uncategorized_sec": 10020
   },
   "2026-10-17": {
    "steps": 6457,
@@ -1361,7 +1611,12 @@
      "start": "21:50",
      "minutes": 19
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1689,
+   "sleeping_sec": 30960,
+   "stress_activity_sec": 14460,
+   "stress_uncategorized_sec": 7980
   },
   "2026-10-18": {
    "steps": 2631,
@@ -1379,7 +1634,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1521,
+   "sleeping_sec": 27420,
+   "stress_activity_sec": 13980,
+   "stress_uncategorized_sec": 12720
   },
   "2026-10-19": {
    "steps": 9797,
@@ -1413,7 +1673,12 @@
      "start": "19:15",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1799,
+   "sleeping_sec": 18360,
+   "stress_activity_sec": 20760,
+   "stress_uncategorized_sec": 8400
   },
   "2026-10-20": {
    "steps": 5533,
@@ -1442,7 +1707,12 @@
      "start": "19:33",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1617,
+   "sleeping_sec": 21900,
+   "stress_activity_sec": 13500,
+   "stress_uncategorized_sec": 6000
   },
   "2026-10-21": {
    "steps": 9933,
@@ -1471,7 +1741,12 @@
      "start": "18:57",
      "minutes": 13
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 2052,
+   "sleeping_sec": 17100,
+   "stress_activity_sec": 18360,
+   "stress_uncategorized_sec": 9840
   },
   "2026-10-22": {
    "steps": 5442,
@@ -1500,7 +1775,12 @@
      "start": "19:33",
      "minutes": 15
     }
-   ]
+   ],
+   "resting_kcal": 1415,
+   "total_kcal": 1642,
+   "sleeping_sec": 21060,
+   "stress_activity_sec": 11880,
+   "stress_uncategorized_sec": 5280
   },
   "2026-10-25": {
    "steps": 2414,
@@ -1518,7 +1798,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1525,
+   "sleeping_sec": 25740,
+   "stress_activity_sec": 7920,
+   "stress_uncategorized_sec": 8640
   },
   "2026-10-26": {
    "steps": 4671,
@@ -1552,7 +1837,12 @@
      "start": "21:05",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1695,
+   "sleeping_sec": 21120,
+   "stress_activity_sec": 12060,
+   "stress_uncategorized_sec": 9060
   },
   "2026-10-27": {
    "steps": 10304,
@@ -1570,7 +1860,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 2030,
+   "sleeping_sec": 25980,
+   "stress_activity_sec": 17460,
+   "stress_uncategorized_sec": 11040
   },
   "2026-10-28": {
    "steps": 9923,
@@ -1604,7 +1899,12 @@
      "start": "17:28",
      "minutes": 27
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1897,
+   "sleeping_sec": 18960,
+   "stress_activity_sec": 18300,
+   "stress_uncategorized_sec": 9840
   },
   "2026-10-29": {
    "steps": 3627,
@@ -1633,7 +1933,12 @@
      "start": "18:43",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1578,
+   "sleeping_sec": 22860,
+   "stress_activity_sec": 9120,
+   "stress_uncategorized_sec": 8580
   },
   "2026-10-30": {
    "steps": 10357,
@@ -1651,7 +1956,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1741,
+   "sleeping_sec": 19500,
+   "stress_activity_sec": 19680,
+   "stress_uncategorized_sec": 11400
   },
   "2026-10-31": {
    "steps": 5002,
@@ -1680,7 +1990,12 @@
      "start": "18:15",
      "minutes": 12
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1674,
+   "sleeping_sec": 25920,
+   "stress_activity_sec": 12540,
+   "stress_uncategorized_sec": 12120
   },
   "2026-11-01": {
    "steps": 4229,
@@ -1704,7 +2019,12 @@
      "start": "03:31",
      "minutes": 16
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1641,
+   "sleeping_sec": 22320,
+   "stress_activity_sec": 11760,
+   "stress_uncategorized_sec": 6840
   },
   "2026-11-02": {
    "steps": 8160,
@@ -1738,7 +2058,12 @@
      "start": "19:43",
      "minutes": 15
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1905,
+   "sleeping_sec": 16200,
+   "stress_activity_sec": 14820,
+   "stress_uncategorized_sec": 19680
   },
   "2026-11-03": {
    "steps": 12637,
@@ -1756,7 +2081,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1872,
+   "sleeping_sec": 0,
+   "stress_activity_sec": 21420,
+   "stress_uncategorized_sec": 15180
   },
   "2026-11-04": {
    "steps": 10850,
@@ -1780,7 +2110,12 @@
      "start": "17:04",
      "minutes": 35
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1947,
+   "sleeping_sec": 30720,
+   "stress_activity_sec": 14700,
+   "stress_uncategorized_sec": 8400
   },
   "2026-11-05": {
    "steps": 7253,
@@ -1798,7 +2133,12 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1694,
+   "sleeping_sec": 16860,
+   "stress_activity_sec": 14460,
+   "stress_uncategorized_sec": 13020
   },
   "2026-11-06": {
    "steps": 7111,
@@ -1842,7 +2182,12 @@
      "start": "22:58",
      "minutes": 15
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1678,
+   "sleeping_sec": 15540,
+   "stress_activity_sec": 11460,
+   "stress_uncategorized_sec": 9960
   },
   "2026-11-07": {
    "steps": 13174,
@@ -1866,7 +2211,12 @@
      "start": "07:24",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 2031,
+   "sleeping_sec": 9360,
+   "stress_activity_sec": 19260,
+   "stress_uncategorized_sec": 10680
   },
   "2026-11-08": {
    "steps": 12632,
@@ -1890,7 +2240,12 @@
      "start": "08:35",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1930,
+   "sleeping_sec": 23700,
+   "stress_activity_sec": 17400,
+   "stress_uncategorized_sec": 12180
   },
   "2026-11-09": {
    "steps": 9845,
@@ -1914,7 +2269,12 @@
      "start": "17:50",
      "minutes": 11
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1798,
+   "sleeping_sec": 16560,
+   "stress_activity_sec": 14220,
+   "stress_uncategorized_sec": 20460
   },
   "2026-11-10": {
    "steps": 7782,
@@ -1943,7 +2303,12 @@
      "start": "17:09",
      "minutes": 10
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1798,
+   "sleeping_sec": 19620,
+   "stress_activity_sec": 19560,
+   "stress_uncategorized_sec": 18060
   },
   "2026-11-11": {
    "steps": 9599,
@@ -1967,7 +2332,12 @@
      "start": "16:36",
      "minutes": 13
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1712,
+   "sleeping_sec": 15720,
+   "stress_activity_sec": 19500,
+   "stress_uncategorized_sec": 8640
   },
   "2026-11-12": {
    "steps": 9955,
@@ -1985,21 +2355,26 @@
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
-   "move_iq": []
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1799,
+   "sleeping_sec": 12900,
+   "stress_activity_sec": 18360,
+   "stress_uncategorized_sec": 8700
   },
   "2026-11-13": {
-   "steps": 5347,
+   "steps": 8847,
    "step_goal": 9540,
-   "distance_m": 3668,
-   "active_kcal": 223,
-   "highly_active_sec": 995,
-   "active_sec": 3891,
-   "sedentary_sec": 29794,
-   "floors_up": 10.0,
-   "stress_rest_sec": 26400,
-   "stress_low_sec": 3660,
-   "stress_medium_sec": 4500,
-   "stress_high_sec": 3180,
+   "distance_m": 6043,
+   "active_kcal": 370,
+   "highly_active_sec": 1382,
+   "active_sec": 7318,
+   "sedentary_sec": 59760,
+   "floors_up": 12.1,
+   "stress_rest_sec": 29400,
+   "stress_low_sec": 10020,
+   "stress_medium_sec": 13500,
+   "stress_high_sec": 5100,
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
@@ -2013,8 +2388,173 @@
      "type": "walking",
      "start": "12:57",
      "minutes": 10
+    },
+    {
+     "type": "walking",
+     "start": "16:11",
+     "minutes": 10
+    },
+    {
+     "type": "cycling",
+     "start": "19:28",
+     "minutes": 24
     }
-   ]
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1792,
+   "sleeping_sec": 17940,
+   "stress_activity_sec": 15720,
+   "stress_uncategorized_sec": 8340
+  },
+  "2026-11-14": {
+   "steps": 3748,
+   "step_goal": 9470,
+   "distance_m": 2635,
+   "active_kcal": 286,
+   "highly_active_sec": 690,
+   "active_sec": 4212,
+   "sedentary_sec": 58818,
+   "floors_up": 31.1,
+   "stress_rest_sec": 45300,
+   "stress_low_sec": 6600,
+   "stress_medium_sec": 6120,
+   "stress_high_sec": 3960,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [
+    {
+     "type": "cycling",
+     "start": "18:24",
+     "minutes": 11
+    }
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1708,
+   "sleeping_sec": 22680,
+   "stress_activity_sec": 11280,
+   "stress_uncategorized_sec": 11160
+  },
+  "2026-11-15": {
+   "steps": 5864,
+   "step_goal": 8330,
+   "distance_m": 3910,
+   "active_kcal": 193,
+   "highly_active_sec": 1229,
+   "active_sec": 5845,
+   "sedentary_sec": 70326,
+   "floors_up": 7.0,
+   "stress_rest_sec": 31080,
+   "stress_low_sec": 15360,
+   "stress_medium_sec": 6000,
+   "stress_high_sec": 1080,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1615,
+   "sleeping_sec": 9000,
+   "stress_activity_sec": 15900,
+   "stress_uncategorized_sec": 14520
+  },
+  "2026-11-16": {
+   "steps": 9853,
+   "step_goal": 7840,
+   "distance_m": 6646,
+   "active_kcal": 384,
+   "highly_active_sec": 1327,
+   "active_sec": 8897,
+   "sedentary_sec": 56856,
+   "floors_up": 11.6,
+   "stress_rest_sec": 30780,
+   "stress_low_sec": 10380,
+   "stress_medium_sec": 13800,
+   "stress_high_sec": 7020,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1806,
+   "sleeping_sec": 19320,
+   "stress_activity_sec": 15720,
+   "stress_uncategorized_sec": 5760
+  },
+  "2026-11-17": {
+   "steps": 5710,
+   "step_goal": 8050,
+   "distance_m": 4035,
+   "active_kcal": 251,
+   "highly_active_sec": 1245,
+   "active_sec": 4798,
+   "sedentary_sec": 59237,
+   "floors_up": 9.7,
+   "stress_rest_sec": 27240,
+   "stress_low_sec": 13920,
+   "stress_medium_sec": 11580,
+   "stress_high_sec": 4140,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [
+    {
+     "type": "walking",
+     "start": "13:16",
+     "minutes": 17
+    }
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1673,
+   "sleeping_sec": 21120,
+   "stress_activity_sec": 13320,
+   "stress_uncategorized_sec": 12600
+  },
+  "2026-11-18": {
+   "steps": 9238,
+   "step_goal": 7820,
+   "distance_m": 6084,
+   "active_kcal": 395,
+   "highly_active_sec": 2252,
+   "active_sec": 7801,
+   "sedentary_sec": 67347,
+   "floors_up": 30.2,
+   "stress_rest_sec": 21420,
+   "stress_low_sec": 11640,
+   "stress_medium_sec": 18660,
+   "stress_high_sec": 9780,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [],
+   "resting_kcal": 1422,
+   "total_kcal": 1817,
+   "sleeping_sec": 9000,
+   "stress_activity_sec": 14580,
+   "stress_uncategorized_sec": 7140
+  },
+  "2026-11-19": {
+   "steps": 46,
+   "step_goal": 7970,
+   "distance_m": 31,
+   "active_kcal": 0,
+   "highly_active_sec": 120,
+   "active_sec": 60,
+   "sedentary_sec": 4860,
+   "floors_up": 0.0,
+   "stress_rest_sec": 16380,
+   "stress_low_sec": 1740,
+   "stress_medium_sec": 480,
+   "stress_high_sec": null,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [],
+   "resting_kcal": 360,
+   "total_kcal": 360,
+   "sleeping_sec": 16860,
+   "stress_activity_sec": 780,
+   "stress_uncategorized_sec": 1920
   }
  }
 }

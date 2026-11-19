@@ -6,9 +6,10 @@ import 'package:flutter/material.dart';
 import '../services/game_service.dart' show NightXp;
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
+import '../services/pet_notes.dart';
 import '../theme/report_style.dart';
-import '../widgets/dream_book.dart';
-import '../widgets/dream_diary.dart';
+import '../widgets/notes_book.dart';
+import '../widgets/pet_notes_sheet.dart';
 import '../widgets/home_pet.dart';
 import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
@@ -37,10 +38,11 @@ import '../widgets/stress_sheet.dart';
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
 ///
-/// 由上到下：日期 → 圓環＋山丘＋小狗＋自評小標籤 → Lv／XP 一條 → From your buddy
-/// （AI 那段＋小建議）→ Time in bed／Time asleep → Phone down｜Your target
+/// 由上到下：日期 → 圓環＋山丘＋小狗＋自評小標籤 → Lv／XP 一條
+/// → Time in bed／Time asleep → Phone down｜Your target
 /// → Sleep phases → More details（收合）→ View sleep insights → Back to home。
-/// 那一晚有夢境時，小狗頭上有「I had a dream…」對話框，點開看夢境日記（`widgets/dream_diary.dart`）。
+/// 那一晚有寵物 notes 時，右下草地上一本日記，點開看總結＋建議（`widgets/pet_notes_sheet.dart`）。
+/// 2026-11-17 起 From your buddy 那張卡整段搬進日記（grill 定：兩段 AI 文字講同一晚遲早會矛盾）。
 ///
 /// 一打開就先畫 [initial]（手機上已經有的），[load] 回來之後換成完整版，
 /// [loadSummary] 再晚一點回來（AI 第一次生成要等模型）。
@@ -56,8 +58,9 @@ class MorningReportScreen extends StatefulWidget {
   final MorningReport initial;
   final Future<MorningReport> Function()? load;
 
-  /// 拿到完整版之後再接 AI 那段。回傳 `/night-summary` 的 JSON（失敗回 null）。
-  final Future<Map<String, dynamic>?> Function()? loadSummary;
+  /// 拿到完整版之後再接寵物 notes。回傳 `/night-summary` 的 JSON（失敗回 null）。
+  /// 沒有分數時帶 generate: false（只拿行為那幾條原句，不要求 AI）。
+  final NotesLoader? loadSummary;
 
   /// 這一晚是不是剛結束（今天早上起床的那一晚）。是的話沒分數時說「在等資料」，
   /// 不是的話說「沒有資料」——幾天前沒戴錶的晚上，資料不會來了。
@@ -66,11 +69,11 @@ class MorningReportScreen extends StatefulWidget {
   /// 要不要放 View sleep insights（首頁有給切分頁的方法才放）。
   final bool canOpenInsights;
 
-  /// 點開夢境之後（首頁用來記「這個夢看過了」）。
-  final VoidCallback? onDreamOpened;
+  /// 點開 notes 之後（首頁用來記「這個 version 看過了」）。
+  final void Function(String version)? onNotesOpened;
 
-  /// 這一晚的夢看過了沒（首頁的 DreamReadStore）。沒給＝當作沒看過，日記本會抖。
-  final Future<bool> Function()? isDreamRead;
+  /// 這一晚的這個 version 看過了沒（首頁的 NotesReadStore）。沒給＝當作沒看過，日記本會抖。
+  final Future<bool> Function(String version)? isNotesRead;
 
   /// 每晚睡了幾分鐘（首頁那一份打包檔的 history）。Time asleep 點開的一週長條圖用；沒給就不能點。
   final Future<List<NightValue>> Function()? loadSleepSeries;
@@ -111,8 +114,8 @@ class MorningReportScreen extends StatefulWidget {
     this.loadSummary,
     this.pending = true,
     this.canOpenInsights = false,
-    this.onDreamOpened,
-    this.isDreamRead,
+    this.onNotesOpened,
+    this.isNotesRead,
     this.loadSleepSeries,
     this.loadBedTimes,
     this.loadPhoneDowns,
@@ -170,44 +173,70 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   late MorningReport _report = widget.initial;
   bool _loading = false;
 
-  /// 先當作看過（不抖），問到「還沒看過」才開始抖——免得看過的人一打開先抖一下。
-  bool _dreamRead = true;
+  /// 看過的那個 version。先當作看過（不抖），問到「還沒看過」才開始抖——
+  /// 免得看過的人一打開先抖一下。內容換了（version 不同）就再問一次。
+  String? _readVersion;
+  String? _askedVersion;
+
+  bool get _notesUnread {
+    final n = _report.notes;
+    return n != null && _askedVersion == n.version && _readVersion != n.version;
+  }
+
+  void _askNotesRead() {
+    final n = _report.notes;
+    if (n == null || _askedVersion == n.version) return;
+    final version = n.version;
+    final isRead = widget.isNotesRead;
+    if (isRead == null) {
+      _askedVersion = version;
+      return;
+    }
+    isRead(version)
+        .then((read) {
+          if (!mounted) return;
+          setState(() {
+            _askedVersion = version;
+            if (read) _readVersion = version;
+          });
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _askedVersion = version);
+        });
+  }
+
+  void _setReport(MorningReport r) {
+    _report = r;
+    _askNotesRead();
+  }
 
   @override
   void initState() {
     super.initState();
-    final isRead = widget.isDreamRead;
-    if (isRead == null) {
-      _dreamRead = false;
-    } else {
-      isRead()
-          .then((read) {
-            if (mounted && !read) setState(() => _dreamRead = false);
-          })
-          .catchError((_) {});
-    }
+    _askNotesRead();
     final load = widget.load;
     if (load != null) {
       _loading = true;
       load()
           .then((r) async {
             if (!mounted) return;
-            setState(() => _report = r);
+            setState(() => _setReport(r));
             final summary = widget.loadSummary;
-            if (summary != null && r.hasScore) {
-              final json = await summary();
-              if (mounted) setState(() => _report = _report.withSummary(json));
+            // 沒分數時後端回 waiting（只有行為那幾條原句、不呼叫 AI），照樣接上
+            if (summary != null) {
+              final json = await summary(generate: r.hasScore);
+              if (mounted) setState(() => _setReport(_report.withNotes(json)));
             }
           })
           .whenComplete(() {
             if (mounted) setState(() => _loading = false);
           });
-    } else if (widget.loadSummary != null && widget.initial.hasScore) {
-      // 等待畫面已經備好分數，只剩 AI 那段還在路上（超過等待時間）
+    } else if (widget.loadSummary != null) {
+      // 等待畫面已經備好分數，只剩 notes 還在路上（超過等待時間，或手錶還沒到）
       _loading = true;
-      widget.loadSummary!()
+      widget.loadSummary!(generate: widget.initial.hasScore)
           .then((json) {
-            if (mounted) setState(() => _report = _report.withSummary(json));
+            if (mounted) setState(() => _setReport(_report.withNotes(json)));
           })
           .whenComplete(() {
             if (mounted) setState(() => _loading = false);
@@ -218,7 +247,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   @override
   Widget build(BuildContext context) {
     final r = _report;
-    final hasBuddy = r.hasScore && (_buddyText(r) != null || r.tip != null);
     return ReportFont(
       child: Scaffold(
         backgroundColor: ReportColors.bgTop,
@@ -260,7 +288,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       ),
                     ],
                   ),
-                  if (hasBuddy) ...[const SizedBox(height: 14), _buddy(r)],
                   // 昨晚的數字（2026-11-14 改成圖形格子，參考圖：每一格的圖就是那個數字）
                   const SizedBox(height: 18),
                   reportSectionTitle(
@@ -492,17 +519,16 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                   width: w / 2 - 54,
                   child: _ratingChip(r),
                 ),
-              // 右下：夢境日記（使用者生成）。點開看完整夢境；那一晚沒有夢就不出現。
-              // 2026-11-14 取代頭邊小雲：雲裡的月亮星星＝正在睡，跟日出、醒著的小狗對不上。
-              if (r.dream != null)
+              // 右下：草地上的日記本（使用者生成），點開看寵物 notes；沒有內容就不出現。
+              if (r.notes != null)
                 Positioned(
-                  key: const Key('report-dream'),
+                  key: const Key('report-notes'),
                   // 草坡往右邊斜下去，書要放低一點才在草地上
                   right: 6,
                   bottom: -30,
-                  child: DreamBook(
-                    unread: !_dreamRead,
-                    onTap: () => _showDream(r),
+                  child: NotesBook(
+                    unread: _notesUnread,
+                    onTap: () => _showNotes(r.notes!),
                   ),
                 ),
             ],
@@ -730,99 +756,6 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           ),
         ],
       ],
-    );
-  }
-
-  // ── From your buddy：AI 那段＋小建議（都照抄 /night-summary） ─────────────
-
-  /// AI 那段。⚠️ 後端寫不出來時（source = fallback）回的是 score_message＋mood_description，
-  /// 也就是圓環下面已經有的那兩句——再放一次就是同一句話出現兩遍，所以不放，只留小建議。
-  static String? _buddyText(MorningReport r) =>
-      r.summarySource == 'fallback' ? null : r.summaryText;
-
-  Widget _buddy(MorningReport r) {
-    final tip = r.tip;
-    final text = _buddyText(r);
-    return Container(
-      key: const Key('report-buddy'),
-      padding: const EdgeInsets.all(16),
-      decoration: reportCard(radius: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.auto_awesome_rounded,
-                size: 16,
-                color: ReportColors.accent,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'From your buddy',
-                style: TextStyle(
-                  color: ReportColors.accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          if (text != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              text,
-              key: const Key('report-summary'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                height: 1.5,
-              ),
-            ),
-          ],
-          if (tip != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              key: const Key('report-tip'),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(
-                      // tip 是「下次可以怎麼做」，note 只解釋這一晚——圖示分開
-                      tip.isNote
-                          ? Icons.info_outline_rounded
-                          : Icons.lightbulb_outline_rounded,
-                      key: Key(
-                        tip.isNote ? 'report-tip-note' : 'report-tip-tip',
-                      ),
-                      size: 18,
-                      color: ReportColors.gold,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      tip.text,
-                      style: const TextStyle(
-                        color: ReportColors.soft,
-                        fontSize: 14,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -1920,10 +1853,10 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  void _showDream(MorningReport r) {
-    setState(() => _dreamRead = true);
-    showDreamDiary(context, text: r.dream!, date: r.date, mood: r.mood);
-    widget.onDreamOpened?.call();
+  void _showNotes(PetNotes notes) {
+    setState(() => _readVersion = notes.version);
+    showPetNotes(context, notes: notes, mood: _report.mood);
+    widget.onNotesOpened?.call(notes.version);
   }
 
   /// 1219 → 1,219
