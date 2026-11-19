@@ -608,6 +608,7 @@ const accessories = <AccessoryDefinition>[
     assetPath: 'assets/accessories/head/star_top_hat.png',
     fit: 0.62,
     drop: -0.04,
+    shadowAt: 0.887,
   ),
   AccessoryDefinition(
     id: 'moon_crown',
@@ -616,5 +617,6 @@ const accessories = <AccessoryDefinition>[
     assetPath: 'assets/accessories/head/moon_crown.png',
     fit: 0.58,
     drop: -0.04,
+    shadowAt: 0.82,
   ),
 ];

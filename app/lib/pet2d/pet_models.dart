@@ -171,6 +171,7 @@ class AccessoryDefinition {
     required this.assetPath,
     this.fit = 1,
     this.drop = 0,
+    this.shadowAt,
   });
 
   final String id;
@@ -185,6 +186,10 @@ class AccessoryDefinition {
 
   /// 往下移多少（錨點框邊長的比例）；讓硬的帽子坐進兩耳之間，不是浮在頭頂上。
   final double drop;
+
+  /// 帽子底下那道淡影子落在框高的哪裡（＝圖裡帽子的底邊，0–1）；null＝不畫。
+  /// 硬帽子沒有影子看起來是「浮」在頭上（2026-11-19 使用者：很突兀）。
+  final double? shadowAt;
 }
 
 class AccessoryTweak {

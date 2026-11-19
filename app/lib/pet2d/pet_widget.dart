@@ -3,6 +3,7 @@
 // 心情一律先過 pet.resolve()（缺圖畫 bored，不畫 happy）。預覽用的調位置工具照留、App 不開。
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -269,11 +270,44 @@ class _LayeredPetState extends State<LayeredPet>
             base.rotationDeg + tweak.rotationDeg + animatedRotation,
           ),
           alignment: Alignment.bottomCenter,
-          child: Image.asset(
-            accessory.assetPath,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
+          child: accessory.shadowAt == null
+              ? Image.asset(
+                  accessory.assetPath,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                )
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 落在頭上的淡影子：在帽子底邊、比帽子窄一點，看起來是戴著不是貼著
+                    Positioned(
+                      key: const Key('pet-accessory-shadow'),
+                      left: size * 0.16,
+                      width: size * 0.68,
+                      top: size * accessory.shadowAt! - size * 0.07,
+                      height: size * 0.13,
+                      child: ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                          sigmaX: size * 0.035,
+                          sigmaY: size * 0.035,
+                        ),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Color(0x4D5A2A12),
+                            borderRadius: BorderRadius.all(Radius.elliptical(100, 30)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: Image.asset(
+                        accessory.assetPath,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
