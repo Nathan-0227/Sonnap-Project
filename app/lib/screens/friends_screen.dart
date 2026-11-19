@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
-import '../models/wall_clock.dart';
 import '../services/friends_service.dart';
 import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
 import '../widgets/friend_live_card.dart';
+import '../widgets/friend_live_sheet.dart';
+import '../widgets/home_pet.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/friend_night_card.dart';
 import '../widgets/friends_town.dart';
 import '../widgets/streak_card.dart';
@@ -76,6 +78,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
   _LiveTab _live = _LiveTab.all;
 
   bool _liveAsking = false;
+
+  /// 我的 live_status 有沒有分享（You 卡用）；null＝還不知道（沒問到後端）。
+  bool? _liveShared;
 
   @override
   void initState() {
@@ -224,35 +229,104 @@ class _FriendsScreenState extends State<FriendsScreen> {
       MaterialPageRoute<void>(builder: (_) => FriendSharingScreen(service: service)),
     );
     await _load();
+    // 回來時 You 卡要跟著改（可能剛打開或關掉即時狀態）
+    if (mounted && _tab == _Tab.friends) await _maybeAskLiveSharing();
   }
 
   void _toast(String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  /// 標題右邊的「人＋」（2026-11-19 使用者定 Q2）：上面是我的邀請碼（可以複製），下面輸入朋友的。
   Future<void> _addFriend() async {
     final service = widget.service;
     if (service == null) return;
+    final myCode = _result?.value?.myInviteCode ?? '';
     final controller = TextEditingController();
-    final code = await showDialog<String>(
+    final code = await showReportSheet<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add a friend'),
-        content: TextField(
-          key: const Key('invite-field'),
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: "Their 6-character invite code"),
+      builder: (context) => Container(
+        key: const Key('add-friend-sheet'),
+        decoration: const BoxDecoration(
+          color: Color(0xFF141A45),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            key: const Key('invite-submit'),
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Add'),
+        padding: EdgeInsets.fromLTRB(
+            20, 8, 20, 24 + MediaQuery.viewInsetsOf(context).bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Add a friend',
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              const Text('YOUR INVITE CODE',
+                  style: TextStyle(
+                      color: Color(0x99FFFFFF), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: SelectableText(
+                      myCode,
+                      key: const Key('my-invite-code'),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 3),
+                    ),
+                  ),
+                  TextButton.icon(
+                    key: const Key('copy-invite-code'),
+                    onPressed: myCode.isEmpty
+                        ? null
+                        : () {
+                            Clipboard.setData(ClipboardData(text: myCode));
+                            ScaffoldMessenger.maybeOf(context)
+                                ?.showSnackBar(const SnackBar(content: Text('Invite code copied.')));
+                          },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copy'),
+                  ),
+                ],
+              ),
+              const Text('Send it to a friend. They enter it here to add you.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(height: 20),
+              const Text('THEIR INVITE CODE',
+                  style: TextStyle(
+                      color: Color(0x99FFFFFF), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('invite-field'),
+                      controller: controller,
+                      textCapitalization: TextCapitalization.characters,
+                      style: const TextStyle(color: Colors.white, letterSpacing: 2),
+                      decoration: InputDecoration(
+                        hintText: '6 characters',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: const Color(0x14FFFFFF),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton(
+                    key: const Key('invite-submit'),
+                    onPressed: () => Navigator.pop(context, controller.text),
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
     if (code == null || code.trim().isEmpty) return;
@@ -274,60 +348,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
     await _load();
   }
 
-  /// 「幾點放下手機」那一行。⚠️ 一律走 parseWallClock()：
-  /// `DateTime.tryParse("...+08:00")` 回的是 UTC，`.hour` 會早 8 小時。
-  static String lightsOutLine(FriendSummary f) {
-    final at = parseWallClock(f.lastLightsOutAt);
-    if (at == null) {
-      // 時刻沒公開（或只公開準時與否）：有準時就寫準時
-      if (f.lastNightLate != null) return f.lastNightLate! ? 'Late last night' : 'On time last night';
-      return 'No record yet';
-    }
-    final time = DateFormat('HH:mm').format(at);
-    final late = f.lastNightLate == true ? ' · late' : '';
-    return 'Phone down $time (${f.lastNightDate ?? ''})$late';
-  }
-
+  /// 點好友卡片（Q6）：現在的狀態 → 7 晚放下手機 → 最近那張動態卡 → Remove friend。
   void _showFriend(FriendSummary f) {
     final latest = _feed.where((c) => c.handle == f.handle).firstOrNull;
-    showModalBottomSheet<void>(
+    showReportSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF10265A),
-      builder: (context) => SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(f.displayName,
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            // 他的 Streak 卡（他沒公開的部分後端已經遮掉）
-            StreakCard(summary: f, species: speciesOf(f.petSpecies)),
-            Text(lightsOutLine(f), style: const TextStyle(color: Colors.white70)),
-            const SizedBox(height: 4),
-            if (f.lateNights != null)
-              Text(
-                // ⚠️ 分母一定要講出來，理由同 Insights 的熬夜比率卡。
-                f.recordedNights == 0
-                    ? 'No nights recorded yet'
-                    : 'Late on ${f.lateNights} of ${f.recordedNights} recorded nights',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            if (latest != null) ...[
-              const SizedBox(height: 12),
-              FriendNightCardView(card: latest),
-            ],
-            const SizedBox(height: 16),
-            TextButton.icon(
-              key: const Key('remove-friend'),
-              onPressed: () => _removeFriend(f),
-              icon: const Icon(Icons.person_remove_rounded, color: Color(0xFFFF6B6B)),
-              label: const Text('Remove friend', style: TextStyle(color: Color(0xFFFF6B6B))),
-            ),
-          ],
-        ),
+      builder: (context) => FriendLiveSheet(
+        friend: f,
+        now: widget.clock(),
+        lastNight: latest,
+        onRemove: () => _removeFriend(f),
       ),
     );
   }
@@ -340,13 +370,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
               style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
             ),
           ),
-          if (widget.service != null)
+          if (widget.service != null) ...[
             IconButton(
               key: const Key('open-sharing'),
               tooltip: 'What friends can see',
               onPressed: _openSharing,
               icon: const Icon(Icons.visibility_rounded, color: Colors.white70),
             ),
+            const SizedBox(width: 4),
+            // 參考圖的圓鈕（2026-11-19 Q2）：我的邀請碼＋輸入朋友的，都在這裡
+            Material(
+              color: const Color(0xFF2A2F70),
+              shape: const CircleBorder(),
+              child: IconButton(
+                key: const Key('add-friend'),
+                tooltip: 'Add a friend',
+                onPressed: _addFriend,
+                icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+              ),
+            ),
+          ],
         ],
       );
 
@@ -426,6 +469,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _Tab.town => _townTab(state),
         _Tab.feed => _feedTab(state),
         _Tab.friends => _friendsTab(state, visible),
+        // 2026-11-19 使用者定：排行榜自成一個大分頁（名次、門檻照抄後端）
+        _Tab.ranks => [LeaderboardSection(service: widget.service!)],
       },
       if (state.notes['what_is_shared'] != null) ...[
         const SizedBox(height: 12),
@@ -449,7 +494,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (service == null || _liveAsking) return;
     _liveAsking = true;
     try {
-      if (await widget.store.getString(FriendsScreenKeys.liveAsked) != null) return;
+      // 每次進 Friends 分頁都問一次後端：You 卡要知道好友看不看得到你
       final r = await service.fetchSharing();
       if (!mounted || !r.isOk || r.value == null) return;
       final item = r.value!.groups
@@ -457,6 +502,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
           .where((i) => i.key == 'live_status')
           .firstOrNull;
       if (item == null) return;
+      setState(() => _liveShared = item.enabled);
+      if (await widget.store.getString(FriendsScreenKeys.liveAsked) != null) return;
+      if (!mounted) return;
       if (item.enabled) {
         await widget.store.setString(FriendsScreenKeys.liveAsked, 'on');
         return;
@@ -492,6 +540,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       if (yes) {
         final saved = await service.patchSharing(items: {'live_status': true});
         if (!saved.isOk) return;
+        if (mounted) setState(() => _liveShared = true);
       }
       await widget.store.setString(FriendsScreenKeys.liveAsked, yes ? 'on' : 'off');
     } finally {
@@ -528,13 +577,25 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
           ),
         );
-    return Row(
-      children: [
-        for (final (t, label) in [(_Tab.town, 'Town'), (_Tab.feed, 'Feed'), (_Tab.friends, 'Friends')]) ...[
-          tab(label, _tab == t, () => _selectTab(t), Key('tab-${t.name}')),
-          const SizedBox(width: 20),
+    // 2026-11-19 多了 Ranks：四個在窄手機上放不下（測試量到超出 86 px）→ 間距縮小，
+    // 還是太窄就整排等比縮小（不換行、不截字）
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (i, (t, label)) in [
+            (_Tab.town, 'Town'),
+            (_Tab.feed, 'Feed'),
+            (_Tab.friends, 'Friends'),
+            (_Tab.ranks, 'Ranks'),
+          ].indexed) ...[
+            if (i > 0) const SizedBox(width: 14),
+            tab(label, _tab == t, () => _selectTab(t), Key('tab-${t.name}')),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -565,7 +626,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
             key: _townMap,
             town: town,
             onTap: _tapTownie,
-            onAddFriend: town.friends.length < kTownMaxFriends ? () => _selectTab(_Tab.friends) : null,
+            onAddFriend: town.friends.length < kTownMaxFriends
+                ? () {
+                    _selectTab(_Tab.friends);
+                    _addFriend();
+                  }
+                : null,
             covered: EdgeInsets.only(top: pad.top + headerH, bottom: pad.bottom + 70),
           ),
         ),
@@ -707,27 +773,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
     ];
   }
 
+  /// Friends 分頁（2026-11-19 使用者定，第二輪 Q1–Q8）：加朋友＋看朋友現在的狀態。
+  /// You 卡 → All／Asleep／Still up（人數寫在上面）→ 依狀態排好的卡片。
+  /// 邀請碼搬進標題右邊的「人＋」按鈕、Sleep Circle 拿掉（它講昨晚）、排行榜搬到 Ranks 分頁。
   List<Widget> _friendsTab(FriendsState state, List<FriendSummary> visible) {
+    final now = widget.clock();
+    if (state.friends.isEmpty) {
+      return [
+        if (state.me != null)
+          YouLiveCard(me: state.me!, now: now, shared: _liveShared, onOpenSharing: _openSharing),
+        _emptyFriends(),
+      ];
+    }
     return [
-      _inviteCard(state.myInviteCode),
-      _circleCard(state.friends),
-      // 七個排行榜（第二批）：名次、門檻都照抄後端（舊的只有連續天數那張換掉了）
-      // 2026-11-19 使用者定（參考圖）：All · Asleep · Still up · This Week。
-      // This Week＝原本的排行榜（名次、門檻照抄後端）
-      _liveTabs(),
+      if (state.me != null)
+        YouLiveCard(me: state.me!, now: now, shared: _liveShared, onOpenSharing: _openSharing),
+      _liveTabs(state.friends),
       const SizedBox(height: 14),
-      if (_live == _LiveTab.week)
-        if (widget.service != null)
-          LeaderboardSection(service: widget.service!)
-        else
-          const SizedBox.shrink()
-      else if (state.friends.isEmpty)
-        _card(const Text(
-          "No friends yet. Share your invite code, or add a friend with theirs.",
-          key: Key('friends-empty'),
-          style: TextStyle(color: Colors.white70, height: 1.4),
-        ))
-      else if (visible.isEmpty)
+      if (visible.isEmpty)
         _card(Text(
           _live == _LiveTab.asleep
               ? "Nobody has tapped Start Sleep yet."
@@ -736,8 +799,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
           style: const TextStyle(color: Colors.white70),
         ))
       else ...[
-        for (final f in visible)
-          FriendLiveCard(friend: f, now: widget.clock(), onTap: () => _showFriend(f)),
+        for (final f in sortByLiveState(visible))
+          FriendLiveCard(friend: f, now: now, onTap: () => _showFriend(f)),
         // 狀態只來自按鈕：沒按的人不代表醒著（「不按也沒關係」）
         const Padding(
           padding: EdgeInsets.only(top: 2, bottom: 8),
@@ -752,9 +815,42 @@ class _FriendsScreenState extends State<FriendsScreen> {
     ];
   }
 
-  /// 照參考圖的膠囊分頁：選中的是實心紫。
-  Widget _liveTabs() {
-    Widget pill(_LiveTab t, String label) {
+  /// 沒有朋友（Q7）：睡覺的小狗＋一句話＋大的 Add friend。
+  Widget _emptyFriends() => Container(
+        key: const Key('friends-empty'),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1F4E),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          children: [
+            const HomePet(mood: 'tired', size: 120, animate: false),
+            const SizedBox(height: 12),
+            const Text("Add a friend to see who's asleep",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            const Text("Share your invite code, or enter theirs.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70, fontSize: 13)),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const Key('empty-add-friend'),
+              onPressed: _addFriend,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add friend'),
+            ),
+          ],
+        ),
+      );
+
+  /// 照參考圖的膠囊分頁：選中的是實心紫。人數寫在字後面（Q3）。
+  Widget _liveTabs(List<FriendSummary> friends) {
+    final asleep = friends.where((f) => liveFilterOf(f) == 'asleep').length;
+    final up = friends.where((f) => liveFilterOf(f) == 'still_up').length;
+    Widget pill(_LiveTab t, String label, int n) {
       final selected = _live == t;
       return Expanded(
         child: InkWell(
@@ -773,13 +869,25 @@ class _FriendsScreenState extends State<FriendsScreen> {
             child: Center(
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(label,
-                    softWrap: false,
-                    style: TextStyle(
-                      color: selected ? Colors.white : const Color(0xCCFFFFFF),
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 14,
-                    )),
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: label),
+                    TextSpan(
+                      text: '  $n',
+                      style: TextStyle(
+                        color: selected ? const Color(0xCCFFFFFF) : const Color(0x80FFFFFF),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ]),
+                  key: Key('live-count-${t.name}'),
+                  softWrap: false,
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xCCFFFFFF),
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
           ),
@@ -795,10 +903,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
       child: Row(
         children: [
-          pill(_LiveTab.all, 'All'),
-          pill(_LiveTab.asleep, 'Asleep'),
-          pill(_LiveTab.stillUp, 'Still up'),
-          pill(_LiveTab.week, 'This Week'),
+          pill(_LiveTab.all, 'All', friends.length),
+          pill(_LiveTab.asleep, 'Asleep', asleep),
+          pill(_LiveTab.stillUp, 'Still up', up),
         ],
       ),
     );
@@ -814,87 +921,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ),
         child: child,
       );
-
-  Widget _inviteCard(String code) => _card(Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Your invite code", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                const SizedBox(height: 4),
-                SelectableText(
-                  code,
-                  key: const Key('my-invite-code'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          FilledButton.icon(
-            key: const Key('add-friend'),
-            onPressed: _addFriend,
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            label: const Text('Add'),
-          ),
-        ],
-      ));
-
-  /// 最近一晚準時／熬夜各幾人。⚠️ 用後端的 last_night_late，不在 Dart 判斷幾分鐘算晚。
-  Widget _circleCard(List<FriendSummary> friends) {
-    final onTime = friends.where((f) => f.lastNightLate == false).length;
-    final late = friends.where((f) => f.lastNightLate == true).length;
-    Widget half(IconData icon, Color bg, int n, String label, Key key) => Expanded(
-          child: Row(
-            children: [
-              CircleAvatar(radius: 22, backgroundColor: bg, child: Icon(icon, color: Colors.white)),
-              const SizedBox(width: 12),
-              // ⚠️ Expanded 不能省：標籤比原本的「Friends asleep」長，一半只有
-              //    約 285px（650 寬的版面），手機上更窄——少了它就溢位（測試抓到的）。
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("$n",
-                        key: key,
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                    Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-    return _card(Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Row(
-          children: [
-            Icon(Icons.groups_rounded, color: Color(0xFF7C6DFF)),
-            SizedBox(width: 8),
-            Text("Sleep Circle",
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            half(Icons.nightlight_round, const Color(0xFF3546B8), onTime, "On time, latest night",
-                const Key('circle-on-time')),
-            half(Icons.phone_android_rounded, const Color(0xFF7C6DFF), late, "Late, latest night",
-                const Key('circle-late')),
-          ],
-        ),
-      ],
-    ));
-  }
 }
 
-enum _Tab { town, feed, friends }
+enum _Tab { town, feed, friends, ranks }
 
-enum _LiveTab { all, asleep, stillUp, week }
+enum _LiveTab { all, asleep, stillUp }
