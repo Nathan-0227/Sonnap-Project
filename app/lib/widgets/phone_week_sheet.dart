@@ -173,6 +173,7 @@ Future<void> showPhoneWeekSheet(
   DateTime? startSleepAt,
   DateTime? phoneDownAt,
   double? afterStartMinutes,
+  Widget? footer,
 }) {
   return showReportSheet<void>(
     context: context,
@@ -187,6 +188,7 @@ Future<void> showPhoneWeekSheet(
         startSleepAt: startSleepAt,
         phoneDownAt: phoneDownAt,
         afterStartMinutes: afterStartMinutes,
+        footer: footer,
       ),
     ),
   );
@@ -214,6 +216,9 @@ class PhoneWeekView extends StatelessWidget {
   final DateTime? startSleepAt;
   final DateTime? phoneDownAt;
   final double? afterStartMinutes;
+
+  /// 頁面最底下多放的東西（Insights 放「Before bed」）。null＝不放。
+  final Widget? footer;
   const PhoneWeekView({
     super.key,
     required this.title,
@@ -222,6 +227,7 @@ class PhoneWeekView extends StatelessWidget {
     this.startSleepAt,
     this.phoneDownAt,
     this.afterStartMinutes,
+    this.footer,
     this.icon = Icons.phone_android_rounded,
     this.color = const Color(0xFFFFC97A),
   });
@@ -384,6 +390,11 @@ class PhoneWeekView extends StatelessWidget {
                   const SizedBox(height: 6),
                   _AfterStartBars(week: week, color: color),
                 ],
+              ],
+              // 睡前 60 分鐘用了哪些 App（2026-11-19 從舊 Insights 搬來，只有這一晚、只在 Day）
+              if (footer != null) ...[
+                const SizedBox(height: 22),
+                footer!,
               ],
             ],
           ),

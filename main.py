@@ -73,6 +73,7 @@ from social import sharing as social_sharing
 #    會在某次改動後悄悄地不一致——那正是本專案最想避免的那類 bug。
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
+from evaluate_sleep_quality import GRADE_THRESHOLDS  # noqa: E402  等級切點只有評分器那一份
 import camera_curve  # noqa: E402  攝影機曲線只留睡著那段（純函式，不載入 OpenCV）
 from social import leaderboard as social_leaderboard  # noqa: E402  好友排行榜（純函式）
 from social import town as social_town  # noqa: E402  好友小鎮（純函式）
@@ -472,13 +473,19 @@ def _sleeping_sec(row):
     return 86400 - sum(parts)
 
 
-def _yesterday_history(user_id, day, owns_raw=True):
+def _yesterday_history(user_id, day, owns_raw=True, days=None, lite=False):
     """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。
-    owns_raw=False：不讀 Garmin 原始檔（那是本人的，見 _owns_garmin_file），平均壓力與醒著心率留 None。"""
-    since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
+    owns_raw=False：不讀 Garmin 原始檔（那是本人的，見 _owns_garmin_file），平均壓力與醒著心率留 None。
+
+    [days]／[lite]：Insights 的 Week／Month／Year 用（2026-11-19），一次要一整年，所以只帶
+    格子要的那幾項——Awake HR 與 Move IQ 要逐天掃整天的讀數，365 天太慢、也不進格子。
+    """
+    n = days or _payload.ACTIVITY_HISTORY_DAYS
+    since = (day - timedelta(days=n - 1)).isoformat()
     stress_avgs = (sleep_heart_rate.stress_day_averages(_garmin_records() or [])
                    if owns_raw else {})
-    windows = db.list_sleep_windows(user_id, since, (day + timedelta(days=1)).isoformat())
+    windows = [] if lite else db.list_sleep_windows(
+        user_id, since, (day + timedelta(days=1)).isoformat())
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
         if not any(r.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
@@ -497,10 +504,12 @@ def _yesterday_history(user_id, day, owns_raw=True):
             # Stress 一週圖：各程度幾分鐘＋那天的平均壓力（從每 3 分鐘的讀數算）
             "stress_minutes": _payload.stress_minutes(r),
             "stress_avg": stress_avgs.get(r["date"]),
-            # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
-            "awake_hr": _awake_hr_summary(user_id, r, windows) if owns_raw else None,
-            # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
-            "move_iq": r.get("move_iq"),
+            **({} if lite else {
+                # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
+                "awake_hr": _awake_hr_summary(user_id, r, windows) if owns_raw else None,
+                # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
+                "move_iq": r.get("move_iq"),
+            }),
         })
     return out
 
@@ -1383,6 +1392,9 @@ async def get_insights(
                 if scored else None
             ),
             "quality_distribution": distribution,
+            # Insights W/M/Y 把「這段期間的中位分數」換成星星與等級用（2026-11-19）。
+            # ⚠️ 切點只在評分器定義，這裡照抄；Dart 不寫任何一個數字
+            "quality_bands": [{"min": m, "quality": q} for m, q in GRADE_THRESHOLDS],
             "history": [
                 {
                     "date": r["date"],
@@ -1403,6 +1415,10 @@ async def get_insights(
                     #    deep_min），欄名與 asset 路徑的 history 相同。
                     "sleep_efficiency": r["efficiency"],
                     "deep_minutes": r["deep_min"],
+                    # Insights 的 Sleep phases（W/M/Y 堆疊長條，2026-11-19）。沒量到 REM → 兩個都是 null，
+                    # 不畫成 0（減出來的淺睡會把 REM 吃進去）
+                    "rem_minutes": r["rem_min"] if r.get("rem_measured") else None,
+                    "light_minutes": _light_minutes(r),
                     # 早晨報告 Sleeping heart rate 點開的一週圖（2026-11-15）：睡著那一段的
                     # 平均與最低，跟報告格子**同一支** night_heart_rate（只有 Garmin 來源有）。
                     "sleep_heart_rate": _sleep_hr_summary(r),
@@ -1472,6 +1488,11 @@ async def get_insights(
                 for r in camera_rows
             ],
         },
+        # Insights W/M/Y 的步數、活動卡路里、活動時間、壓力（2026-11-19）。
+        # 只呈現、不計分；沒資料的日子不放（0 步＝沒戴錶，App 寫「—」）
+        # 原始檔只有它的主人能讀（_owns_garmin_file），示範帳號不會讀到本人的壓力
+        "daily": _yesterday_history(
+            user_id, date_cls.today(), _owns_garmin_file(user_id), days=days, lite=True),
         "notes": {
             "tier_b_comparability": (
                 "Values in wearable.history support within-person trends only; "
