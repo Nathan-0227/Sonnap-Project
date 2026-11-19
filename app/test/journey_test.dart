@@ -7,6 +7,7 @@ import 'package:app/services/key_value_store.dart';
 import 'package:app/services/plan_reminders.dart';
 import 'package:app/services/sleep_plan.dart';
 import 'package:app/widgets/journey_section.dart';
+import 'package:app/widgets/sleep_dial.dart';
 import 'package:app/widgets/sleep_schedule_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -256,30 +257,39 @@ void main() {
       expect(find.byKey(const Key('journey-start')), findsOneWidget);
     });
 
-    testWidgets('開始：起點用後端的建議；不選終點按不了；睡不到 7 小時照 7 小時送', (tester) async {
+    SleepDial dial(WidgetTester tester) =>
+        tester.widget<SleepDial>(find.byKey(const Key('journey-setup-dial')));
+    String text(WidgetTester tester, String key) => tester.widget<Text>(find.byKey(Key(key))).data!;
+
+    testWidgets('開始：用 App 的轉盤設目標；起點 ±5 分；沒拖太陽按不了；月亮拖不到 7 小時以下', (tester) async {
       final (_, api) = await pump(tester, _info(null, suggested: '11:05'));
       await tester.tap(find.byKey(const Key('journey-start')));
       await settle(tester);
-      expect(find.text('11:05'), findsOneWidget, reason: '起點＝最近 7 晚中間值（後端算的）');
+      expect(text(tester, 'journey-setup-start'), '11:05', reason: '起點＝最近 7 晚中間值（後端算的）');
       expect(find.text('Middle of your last 7 nights'), findsOneWidget);
-      expect(find.text('At least 7h is recommended'), findsOneWidget);
+      expect(find.byType(TimePickerDialog), findsNothing);
       final go = find.byKey(const Key('journey-setup-go'));
-      expect(tester.widget<FilledButton>(go).onPressed, isNull, reason: '終點要自己選');
-      // 轉盤 04:00 → 起床 12:00（預設 +8 小時）＝8 小時；減到底只能到 7 小時
-      for (var i = 0; i < 8; i++) {
-        final less = find.byKey(const Key('journey-setup-less'));
-        if (tester.widget<IconButton>(less).onPressed == null) break;
-        await tester.tap(less);
-        await tester.pump();
-      }
-      expect(find.text('7h'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('journey-setup-goal')));
-      await settle(tester);
-      await tester.tap(find.text('OK'));
-      await settle(tester);
+      expect(tester.widget<FilledButton>(go).onPressed, isNull, reason: '終點要自己選（拖過太陽才算）');
+
+      await tester.tap(find.byKey(const Key('journey-setup-start-less')));
+      await tester.pump();
+      expect(text(tester, 'journey-setup-start'), '11:00');
+      expect(text(tester, 'journey-setup-goal-wake'), '11:00', reason: '還沒選目標時太陽跟著起點');
+
+      // 拖太陽到 09:00：就寢跟著（轉盤 04:00→12:00 是 8 小時，就寢 01:00）
+      dial(tester).onWakeChanged(const TimeOfDay(hour: 9, minute: 0));
+      await tester.pump();
+      expect(text(tester, 'journey-setup-goal-wake'), '09:00');
+      expect(text(tester, 'journey-setup-goal-bed'), '01:00');
+      // 拖月亮到 03:00（只剩 6 小時）→ 停在 7 小時
+      dial(tester).onBedtimeChanged(const TimeOfDay(hour: 3, minute: 0));
+      await tester.pump();
+      expect(text(tester, 'journey-setup-goal-bed'), '02:00');
+      expect(text(tester, 'journey-setup-min-note'), '7h of sleep · at least 7h is recommended');
+
       await tester.tap(go);
       await settle(tester);
-      expect(api.lastStart?['sleep'], 420);
+      expect(api.lastStart, {'start': '11:00', 'end': '09:00', 'sleep': 420});
       expect(find.text('Journey · stop 1 of 3'), findsOneWidget);
     });
 
@@ -288,10 +298,8 @@ void main() {
       api.startOutcome = JourneyStartOutcome.alreadyThere;
       await tester.tap(find.byKey(const Key('journey-start')));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('journey-setup-goal')));
-      await settle(tester);
-      await tester.tap(find.text('OK'));
-      await settle(tester);
+      dial(tester).onWakeChanged(const TimeOfDay(hour: 8, minute: 0));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('journey-setup-go')));
       await settle(tester);
       expect(find.byKey(const Key('journey-setup-error')), findsOneWidget);
