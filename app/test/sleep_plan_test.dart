@@ -9,6 +9,7 @@ import 'package:app/services/nightly_sync.dart';
 import 'package:app/services/pet_notes.dart';
 import 'package:app/services/plan_reminders.dart';
 import 'package:app/services/sleep_plan.dart';
+import 'package:app/widgets/home_pet.dart';
 import 'package:app/widgets/pet_notes_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,6 +46,14 @@ class _FakeReminders implements PlanReminderScheduler {
 
 const _bed = TimeOfDay(hour: 0, minute: 30);
 const _wake = TimeOfDay(hour: 9, minute: 0);
+
+Future<(PlanStore, _FakeReminders)> Function(WidgetTester,
+    {ChallengesResult? challenges, bool reduceMotion, String? mood})? _pumpPlan;
+
+Future<PlanStore> pumpPlanForFeedback(WidgetTester tester, {bool reduceMotion = false, String? mood}) async {
+  final (plan, _) = await _pumpPlan!(tester, reduceMotion: reduceMotion, mood: mood);
+  return plan;
+}
 
 void main() {
   group('措辭與 id', () {
@@ -184,7 +193,8 @@ void main() {
           lowerIsBetter: false,
         );
 
-    Future<(PlanStore, _FakeReminders)> pumpPlan(WidgetTester tester, {ChallengesResult? challenges}) async {
+    Future<(PlanStore, _FakeReminders)> pumpPlan(WidgetTester tester,
+        {ChallengesResult? challenges, bool reduceMotion = false, String? mood}) async {
       tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -195,7 +205,12 @@ void main() {
       final nightly = NightlySync(bedMarks: BedMarkStore(kv))..challenges = challenges;
       final reminders = _FakeReminders();
       await tester.pumpWidget(MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         home: PlanScreen(
+          petMood: mood == null ? null : () async => mood,
           plan: plan,
           nightly: nightly,
           bedtime: _bed,
@@ -209,6 +224,7 @@ void main() {
       await tester.pump();
       return (plan, reminders);
     }
+    _pumpPlan = pumpPlan;
 
     testWidgets('量測那幾列：整句照抄後端；沒量到寫「—」不是空圈', (tester) async {
       await pumpPlan(
@@ -246,6 +262,50 @@ void main() {
       expect(find.text('00:30'), findsWidgets);
       expect(find.text('08:30'), findsOneWidget);
     });
+  });
+
+  group('勾下去的回饋（Q36、Q40–Q46：只有當下，不累積）', () {
+    testWidgets('勾下去：Nice! 出現、一會兒就消失；寵物冒星星；沒有任何點數', (tester) async {
+      await pumpPlanForFeedback(tester);
+      await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('plan-nice')), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome), findsWidgets, reason: '寵物跳一下、冒星星');
+      expect(find.textContaining('XP'), findsNothing);
+      expect(find.textContaining('+'), findsNothing, reason: '不累積：沒有 +1、+5 這種數字');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('plan-nice')), findsNothing, reason: '回饋只在當下，不留著');
+    });
+
+    testWidgets('取消勾選：什麼都沒有', (tester) async {
+      final plan = await pumpPlanForFeedback(tester);
+      await plan.setChecked('late_caffeine', DateTime(2026, 11, 20), true);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(plan.isChecked('late_caffeine', DateTime(2026, 11, 20)), isFalse);
+      expect(find.byKey(const Key('plan-nice')), findsNothing);
+      expect(find.byIcon(Icons.auto_awesome), findsNothing);
+    });
+
+    testWidgets('寵物的臉維持後端的心情，勾了也不換成開心', (tester) async {
+      await pumpPlanForFeedback(tester, mood: 'anxious');
+      await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
+      await tester.pump(const Duration(milliseconds: 100));
+      final pets = tester.widgetList<HomePet>(find.byType(HomePet));
+      expect(pets.map((p) => p.mood).toSet(), {'anxious'},
+          reason: '臉是後端判的心情；勾一下就畫開心＝沒有根據的心情（同紅線 5）');
+    });
+
+    testWidgets('減少動態效果：不跳、不冒星星，但 Nice! 文字照樣出現', (tester) async {
+      await pumpPlanForFeedback(tester, reduceMotion: true);
+      await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('plan-nice')), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome), findsNothing);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
   });
 
   group('寵物 notes 的「Add to my plan」', () {

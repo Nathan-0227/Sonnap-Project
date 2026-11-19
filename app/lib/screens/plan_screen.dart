@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -10,6 +11,7 @@ import '../services/plan_reminders.dart';
 import '../services/sleep_plan.dart';
 import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/plan_check_button.dart';
 import '../widgets/plan_habit_editor.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
@@ -65,19 +67,26 @@ class PlanScreen extends StatefulWidget {
   State<PlanScreen> createState() => _PlanScreenState();
 }
 
+/// 疊在木頭地板上的字：加一層柔和陰影才讀得清楚。
+const List<Shadow> _onFloor = [Shadow(blurRadius: 8, color: Color(0xCC000000))];
+
 /// Daily＝量測的三列；Weekly＝多晚的兩個（後端 challenge id）。
 const List<String> kMeasuredIds = ['on_time_tonight', 'phone_in_bed_tonight', 'up_on_time'];
 const List<String> kWeekIds = ['streak_nights', 'bedtime_consistency_7d'];
 
-/// 場景圖：使用者生成的放 `assets/plan/scene.jpg`；還沒有時用報告那張日出。
-const String kPlanSceneAsset = 'assets/plan/scene.jpg';
+/// 整頁背景（2026-11-19 使用者生成）：直式長圖，上面是窗戶、地毯在約 36%–50% 高、
+/// 下面一大片往下變暗的地板。**固定不動**，清單在上面捲動、卡片從寵物身上滑過去（Q35、Q37）。
+/// 讀不到時退回報告那張日出。
+const String kPlanRoomAsset = 'assets/plan/room.jpg';
+const double kPlanRoomAspect = 2335 / 1080; // 圖的高÷寬
+
+/// 地毯中心落在圖高的幾成（量使用者那張圖：地毯 36%–50%）。換圖要重量。
+const double kPlanRugCenter = 0.43;
 
 /// 習慣的插圖：`assets/plan/<id>.png`（透明背景）。沒有就畫 Material 圖示。
 String planIconAsset(String id) => 'assets/plan/${id.startsWith('custom_') ? 'custom' : id}.png';
 
-const _squareRadius = 16.0;
-
-class _PlanScreenState extends State<PlanScreen> {
+class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateMixin {
   late TimeOfDay _bedtime = widget.bedtime;
   TimeOfDay? _wake;
   String? _mood;
@@ -85,6 +94,10 @@ class _PlanScreenState extends State<PlanScreen> {
   List<ClaimableReward> _claimable = const [];
   String? _claiming;
   ChallengesResult? _fresh;
+
+  /// 勾下去時寵物跳一下（只動作，**臉不換**：臉是後端判的心情，Q40）。
+  late final AnimationController _hop =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
 
   @override
   void initState() {
@@ -110,6 +123,7 @@ class _PlanScreenState extends State<PlanScreen> {
   void dispose() {
     widget.plan.removeListener(_onChange);
     widget.nightly?.removeListener(_onChange);
+    _hop.dispose();
     super.dispose();
   }
 
@@ -209,20 +223,32 @@ class _PlanScreenState extends State<PlanScreen> {
   Widget build(BuildContext context) {
     final wake = _wake;
     final today = wake == null ? null : planDayOf(widget.clock(), wake);
+    final size = MediaQuery.sizeOf(context);
+    final pad = MediaQuery.paddingOf(context);
+    // 背景用 cover、靠上對齊：圖實際畫出來的高度
+    final imgH = math.max(size.height, size.width * kPlanRoomAspect);
+    final rugY = imgH * kPlanRugCenter;
+    const petSize = 150.0;
     return ReportFont(
       child: Scaffold(
         backgroundColor: ReportColors.bgMid,
-        body: ListView(
-          key: const Key('plan-list'),
-          padding: EdgeInsets.zero,
+        body: Stack(
           children: [
-            _scene(context, wake),
-            Padding(
-              // 底部要讓出系統導覽列，不然最後一張卡的 Claim 會壓在手勢列底下
-              padding: EdgeInsets.fromLTRB(18, 0, 18, 32 + MediaQuery.paddingOf(context).bottom),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            Positioned.fill(child: _room()),
+            // 寵物固定在地毯上；清單排在它後面，往上捲時卡片從牠身上滑過去（Q37）
+            Positioned(
+              left: 0,
+              right: 0,
+              top: rugY - petSize * 0.82,
+              child: Center(child: _pet(petSize)),
+            ),
+            Positioned.fill(
+              child: ListView(
+                key: const Key('plan-list'),
+                // 底部要讓出系統導覽列，不然最後一張卡的 Claim 會壓在手勢列底下
+                padding: EdgeInsets.fromLTRB(18, rugY + petSize * 0.32, 18, 32 + pad.bottom),
                 children: [
+                  _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
                   _habitHeader(today),
                   const SizedBox(height: 10),
                   if (today != null) ..._habitRows(today, wake!),
@@ -231,98 +257,118 @@ class _PlanScreenState extends State<PlanScreen> {
                 ],
               ),
             ),
+            // 頂端固定：返回鍵＋標題，底下墊一層漸層，卡片捲上來時字還讀得到
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: pad.top + 72,
+              child: const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xCC0B1636), Color(0x000B1636)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 8,
+              top: pad.top + 4,
+              child: IconButton(
+                key: const Key('plan-back'),
+                onPressed: () => Navigator.of(context).maybePop(),
+                style: IconButton.styleFrom(backgroundColor: Colors.black.withValues(alpha: 0.25)),
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              ),
+            ),
+            Positioned(
+              left: 64,
+              right: 16,
+              top: pad.top + 12,
+              child: const Text(
+                'Your sleep plan',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  shadows: [Shadow(blurRadius: 10, color: Colors.black54)],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ── 場景＋作息條 ─────────────────────────────────────────────────
+  // ── 背景與寵物 ───────────────────────────────────────────────────
 
-  Widget _scene(BuildContext context, TimeOfDay? wake) {
-    final top = MediaQuery.paddingOf(context).top;
-    const height = 270.0;
-    return SizedBox(
-      height: height + top + 44,
-      child: Stack(
+  Widget _room() => Stack(
+        fit: StackFit.expand,
         children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            height: height + top,
-            child: Image.asset(
-              kPlanSceneAsset,
+          Image.asset(
+            kPlanRoomAsset,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            errorBuilder: (_, _, _) => Image.asset(
+              'assets/backgrounds/report_dawn.jpg',
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Image.asset(
-                'assets/backgrounds/report_dawn.jpg',
-                fit: BoxFit.cover,
-                alignment: Alignment.bottomCenter,
-                errorBuilder: (_, _, _) => const ColoredBox(color: ReportColors.hill),
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, _, _) => const ColoredBox(color: ReportColors.hill),
+            ),
+          ),
+          // 地板往下再壓暗一點：白字卡片與區段標題疊在上面才讀得清楚
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00131D4A), Color(0x00131D4A), Color(0x99131D4A), Color(0xD9131D4A)],
+                stops: [0, 0.5, 0.75, 1],
               ),
             ),
-          ),
-          // 下緣淡進頁面底色（淡成透明會多一條線，所以淡成同一個顏色）
-          Positioned(
-            left: 0,
-            right: 0,
-            top: height + top - 90,
-            height: 90,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x00131D4A), ReportColors.bgMid],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: top + height - 178,
-            child: Center(
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: HomePet(mood: _mood, size: 150),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 8,
-            top: top + 4,
-            child: IconButton(
-              key: const Key('plan-back'),
-              onPressed: () => Navigator.of(context).maybePop(),
-              style: IconButton.styleFrom(backgroundColor: Colors.black.withValues(alpha: 0.25)),
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            ),
-          ),
-          Positioned(
-            left: 64,
-            right: 16,
-            top: top + 12,
-            child: const Text(
-              'Your sleep plan',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                shadows: [Shadow(blurRadius: 10, color: Colors.black54)],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: 0,
-            child: _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
           ),
         ],
-      ),
-    );
+      );
+
+  /// 寵物＋勾下去時跳一下、頭上冒小星星。減少動態效果時 [_hop] 不會跑，就是靜止的。
+  Widget _pet(double size) => AnimatedBuilder(
+        key: const Key('plan-pet'),
+        animation: _hop,
+        builder: (context, child) {
+          final t = _hop.isAnimating ? _hop.value : 0.0;
+          final up = math.sin(math.pi * t) * 22;
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Transform.translate(offset: Offset(0, -up), child: child),
+                if (_hop.isAnimating)
+                  for (final (dx, delay) in const [(-34.0, 0.0), (0.0, 0.12), (34.0, 0.06)])
+                    Positioned(
+                      left: size / 2 + dx - 10,
+                      top: 6 - 40 * ((t - delay).clamp(0.0, 1.0)),
+                      child: Opacity(
+                        opacity: (1 - (t - delay).clamp(0.0, 1.0)).clamp(0.0, 1.0),
+                        child: const Icon(Icons.auto_awesome, size: 20, color: ReportColors.gold),
+                      ),
+                    ),
+              ],
+            ),
+          );
+        },
+        child: HomePet(mood: _mood, size: size),
+      );
+
+  void _cheer() {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _hop.forward(from: 0);
   }
 
   // ── 習慣 ─────────────────────────────────────────────────────────
@@ -352,7 +398,7 @@ class _PlanScreenState extends State<PlanScreen> {
           Expanded(
             child: Text(line,
                 key: const Key('plan-left-today'),
-                style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+                style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900, shadows: _onFloor)),
           ),
           IconButton(
             key: const Key('plan-add'),
@@ -394,6 +440,7 @@ class _PlanScreenState extends State<PlanScreen> {
           streak: widget.plan.streak(item.id, today),
           time: itemTime(item, bedtime: _bedtime, wake: wake),
           onToggle: () => widget.plan.setChecked(item.id, today, !widget.plan.isChecked(item.id, today)),
+          onChecked: _cheer,
           onTap: () => _openEditor(item),
         ),
     ];
@@ -416,14 +463,14 @@ class _PlanScreenState extends State<PlanScreen> {
           children: [
             const Expanded(
               child: Text('Quests',
-                  style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+                  style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900, shadows: _onFloor)),
             ),
             _Tabs(weekly: _weekly, onChanged: (w) => setState(() => _weekly = w)),
           ],
         ),
         const SizedBox(height: 4),
         const Text('Measured by your phone and watch, from your last recorded night.',
-            style: TextStyle(color: ReportColors.muted, fontSize: 12)),
+            style: TextStyle(color: ReportColors.soft, fontSize: 12, shadows: _onFloor)),
         const SizedBox(height: 12),
         if (list.isEmpty)
           // ⚠️ 量不到時照實說，不畫成沒做到
@@ -534,6 +581,7 @@ class _HabitCard extends StatelessWidget {
   final int streak;
   final TimeOfDay time;
   final VoidCallback onToggle;
+  final VoidCallback onChecked;
   final VoidCallback onTap;
 
   const _HabitCard({
@@ -543,6 +591,7 @@ class _HabitCard extends StatelessWidget {
     required this.streak,
     required this.time,
     required this.onToggle,
+    required this.onChecked,
     required this.onTap,
   });
 
@@ -555,7 +604,7 @@ class _HabitCard extends StatelessWidget {
         key: Key('plan-habit-${item.id}'),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A3070),
+          color: const Color(0xE62A3070),
           borderRadius: BorderRadius.circular(26),
           border: Border.all(color: ReportColors.border),
           boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 4))],
@@ -600,30 +649,13 @@ class _HabitCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // ⚠️ 沒勾是空的方格，不打叉、不用紅
-                  Semantics(
-                    button: true,
-                    label: checked ? 'Done' : 'Mark done',
-                    child: InkWell(
-                      key: Key('plan-check-${item.id}'),
-                      onTap: due ? onToggle : null,
-                      borderRadius: BorderRadius.circular(_squareRadius),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: checked ? ReportColors.gold : Colors.white.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(_squareRadius),
-                          border: Border.all(color: checked ? ReportColors.gold : ReportColors.border, width: 1.5),
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: 30,
-                          color: checked ? ReportColors.navy : Colors.white.withValues(alpha: 0.35),
-                        ),
-                      ),
-                    ),
+                  // ⚠️ 沒勾是空的方格，不打叉、不用紅；勾下去只有當下的回饋（Q36）
+                  PlanCheckButton(
+                    key: Key('plan-check-${item.id}'),
+                    checked: checked,
+                    enabled: due,
+                    onToggle: onToggle,
+                    onChecked: onChecked,
                   ),
                 ],
               ),
@@ -709,7 +741,7 @@ class _QuestCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        color: reward != null ? const Color(0xFF3A3466) : const Color(0xFF242A62),
+        color: reward != null ? const Color(0xEB3A3466) : const Color(0xE6242A62),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: reward != null ? const Color(0x80FFD772) : ReportColors.border),
       ),
