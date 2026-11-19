@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     bed_start_kind    TEXT,
     bed_end_kind      TEXT,
     bridged_unlocks   INTEGER,                -- 偵測時跨過幾次半夜的短解鎖（<30 秒）；0＝正常偵測，NULL＝舊資料／舊版 App
+    phone_model       TEXT,                   -- 那一晚用的手機（App 給的顯示名稱，例如 Samsung Galaxy S24+）；NULL＝舊資料
 
     -- ── 候選安靜期（2026-11-16）────────────────────────────────────
     -- App 送上來的**所有** ≥60 分鐘的安靜期（JSON 陣列）。手機端的規則是
@@ -416,6 +417,7 @@ CREATE TABLE IF NOT EXISTS camera_nightly (
     csv_name       TEXT,                     -- 哪一份錄影算出來的
     motion_curve   TEXT,                     -- JSON：每 5 分鐘有幾成時間在動（Sleep Stages 卡的 Camera 線）
     motion_episodes TEXT,                    -- JSON：每一段動作的開始與秒數（早晨報告 Movement 點開，2026-11-15）
+    camera_model   TEXT,                     -- 哪一台攝影機（匯入時的 CAMERA_MODEL，例如 Tapo C200）；NULL＝舊資料
     created_at     TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -462,6 +464,36 @@ CREATE TABLE IF NOT EXISTS camera_clips (
 --    （game/state.py），理由同挑戰進度：事實來源只能有一個，受測者事後
 --    補填某一晚時 XP 要自動更正。存一個累加值的話，補填那一晚就永遠少算。
 -- ⚠️ 三張都掛 ON DELETE CASCADE——知情同意書承諾「退出即刪除」。
+
+-- 每個人自己選讓好友看到什麼（2026-11-15，social/sharing.py）。沒有這一列＝全部用預設。
+-- items 是 JSON {項目: true/false}，只存使用者改過的；不認得的 key 讀的時候忽略。
+-- pet_species：好友頁畫他的寵物用（狗／貓，原本只存在手機上）。
+-- scene：動態卡的場景（social/sharing.SCENES，2026-11-16），自己選一張。
+CREATE TABLE IF NOT EXISTS friend_sharing (
+    user_id        TEXT NOT NULL,
+    items          TEXT,
+    time_precision TEXT,
+    pet_species    TEXT,
+    scene          TEXT,
+    updated_at     TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 好友頁的即時狀態（2026-11-19，social/live_status.py）：按 Start Sleep 寫 started_at、
+-- Out of bed 寫 ended_at、Cancel 整列刪掉。一個人只有一列（只記最近一次）。
+-- 時刻是手機的牆鐘時間（不帶時區，同 nightly_behavior.bed_start_at）。
+-- ⚠️ 這張表不進評分、不給 XP；好友看不看得到由 friend_sharing 的 live_status 決定（預設關）。
+CREATE TABLE IF NOT EXISTS live_sleep_status (
+    user_id     TEXT NOT NULL,
+    started_at  TEXT,
+    ended_at    TEXT,
+    updated_at  TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS user_game_state (
     user_id          TEXT NOT NULL,
@@ -518,6 +550,22 @@ CREATE TABLE IF NOT EXISTS friendships (
     PRIMARY KEY (user_id, friend_id),
     FOREIGN KEY (user_id)   REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- ── 好友小鎮的拜訪（2026-11-17）─────────────────────────────────
+-- 摸摸或一句預設的話（social/town.KINDS）。同一個人對同一個朋友一天（起床日）一次 → 主鍵。
+-- ⚠️ 不給 XP、不影響分數、不推播。存 social/town.VISIT_KEEP_DAYS 天（寫入時順手刪舊的）。
+-- ⚠️ 兩邊都掛 CASCADE（退出即刪除）；解除好友時 remove_friendship 另外刪兩個方向的拜訪。
+CREATE TABLE IF NOT EXISTS friend_visits (
+    sender_id   TEXT NOT NULL,
+    receiver_id TEXT NOT NULL,
+    day         TEXT NOT NULL,                -- 起床日（social/town.visit_day）
+    kind        TEXT NOT NULL,                -- social/town.KINDS 的 key
+    created_at  TEXT NOT NULL,
+
+    PRIMARY KEY (sender_id, receiver_id, day),
+    FOREIGN KEY (sender_id)   REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (receiver_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 -- ── 起床自評（2026-11-12）──────────────────────────────────────
@@ -592,6 +640,7 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     -- 每 15 分鐘的活動程度：JSON 96 格 [sleep|still|active|high|other, 步數] 或 null（沒戴錶）；
     -- 來源同上，set_garmin_activity_quarters 寫（2026-11-15，Active time 的時間軸）
     activity_quarters    TEXT,
+    stress_avg     REAL,                     -- 那一天每 3 分鐘壓力讀數的平均；只有示範帳號存（本人的從原始檔現算），排行榜 Chill 用
     updated_at           TEXT NOT NULL,
 
     PRIMARY KEY (user_id, date),
@@ -634,6 +683,8 @@ COLUMN_MIGRATIONS = [
     ("camera_nightly", "motion_curve", "TEXT"),
     ("camera_nightly", "motion_episodes", "TEXT"),
     ("garmin_daily", "steps_hourly", "TEXT"),
+    # 2026-11-16：動態卡的場景（自己選）
+    ("friend_sharing", "scene", "TEXT"),
     ("garmin_daily", "resting_kcal", "INTEGER"),
     ("garmin_daily", "total_kcal", "INTEGER"),
     ("garmin_daily", "sleeping_sec", "INTEGER"),
@@ -683,6 +734,9 @@ COLUMN_MIGRATIONS = [
     # 2026-11-15：就寢偵測第 4 條規則（半夜看一下時間的短解鎖可以跨過去）。
     #             記這一晚跨過了幾次；0＝正常偵測，NULL＝舊資料／舊版 App 沒送。只供分析、不顯示
     ("nightly_behavior", "bridged_unlocks", "INTEGER"),
+    ("nightly_behavior", "phone_model", "TEXT"),
+    ("camera_nightly", "camera_model", "TEXT"),
+    ("garmin_daily", "stress_avg", "REAL"),
     # 2026-11-16：候選安靜期與「誰挑的」（見 behavior/lights_out_resolve.py）。
     ("nightly_behavior", "quiet_candidates", "TEXT"),
     ("nightly_behavior", "lights_out_pick", "TEXT"),
@@ -1032,8 +1086,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             adherence_minutes, is_late, source="phone",
                             db_path=None, efficiency=None,
                             bed_start_kind=None, bed_end_kind=None,
-                            bridged_unlocks=None, quiet_candidates=None,
-                            lights_out_pick=None):
+                            bridged_unlocks=None, phone_model=None,
+                            quiet_candidates=None, lights_out_pick=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -1096,6 +1150,12 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
              bed_end_kind if eff.get("bed_end_at") else None,
              bridged_unlocks, quiet_candidates, lights_out_pick),
         )
+        # 手機型號：有給才寫，沒給（舊版 App、補送）就留著之前的，不洗成 NULL
+        if phone_model:
+            conn.execute(
+                "UPDATE nightly_behavior SET phone_model = ? WHERE user_id = ? AND date = ?",
+                (phone_model, user_id, date),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1168,6 +1228,19 @@ def get_nightly_behavior(user_id, days=30, db_path=None):
 # ═══════════════════════════════════════════════════════════════════
 # Tier B：穿戴裝置資料（唯讀給 API，寫入只由上游 pipeline / adapter 呼叫）
 # ═══════════════════════════════════════════════════════════════════
+
+def has_wearable_source(user_id, source, db_path=None):
+    """這個帳號有沒有任何一晚是這個來源（例如 'garmin'）。"""
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM wearable_nightly WHERE user_id = ? AND source = ?",
+            (user_id, source),
+        ).fetchone()
+        return bool(dict(row)["n"])
+    finally:
+        conn.close()
+
 
 def get_wearable_source(user_id, date, db_path=None):
     """
@@ -1378,6 +1451,12 @@ def upsert_camera_nightly(user_id, date, result, db_path=None):
              json.dumps(result["motion_episodes"]) if result.get("motion_episodes") is not None else None,
              now_iso()),
         )
+        # 哪一台攝影機（2026-11-16）：另一道 UPDATE，上面那句 upsert 的欄位清單不動
+        if result.get("camera_model"):
+            conn.execute(
+                "UPDATE camera_nightly SET camera_model = ? WHERE user_id = ? AND date = ?",
+                (result["camera_model"], user_id, date),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -1861,6 +1940,123 @@ def get_challenge_progress(user_id, db_path=None):
 #    `ON CONFLICT(...) DO UPDATE SET x = excluded.x`）。別的寫法在 SQLite
 #    會過、在 MariaDB 會直接語法錯誤——而正式環境跑的是 MariaDB。
 
+def get_friend_sharing(user_id, db_path=None):
+    """friend_sharing 那一列 → {"items": {...}, "time_precision", "pet_species", "scene"}；沒有就 None。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM friend_sharing WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return None
+    r = dict(rows[0])
+    try:
+        items = json.loads(r.get("items") or "{}")
+    except ValueError:
+        items = {}
+    return {"items": items if isinstance(items, dict) else {},
+            "time_precision": r.get("time_precision"), "pet_species": r.get("pet_species"),
+            "scene": r.get("scene")}
+
+
+def set_friend_sharing(user_id, items=None, time_precision=None, pet_species=None, scene=None,
+                       db_path=None):
+    """改分享設定：items 併進舊的（只改有給的 key），其他有給才改。驗證由呼叫端做。"""
+    old = get_friend_sharing(user_id, db_path) or {}
+    merged = {**(old.get("items") or {}), **(items or {})}
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO friend_sharing (user_id, items, time_precision, pet_species, scene,
+                                        updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                items          = excluded.items,
+                time_precision = excluded.time_precision,
+                pet_species    = excluded.pet_species,
+                scene          = excluded.scene,
+                updated_at     = excluded.updated_at
+            """,
+            (user_id, json.dumps(merged, sort_keys=True),
+             time_precision if time_precision is not None else old.get("time_precision"),
+             pet_species if pet_species is not None else old.get("pet_species"),
+             scene if scene is not None else old.get("scene"),
+             now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_live_sleep_status(user_id, db_path=None):
+    """live_sleep_status 那一列 → dict；沒有就 None。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM live_sleep_status WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return dict(rows[0]) if rows else None
+
+
+def set_live_sleep_status(user_id, started_at=None, ended_at=None, db_path=None):
+    """
+    寫即時狀態。started_at 有給＝剛按 Start Sleep（ended_at 清掉）；
+    只給 ended_at＝按了 Out of bed（started_at 留著）。驗證由呼叫端做。
+    """
+    old = get_live_sleep_status(user_id, db_path) or {}
+    if started_at is not None:
+        new_start, new_end = started_at, None
+    else:
+        new_start, new_end = old.get("started_at"), ended_at
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO live_sleep_status (user_id, started_at, ended_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                started_at = excluded.started_at,
+                ended_at   = excluded.ended_at,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, new_start, new_end, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_live_sleep_status(user_id, db_path=None):
+    """按了 Cancel：整列刪掉（沒開始過就不該留著 Asleep）。"""
+    conn = connect(db_path)
+    try:
+        conn.execute("DELETE FROM live_sleep_status WHERE user_id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def prebed_phone_minutes(user_id, date, db_path=None):
+    """那一晚睡前 60 分鐘手機一共用了幾分鐘（所有 App 加總）；沒有紀錄 → None。
+    ⚠️ 只回加總：哪些 App 是「永遠不給」的（social/sharing.NEVER_SHARED）。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT prebed_minutes FROM app_usage_daily WHERE user_id = ? AND date = ?",
+            (user_id, date),
+        ).fetchall()
+    finally:
+        conn.close()
+    vals = [r[0] if not isinstance(r, dict) else r["prebed_minutes"] for r in rows]
+    vals = [v for v in vals if v is not None]
+    return round(sum(vals), 1) if vals else None
+
+
 def get_game_state(user_id, db_path=None):
     """user_game_state 那一列；沒有就回 None（代表還沒穿過任何東西）。"""
     conn = connect(db_path)
@@ -2077,8 +2273,77 @@ def remove_friendship(user_id, friend_id, db_path=None):
             "OR (user_id = ? AND friend_id = ?)",
             (user_id, friend_id, friend_id, user_id),
         )
+        # 小鎮的拜訪也一起消失（兩個方向）
+        conn.execute(
+            "DELETE FROM friend_visits WHERE (sender_id = ? AND receiver_id = ?) "
+            "OR (sender_id = ? AND receiver_id = ?)",
+            (user_id, friend_id, friend_id, user_id),
+        )
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+def add_friend_visit(sender_id, receiver_id, day, kind, keep_since, db_path=None):
+    """
+    存一次拜訪。同一天已經送過 → False（不覆蓋，一天一次）。
+    keep_since：比這天早的拜訪順手刪掉（所有人的，存 14 天的規則在 social/town）。
+    """
+    conn = connect(db_path)
+    try:
+        conn.execute("DELETE FROM friend_visits WHERE day < ?", (keep_since,))
+        exists = conn.execute(
+            "SELECT kind FROM friend_visits WHERE sender_id = ? AND receiver_id = ? AND day = ?",
+            (sender_id, receiver_id, day),
+        ).fetchall()
+        if exists:
+            conn.commit()
+            return False
+        conn.execute(
+            "INSERT INTO friend_visits (sender_id, receiver_id, day, kind, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sender_id, receiver_id, day, kind, now_iso()),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def list_friend_visits(user_id, day, db_path=None):
+    """那一天的拜訪：(我收到的 [(sender_id, kind)]，我送出的 {receiver_id: kind})。舊的先送的在前。"""
+    conn = connect(db_path)
+    try:
+        got = conn.execute(
+            "SELECT sender_id, kind FROM friend_visits WHERE receiver_id = ? AND day = ? "
+            "ORDER BY created_at",
+            (user_id, day),
+        ).fetchall()
+        sent = conn.execute(
+            "SELECT receiver_id, kind FROM friend_visits WHERE sender_id = ? AND day = ?",
+            (user_id, day),
+        ).fetchall()
+        return ([(r["sender_id"], r["kind"]) for r in got],
+                {r["receiver_id"]: r["kind"] for r in sent})
+    finally:
+        conn.close()
+
+
+def list_visits_received(user_ids, since, db_path=None):
+    """這幾個人從 since（起床日，含）起收到的拜訪：[(receiver_id, sender_id, day)]，先送的在前。
+    動態卡的 🐾 數用（2026-11-19）。"""
+    if not user_ids:
+        return []
+    marks = ", ".join("?" for _ in user_ids)
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            f"SELECT receiver_id, sender_id, day FROM friend_visits "
+            f"WHERE receiver_id IN ({marks}) AND day >= ? ORDER BY created_at",
+            (*user_ids, since),
+        ).fetchall()
+        return [(r["receiver_id"], r["sender_id"], r["day"]) for r in rows]
     finally:
         conn.close()
 
@@ -2214,6 +2479,20 @@ def get_garmin_daily(user_id, date, db_path=None):
     finally:
         conn.close()
     return _garmin_daily_row(rows[0]) if rows else None
+
+
+def set_garmin_stress_avg(user_id, date, value, db_path=None):
+    """**只**寫那一天的平均壓力（同 set_garmin_steps_hourly：存白天資料時不會被蓋掉）。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            "UPDATE garmin_daily SET stress_avg = ? WHERE user_id = ? AND date = ?",
+            (value, user_id, date),
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
 
 
 def list_garmin_daily(user_id, since, until, db_path=None):

@@ -37,6 +37,9 @@ class SettingsScreen extends StatefulWidget {
   /// 打開 Health Connect 的設定頁（B8）。
   final VoidCallback? onHealthConnectTap;
 
+  /// What friends can see（2026-11-15）。null＝這支 build 沒有後端，點了說要連上後端。
+  final VoidCallback? onFriendSharingTap;
+
   /// 鬧鐘的設定存在哪、原生端是誰（可注入，測試換成假的）。
   final KeyValueStore store;
   final AlarmScheduler alarmScheduler;
@@ -61,6 +64,7 @@ class SettingsScreen extends StatefulWidget {
     this.onLogout,
     this.onBedtimeGuardTap,
     this.onHealthConnectTap,
+    this.onFriendSharingTap,
     this.store = const PlatformKeyValueStore(),
     this.dataSection,
     this.alarmScheduler = const PlatformAlarmScheduler(),
@@ -313,6 +317,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap:
                       widget.onHealthConnectTap ??
                       () => _showComingSoon("Health Connect"),
+                ),
+
+                const SizedBox(height: 12),
+
+                _buildSettingTile(
+                  icon: Icons.visibility_rounded,
+                  title: "What friends can see",
+                  subtitle: "Choose what your friends see about your nights",
+                  onTap: widget.onFriendSharingTap ??
+                      () => _showComingSoon("Sharing with friends (needs the backend)"),
                 ),
 
                 const SizedBox(height: 12),

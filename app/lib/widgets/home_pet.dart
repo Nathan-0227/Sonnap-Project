@@ -34,6 +34,12 @@ class HomePet extends StatefulWidget {
   /// 動畫速度倍率。晚上版用 < 1 表現想睡。
   final double speed;
 
+  /// 指定畫狗或貓（好友頁畫朋友的寵物）；null＝照自己選的（PetChoice）。
+  final PetSpecies? species;
+
+  /// false＝靜止（好友卡一排頭像用；一排寵物同時動太吵）。預設照舊會動。
+  final bool animate;
+
   const HomePet({
     super.key,
     required this.mood,
@@ -42,6 +48,8 @@ class HomePet extends StatefulWidget {
     this.accessoryEmoji,
     this.growthStage,
     this.speed = 1.0,
+    this.species,
+    this.animate = true,
   });
 
   @override
@@ -105,7 +113,14 @@ class _HomePetState extends State<HomePet> {
     _checkLayeredAssets();
   }
 
-  PetDefinition get _petDef => petDefinitionFor(PetChoice.current.value);
+  PetDefinition get _petDef =>
+      petDefinitionFor(widget.species ?? PetChoice.current.value);
+
+  @override
+  void didUpdateWidget(HomePet old) {
+    super.didUpdateWidget(old);
+    if (old.species != widget.species) _onSpecies();
+  }
 
   Future<void> _checkLayeredAssets() async {
     final pose = _petDef.poseFor(petMoodFromBackend(widget.mood));
@@ -123,6 +138,7 @@ class _HomePetState extends State<HomePet> {
       width: widget.size,
       height: widget.size,
       fit: BoxFit.contain,
+      animate: widget.animate,
       errorBuilder: (context, error, stack) => SizedBox.square(
         dimension: widget.size,
         child: Icon(
@@ -148,6 +164,7 @@ class _HomePetState extends State<HomePet> {
             accessory: layered,
             size: widget.size,
             speed: widget.speed,
+            animate: widget.animate,
           );
 
     return SizedBox.square(

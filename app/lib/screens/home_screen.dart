@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
+import '../services/live_sleep_status.dart';
 import '../services/account_service.dart';
 import '../services/sleep_sounds.dart';
 import '../services/alarm.dart';
@@ -104,6 +105,8 @@ class HomeScreen extends StatefulWidget {
 
   /// 手機使用權限（偵測放下手機的時刻要它）。沒開時首頁出現一條提示（2026-11-19 使用者定）。
   final UsageStatsService usageStats;
+  /// 好友頁的即時狀態（`POST /sleep-status`）。null＝這支 build 沒有後端。
+  final SleepStatusSink? sleepStatus;
 
   const HomeScreen({
     super.key,
@@ -118,6 +121,7 @@ class HomeScreen extends StatefulWidget {
     this.onOpenInsights,
     this.startSleepRequests,
     this.onOpenSettings,
+    this.sleepStatus,
     this.clock = DateTime.now,
     this.displayName = kFallbackDisplayName,
     this.repository = const AssetSleepRepository(),
@@ -401,6 +405,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           store: widget.bedMarks,
           startAt: startAt,
           clock: widget.clock,
+          sleepStatus: widget.sleepStatus,
           // 剛按 Start Sleep 才播「趴下睡著」的過場；半夜重開 App 不播
           playIntro: introNow,
           onEnded: (end) {
@@ -709,6 +714,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _startSleep() async {
     final now = widget.clock();
     await widget.bedMarks.markStart(now);
+    // 好友頁的即時狀態：只試一次、不等它（送不出去不擋睡覺）
+    unawaited(sendSleepStatus(widget.sleepStatus, 'start', now));
     // 鬧鐘只在按了 Start Sleep 才排（使用者決定）。
     await _alarm.onStartSleep(now, _bedtime);
     _introNext = true;

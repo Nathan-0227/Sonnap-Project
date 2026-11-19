@@ -9,6 +9,8 @@
    （畫成 0 會被讀成整晚沒有 REM；減出來的淺睡會把 REM 吃進去）
 3. daily 帶出步數等白天資料，而且是輕量版（不帶 awake_hr、move_iq——一年份太慢）
 4. 那些格子只讀不寫：/insights 不會改到任何一晚的分數
+6. 一年份的 daily 只有 Garmin 原始檔的主人才讀那份檔（_owns_garmin_file）——
+   別的帳號（示範帳號）的壓力不能是本人的
 
 用臨時的 SQLite 資料庫跑。不需要 pytest：
 
@@ -106,6 +108,20 @@ if hist:
     check("完整版有 awake_hr 鍵", "awake_hr" in hist[-1], True)
 else:
     print("  - 那天沒有白天資料，跳過")
+
+print("【6】原始檔只給它的主人")
+_orig = main.sleep_heart_rate.stress_day_averages
+main.sleep_heart_rate.stress_day_averages = lambda records: {d1: 77.0}
+try:
+    other = client.post("/users", json={"display_name": "Other", "target_bedtime": "23:30"}).json()["user_id"]
+    db.upsert_wearable_nightly(other, d1, "health_connect", dict(base), db_path=TMP)
+    db.upsert_garmin_daily(other, d1, {"steps": 5000, "step_goal": 9000}, db_path=TMP)
+    mine = {x["date"]: x for x in client.get("/insights", params={"user_id": uid, "days": 365}).json()["daily"]}
+    theirs = {x["date"]: x for x in client.get("/insights", params={"user_id": other, "days": 365}).json()["daily"]}
+    check("主人讀得到原始檔的壓力（反向對照）", mine[d1].get("stress_avg"), 77.0)
+    check("別的帳號讀不到本人的壓力", theirs[d1].get("stress_avg") == 77.0, False)
+finally:
+    main.sleep_heart_rate.stress_day_averages = _orig
 
 if FAILURES:
     print(f"\n✗ {len(FAILURES)} 項失敗")
