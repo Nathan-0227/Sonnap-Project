@@ -242,6 +242,14 @@ void main() {
       expect(find.textContaining('on-time mornings'), findsNothing, reason: '少字（使用者 11-19）');
       expect(find.byKey(const Key('plan-schedule')), findsNothing,
           reason: '作息跟路合成一張卡，不再另外一張作息條');
+      // 起點、終點、太陽先找使用者的圖（11-19：不要系統圖示）；沒圖時才退回圖示
+      for (final asset in [kJourneyStartAsset, kJourneyGoalAsset, kJourneySunAsset]) {
+        expect(
+            find.byWidgetPredicate(
+                (w) => w is Image && w.image is AssetImage && (w.image as AssetImage).assetName == asset),
+            findsWidgets,
+            reason: asset);
+      }
       expect(find.byKey(const Key('journey-goal')), findsOneWidget);
       expect(find.byKey(const Key('journey-notice')), findsOneWidget, reason: '剛前進到第 2 站');
       expect(tester.widget<Text>(find.byKey(const Key('plan-bedtime'))).data, '03:00',

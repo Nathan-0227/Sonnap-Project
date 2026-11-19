@@ -26,6 +26,21 @@ String journeyHeadAsset(PetSpecies s) => s == PetSpecies.cat
     ? 'assets/plan/journey_cat.png'
     : 'assets/plan/journey_dog.png';
 
+/// Journey 的小圖（使用者生成，11-19：不要系統圖示）。沒有圖時各自退回原本的樣子。
+const String kJourneyStartAsset = 'assets/plan/journey_start.png';
+const String kJourneyGoalAsset = 'assets/plan/journey_goal.png';
+const String kJourneySunAsset = 'assets/plan/journey_sun.png';
+
+Widget journeyArt(String asset, double size, Widget fallback) => SizedBox(
+  width: size,
+  height: size,
+  child: Image.asset(
+    asset,
+    fit: BoxFit.contain,
+    errorBuilder: (_, _, _) => fallback,
+  ),
+);
+
 /// 作息＋Journey 合成一張卡（11-19 使用者定：作息條本來就寫今晚幾點，路直接畫在它下面）。
 ///
 ///   🌙 03:00   ☀ 10:00               7h ›     ← 點了開轉盤（Journey 進行中是鎖住的）
@@ -316,17 +331,9 @@ class JourneySection extends StatelessWidget {
                 j.onTimeNeeded,
                 (i) => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: Icon(
-                    i < j.onTimeStreak
-                        ? Icons.wb_sunny_rounded
-                        : Icons.wb_sunny_outlined,
-                    key: Key(
-                      'journey-sun-$i-${i < j.onTimeStreak ? 'on' : 'off'}',
-                    ),
-                    size: 20,
-                    color: i < j.onTimeStreak
-                        ? ReportColors.gold
-                        : ReportColors.dim,
+                  child: KeyedSubtree(
+                    key: Key('journey-sun-$i-${i < j.onTimeStreak ? 'on' : 'off'}'),
+                    child: _sun(i < j.onTimeStreak),
                   ),
                 ),
               ),
@@ -334,6 +341,29 @@ class JourneySection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// 準時起床的太陽：做到的是原本的圖、還沒做到的是灰的半透明（同一張圖，不另外生）。
+  Widget _sun(bool on) {
+    final art = journeyArt(
+      kJourneySunAsset,
+      24,
+      Icon(on ? Icons.wb_sunny_rounded : Icons.wb_sunny_outlined,
+          size: 20, color: on ? ReportColors.gold : ReportColors.dim),
+    );
+    if (on) return art;
+    return Opacity(
+      opacity: 0.35,
+      child: ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.33, 0.33, 0.33, 0, 0, //
+          0.33, 0.33, 0.33, 0, 0, //
+          0.33, 0.33, 0.33, 0, 0, //
+          0, 0, 0, 1, 0,
+        ]),
+        child: art,
+      ),
     );
   }
 
@@ -426,6 +456,7 @@ class _JourneyRoadState extends State<JourneyRoad>
     with SingleTickerProviderStateMixin {
   static const double _end = 30; // 兩端圓的直徑
   static const double _marker = 50;
+  static const double _art = 40; // 起點、終點的圖
   static const double _height = 54;
 
   late final AnimationController _walk = AnimationController(
@@ -534,34 +565,45 @@ class _JourneyRoadState extends State<JourneyRoad>
                       ),
                     ),
                     Positioned(
-                      left: 0,
-                      top: cy - _end / 2,
-                      child: _circle(
-                        _end,
-                        ReportColors.lilac.withValues(alpha: 0.25),
-                        ReportColors.lilac,
-                        const Icon(
-                          Icons.wb_twilight_rounded,
-                          size: 16,
-                          color: ReportColors.lilac,
+                      left: (_end - _art) / 2,
+                      top: cy - _art / 2,
+                      child: KeyedSubtree(
+                        key: const Key('journey-road-start'),
+                        child: journeyArt(
+                          kJourneyStartAsset,
+                          _art,
+                          // 還沒有使用者的圖：退回原本的圓圈
+                          Center(
+                            child: _circle(
+                              _end,
+                              ReportColors.lilac.withValues(alpha: 0.25),
+                              ReportColors.lilac,
+                              const Icon(Icons.wb_twilight_rounded,
+                                  size: 16, color: ReportColors.lilac),
+                            ),
+                          ),
                         ),
-                        const Key('journey-road-start'),
                       ),
                     ),
                     if (!atGoal)
                       Positioned(
-                        left: right - _end / 2,
-                        top: cy - _end / 2,
-                        child: _circle(
-                          _end,
-                          ReportColors.gold.withValues(alpha: 0.18),
-                          ReportColors.gold,
-                          const Icon(
-                            Icons.flag_rounded,
-                            size: 16,
-                            color: ReportColors.gold,
+                        left: right - _art / 2,
+                        top: cy - _art / 2,
+                        child: KeyedSubtree(
+                          key: const Key('journey-goal'),
+                          child: journeyArt(
+                            kJourneyGoalAsset,
+                            _art,
+                            Center(
+                              child: _circle(
+                                _end,
+                                ReportColors.gold.withValues(alpha: 0.18),
+                                ReportColors.gold,
+                                const Icon(Icons.flag_rounded,
+                                    size: 16, color: ReportColors.gold),
+                              ),
+                            ),
                           ),
-                          const Key('journey-goal'),
                         ),
                       ),
                     Positioned(
@@ -616,14 +658,8 @@ class _JourneyRoadState extends State<JourneyRoad>
     );
   }
 
-  Widget _circle(
-    double size,
-    Color fill,
-    Color border,
-    Widget child,
-    Key key,
-  ) => Container(
-    key: key,
+  Widget _circle(double size, Color fill, Color border, Widget child) =>
+      Container(
     width: size,
     height: size,
     decoration: BoxDecoration(
