@@ -237,6 +237,9 @@ finally:
 
 print()
 print("【即時狀態】示範帳號（2026-11-19）")
+# 模擬「即時狀態上線之前建的示範帳號」：分享設定裡把 live_status 關掉
+for _uid, _ in demo_accounts.demo_users(TMP):
+    db.set_friend_sharing(_uid, items={"live_status": False}, db_path=TMP)
 noon = datetime(2026, 11, 25, 14, 0)
 check("白天：Mia 睡著、Leo 起床了、Yuki／Ken 醒著（看時鐘）",
       demo_accounts.set_live_demo(now=noon, db_path=TMP),
