@@ -289,6 +289,9 @@ def set_live_demo(now=None, db_path=None):
     now = (now or datetime.now(TZ)).replace(tzinfo=None, microsecond=0)
     out = {}
     for uid, name in demo_users(db_path):
+        # 即時狀態的分享項目是後來才加的：在那之前建的示範帳號，「全開」不含它（2026-11-19 實機發現，
+        # 好友頁四個人都寫 Live status not shared）。這裡一起打開，不用為了它重建整批資料
+        db.set_friend_sharing(uid, items={"live_status": True}, db_path=db_path)
         db.clear_live_sleep_status(uid, db_path=db_path)
         plan = DEMO_LIVE.get(name)
         if plan == "up":
