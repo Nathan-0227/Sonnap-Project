@@ -57,7 +57,7 @@ import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine,
                       lights_out_resolve, morning_tips,
-                      pet_state, sleep_efficiency)
+                      pet_state, sleep_efficiency, wake)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
 # 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
@@ -175,6 +175,7 @@ class CreateUserRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=40,
                               description="Nickname. No email, no password.")
     target_bedtime: str = Field("23:30", description='Target bedtime, "HH:MM".')
+    target_wake: Optional[str] = Field(None, description='Target wake time, "HH:MM".')
     age_band: str = Field("young_adult", description="Age band used for scoring.")
     study_cohort: str = Field("L0", description="L0 phone only / L1 wearable / L2 researcher")
     wearable_brand: Optional[str] = Field(
@@ -184,6 +185,7 @@ class CreateUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     display_name: Optional[str] = Field(None, min_length=1, max_length=40)
     target_bedtime: Optional[str] = None
+    target_wake: Optional[str] = None
     age_band: Optional[str] = None
     study_cohort: Optional[str] = None
     wearable_brand: Optional[str] = None
@@ -769,6 +771,17 @@ def resolve_mood(behavior_row: Optional[dict], wearable_row: Optional[dict]):
 # 使用者
 # ═══════════════════════════════════════════════════════════════════
 
+def _check_hhmm(name, value):
+    """"HH:MM" 格式檢查；None 不檢查。格式錯回 422（不讓壞值進資料庫）。"""
+    if value is None:
+        return
+    try:
+        adherence.parse_bedtime(value)
+    except (ValueError, IndexError):
+        raise HTTPException(
+            status_code=422, detail=f'{name} is malformed: {value!r}; expected "HH:MM".')
+
+
 @app.post("/users", status_code=201)
 async def create_user(req: CreateUserRequest):
     """
@@ -785,6 +798,7 @@ async def create_user(req: CreateUserRequest):
             status_code=422,
             detail=f'target_bedtime is malformed: {req.target_bedtime!r}; expected "HH:MM".',
         )
+    _check_hhmm("target_wake", req.target_wake)
 
     db.init_db()   # 第一次呼叫就把表建好，省掉「忘了跑 db.py --init」這個坑
     user_id = db.create_user(
@@ -794,6 +808,8 @@ async def create_user(req: CreateUserRequest):
         study_cohort=req.study_cohort,
         wearable_brand=req.wearable_brand,
     )
+    if req.target_wake:
+        db.update_user(user_id, target_wake=req.target_wake)
     return {"user_id": user_id, **db.get_user(user_id)}
 
 
@@ -827,6 +843,7 @@ async def update_user(user_id: str, req: UpdateUserRequest):
                 detail=f'target_bedtime is malformed: {fields["target_bedtime"]!r}; '
                        f'expected "HH:MM".',
             )
+    _check_hhmm("target_wake", fields.get("target_wake"))
 
     try:
         db.update_user(user_id, **fields)
@@ -980,6 +997,8 @@ async def post_nightly(req: NightlyRequest):
         quiet_candidates=(None if req.quiet_candidates is None
                           else json.dumps(req.quiet_candidates, ensure_ascii=False)),
         lights_out_pick=lights_out_resolve.PICK_PHONE,
+        # 目標起床時間的快照（睡眠計畫「準時起床」）。理由同 target_bedtime。
+        target_wake=user.get("target_wake"),
     )
     # 回應把兩者合起來。⚠️ 達成度與效率都**只在後端算**，Dart 端照抄不重算
     #    （CLAUDE.md「達成度只在後端算」——兩份定義漂移時不會有任何錯誤訊息）。
@@ -1563,6 +1582,19 @@ async def get_camera_clip(name: str):
                         headers={"Cache-Control": "private, max-age=86400"})
 
 
+def _behavior_rows_with_wake(user_id, days):
+    """
+    行為資料＋每晚的起床判定（behavior/wake.py）。
+
+    ⚠️ 挑戰引擎的兩個呼叫端（/challenges、遊戲化）都要經過這裡：
+       沒併的話「準時起床」一律是 None，看起來跟「沒量到」一樣、不會報錯。
+    """
+    rows = db.get_nightly_behavior(user_id, days=days)
+    watch = {w["date"]: w.get("wake_time")
+             for w in db.get_wearable_nightly(user_id, days=days)}
+    return wake.annotate_rows(rows, watch)
+
+
 @app.get("/challenges")
 async def get_challenges(
     user_id: str = Query(...),
@@ -1598,7 +1630,7 @@ async def get_challenges(
     # ⚠️ 取的夜數要涵蓋最長的窗格，否則長窗格的挑戰會少看到資料
     #    而回報 insufficient_data。不要寫死 30。
     need_days = max(DEFAULT_HISTORY_DAYS, max(c["window_days"] for c in defs))
-    rows = db.get_nightly_behavior(user_id, days=need_days)
+    rows = _behavior_rows_with_wake(user_id, need_days)
 
     results = challenge_engine.evaluate_all(defs, rows, as_of=as_of)
     return {
@@ -1607,7 +1639,7 @@ async def get_challenges(
         "challenges": results,
         "notes": {
             "targets_are_behavioral": (
-                "Every challenge targets a behaviour (when you put the phone down), "
+                "Every challenge targets a behaviour (when you put the phone down or get up), "
                 "not a physiological outcome (minutes of deep sleep) - users cannot control the latter."
             ),
             "calibration": (
@@ -1644,7 +1676,7 @@ class EquipRequest(BaseModel):
 
 def _game_inputs(user_id):
     """一次撈齊 game/state.py 要的東西。挑戰達成與否一律由挑戰引擎判定。"""
-    behavior_rows = db.get_nightly_behavior(user_id, days=GAME_HISTORY_DAYS)
+    behavior_rows = _behavior_rows_with_wake(user_id, GAME_HISTORY_DAYS)
     wearable_rows = db.get_wearable_nightly(user_id, days=GAME_HISTORY_DAYS)
     achievement_rows = db.get_achievements(user_id)
     defs = db.get_challenges()

@@ -120,6 +120,11 @@ CREATE TABLE IF NOT EXISTS users (
 
     -- 目標就寢時間，"HH:MM"。這是 Tier A 一切計算的基準。
     target_bedtime  TEXT NOT NULL DEFAULT '23:30',
+    -- 目標起床時間，"HH:MM"（2026-11-19，睡眠計畫的「準時起床」）。
+    -- NULL = App 還沒送過（舊版 App）→ 準時起床一律「沒判」，不是「沒做到」。
+    -- 原本起床時間只存在手機上（鬧鐘用）；判準時要在後端（跨午夜只算一份），
+    -- 所以 App 改成跟就寢時間一樣 PATCH 上來。見 Research-Background/睡眠計畫.md。
+    target_wake     TEXT,
     timezone        TEXT NOT NULL DEFAULT '+08:00',
 
     -- 評分的分齡門檻要用（睡眠時長／REM／WASO 的參考區間都分齡）。
@@ -147,6 +152,8 @@ CREATE TABLE IF NOT EXISTS nightly_behavior (
     -- 使用者隨時可以改目標，改了之後歷史紀錄的達成度就會被追溯性地改寫，
     -- 那會讓「我上週明明有達成」變成「沒有達成」。存快照才可稽核。
     target_bedtime    TEXT NOT NULL,
+    -- 當晚的目標起床時間快照（理由同 target_bedtime）。NULL＝那時還沒設／舊資料。
+    target_wake       TEXT,
 
     -- 手機最後一次互動的時間。⚠️ 這**不是入睡時間**，是替代測量（proxy）。
     -- 有人放下手機後還會躺半小時。報告中必須誠實標註，比照本專案對
@@ -679,6 +686,9 @@ CREATE INDEX IF NOT EXISTS idx_block_events_user_date
 # 要改型別或刪欄位的話，SQLite 的標準作法是「建新表 → 搬資料 → 換名」，
 # 那已經超出這個機制的範圍，屆時請另寫一次性腳本。
 COLUMN_MIGRATIONS = [
+    # 2026-11-19：睡眠計畫的「準時起床」。目標存在使用者、每晚存一份快照。
+    ("users", "target_wake", "TEXT"),
+    ("nightly_behavior", "target_wake", "TEXT"),
     # 2026-11-13：攝影機整晚的動作曲線（只呈現、不計分）。Sleep Stages 卡點 Camera 疊上去。
     ("camera_nightly", "motion_curve", "TEXT"),
     ("camera_nightly", "motion_episodes", "TEXT"),
@@ -941,7 +951,7 @@ def update_user(user_id, db_path=None, **fields):
     更新使用者設定。只允許改白名單內的欄位——
     否則呼叫端一個打錯的鍵名就能寫進 user_id，而 SQLite 不會攔。
     """
-    allowed = {"display_name", "target_bedtime", "timezone",
+    allowed = {"display_name", "target_bedtime", "target_wake", "timezone",
                "age_band", "study_cohort", "wearable_brand"}
 
     # ⚠️ 順序很重要：先擋未知欄位，再處理「沒有東西要更新」。
@@ -1087,7 +1097,8 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
                             db_path=None, efficiency=None,
                             bed_start_kind=None, bed_end_kind=None,
                             bridged_unlocks=None, phone_model=None,
-                            quiet_candidates=None, lights_out_pick=None):
+                            quiet_candidates=None, lights_out_pick=None,
+                            target_wake=None):
     """
     寫入或覆寫某一晚的行為資料。
 
@@ -1150,6 +1161,13 @@ def upsert_nightly_behavior(user_id, date, target_bedtime, lights_out_at,
              bed_end_kind if eff.get("bed_end_at") else None,
              bridged_unlocks, quiet_candidates, lights_out_pick),
         )
+        # 目標起床時間的快照：有給才寫。沒設的人（舊版 App）留著之前的，
+        # 不洗成 NULL——同一晚重送時不該把已經記下的目標弄丟。
+        if target_wake:
+            conn.execute(
+                "UPDATE nightly_behavior SET target_wake = ? WHERE user_id = ? AND date = ?",
+                (target_wake, user_id, date),
+            )
         # 手機型號：有給才寫，沒給（舊版 App、補送）就留著之前的，不洗成 NULL
         if phone_model:
             conn.execute(
@@ -1789,6 +1807,26 @@ DEFAULT_CHALLENGES = [
         #
         # → D2 收到真實資料之後，照另外三個挑戰的作法重新校準：
         #   看達成率分布，選一個「最不規律的人也還有兩成機會達成」的值。
+    },
+    {
+        "challenge_id": "up_on_time",
+        "kind": "wake_time",
+        "title": "Up at your wake time",
+        "description": "Get up within an hour of your wake time, weekends too.",
+        "target_value": 60.0,       # |起床 − 目標| <= 60 分鐘（behavior/wake.py）
+        "window_days": 1,
+        "literature_ref": (
+            "Bootzin RR & Perlis ML (2011), stimulus control therapy - the expanded fifth "
+            "instruction is a regular rise time seven days a week, with days off within an hour "
+            "of work days. Windred et al. (2024) describe regular sleepers as falling within about "
+            "a one-hour window. Neither is a tested cutpoint. NOT Bootzin (1972): the original "
+            "four instructions say nothing about rise time."
+        ),
+        # ── 還沒有校準（2026-11-19）──────────────────────────────────
+        # ±60 是文獻裡唯一有的數字（臨床慣例），不是拿實測資料調的。
+        # 研究者本人「有按 Out of bed 或有手錶起床時刻」的夜晚很多，
+        # 但目標起床時間 11-19 以前只存在手機上，沒有歷史快照可以模擬。
+        # D2 收到資料後照另外三個挑戰的作法看達成率分布。
     },
 ]
 
