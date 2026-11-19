@@ -26,6 +26,9 @@ import 'services/home_service.dart';
 import 'services/morning_rating.dart';
 import 'services/morning_report.dart';
 import 'services/key_value_store.dart';
+import 'widgets/sleep_dial.dart';
+import 'services/alarm.dart';
+import 'screens/insights_screen.dart';
 import 'services/nightly_uploader.dart';
 import 'services/notification_service.dart';
 import 'services/pending_nightly.dart';
@@ -486,12 +489,25 @@ class _MainPageState extends State<MainPage> {
         onReminderChanged: _setReminder,
       ),
       FriendsScreen(service: _friends),
-      ReportScreen(
+      // Insights（2026-11-19 改版：頂端 Day／Week／Month／Year）。舊頁包在裡面一直掛著——
+      // 它背後負責偵測就寢時刻與上傳，見 InsightsScreen 的註解。
+      InsightsScreen(
         repository: _repository,
-        uploader: _uploader,
         cameraInsights: _cameraInsights,
-        challenges: _challenges,
-        home: _home,
+        morningReport: _morningReport,
+        game: _game,
+        goalMinutes: () async {
+          final wake = await const AlarmSettingsStore(PlatformKeyValueStore())
+              .wakeTime(targetBedtime);
+          return sleepSpan(targetBedtime, wake).inMinutes;
+        },
+        legacy: ReportScreen(
+          repository: _repository,
+          uploader: _uploader,
+          cameraInsights: _cameraInsights,
+          challenges: _challenges,
+          home: _home,
+        ),
       ),
       AssistantScreen(
         chat: _chat,
