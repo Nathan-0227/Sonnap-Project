@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/insights_periods.dart';
 import '../theme/report_style.dart';
+import 'period_detail_sheet.dart';
 import 'report_tiles.dart' show reportSectionTitle;
 import 'week_mood_strip.dart' show MoodFace, moodColor;
 
@@ -33,11 +34,11 @@ class InsightsPeriodView extends StatelessWidget {
   });
 
   String get _noun => switch (period) {
-        InsightsPeriod.week => 'week',
-        InsightsPeriod.month => 'month',
-        InsightsPeriod.year => 'year',
-        InsightsPeriod.day => 'night',
-      };
+    InsightsPeriod.week => 'week',
+    InsightsPeriod.month => 'month',
+    InsightsPeriod.year => 'year',
+    InsightsPeriod.day => 'night',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -49,12 +50,27 @@ class InsightsPeriodView extends StatelessWidget {
             'Needs the backend — only the last 30 nights are bundled with the app.',
             key: Key('insights-needs-backend'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: ReportColors.muted, fontSize: 14, height: 1.4),
+            style: TextStyle(
+              color: ReportColors.muted,
+              fontSize: 14,
+              height: 1.4,
+            ),
           ),
         ),
       );
     }
     final s = series;
+    // PR 3：點格子開詳細頁，停在同一個期間（頁裡也有 D/W/M/Y）
+    VoidCallback open(String id) =>
+        () => showPeriodDetailSheet(
+          context,
+          metric: PeriodMetric.byId(id),
+          series: s,
+          period: period,
+          anchor: anchor,
+          today: today,
+          online: online,
+        );
     PeriodStat st(Map<String, double> m) => periodStat(m, period, anchor);
     final sleep = st(s.sleep);
     final inBed = st(s.inBed);
@@ -76,6 +92,7 @@ class InsightsPeriodView extends StatelessWidget {
     final sleepTiles = <Widget>[
       _Tile(
         key: const Key('period-tile-sleep'),
+        onTap: open('sleep'),
         title: 'Total sleep',
         stat: sleep,
         big: sleep.median == null ? '—' : reportHm(sleep.median!),
@@ -84,28 +101,35 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-bed'),
+        onTap: open('bed'),
         title: 'Time in bed',
         stat: inBed,
         big: bedIn.median == null || bedOut.median == null
             ? '—'
             : '${clockLabel(bedIn.median!)} → ${clockLabel(bedOut.median!)}',
-        sub: inBed.median == null ? 'no bedtimes' : 'usually · ${reportHm(inBed.median!)} in bed',
+        sub: inBed.median == null
+            ? 'no bedtimes'
+            : 'usually · ${reportHm(inBed.median!)} in bed',
       ),
       _Tile(
         key: const Key('period-tile-phone'),
+        onTap: open('phone'),
         title: 'Phone down',
         stat: phone,
         big: phone.median == null ? '—' : clockLabel(phone.median!),
         delta: phone.delta == null || phone.delta!.round() == 0
             ? null
-            : (phone.delta! > 0,
-                '${reportHm(phone.delta!.abs())} ${phone.delta! > 0 ? 'later' : 'earlier'}'),
+            : (
+                phone.delta! > 0,
+                '${reportHm(phone.delta!.abs())} ${phone.delta! > 0 ? 'later' : 'earlier'}',
+              ),
         sub: late.judged == 0
             ? 'usually'
             : '${late.late} of ${late.judged} nights late',
       ),
       _Tile(
         key: const Key('period-tile-awake'),
+        onTap: open('awake'),
         title: 'Awake',
         stat: awake,
         big: awake.median == null ? '—' : reportHm(awake.median!),
@@ -114,6 +138,7 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-eff'),
+        onTap: open('eff'),
         title: 'Efficiency',
         stat: eff,
         big: eff.median == null ? '—' : '${eff.median!.round()}%',
@@ -124,6 +149,7 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-hr'),
+        onTap: open('hr'),
         title: 'Sleeping HR',
         stat: hr,
         big: hr.median == null ? '—' : '${hr.median!.round()} bpm',
@@ -131,16 +157,20 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-phases'),
+        onTap: open('phases'),
         title: 'Sleep phases',
         stat: deep,
         big: deep.median == null ? '—' : 'Deep ${reportHm(deep.median!)}',
-        sub: rem.median == null ? 'REM not measured' : 'REM ${reportHm(rem.median!)}',
+        sub: rem.median == null
+            ? 'REM not measured'
+            : 'REM ${reportHm(rem.median!)}',
       ),
     ];
 
     final dayTiles = <Widget>[
       _Tile(
         key: const Key('period-tile-steps'),
+        onTap: open('steps'),
         title: 'Steps',
         stat: steps,
         big: steps.median == null ? '—' : _thousands(steps.median!.round()),
@@ -151,6 +181,7 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-kcal'),
+        onTap: open('kcal'),
         title: 'Active kcal',
         stat: kcal,
         big: kcal.median == null ? '—' : '${kcal.median!.round()}',
@@ -158,6 +189,7 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-active'),
+        onTap: open('active'),
         title: 'Active time',
         stat: active,
         big: active.median == null ? '—' : reportHm(active.median!),
@@ -165,6 +197,7 @@ class InsightsPeriodView extends StatelessWidget {
       ),
       _Tile(
         key: const Key('period-tile-stress'),
+        onTap: open('stress'),
         title: 'Stress',
         stat: stress,
         big: stress.median == null ? '—' : '${stress.median!.round()}',
@@ -177,6 +210,7 @@ class InsightsPeriodView extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
       children: [
         _MoodCard(
+          onTap: open('score'),
           series: s,
           period: period,
           anchor: anchor,
@@ -189,6 +223,7 @@ class InsightsPeriodView extends StatelessWidget {
         const SizedBox(height: 10),
         _Tile(
           key: const Key('period-tile-camera'),
+          onTap: open('camera'),
           title: 'Movement (camera)',
           stat: cam,
           big: cam.median == null ? '—' : '${cam.median!.round()} moves / hour',
@@ -227,11 +262,13 @@ class InsightsPeriodView extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < tiles.length; i += 2) {
       final pair = i + 1 < tiles.length
-          ? Row(children: [
-              Expanded(child: tiles[i]),
-              const SizedBox(width: 10),
-              Expanded(child: tiles[i + 1]),
-            ])
+          ? Row(
+              children: [
+                Expanded(child: tiles[i]),
+                const SizedBox(width: 10),
+                Expanded(child: tiles[i + 1]),
+              ],
+            )
           : tiles[i];
       rows
         ..add(pair)
@@ -250,8 +287,10 @@ class _Tile extends StatelessWidget {
   /// (往上?, 差多少)。null＝不畫箭頭（沒有上一期、差不多、或這一項不比）。
   final (bool, String)? delta;
   final String sub;
+  final VoidCallback? onTap;
 
   const _Tile({
+    this.onTap,
     super.key,
     required this.title,
     required this.stat,
@@ -265,82 +304,93 @@ class _Tile extends StatelessWidget {
     final values = stat.bars.whereType<double>();
     final max = values.isEmpty ? 1.0 : values.reduce((a, b) => a > b ? a : b);
     final dense = stat.bars.length > 12;
-    return Container(
-      height: 132,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ReportColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ReportColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: ReportColors.muted, fontSize: 12.5)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 30,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (final v in stat.bars)
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: dense ? 0.5 : 2),
-                      child: Container(
-                        // 沒資料的那一欄只留一條底線，不畫成 0 高的長條
-                        height: v == null ? 2 : (4 + 26 * (max <= 0 ? 0 : v / max)),
-                        decoration: BoxDecoration(
-                          color: v == null
-                              ? Colors.white.withValues(alpha: 0.10)
-                              : ReportColors.lilac.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(dense ? 1 : 3),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 132,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: ReportColors.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: ReportColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(color: ReportColors.muted, fontSize: 12.5),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 30,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final v in stat.bars)
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: dense ? 0.5 : 2,
+                        ),
+                        child: Container(
+                          // 沒資料的那一欄只留一條底線，不畫成 0 高的長條
+                          height: v == null
+                              ? 2
+                              : (4 + 26 * (max <= 0 ? 0 : v / max)),
+                          decoration: BoxDecoration(
+                            color: v == null
+                                ? Colors.white.withValues(alpha: 0.10)
+                                : ReportColors.lilac.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(dense ? 1 : 3),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    big,
-                    softWrap: false,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
+            const Spacer(),
+            Row(
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      big,
+                      softWrap: false,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (delta != null) ...[
-                const SizedBox(width: 6),
-                Text(
-                  '${delta!.$1 ? '↑' : '↓'} ${delta!.$2}',
-                  style: TextStyle(
-                    color: delta!.$1 ? ReportColors.up : ReportColors.down,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                if (delta != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '${delta!.$1 ? '↑' : '↓'} ${delta!.$2}',
+                    style: TextStyle(
+                      color: delta!.$1 ? ReportColors.up : ReportColors.down,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            sub,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: ReportColors.faint, fontSize: 11),
-          ),
-        ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ReportColors.faint, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -354,8 +404,10 @@ class _MoodCard extends StatelessWidget {
   final DateTime anchor;
   final DateTime today;
   final String noun;
+  final VoidCallback? onTap;
 
   const _MoodCard({
+    this.onTap,
     required this.series,
     required this.period,
     required this.anchor,
@@ -369,65 +421,75 @@ class _MoodCard extends StatelessWidget {
     final quality = qualityFor(score.median, series.qualityBands);
     final stars = starsFor(quality);
     final d = score.delta;
-    return Container(
-      key: const Key('period-mood-card'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ReportColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Your buddy this $noun',
-                  style: const TextStyle(color: ReportColors.muted, fontSize: 13),
-                ),
-              ),
-              if (stars > 0)
-                Text(
-                  '${'★' * stars}${'☆' * (4 - stars)} ',
-                  key: const Key('period-stars'),
-                  style: const TextStyle(color: ReportColors.gold, fontSize: 13),
-                ),
-              Text(
-                score.median == null ? '—' : '${score.median!.round()}',
-                key: const Key('period-score'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (d != null && d.round() != 0) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '${d > 0 ? '↑' : '↓'} ${d.abs().round()}',
-                  style: TextStyle(
-                    color: d > 0 ? ReportColors.up : ReportColors.down,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        key: const Key('period-mood-card'),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: ReportColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Your buddy this $noun',
+                    style: const TextStyle(
+                      color: ReportColors.muted,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
+                if (stars > 0)
+                  Text(
+                    '${'★' * stars}${'☆' * (4 - stars)} ',
+                    key: const Key('period-stars'),
+                    style: const TextStyle(
+                      color: ReportColors.gold,
+                      fontSize: 13,
+                    ),
+                  ),
+                Text(
+                  score.median == null ? '—' : '${score.median!.round()}',
+                  key: const Key('period-score'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (d != null && d.round() != 0) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    '${d > 0 ? '↑' : '↓'} ${d.abs().round()}',
+                    style: TextStyle(
+                      color: d > 0 ? ReportColors.up : ReportColors.down,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-          if (quality != null)
-            Text(
-              'usually $quality · ${score.n == 1 ? '1 scored night' : '${score.n} scored nights'}',
-              style: const TextStyle(color: ReportColors.faint, fontSize: 11),
             ),
-          const SizedBox(height: 12),
-          switch (period) {
-            InsightsPeriod.week => _week(),
-            InsightsPeriod.month => _month(),
-            _ => _year(),
-          },
-        ],
+            if (quality != null)
+              Text(
+                'usually $quality · ${score.n == 1 ? '1 scored night' : '${score.n} scored nights'}',
+                style: const TextStyle(color: ReportColors.faint, fontSize: 11),
+              ),
+            const SizedBox(height: 12),
+            switch (period) {
+              InsightsPeriod.week => _week(),
+              InsightsPeriod.month => _month(),
+              _ => _year(),
+            },
+          ],
+        ),
       ),
     );
   }
@@ -460,7 +522,13 @@ class _MoodCard extends StatelessWidget {
               children: [
                 _face(dates[i], 34),
                 const SizedBox(height: 4),
-                Text(days[i], style: const TextStyle(color: ReportColors.faint, fontSize: 11)),
+                Text(
+                  days[i],
+                  style: const TextStyle(
+                    color: ReportColors.faint,
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
           ),
@@ -481,7 +549,9 @@ class _MoodCard extends StatelessWidget {
             Text(
               '${DateTime.parse(k).day}',
               style: TextStyle(
-                color: isFuture(k, today) ? ReportColors.dim : ReportColors.soft,
+                color: isFuture(k, today)
+                    ? ReportColors.dim
+                    : ReportColors.soft,
                 fontSize: 10,
               ),
             ),
@@ -495,9 +565,14 @@ class _MoodCard extends StatelessWidget {
           children: [
             for (final d in const ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
               Expanded(
-                child: Text(d,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: ReportColors.faint, fontSize: 10)),
+                child: Text(
+                  d,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: ReportColors.faint,
+                    fontSize: 10,
+                  ),
+                ),
               ),
           ],
         ),
@@ -524,50 +599,60 @@ class _MoodCard extends StatelessWidget {
       key: const Key('period-mood-year'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LayoutBuilder(builder: (context, c) {
-          final cell = (c.maxWidth - (columns - 1)) / columns;
-          return Row(
-            children: [
-              for (var col = 0; col < columns; col++) ...[
-                if (col > 0) const SizedBox(width: 1),
-                Column(
-                  children: [
-                    for (var row = 0; row < 7; row++) ...[
-                      if (row > 0) const SizedBox(height: 1),
-                      Builder(builder: (_) {
-                        final i = col * 7 + row;
-                        final k = i < cells.length ? cells[i] : null;
-                        final mood = k == null ? null : series.mood[k];
-                        final Color color;
-                        if (k == null || isFuture(k, today)) {
-                          color = Colors.transparent;
-                        } else if (mood == null) {
-                          color = Colors.white.withValues(alpha: 0.06);
-                        } else {
-                          color = moodColor(mood);
-                        }
-                        return Container(
-                          width: cell,
-                          height: cell,
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                        );
-                      }),
+        LayoutBuilder(
+          builder: (context, c) {
+            final cell = (c.maxWidth - (columns - 1)) / columns;
+            return Row(
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) const SizedBox(width: 1),
+                  Column(
+                    children: [
+                      for (var row = 0; row < 7; row++) ...[
+                        if (row > 0) const SizedBox(height: 1),
+                        Builder(
+                          builder: (_) {
+                            final i = col * 7 + row;
+                            final k = i < cells.length ? cells[i] : null;
+                            final mood = k == null ? null : series.mood[k];
+                            final Color color;
+                            if (k == null || isFuture(k, today)) {
+                              color = Colors.transparent;
+                            } else if (mood == null) {
+                              color = Colors.white.withValues(alpha: 0.06);
+                            } else {
+                              color = moodColor(mood);
+                            }
+                            return Container(
+                              width: cell,
+                              height: cell,
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
+                ],
               ],
-            ],
-          );
-        }),
+            );
+          },
+        ),
         const SizedBox(height: 6),
         Row(
           children: [
             for (final m in months)
               Expanded(
-                child: Text(m, style: const TextStyle(color: ReportColors.faint, fontSize: 9)),
+                child: Text(
+                  m,
+                  style: const TextStyle(
+                    color: ReportColors.faint,
+                    fontSize: 9,
+                  ),
+                ),
               ),
           ],
         ),
@@ -582,10 +667,19 @@ class _MoodCard extends StatelessWidget {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: BoxDecoration(color: moodColor(m), shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: moodColor(m),
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 4),
-                  Text(m, style: const TextStyle(color: ReportColors.faint, fontSize: 11)),
+                  Text(
+                    m,
+                    style: const TextStyle(
+                      color: ReportColors.faint,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
           ],

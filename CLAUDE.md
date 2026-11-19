@@ -408,7 +408,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 舊卡去處：挑戰＝Day 與 W/M/Y 最底下一行（`widgets/challenges_sheet.dart`）；睡前 App＝Phone down 詳細頁最底下、**只有最近一次放下手機那一晚**；資料即時與否／昨晚送到沒／來源＝設定頁「Data」；Sleep basics＝助理頁（預設收合） | — |
 | 🔴 **偵測就寢＋上傳＋問挑戰在 App 層的 `services/nightly_sync.dart`**：開 App（帳號解析完之後）與每次回到前景都跑，**跟停在哪一頁無關**。原本藏在舊 Insights 頁的 initState | 漏跑不會報錯，只是昨晚沒上傳、熬夜與挑戰少一晚 |
 | 手機使用權限沒開時**首頁**寵物下方一條提示（`usage-access-banner`），點了去系統設定、回來開了就消失 | 原本按鈕在舊 Insights 卡裡，新使用者找不到 |
-| W/M/Y 的格子**點了還沒有反應**；詳細頁補 Month／Year 是下一個 PR（在那之前詳細頁只有 Day、Week 兩種內容） | — |
+| **W/M/Y 的格子與心情卡點了開詳細頁**（`widgets/period_detail_sheet.dart`，PR 3）：開在**同一個期間**，頁裡也有 D/W/M/Y 與「‹ 期間 ›」；切到 Day 停在那段期間**最後一個有資料的晚上**、跟上一個有資料的晚上比；Year 一欄＝那個月的中位數；時刻（Phone down）畫點、上早下晚；點長條寫那一天。規矩同格子（中位數、「—」、只代表方向、不放常模、分數頁不呈現組成）。每一項怎麼取值、怎麼寫只在 `kPeriodMetrics` 一份。⚠️ **Day 分頁的格子點開的還是報告原本的詳細頁**（這一晚＋這一週），那些頁沒有 Month／Year——要看月、年從頂端切到 Month 再點 | — |
 
 ### ✅ 首頁改版（2026-11-12，`feature/home-day-night`）
 
@@ -1691,7 +1691,7 @@ python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**883 條全過**，2026-11-19 實測；少掉的是舊 Insights 頁的畫面測試）：
+Flutter（在 `app/` 底下跑，**894 條全過**，2026-11-19 實測）：
 
 ```bash
 flutter test
