@@ -188,6 +188,19 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  /// Insights 的 Week／Month／Year 要一整年（2026-11-19）：同一支 `/insights`，多要幾天、多等一點。
+  /// Day 分頁點開的一週詳細頁也讀這一份。
+  CameraInsightsService? get _insightsYear {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+    return CameraInsightsService(
+      baseUrl: baseUrl,
+      identity: ResolvedUserIdentity(_account?.userId),
+      days: 365,
+      timeout: const Duration(seconds: 8),
+    );
+  }
+
   /// 挑戰進度的來源。與 [_uploader] 一樣依 [_account] 重建——
   /// 帳號是 App 開起來之後才建立的，固定住的話剛註冊完那一次會用到空身分。
   ChallengesService? get _challenges {
@@ -493,7 +506,7 @@ class _MainPageState extends State<MainPage> {
       // 它背後負責偵測就寢時刻與上傳，見 InsightsScreen 的註解。
       InsightsScreen(
         repository: _repository,
-        cameraInsights: _cameraInsights,
+        cameraInsights: _insightsYear,
         morningReport: _morningReport,
         game: _game,
         goalMinutes: () async {

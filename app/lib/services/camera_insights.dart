@@ -288,8 +288,21 @@ class CameraInsightsResult {
   /// 早晨報告 Sleeping heart rate 點開的一週用；只有 Garmin 來源的晚上有。
   final Map<String, SleepHeartRate> sleepHeartRates;
 
+  /// 每晚的分數、等級、寵物心情、睡多久、各階段（`wearable.history`，Insights W/M/Y 用，2026-11-19）。
+  final Map<String, WearableNight> wearableNights;
+
+  /// 分數→等級的切點（`wearable.quality_bands`，高到低）。**照抄評分器**，Dart 不寫數字。
+  /// 舊版後端沒有 → 空，W/M/Y 就不換星星。
+  final List<QualityBand> qualityBands;
+
+  /// 每天的步數、活動卡路里、活動時間、平均壓力（`daily`，Insights W/M/Y 用）。
+  final Map<String, DailyActivity> dailies;
+
   const CameraInsightsResult(
     this.status, {
+    this.wearableNights = const {},
+    this.qualityBands = const [],
+    this.dailies = const {},
     this.bedButtons = const {},
     this.phoneDowns = const {},
     this.awakeMinutes = const {},
@@ -402,13 +415,27 @@ class CameraInsightsService implements CameraInsightsSource {
                   .whereType<Map<String, dynamic>>())
             if (j['date'] is String) j['date'] as String: j,
       };
+      final wearableNights = <String, WearableNight>{};
+      final qualityBands = <QualityBand>[];
+      final dailies = <String, DailyActivity>{};
+      for (final j in (decoded['daily'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()) {
+        final date = j['date'];
+        if (date is String) dailies[date] = DailyActivity.fromJson(j);
+      }
       final wearable = decoded['wearable'];
       if (wearable is Map<String, dynamic>) {
+        for (final b in (wearable['quality_bands'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()) {
+          final min = b['min'], q = b['quality'];
+          if (min is num && q is String) qualityBands.add(QualityBand(min.toDouble(), q));
+        }
         for (final j
             in (wearable['history'] as List<dynamic>? ?? const [])
                 .whereType<Map<String, dynamic>>()) {
           final date = j['date'];
           if (date is! String) continue;
+          wearableNights[date] = WearableNight.fromJson(j);
           final v = j['waso_minutes'];
           if (v is num) awakeMinutes[date] = v.toDouble();
           final count = j['awake_count'];
@@ -448,6 +475,9 @@ class CameraInsightsService implements CameraInsightsSource {
           watchSleep: watchSleep,
           efficiencyNights: efficiencyNights,
           sleepHeartRates: sleepHeartRates,
+          wearableNights: wearableNights,
+          qualityBands: qualityBands,
+          dailies: dailies,
         );
       }
       final history = (camera['history'] as List<dynamic>? ?? [])
@@ -464,6 +494,9 @@ class CameraInsightsService implements CameraInsightsSource {
         watchSleep: watchSleep,
         efficiencyNights: efficiencyNights,
         sleepHeartRates: sleepHeartRates,
+        wearableNights: wearableNights,
+        qualityBands: qualityBands,
+        dailies: dailies,
         nights: history,
         note: camera['note'] as String?,
         floorNote: camera['floor_note'] as String?,
@@ -512,4 +545,78 @@ class SleepHeartRate {
   final double avg;
   final double min;
   const SleepHeartRate(this.avg, this.min);
+}
+
+
+/// 一晚的手錶數字（`/insights` 的 `wearable.history`）。全部照抄後端，沒有的是 null。
+class WearableNight {
+  final double? score;
+  final String? quality;
+
+  /// 那一晚寵物的心情（後端 `resolve_mood`，Dart 不推）。
+  final String? petMood;
+  final double? sleepMinutes;
+  final double? deepMinutes;
+
+  /// 沒量到 REM 時兩個都是 null（不是 0）。
+  final double? remMinutes;
+  final double? lightMinutes;
+
+  const WearableNight({
+    this.score,
+    this.quality,
+    this.petMood,
+    this.sleepMinutes,
+    this.deepMinutes,
+    this.remMinutes,
+    this.lightMinutes,
+  });
+
+  static double? _d(Object? v) => v is num ? v.toDouble() : null;
+
+  factory WearableNight.fromJson(Map<String, dynamic> j) {
+    final hours = _d(j['sleep_duration_hours']);
+    return WearableNight(
+      score: _d(j['final_score']),
+      quality: j['final_quality'] as String?,
+      petMood: j['pet_mood'] as String?,
+      sleepMinutes: hours == null ? null : hours * 60,
+      deepMinutes: _d(j['deep_minutes']),
+      remMinutes: _d(j['rem_minutes']),
+      lightMinutes: _d(j['light_minutes']),
+    );
+  }
+}
+
+/// 分數 ≥ [min] 就是 [quality]（後端照抄評分器的切點）。
+class QualityBand {
+  final double min;
+  final String quality;
+  const QualityBand(this.min, this.quality);
+}
+
+/// 一天的白天資料（`/insights` 的 `daily`）。只呈現、不計分。
+class DailyActivity {
+  final int? steps;
+  final double? activeKcal;
+  final double? activeMinutes;
+  final double? stressAvg;
+
+  const DailyActivity({
+    this.steps,
+    this.activeKcal,
+    this.activeMinutes,
+    this.stressAvg,
+  });
+
+  factory DailyActivity.fromJson(Map<String, dynamic> j) {
+    double? d(Object? v) => v is num ? v.toDouble() : null;
+    final steps = j['steps'];
+    return DailyActivity(
+      steps: steps is num ? steps.toInt() : null,
+      activeKcal: d(j['active_kcal']),
+      activeMinutes: d(j['active_minutes']),
+      stressAvg: d(j['stress_avg']),
+    );
+  }
 }

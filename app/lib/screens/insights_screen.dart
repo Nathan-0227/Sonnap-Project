@@ -4,6 +4,7 @@ import '../models/sleep_session.dart';
 import '../services/bed_marks.dart';
 import '../services/camera_insights.dart';
 import '../services/game_service.dart';
+import '../services/insights_periods.dart';
 import '../services/key_value_store.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
@@ -11,109 +12,25 @@ import '../services/pet_notes.dart';
 import '../services/report_loader.dart';
 import '../services/sleep_repository.dart';
 import '../theme/report_style.dart';
+import '../widgets/insights_period_view.dart';
 import 'morning_report_screen.dart';
 
-/// Insights 的四個期間（2026-11-19 grill 定案）。
-enum InsightsPeriod { day, week, month, year }
-
-const _periodLabels = {
-  InsightsPeriod.day: 'Day',
-  InsightsPeriod.week: 'Week',
-  InsightsPeriod.month: 'Month',
-  InsightsPeriod.year: 'Year',
-};
-
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-const _monthsLong = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
-/// [anchor] 落在的那一段期間：[start, end]（都含）。
-/// Week＝週一到週日的日曆週；Month、Year＝日曆月、日曆年（使用者定，不用「最近 N 天」）。
-({DateTime start, DateTime end}) insightsRange(
-    InsightsPeriod period, DateTime anchor) {
-  final d = _dateOnly(anchor);
-  switch (period) {
-    case InsightsPeriod.day:
-      return (start: d, end: d);
-    case InsightsPeriod.week:
-      // 用日曆日相減，不減 24 小時（夏令時間那天會差一小時）
-      final start = DateTime(d.year, d.month, d.day - (d.weekday - 1));
-      return (start: start, end: DateTime(start.year, start.month, start.day + 6));
-    case InsightsPeriod.month:
-      return (
-        start: DateTime(d.year, d.month, 1),
-        end: DateTime(d.year, d.month + 1, 0),
-      );
-    case InsightsPeriod.year:
-      return (start: DateTime(d.year, 1, 1), end: DateTime(d.year, 12, 31));
-  }
-}
-
-/// 往前／往後一段期間。月份從 31 號往前翻時夾到那個月的最後一天（3/31 → 2/28）。
-DateTime insightsShift(InsightsPeriod period, DateTime anchor, int step) {
-  final d = _dateOnly(anchor);
-  switch (period) {
-    case InsightsPeriod.day:
-      return DateTime(d.year, d.month, d.day + step);
-    case InsightsPeriod.week:
-      return DateTime(d.year, d.month, d.day + 7 * step);
-    case InsightsPeriod.month:
-      final last = DateTime(d.year, d.month + step + 1, 0).day;
-      return DateTime(d.year, d.month + step, d.day > last ? last : d.day);
-    case InsightsPeriod.year:
-      final last = DateTime(d.year + step, d.month + 1, 0).day;
-      return DateTime(d.year + step, d.month, d.day > last ? last : d.day);
-  }
-}
-
-/// 「Wed, Nov 18」／「Nov 16 – 22」／「November 2026」／「2026」。
-/// 自己組而不用 intl：那會跟著手機語言走，而全 App 的輸出是英文。
-String insightsLabel(InsightsPeriod period, DateTime anchor) {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  final r = insightsRange(period, anchor);
-  switch (period) {
-    case InsightsPeriod.day:
-      final d = r.start;
-      return '${days[d.weekday - 1]}, ${_months[d.month - 1]} ${d.day}';
-    case InsightsPeriod.week:
-      final s = r.start, e = r.end;
-      final head = '${_months[s.month - 1]} ${s.day}';
-      final tail = s.month == e.month
-          ? '${e.day}'
-          : '${_months[e.month - 1]} ${e.day}';
-      final year = s.year == e.year ? '' : ', ${e.year}';
-      return '$head – $tail$year';
-    case InsightsPeriod.month:
-      return '${_monthsLong[r.start.month - 1]} ${r.start.year}';
-    case InsightsPeriod.year:
-      return '${r.start.year}';
-  }
-}
-
-/// 右箭頭到「本期」為止（不能翻到未來）。
-bool insightsCanGoNext(InsightsPeriod period, DateTime anchor, DateTime today) =>
-    insightsRange(period, anchor).end.isBefore(_dateOnly(today));
-
-/// 左箭頭到「帳號有資料的第一天」那一期為止。[first] 是 null（還不知道）就不擋。
-bool insightsCanGoPrev(
-        InsightsPeriod period, DateTime anchor, DateTime? first) =>
-    first == null || insightsRange(period, anchor).start.isAfter(_dateOnly(first));
+export '../services/insights_periods.dart'
+    show
+        InsightsPeriod,
+        insightsRange,
+        insightsShift,
+        insightsLabel,
+        insightsCanGoNext,
+        insightsCanGoPrev;
 
 /// Insights 頁（2026-11-19 改版）：頂端 Day／Week／Month／Year，底下「‹ 期間 ›」。
 ///
 /// - **Day**＝早晨報告本體，跟起床後看到的是同一個元件（`MorningReportScreen.fromLoader`，
 ///   embedded：不畫經驗條、關閉鈕、底部兩顆按鈕）。🔴 notes 一律 generate=false：
 ///   AI 只在起床流程、自評之後生成，Insights 打開絕不花額度。
-/// - Week／Month／Year：鏡像格子在下一步（同一條分支）。在那之前 Week 先放舊的卡片，
-///   ⚠️ 舊頁 [legacy] **一定要一直掛著**（IndexedStack）：它背後負責偵測就寢時刻、
+/// - Week／Month／Year：上面一塊心情、下面鏡像格子（`widgets/insights_period_view.dart`）。
+/// - ⚠️ 舊頁 [legacy] **一定要一直掛著**（Offstage，不顯示）：它背後負責偵測就寢時刻、
 ///   上傳 `POST /nightly`、補傳漏掉的夜晚，不能因為使用者停在 Day 就沒跑。
 class InsightsScreen extends StatefulWidget {
   /// 舊的 Insights 頁（含上傳邏輯）。
@@ -151,7 +68,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   /// 正在看的那一天（W/M/Y 用它所在的那一期）。預設今天＝昨晚那一晚
   /// （報告的日期是起床那天）；手錶還沒到時報告自己會寫 Waiting for your watch data。
-  late DateTime _anchor = _dateOnly(widget.clock());
+  late DateTime _anchor = dateOnly(widget.clock());
 
   /// 帳號有資料的第一晚（打包檔或後端的歷史，取較早的）。左箭頭到這一期為止。
   DateTime? _first;
@@ -174,45 +91,58 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   final Map<String, Future<ReportInputs>> _inputs = {};
 
+  /// Week／Month／Year 的逐夜數字。null＝還在讀。
+  PeriodSeries? _series;
+
+  /// false＝連不到後端，只有打包檔（Month／Year 照實說要後端）。
+  bool _online = false;
+
   @override
   void initState() {
     super.initState();
-    _findFirst();
+    _loadSeries();
   }
 
-  Future<void> _findFirst() async {
-    DateTime? first;
-    void consider(String? date) {
-      final d = date == null ? null : DateTime.tryParse(date);
-      if (d != null && (first == null || d.isBefore(first!))) first = d;
+  Future<void> _loadSeries() async {
+    final cam = await _loader.camera();
+    PeriodSeries series;
+    var online = false;
+    if (cam?.status == CameraInsightsStatus.ok) {
+      series = PeriodSeries.fromInsights(cam!);
+      online = true;
+    } else {
+      try {
+        series = periodSeriesFromBundled(await _session);
+      } catch (_) {
+        series = const PeriodSeries();
+      }
     }
-
+    var first = series.firstDate;
     try {
-      final s = await _session;
-      for (final e in s.history) {
-        consider(e.date);
+      // 打包檔可能比後端多幾晚舊的（後端只回最近一年）
+      final bundledFirst = periodSeriesFromBundled(await _session).firstDate;
+      if (bundledFirst != null && (first == null || bundledFirst.isBefore(first))) {
+        first = bundledFirst;
       }
     } catch (_) {}
-    final cam = await _loader.camera();
-    for (final n in cam?.nights ?? const <CameraNight>[]) {
-      consider(n.date);
-    }
-    for (final d in cam?.phoneDowns.keys ?? const <String>[]) {
-      consider(d);
-    }
-    if (mounted && first != null) setState(() => _first = first);
+    if (!mounted) return;
+    setState(() {
+      _series = series;
+      _online = online;
+      _first = first;
+    });
   }
 
   void _go(int step) => setState(() {
         _anchor = insightsShift(_period, _anchor, step);
         // 不翻到未來
-        final today = _dateOnly(widget.clock());
+        final today = dateOnly(widget.clock());
         if (_anchor.isAfter(today)) _anchor = today;
       });
 
   @override
   Widget build(BuildContext context) {
-    final today = _dateOnly(widget.clock());
+    final today = dateOnly(widget.clock());
     return ReportFont(
       child: Scaffold(
         backgroundColor: ReportColors.bgTop,
@@ -237,17 +167,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
               ),
               _nav(today),
               Expanded(
-                child: IndexedStack(
-                  index: switch (_period) {
-                    InsightsPeriod.day => 0,
-                    InsightsPeriod.week => 1,
-                    _ => 2,
-                  },
+                child: Stack(
                   children: [
-                    _day(today),
-                    // ⚠️ 一直掛著（見 class 註解）
-                    widget.legacy,
-                    const _ComingNext(),
+                    // ⚠️ 舊頁一直掛著、但不顯示（見 class 註解）
+                    Offstage(child: widget.legacy),
+                    Positioned.fill(
+                      child: _period == InsightsPeriod.day
+                          ? _day(today)
+                          : _periodView(today),
+                    ),
                   ],
                 ),
               ),
@@ -288,7 +216,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      _periodLabels[p]!,
+                      insightsPeriodLabels[p]!,
                       style: TextStyle(
                         color: p == _period
                             ? Colors.white
@@ -348,6 +276,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
+  Widget _periodView(DateTime today) {
+    final series = _series;
+    if (series == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: ReportColors.muted),
+      );
+    }
+    return InsightsPeriodView(
+      series: series,
+      period: _period,
+      anchor: _anchor,
+      today: today,
+      online: _online,
+    );
+  }
+
   Widget _day(DateTime today) {
     final date = reportDateKey(_anchor);
     final inputs = _inputs[date] ??= _loader.inputs(date);
@@ -377,17 +321,4 @@ class _InsightsScreenState extends State<InsightsScreen> {
       },
     );
   }
-}
-
-class _ComingNext extends StatelessWidget {
-  const _ComingNext();
-
-  @override
-  Widget build(BuildContext context) => const Center(
-        child: Text(
-          'Coming next',
-          key: Key('insights-coming-next'),
-          style: TextStyle(color: ReportColors.muted, fontSize: 14),
-        ),
-      );
 }
