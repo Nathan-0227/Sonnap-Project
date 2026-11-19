@@ -27,6 +27,7 @@ import 'package:app/screens/home_screen.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:app/services/account_service.dart';
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/alarm.dart';
 import 'package:app/services/user_settings.dart';
 
 /// 記下每一次 PATCH 的假帳號服務。
@@ -58,6 +59,17 @@ class _FakeAccounts implements AccountService {
     required String targetBedtime,
   }) async {
     patched.add(targetBedtime);
+    return patchSucceeds;
+  }
+
+  final List<String> patchedWake = [];
+
+  @override
+  Future<bool> updateTargetWake({
+    required String userId,
+    required String targetWake,
+  }) async {
+    patchedWake.add(targetWake);
     return patchSucceeds;
   }
 
@@ -295,6 +307,44 @@ void main() {
       await open(tester, store, accounts);
 
       expect(accounts.patched, ['01:00']);
+    });
+
+    // ── 目標起床時間（2026-11-19，睡眠計畫的「準時起床」要在後端判）──────────
+
+    testWidgets('開 App 會把起床時間送上去；沒設過就是就寢 + 8 小時（畫面上看到的那一個）',
+        (tester) async {
+      final store = InMemoryKeyValueStore();
+      final accounts = _FakeAccounts();
+      await open(tester, store, accounts);
+      expect(accounts.patchedWake, ['07:30'],
+          reason: '後端不知道起床目標，準時起床就永遠判不出來，而畫面上看不出來');
+    });
+
+    testWidgets('起床時間送成功之後，重開 App 不再送', (tester) async {
+      final store = InMemoryKeyValueStore();
+      final accounts = _FakeAccounts();
+      await open(tester, store, accounts);
+      await open(tester, store, accounts);
+      expect(accounts.patchedWake, hasLength(1));
+    });
+
+    testWidgets('轉盤上改了起床時間 → 下次開 App 送新的', (tester) async {
+      final store = InMemoryKeyValueStore();
+      final accounts = _FakeAccounts();
+      await open(tester, store, accounts);
+      await AlarmSettingsStore(store)
+          .save(wake: const TimeOfDay(hour: 9, minute: 15), enabled: true);
+      await open(tester, store, accounts);
+      expect(accounts.patchedWake, ['07:30', '09:15']);
+    });
+
+    testWidgets('起床時間送失敗 → 不記成已同步，下次補送', (tester) async {
+      final store = InMemoryKeyValueStore();
+      await open(tester, store, _FakeAccounts(patchSucceeds: false));
+      expect(await UserSettingsStore(store).syncedWake(), isNull);
+      final online = _FakeAccounts();
+      await open(tester, store, online);
+      expect(online.patchedWake, ['07:30']);
     });
 
     testWidgets('提醒開關關掉之後，重開 App 仍然是關的', (tester) async {

@@ -112,12 +112,12 @@ class ChallengesList extends StatelessWidget {
         const SizedBox(height: 4),
         const Text(
           'Every target here is a behaviour you control - when you put the '
-          'phone down - never a sleep outcome.',
+          'phone down or get up - never a sleep outcome.',
           style: TextStyle(color: ReportColors.muted, fontSize: 12.5, height: 1.4),
         ),
         const SizedBox(height: 16),
         for (final c in result.challenges) ...[
-          _ChallengeCard(challenge: c),
+          ChallengeCard(challenge: c),
           const SizedBox(height: 12),
         ],
       ],
@@ -125,9 +125,11 @@ class ChallengesList extends StatelessWidget {
   }
 }
 
-class _ChallengeCard extends StatelessWidget {
+/// 一個挑戰的卡片（Insights 的清單與睡眠計畫頁共用）。
+/// 一個挑戰的卡片（Insights 的清單與睡眠計畫頁共用）。
+class ChallengeCard extends StatelessWidget {
   final ChallengeProgress challenge;
-  const _ChallengeCard({required this.challenge});
+  const ChallengeCard({super.key, required this.challenge});
 
   @override
   Widget build(BuildContext context) {

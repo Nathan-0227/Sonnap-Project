@@ -468,6 +468,23 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來 |
 | 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
 
+### ✅ 睡眠計畫（2026-11-19，`feature/sleep-plan`）
+
+首頁「不按也沒關係」底下的 **Today's plan** 小卡 → Plan 頁：作息（就寢、起床，同轉盤）→ This week（連續準時、作息收斂）→ **Measured** 三列（準時放下手機、上床少滑手機、**準時起床**）→ 自己勾的習慣 → Add a habit。點一條開編輯頁（照使用者給的參考圖：Time、Notify me、Repeat、Save）。**決定、措辭、文獻全在 `Research-Background/睡眠計畫.md`**。
+
+| 規則 | 理由 |
+|---|---|
+| **量測那幾列與進度條照抄 `/challenges`**，沒量到寫「—」不是空圈 | Dart 不判 |
+| **準時起床**（`behavior/wake.py`）：Out of bed 按鈕 → 手錶起床 → 都沒有＝沒量到；目標 **±60 分**、七天都算（Bootzin & Perlis 2011，⚠️ **不是 Bootzin 1972**——原文沒有起床那條）。**讀取時才併**（`main._behavior_rows_with_wake`），手錶晚到也算得出來；`/challenges` 與遊戲化都要經過它 | 不併的話一律 None，看起來跟沒量到一樣 |
+| 每晚存 `nightly_behavior.target_wake` 快照 | 改目標不改歷史（同 target_bedtime） |
+| **自己勾的只存在手機上**（`services/sleep_plan.dart`）、不送後端不給 AI；**不進分數、不改心情、不給 XP**，只寫「N days in a row」；沒勾是空心圈 | 紅線 4、5：自己勾不需要證據 |
+| 建議清單**逐字照抄研究文件**（`sleep_plan_test` 讀文件比對）；對得上起床自評的 id 與 `morning_tips.TAGS` 相同，但**兩邊不互相代填** | 改措辭先改文件；之後才比得起來 |
+| 時間**跟著作息走**（存相對就寢／起床幾分鐘）；一天從**目標起床前 3 小時**開始（設計決策） | 凌晨三點還沒睡算前一天 |
+| 習慣提醒走 `sonnap/notify` 的 **slot 1..20**、可只在星期幾響；**slot 0 是就寢提醒，計畫永遠不碰**；改了就全部取消再排 | 拿掉一條後舊位置不取消會每天響 |
+| 寵物 notes 對得上的建議有 **Add to my plan**（`kTipToPlan`），加的是**清單那句**不是 AI 改寫的；「說明」那幾句沒有 | AI 那句每晚不一樣 |
+| 挑戰卡**搬到 Plan**，Insights 不再有那一行；領 XP 仍在獎勵頁（準時起床、上床少滑各 10） | 只在一個地方出現 |
+| 不做：一天幾次、沒完成延到下次、Link（清單裡沒有適合連的）；**Journey 是第二個 PR** | 使用者定 |
+
 ### ✅ 轉盤＋鬧鐘（2026-11-12，`feature/alarm-dial`）
 
 點首頁時鐘卡或設定頁的目標就寢時間 → 滑出轉盤（月亮＝就寢、太陽＝起床，5 分鐘一格）＋ Alarm 開關。
@@ -476,7 +493,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 |---|---|
 | **鬧鐘只有按了 Start Sleep 才排**，排在下一個起床時刻；超過 14 小時不排 | 使用者決定不每天自動響；14 小時與睡覺畫面同一個 |
 | Out of bed、Cancel、鬧鐘畫面的 Dismiss 都會取消；**響了不會自動按 Out of bed** | 按鈕是攝影機上床偵測唯一的 ground truth，不能代按 |
-| 起床時間與開關**只存在手機上**（`alarm.dart`）；預設起床 = 目標就寢 + 8 小時；開關預設開 | 後端用不到 |
+| 起床時間與開關存在手機上（`alarm.dart`）；預設起床 = 目標就寢 + 8 小時；開關預設開。⚠️ **2026-11-19 起起床時間也 PATCH 到後端**（`users.target_wake`，睡眠計畫的「準時起床」要在後端判），同步方式同就寢時間：`UserSettingsStore.syncedWake` 記上次送成功的值，不同就補送；開關仍只在手機上 | 判準時只能有一份（跨午夜） |
 | 轉盤中間只顯示睡幾小時，**不判斷好壞** | 好壞只能由後端判斷 |
 | 判斷全在 Dart，原生端（`AlarmService.kt` 等四支）只做「在這個時刻響」 | 與就寢提醒同一條紀律 |
 | 鈴聲是程式合成的原創音檔（`res/raw/sonnap_alarm.wav`），USAGE_ALARM（勿擾也響），30 秒漸強、10 分鐘沒人理自己停 | 沒有版權問題 |
@@ -1716,6 +1733,7 @@ python tests/test_backfill_marks.py      # 2026-11-12 新增：事後補的時�
 python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 三種狀態，「沒判」存成 NULL 不是 0（準時）；原本 None 會被存成準時、算進熬夜比率分母（手動補資料才會遇到，11-07 中過）
 python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
+python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
 ```
 

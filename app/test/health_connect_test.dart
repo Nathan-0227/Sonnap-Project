@@ -122,6 +122,8 @@ class _NoBackendAccounts implements AccountService {
 
   @override
   Future<bool> updateTargetBedtime({required String userId, required String targetBedtime}) async => false;
+  @override
+  Future<bool> updateTargetWake({required String userId, required String targetWake}) async => false;
 
   @override
   String get baseUrl => '';

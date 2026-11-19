@@ -243,10 +243,17 @@ class MainActivity : FlutterFragmentActivity() {
                         result.error("INVALID_ARGUMENTS", "triggerAtMillis and title are required.", null)
                         return@setMethodCallHandler
                     }
-                    result.success(notificationService.schedule(at, title, body))
+                    val slot = call.argument<Number>("slot")?.toInt() ?: 0
+                    val days = call.argument<Number>("days")?.toInt() ?: NotificationService.EVERY_DAY
+                    if (slot < 0 || slot > NotificationService.MAX_SLOT) {
+                        result.error("INVALID_ARGUMENTS", "slot out of range.", null)
+                        return@setMethodCallHandler
+                    }
+                    result.success(notificationService.schedule(at, title, body, slot, days))
                 }
                 "cancel" -> {
-                    notificationService.cancel()
+                    val slot = call.argument<Number>("slot")?.toInt() ?: 0
+                    notificationService.cancel(slot)
                     result.success(null)
                 }
                 "canPostNotifications" -> result.success(notificationService.canPostNotifications())

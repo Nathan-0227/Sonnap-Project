@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/morning_report_screen.dart' show reportDateTitle;
 import '../services/pet_notes.dart';
+import '../services/sleep_plan.dart';
 import '../theme/report_style.dart';
 import 'home_pet.dart';
 import 'report_sheet.dart';
@@ -21,7 +22,7 @@ Future<void> showPetNotes(
   return showReportSheet<void>(
     context: context,
     builder: (context) => ReportFont(
-      child: PetNotesView(notes: notes, mood: mood),
+      child: PetNotesView(notes: notes, mood: mood, plan: PlanStore.shared),
     ),
   );
 }
@@ -37,7 +38,10 @@ const String kNotesAiLine =
 class PetNotesView extends StatelessWidget {
   final PetNotes notes;
   final String? mood;
-  const PetNotesView({super.key, required this.notes, this.mood});
+
+  /// 睡眠計畫。有的話，對得上計畫清單的建議旁邊放「Add to my plan」（2026-11-19）。
+  final PlanStore? plan;
+  const PetNotesView({super.key, required this.notes, this.mood, this.plan});
 
   @override
   Widget build(BuildContext context) {
@@ -163,17 +167,85 @@ class PetNotesView extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              tip.text,
-              style: const TextStyle(
-                color: ReportColors.soft,
-                fontSize: 15,
-                height: 1.5,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tip.text,
+                  style: const TextStyle(
+                    color: ReportColors.soft,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                ),
+                if (plan != null && kTipToPlan[tip.id] != null)
+                  _AddToPlan(plan: plan!, planId: kTipToPlan[tip.id]!),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 建議底下那一顆。加進去的是**清單上那一句**（研究文件審過的），不是 AI 改寫的那句——
+/// AI 那句是寵物口吻、每晚不一樣，放進每天的清單會變成一句看不懂的話。
+class _AddToPlan extends StatefulWidget {
+  final PlanStore plan;
+  final String planId;
+  const _AddToPlan({required this.plan, required this.planId});
+
+  @override
+  State<_AddToPlan> createState() => _AddToPlanState();
+}
+
+class _AddToPlanState extends State<_AddToPlan> {
+  @override
+  void initState() {
+    super.initState();
+    widget.plan.addListener(_changed);
+    if (!widget.plan.loaded) widget.plan.load();
+  }
+
+  @override
+  void dispose() {
+    widget.plan.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = suggestionById(widget.planId);
+    if (s == null || !widget.plan.loaded) return const SizedBox.shrink();
+    final inPlan = widget.plan.contains(s.id);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: inPlan
+          ? const Row(
+              key: Key('pet-notes-in-plan'),
+              children: [
+                Icon(Icons.check_rounded, size: 16, color: ReportColors.down),
+                SizedBox(width: 4),
+                Text('In your plan', style: TextStyle(color: ReportColors.muted, fontSize: 12.5)),
+              ],
+            )
+          : TextButton.icon(
+              key: Key('pet-notes-add-${widget.planId}'),
+              onPressed: () => widget.plan.add(PlanItem.fromSuggestion(s)),
+              style: TextButton.styleFrom(
+                foregroundColor: ReportColors.accent,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add to my plan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
     );
   }
 }

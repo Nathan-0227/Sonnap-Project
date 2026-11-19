@@ -37,7 +37,10 @@ import 'services/nightly_uploader.dart';
 import 'services/notification_service.dart';
 import 'services/pending_nightly.dart';
 import 'services/phone_model.dart';
+import 'services/plan_reminders.dart';
+import 'services/sleep_plan.dart';
 import 'services/sleep_repository.dart';
+import 'screens/plan_screen.dart';
 import 'services/user_settings.dart';
 
 void main() {
@@ -128,7 +131,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 從系統設定開完使用權限回來、或隔天早上打開，都要重跑一次
-    if (state == AppLifecycleState.resumed && _account != null) _runNightly();
+    // 起床目標先送：POST /nightly 存的是當晚的目標快照，後端要先知道新的目標。
+    if (state == AppLifecycleState.resumed && _account != null) {
+      unawaited(() async {
+        await _syncWake();
+        _runNightly();
+      }());
+    }
   }
 
   @override
@@ -165,6 +174,39 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   /// 設定存在哪。⚠️ 與 [AccountService] 用同一個 `sonnap/store`
   /// （Android SharedPreferences），**不裝 shared_preferences**。
+  /// 睡眠計畫（2026-11-19）：自己勾的習慣，只存在手機上。
+  late final PlanStore _plan = PlanStore.shared =
+      PlanStore(widget.store ?? const PlatformKeyValueStore());
+  final PlanReminderScheduler _planReminders = const PlatformPlanReminderScheduler();
+
+  Future<TimeOfDay> _wakeNow() =>
+      AlarmSettingsStore(widget.store ?? const PlatformKeyValueStore()).wakeTime(targetBedtime);
+
+  /// 有任何一條開了提醒才重排（開 App 時；就寢或起床改了也要，提醒跟著作息走）。
+  Future<void> _syncPlanReminders() async {
+    if (!_plan.loaded) await _plan.load();
+    if (!_plan.items.any((i) => i.notify)) return;
+    await syncPlanReminders(_planReminders, _plan.items,
+        now: DateTime.now(), bedtime: targetBedtime, wake: await _wakeNow());
+  }
+
+  void _openPlan() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanScreen(
+          plan: _plan,
+          nightly: _nightly,
+          bedtime: targetBedtime,
+          alarmSettings: AlarmSettingsStore(widget.store ?? const PlatformKeyValueStore()),
+          alarmScheduler: const PlatformAlarmScheduler(),
+          reminders: _planReminders,
+          onBedtimeChanged: _setBedtime,
+          onWakeChanged: () => unawaited(_syncWake()),
+        ),
+      ),
+    );
+  }
+
   late final UserSettingsStore _settings = UserSettingsStore(
     widget.store ?? const PlatformKeyValueStore(),
   );
@@ -364,6 +406,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     await _resolveAccount();
     await restore;
     await _syncBedtime();
+    // 排在 _runNightly 前面：POST /nightly 存的是當晚的起床目標快照。
+    await _syncWake();
+    unawaited(_syncPlanReminders());
     // ⚠️ 排在帳號之後（要 user_id 才送得出去），而且不 await、不問授權：
     //    沒授權就什麼都不做，授權只在設定頁使用者按了按鈕才問。
     unawaited(_healthSync.sync());
@@ -449,6 +494,22 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     if (ok) await _settings.markSynced(stored.targetBedtime!);
   }
 
+  /// 補送目標起床時間（睡眠計畫的「準時起床」要在後端判）。
+  ///
+  /// 送的是**畫面上看到的那一個**：轉盤沒設過時是就寢 + 8 小時
+  /// （`defaultWakeTime`），那也是使用者在 Plan 頁看到的起床時間。
+  /// 只在跟上次成功送出去的不同時才發請求（同 [_syncBedtime]）。
+  Future<void> _syncWake() async {
+    final userId = _account?.userId;
+    if (userId == null || userId.isEmpty) return;
+    final wake = await AlarmSettingsStore(widget.store ?? const PlatformKeyValueStore())
+        .wakeTime(targetBedtime);
+    final hhmm = formatBedtime(wake.hour, wake.minute);
+    if (await _settings.syncedWake() == hhmm) return;
+    final ok = await _accounts.updateTargetWake(userId: userId, targetWake: hhmm);
+    if (ok) await _settings.markWakeSynced(hhmm);
+  }
+
   Future<void> _resolveAccount() async {
     final status = await _accounts.resolve();
     if (!mounted) return;
@@ -468,6 +529,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     await _settings.markSynced('$hh:$mm');
     if (!mounted) return true;
     setState(() => _account = status);
+    unawaited(_syncWake());
     return true;
   }
 
@@ -496,6 +558,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final hhmm = formatBedtime(value.hour, value.minute);
     await _settings.saveBedtime(hhmm);
     await _syncBedtime();
+    // 起床沒設過時是「就寢 + 8 小時」，就寢一改它也跟著變
+    await _syncWake();
+    unawaited(_syncPlanReminders());
   }
 
   Future<void> _setReminder(bool value) async {
@@ -534,6 +599,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         startSleepRequests: _startSleepRequests,
         onOpenSettings: () => setState(() => currentIndex = _settingsIndex),
         sleepStatus: _friends?.sendSleepStatus,
+        planCard: TodayPlanCard(plan: _plan, wake: _wakeNow, onOpen: _openPlan),
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
