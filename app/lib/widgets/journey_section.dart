@@ -163,68 +163,171 @@ class JourneySection extends StatelessWidget {
     );
   }
 
+  /// 進行中（11-19 使用者給參考圖改版：一條路、少字）：
+  ///   上：第幾站 ……… 今晚 🌙 就寢 ☀ 起床  ⋯
+  ///   中：起點 ━━ 🐾 ┄┄•┄┄• 🏁（走過實線、還沒到虛線＋小點）
+  ///   下：三顆太陽＝連續幾天準時（亮的是做到的）
+  /// 說明與 Stop 收進 ⋯。
   Widget _active(BuildContext context, JourneyState j, JourneyInfo info) {
     final n = j.stops.length;
+    final cur = j.current!;
+    Widget time(IconData icon, Color color, TimeOfDay t, Key key) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 3),
+        Text(
+          hhmm(t),
+          key: key,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _title(
-          'Journey · stop ${j.stopIndex + 1} of $n',
-          trailing: TextButton(
-            key: const Key('journey-stop'),
-            onPressed: () => unawaited(_confirmStop(context)),
-            style: TextButton.styleFrom(foregroundColor: ReportColors.faint),
-            child: const Text('Stop journey'),
-          ),
-        ),
-        if (controller.showNotice) _notice(j),
-        const SizedBox(height: 12),
-        _JourneyPath(journey: j),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            ...List.generate(
-              j.onTimeNeeded,
-              (i) => Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  i < j.onTimeStreak
-                      ? Icons.wb_sunny_rounded
-                      : Icons.circle_outlined,
-                  size: 16,
-                  color: i < j.onTimeStreak
-                      ? ReportColors.gold
-                      : ReportColors.dim,
+        if (controller.showNotice)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: ReportColors.gold.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'New stop from tonight',
+                key: Key('journey-notice'),
+                style: TextStyle(
+                  color: ReportColors.gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '${j.onTimeStreak} of ${j.onTimeNeeded} on-time mornings',
-                key: const Key('journey-streak'),
-                style: const TextStyle(
-                  color: ReportColors.soft,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+          ),
+        Row(
+          children: [
+            Text(
+              'Stop ${j.stopIndex + 1} of $n',
+              key: const Key('journey-title'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
               ),
+            ),
+            const Spacer(),
+            time(
+              Icons.bedtime_rounded,
+              ReportColors.lilac,
+              cur.bedtime,
+              const Key('journey-current-bed'),
+            ),
+            const SizedBox(width: 10),
+            time(
+              Icons.wb_sunny_rounded,
+              ReportColors.gold,
+              cur.wake,
+              const Key('journey-current-wake'),
+            ),
+            PopupMenuButton<String>(
+              key: const Key('journey-menu'),
+              icon: const Icon(
+                Icons.more_horiz_rounded,
+                color: ReportColors.faint,
+              ),
+              color: ReportColors.sheet,
+              padding: EdgeInsets.zero,
+              onSelected: (v) {
+                if (v == 'how') unawaited(_howItWorks(context, j));
+                if (v == 'stop') unawaited(_confirmStop(context));
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'how',
+                  key: Key('journey-how'),
+                  child: Text(
+                    'How it works',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'stop',
+                  key: Key('journey-stop'),
+                  child: Text(
+                    'Stop journey',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Up within an hour of ${hhmm(j.current!.wake)}, ${j.onTimeNeeded} mornings in a row, '
-          'and the next stop starts. A missed morning starts the count again.',
-          style: const TextStyle(
-            color: ReportColors.faint,
-            fontSize: 12,
-            height: 1.35,
+        const SizedBox(height: 6),
+        _JourneyRoad(journey: j),
+        const SizedBox(height: 8),
+        Center(
+          child: Semantics(
+            label: '${j.onTimeStreak} of ${j.onTimeNeeded} on-time mornings',
+            child: Row(
+              key: const Key('journey-streak'),
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                j.onTimeNeeded,
+                (i) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Icon(
+                    i < j.onTimeStreak
+                        ? Icons.wb_sunny_rounded
+                        : Icons.wb_sunny_outlined,
+                    key: Key(
+                      'journey-sun-$i-${i < j.onTimeStreak ? 'on' : 'off'}',
+                    ),
+                    size: 20,
+                    color: i < j.onTimeStreak
+                        ? ReportColors.gold
+                        : ReportColors.dim,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
     );
   }
+
+  /// 卡片上拿掉的那段說明（使用者要少字），收進 ⋯ → How it works。
+  Future<void> _howItWorks(BuildContext context, JourneyState j) =>
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ReportColors.sheet,
+          title: const Text(
+            'How it works',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            'Get up within an hour of ${hhmm(j.current!.wake)} for '
+            '${j.onTimeNeeded} mornings in a row and the next stop starts. '
+            'A missed morning starts the count again. '
+            'Your goal: up at ${hhmm(j.endWake)}.',
+            key: const Key('journey-how-text'),
+            style: const TextStyle(color: ReportColors.muted, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
 
   Future<void> _confirmStop(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -264,89 +367,158 @@ class JourneySection extends StatelessWidget {
   }
 }
 
-/// 一站一個點：走過的實心、這一站金色放大、還沒到的空心；兩端寫起床時間。
-class _JourneyPath extends StatelessWidget {
+/// 一條路（照使用者給的參考圖）：左邊起點、🐾＝這一站、右邊 🏁＝終點。
+/// 走過的那段實線，還沒走的虛線，中間每一站一個小點。位置只照抄 stop_index／stops 的個數。
+class _JourneyRoad extends StatelessWidget {
   final JourneyState journey;
-  const _JourneyPath({required this.journey});
+  const _JourneyRoad({required this.journey});
+
+  static const double _end = 30; // 兩端圓的直徑
+  static const double _marker = 36;
 
   @override
   Widget build(BuildContext context) {
     final j = journey;
-    final cur = j.current!;
-    Widget dot(int i) {
-      final passed = i < j.stopIndex, here = i == j.stopIndex;
-      final s = here ? 16.0 : 10.0;
-      return Container(
-        key: Key('journey-dot-$i'),
-        width: s,
-        height: s,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: here
-              ? ReportColors.gold
-              : (passed ? ReportColors.lilac : Colors.transparent),
-          border: Border.all(
-            color: here ? ReportColors.gold : ReportColors.lilac,
-            width: 2,
-          ),
-          boxShadow: here
-              ? const [BoxShadow(color: Color(0x88FFD772), blurRadius: 10)]
-              : null,
-        ),
-      );
-    }
-
-    final items = <Widget>[];
-    for (var i = 0; i < j.stops.length; i++) {
-      if (i > 0) {
-        items.add(
-          Expanded(
-            child: Container(
-              height: 2,
-              color: i <= j.stopIndex
-                  ? ReportColors.lilac
-                  : ReportColors.border,
-            ),
-          ),
-        );
-      }
-      items.add(dot(i));
-    }
-    return Column(
-      children: [
-        Row(children: items),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Text(
-              'up ${hhmm(j.startWake)}',
-              style: const TextStyle(color: ReportColors.dim, fontSize: 12),
-            ),
-            const Spacer(),
-            Text(
-              'Tonight: bed ${hhmm(cur.bedtime)} · up ${hhmm(cur.wake)}',
-              key: const Key('journey-current'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
+    final n = j.stops.length;
+    // 起點在 0、第 i 站在 (i+1)/n、最後一站＝終點在 1
+    final here = n == 0 ? 0.0 : (j.stopIndex + 1) / n;
+    final atGoal = j.stopIndex >= n - 1;
+    return SizedBox(
+      height: _marker + 4,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final left = _end / 2, right = box.maxWidth - _end / 2;
+          double x(double f) => left + (right - left) * f;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _RoadPainter(
+                    from: left,
+                    to: right,
+                    here: x(here),
+                    dots: [
+                      for (var i = j.stopIndex + 1; i < n - 1; i++)
+                        x((i + 1) / n),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const Spacer(),
-            Text(
-              'goal ${hhmm(j.endWake)}',
-              key: const Key('journey-goal'),
-              style: const TextStyle(
-                color: ReportColors.gold,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+              Positioned(
+                left: 0,
+                top: (_marker + 4 - _end) / 2,
+                child: _circle(
+                  _end,
+                  ReportColors.lilac.withValues(alpha: 0.25),
+                  ReportColors.lilac,
+                  const Icon(
+                    Icons.wb_twilight_rounded,
+                    size: 16,
+                    color: ReportColors.lilac,
+                  ),
+                  const Key('journey-road-start'),
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+              if (!atGoal)
+                Positioned(
+                  left: right - _end / 2,
+                  top: (_marker + 4 - _end) / 2,
+                  child: _circle(
+                    _end,
+                    ReportColors.gold.withValues(alpha: 0.18),
+                    ReportColors.gold,
+                    const Icon(
+                      Icons.flag_rounded,
+                      size: 16,
+                      color: ReportColors.gold,
+                    ),
+                    const Key('journey-goal'),
+                  ),
+                ),
+              Positioned(
+                left: x(here) - _marker / 2,
+                top: 2,
+                child: _circle(
+                  _marker,
+                  ReportColors.gold,
+                  Colors.white,
+                  const Icon(
+                    Icons.pets_rounded,
+                    size: 20,
+                    color: ReportColors.navy,
+                  ),
+                  const Key('journey-here'),
+                  glow: true,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
+
+  Widget _circle(
+    double size,
+    Color fill,
+    Color border,
+    Widget child,
+    Key key, {
+    bool glow = false,
+  }) => Container(
+    key: key,
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: fill,
+      border: Border.all(color: border, width: 2),
+      boxShadow: glow
+          ? const [BoxShadow(color: Color(0x88FFD772), blurRadius: 12)]
+          : null,
+    ),
+    child: Center(child: child),
+  );
+}
+
+class _RoadPainter extends CustomPainter {
+  final double from, to, here;
+  final List<double> dots;
+  _RoadPainter({
+    required this.from,
+    required this.to,
+    required this.here,
+    required this.dots,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height / 2;
+    final done = Paint()
+      ..color = ReportColors.lilac
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(from, y), Offset(here, y), done);
+    final todo = Paint()
+      ..color = const Color(0x55FFFFFF)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    for (var x = here + 8; x < to; x += 10) {
+      canvas.drawLine(Offset(x, y), Offset((x + 4).clamp(x, to), y), todo);
+    }
+    final dot = Paint()..color = const Color(0xCCFFFFFF);
+    for (final d in dots) {
+      canvas.drawCircle(Offset(d, y), 4, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RoadPainter old) =>
+      old.here != here ||
+      old.from != from ||
+      old.to != to ||
+      old.dots.length != dots.length;
 }
 
 // ── 開始一段 Journey 的面板 ─────────────────────────────────────────────
@@ -405,17 +577,18 @@ class _JourneySetupState extends State<_JourneySetup> {
   }
 
   /// 只是畫面上的預覽（就寢＝起床 − 睡多久、起點 ±5 分）；真正的每一站由後端排。
-  static TimeOfDay _shift(TimeOfDay t, int minutes) =>
-      TimeOfDay.fromDateTime(DateTime(2000, 1, 1, t.hour, t.minute).add(Duration(minutes: minutes)));
+  static TimeOfDay _shift(TimeOfDay t, int minutes) => TimeOfDay.fromDateTime(
+    DateTime(2000, 1, 1, t.hour, t.minute).add(Duration(minutes: minutes)),
+  );
 
   TimeOfDay get _goalBed => _shift(_goalWake, -_sleep);
 
   /// 拖太陽：目標起床換了，就寢跟著（睡眠長度不變）。
   void _onWake(TimeOfDay t) => setState(() {
-        _goalWake = t;
-        _goalPicked = true;
-        _error = null;
-      });
+    _goalWake = t;
+    _goalPicked = true;
+    _error = null;
+  });
 
   /// 拖月亮：改的是睡多久，拖到哪就是哪（不設下限）。
   void _onBed(TimeOfDay t) {
@@ -427,11 +600,11 @@ class _JourneySetupState extends State<_JourneySetup> {
   }
 
   void _nudgeStart(int minutes) => setState(() {
-        final wasOnStart = !_goalPicked;
-        _start = _shift(_start, minutes);
-        if (wasOnStart) _goalWake = _start; // 還沒選目標時，太陽跟著起點
-        _error = null;
-      });
+    final wasOnStart = !_goalPicked;
+    _start = _shift(_start, minutes);
+    if (wasOnStart) _goalWake = _start; // 還沒選目標時，太陽跟著起點
+    _error = null;
+  });
 
   Future<void> _go() async {
     if (!_goalPicked) return;
@@ -439,30 +612,36 @@ class _JourneySetupState extends State<_JourneySetup> {
       _busy = true;
       _error = null;
     });
-    final out = await widget.controller
-        .start(startWake: _start, endWake: _goalWake, sleepMinutes: _sleep);
+    final out = await widget.controller.start(
+      startWake: _start,
+      endWake: _goalWake,
+      sleepMinutes: _sleep,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     switch (out) {
       case JourneyStartOutcome.started:
         Navigator.of(context).pop(true);
       case JourneyStartOutcome.alreadyThere:
-        setState(() => _error = "You're already there — just change your schedule.");
+        setState(
+          () => _error = "You're already there — just change your schedule.",
+        );
       case JourneyStartOutcome.failed:
         setState(() => _error = "Couldn't reach the backend. Try again later.");
     }
   }
 
-  String _hm(int minutes) =>
-      minutes % 60 == 0 ? '${minutes ~/ 60}h' : '${minutes ~/ 60}h ${minutes % 60}m';
+  String _hm(int minutes) => minutes % 60 == 0
+      ? '${minutes ~/ 60}h'
+      : '${minutes ~/ 60}h ${minutes % 60}m';
 
   Widget _nudge(Key key, IconData icon, VoidCallback onTap) => IconButton(
-        key: key,
-        onPressed: onTap,
-        icon: Icon(icon),
-        color: ReportColors.accent,
-        visualDensity: VisualDensity.compact,
-      );
+    key: key,
+    onPressed: onTap,
+    icon: Icon(icon),
+    color: ReportColors.accent,
+    visualDensity: VisualDensity.compact,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -483,13 +662,24 @@ class _JourneySetupState extends State<_JourneySetup> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Start a journey',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+              const Text(
+                'Start a journey',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
-                  'Your wake time moves ${info.stepMinutes} minutes earlier at each stop. '
-                  'Bedtime follows, so you keep the same sleep length.',
-                  style: const TextStyle(color: ReportColors.muted, fontSize: 13, height: 1.35)),
+                'Your wake time moves ${info.stepMinutes} minutes earlier at each stop. '
+                'Bedtime follows, so you keep the same sleep length.',
+                style: const TextStyle(
+                  color: ReportColors.muted,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
               const SizedBox(height: 14),
               // 現在幾點起：照最近 7 晚抓的，通常只要微調 → ±5 分鐘
               Container(
@@ -504,43 +694,67 @@ class _JourneySetupState extends State<_JourneySetup> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('You wake up now',
-                              style: TextStyle(
-                                  color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                          const Text(
+                            'You wake up now',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
-                              info.suggestedStart != null
-                                  ? 'Middle of your last 7 nights'
-                                  : 'From your schedule',
-                              style: const TextStyle(color: ReportColors.faint, fontSize: 12)),
+                            info.suggestedStart != null
+                                ? 'Middle of your last 7 nights'
+                                : 'From your schedule',
+                            style: const TextStyle(
+                              color: ReportColors.faint,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    _nudge(const Key('journey-setup-start-less'),
-                        Icons.remove_circle_outline_rounded, () => _nudgeStart(-5)),
-                    Text(hhmm(_start),
-                        key: const Key('journey-setup-start'),
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                    _nudge(const Key('journey-setup-start-more'), Icons.add_circle_outline_rounded,
-                        () => _nudgeStart(5)),
+                    _nudge(
+                      const Key('journey-setup-start-less'),
+                      Icons.remove_circle_outline_rounded,
+                      () => _nudgeStart(-5),
+                    ),
+                    Text(
+                      hhmm(_start),
+                      key: const Key('journey-setup-start'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    _nudge(
+                      const Key('journey-setup-start-more'),
+                      Icons.add_circle_outline_rounded,
+                      () => _nudgeStart(5),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('YOUR GOAL',
-                  style: TextStyle(
-                      color: ReportColors.faint,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2)),
+              const Text(
+                'YOUR GOAL',
+                style: TextStyle(
+                  color: ReportColors.faint,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
               const SizedBox(height: 2),
               Text(
-                  _goalPicked
-                      ? 'Drag the moon to change how long you sleep'
-                      : 'Drag the sun to your goal wake time',
-                  key: const Key('journey-setup-hint'),
-                  style: const TextStyle(color: ReportColors.muted, fontSize: 13)),
+                _goalPicked
+                    ? 'Drag the moon to change how long you sleep'
+                    : 'Drag the sun to your goal wake time',
+                key: const Key('journey-setup-hint'),
+                style: const TextStyle(color: ReportColors.muted, fontSize: 13),
+              ),
               const SizedBox(height: 8),
               Center(
                 child: SleepDial(
@@ -556,19 +770,37 @@ class _JourneySetupState extends State<_JourneySetup> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.bedtime_rounded, size: 18, color: ReportColors.lilac),
+                  const Icon(
+                    Icons.bedtime_rounded,
+                    size: 18,
+                    color: ReportColors.lilac,
+                  ),
                   const SizedBox(width: 4),
-                  Text(hhmm(_goalBed),
-                      key: const Key('journey-setup-goal-bed'),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text(
+                    hhmm(_goalBed),
+                    key: const Key('journey-setup-goal-bed'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(width: 18),
-                  const Icon(Icons.wb_sunny_rounded, size: 18, color: ReportColors.gold),
+                  const Icon(
+                    Icons.wb_sunny_rounded,
+                    size: 18,
+                    color: ReportColors.gold,
+                  ),
                   const SizedBox(width: 4),
-                  Text(hhmm(_goalWake),
-                      key: const Key('journey-setup-goal-wake'),
-                      style: const TextStyle(
-                          color: ReportColors.gold, fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text(
+                    hhmm(_goalWake),
+                    key: const Key('journey-setup-goal-wake'),
+                    style: const TextStyle(
+                      color: ReportColors.gold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -577,30 +809,45 @@ class _JourneySetupState extends State<_JourneySetup> {
                   '${_hm(_sleep)} of sleep · ${_hm(info.recommendedSleepMinutes)} or more is recommended',
                   key: const Key('journey-setup-min-note'),
                   // 只寫事實＋參考，不變色、不判斷夠不夠
-                  style: const TextStyle(color: ReportColors.faint, fontSize: 12),
+                  style: const TextStyle(
+                    color: ReportColors.faint,
+                    fontSize: 12,
+                  ),
                 ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
-                Text(_error!,
-                    key: const Key('journey-setup-error'),
-                    style: const TextStyle(
-                        color: ReportColors.gold, fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(
+                  _error!,
+                  key: const Key('journey-setup-error'),
+                  style: const TextStyle(
+                    color: ReportColors.gold,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   key: const Key('journey-setup-go'),
-                  onPressed: !_goalPicked || _busy ? null : () => unawaited(_go()),
+                  onPressed: !_goalPicked || _busy
+                      ? null
+                      : () => unawaited(_go()),
                   style: FilledButton.styleFrom(
                     backgroundColor: ReportColors.purple,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: const StadiumBorder(),
                   ),
-                  child: Text(_busy ? 'Starting…' : 'Start journey',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    _busy ? 'Starting…' : 'Start journey',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ],

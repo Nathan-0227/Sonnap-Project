@@ -228,9 +228,13 @@ void main() {
 
     testWidgets('進行中：第幾站、連續幾天照抄後端；作息條是這一站；沒有 XP', (tester) async {
       await pump(tester, _info(_state(idx: 1, streak: 2)));
-      expect(find.text('Journey · stop 2 of 3'), findsOneWidget);
-      expect(find.text('2 of 3 on-time mornings'), findsOneWidget);
-      expect(find.byKey(const Key('journey-dot-1')), findsOneWidget);
+      expect(find.text('Stop 2 of 3'), findsOneWidget);
+      // 三顆太陽：前兩顆亮（照抄後端的連續天數），不寫成一句話
+      expect(find.byKey(const Key('journey-sun-1-on')), findsOneWidget);
+      expect(find.byKey(const Key('journey-sun-2-off')), findsOneWidget);
+      expect(find.byKey(const Key('journey-here')), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const Key('journey-current-bed'))).data, '03:00');
+      expect(find.textContaining('on-time mornings'), findsNothing, reason: '少字（使用者 11-19）');
       expect(find.byKey(const Key('journey-goal')), findsOneWidget);
       expect(find.byKey(const Key('journey-notice')), findsOneWidget, reason: '剛前進到第 2 站');
       expect(tester.widget<Text>(find.byKey(const Key('plan-bedtime'))).data, '03:00',
@@ -290,7 +294,7 @@ void main() {
       await tester.tap(go);
       await settle(tester);
       expect(api.lastStart, {'start': '11:00', 'end': '09:00', 'sleep': 360});
-      expect(find.text('Journey · stop 1 of 3'), findsOneWidget);
+      expect(find.text('Stop 1 of 3'), findsOneWidget);
     });
 
     testWidgets('終點不比起點早：照後端說 already there，不開始', (tester) async {
@@ -308,6 +312,16 @@ void main() {
 
     testWidgets('Stop：問一次才停；停了之後回到 Start a journey', (tester) async {
       final (_, api) = await pump(tester, _info(_state()));
+      // 說明與 Stop 收進 ⋯
+      await tester.tap(find.byKey(const Key('journey-menu')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('journey-how')));
+      await settle(tester);
+      expect(find.byKey(const Key('journey-how-text')), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('journey-menu')));
+      await settle(tester);
       await tester.tap(find.byKey(const Key('journey-stop')));
       await settle(tester);
       expect(api.stops, 0, reason: '先問一次');

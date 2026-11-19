@@ -489,7 +489,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 #### Journey（2026-11-19 grill，`feature/journey`）：起床一站一站往前移
 
-計畫頁作息條底下（`widgets/journey_section.dart`）。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
+計畫頁作息條底下（`widgets/journey_section.dart`）。進行中是**一條路**（11-19 使用者給參考圖、要少字）：上面「Stop 2 of 5」＋今晚就寢／起床，中間起點 ━ 🐾 ┄•┄ 🏁，下面三顆太陽＝連續幾天準時；說明與 Stop 收進 ⋯。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
 
 | 規則 | 不遵守的後果 |
 |---|---|
