@@ -7,7 +7,7 @@
 【1】一站一站：第 1 站＝起點 − 30；最後一站不滿 30 只走剩下的、停在終點；跨午夜
 【2】終點不比起點早（往後移）→ 不建立（API 422）
 【3】連續 3 天準時才前進：沒準時從 0 重數、沒量到不打斷、永遠不退站
-【4】睡眠長度不到 7 小時照 7 小時排
+【4】睡眠長度由使用者自己定（不設 7 小時下限）
 【5】從哪一晚開始算：白天按＝今晚、半夜按＝這一晚
 【6】建議起點：最近 7 晚中間值、取到 5 分；不到 3 晚是 None
 【7】整條流程走 API：前進之後 users 的目標＝下一站；**以前每晚的快照不變**；
@@ -84,9 +84,8 @@ ok("開始之前的夜晚不算", J.progress(rows, "2026-10-01", 3) == (0, 1, Fa
 rows = [night(f"2026-10-{i:02d}", True) for i in range(1, 7)]
 ok("兩站 × 3 天 → 走完", J.progress(rows, "2026-10-01", 2) == (1, 0, True))
 
-print("【4】7 小時下限")
-ok("6 小時 → 7 小時", J.clamp_sleep(360) == 420)
-ok("8 小時照用", J.clamp_sleep(480) == 480)
+print("【4】睡眠長度自己定")
+ok("沒有 clamp_sleep（不擋 7 小時以下）", not hasattr(J, "clamp_sleep"))
 
 print("【5】從哪一晚開始算")
 ok("白天 10:00 按 → 明天那一晚", J.first_night_for(datetime(2026, 11, 19, 10, 0)) == "2026-11-20")
@@ -107,10 +106,10 @@ uid = client.post("/users", json={"display_name": "旅人", "target_bedtime": "0
 client.patch(f"/users/{uid}", json={"target_wake": "11:00"})
 
 res = client.post("/journey", json={"user_id": uid, "start_wake": "11:00",
-                                    "end_wake": "09:50", "sleep_minutes": 360})
+                                    "end_wake": "09:50", "sleep_minutes": 420})
 ok("開始 → 201", res.status_code == 201, res.text)
 j = res.json()["journey"]
-ok("睡 6 小時照 7 小時排", j["sleep_minutes"] == 420)
+ok("睡眠長度照送來的存", j["sleep_minutes"] == 420)
 ok("第 1 站 10:30／03:30", j["current"] == {"wake": "10:30", "bedtime": "03:30"}, str(j["current"]))
 u = db.get_user(uid)
 ok("目標立刻換成第 1 站", (u["target_wake"], u["target_bedtime"]) == ("10:30", "03:30"))
@@ -191,12 +190,18 @@ client.get(f"/journey?user_id={uid2}")
 ok("停了之後不再拉回（可以自己改了）", db.get_user(uid2)["target_wake"] == "08:45")
 res = client.post("/journey", json={"user_id": uid2, "start_wake": "06:00",
                                     "end_wake": "08:00", "sleep_minutes": 480})
+res6 = client.post("/journey", json={"user_id": uid2, "start_wake": "10:00",
+                                     "end_wake": "09:00", "sleep_minutes": 360})
+ok("睡 6 小時也照 6 小時排（不拉到 7）", res6.status_code == 201
+   and res6.json()["journey"]["sleep_minutes"] == 360
+   and res6.json()["journey"]["current"]["bedtime"] == "03:30", res6.text)
+client.post("/journey/stop", json={"user_id": uid2})
 ok("往後移 → 422 already_there", res.status_code == 422 and "already_there" in res.text, res.text)
 ok("沒有 Journey 的人 Stop → 404",
    client.post("/journey/stop", json={"user_id": client.post(
        "/users", json={"display_name": "無"}).json()["user_id"]}).status_code == 404)
 res = client.get(f"/journey?user_id={uid2}").json()
-ok("GET 帶建議起點與兩個常數", "suggested_start" in res and res["min_sleep_minutes"] == 420
+ok("GET 帶建議起點與兩個常數", "suggested_start" in res and res["recommended_sleep_minutes"] == 420
    and res["step_minutes"] == 30, str(res))
 
 print("【10】不給 XP、刪帳號一起刪")

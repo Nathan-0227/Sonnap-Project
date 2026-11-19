@@ -112,20 +112,21 @@ class JourneyInfo {
 
   /// 最近 7 晚實際起床的中間值；null＝量到的不到 3 晚（用轉盤上的起床時間）。
   final TimeOfDay? suggestedStart;
-  final int minSleepMinutes;
+  /// 建議至少睡多久（後端照抄文獻，只當參考、不擋；使用者 11-19 定）。
+  final int recommendedSleepMinutes;
   final int stepMinutes;
 
   const JourneyInfo({
     this.journey,
     this.suggestedStart,
-    this.minSleepMinutes = 420,
+    this.recommendedSleepMinutes = 420,
     this.stepMinutes = 30,
   });
 
   static JourneyInfo fromJson(Map<String, dynamic> j) => JourneyInfo(
         journey: JourneyState.fromJson(j['journey']),
         suggestedStart: _parse(j['suggested_start']),
-        minSleepMinutes: (j['min_sleep_minutes'] as num?)?.toInt() ?? 420,
+        recommendedSleepMinutes: (j['recommended_sleep_minutes'] as num?)?.toInt() ?? 420,
         stepMinutes: (j['step_minutes'] as num?)?.toInt() ?? 30,
       );
 }

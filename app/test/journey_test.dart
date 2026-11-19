@@ -59,7 +59,7 @@ Map<String, Object?> _state({String status = 'active', int idx = 0, int streak =
 JourneyInfo _info(Map<String, Object?>? j, {String? suggested}) => JourneyInfo.fromJson({
       'journey': j,
       'suggested_start': suggested,
-      'min_sleep_minutes': 420,
+      'recommended_sleep_minutes': 420,
       'step_minutes': 30,
     });
 
@@ -261,7 +261,7 @@ void main() {
         tester.widget<SleepDial>(find.byKey(const Key('journey-setup-dial')));
     String text(WidgetTester tester, String key) => tester.widget<Text>(find.byKey(Key(key))).data!;
 
-    testWidgets('開始：用 App 的轉盤設目標；起點 ±5 分；沒拖太陽按不了；月亮拖不到 7 小時以下', (tester) async {
+    testWidgets('開始：用 App 的轉盤設目標；起點 ±5 分；沒拖太陽按不了；月亮拖到哪就是哪（不設 7 小時下限）', (tester) async {
       final (_, api) = await pump(tester, _info(null, suggested: '11:05'));
       await tester.tap(find.byKey(const Key('journey-start')));
       await settle(tester);
@@ -281,15 +281,15 @@ void main() {
       await tester.pump();
       expect(text(tester, 'journey-setup-goal-wake'), '09:00');
       expect(text(tester, 'journey-setup-goal-bed'), '01:00');
-      // 拖月亮到 03:00（只剩 6 小時）→ 停在 7 小時
+      // 拖月亮到 03:00（只剩 6 小時）→ 就是 6 小時，只寫參考、不擋
       dial(tester).onBedtimeChanged(const TimeOfDay(hour: 3, minute: 0));
       await tester.pump();
-      expect(text(tester, 'journey-setup-goal-bed'), '02:00');
-      expect(text(tester, 'journey-setup-min-note'), '7h of sleep · at least 7h is recommended');
+      expect(text(tester, 'journey-setup-goal-bed'), '03:00');
+      expect(text(tester, 'journey-setup-min-note'), '6h of sleep · 7h or more is recommended');
 
       await tester.tap(go);
       await settle(tester);
-      expect(api.lastStart, {'start': '11:00', 'end': '09:00', 'sleep': 420});
+      expect(api.lastStart, {'start': '11:00', 'end': '09:00', 'sleep': 360});
       expect(find.text('Journey · stop 1 of 3'), findsOneWidget);
     });
 

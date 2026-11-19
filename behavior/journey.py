@@ -6,7 +6,8 @@ behavior/journey.py — 睡眠計畫的 Journey：把起床一站一站往前移
 ═══════════════════════════════════════════════════════════════════
 - 一站提早 STEP_MINUTES（30）分鐘                         ← 文獻：Gradisar 2011、Lack 2007
 - 先移起床，就寢＝起床 − 睡眠長度                          ← 文獻：Sharkey 2011、Burgess 2006
-- 睡眠長度最少 MIN_SLEEP_MINUTES（7 小時）                 ← 文獻：Hirshkowitz 2015
+- 睡眠長度**由使用者自己定、不設下限**（11-19 使用者改：每個人需要的不一樣）；
+  畫面上只照抄 RECOMMENDED_SLEEP_MINUTES（7 小時，Hirshkowitz 2015）當參考
 - 第 1 站＝起點 − 30，開始那晚就生效
 - 最後一站不滿 30 分鐘就只走剩下的，剛好停在終點
 - 連續 ON_TIME_IN_A_ROW（3）天準時起床才前進               ← 🔴 設計決策，沒有文獻
@@ -29,7 +30,7 @@ from statistics import median
 
 STEP_MINUTES = 30
 ON_TIME_IN_A_ROW = 3          # 🔴 設計決策；取 3 與挑戰「Three nights in a row」一致
-MIN_SLEEP_MINUTES = 7 * 60    # Hirshkowitz 2015（P1 的 7–9 小時的下限）
+RECOMMENDED_SLEEP_MINUTES = 7 * 60  # Hirshkowitz 2015（P1 的 7–9 小時的下限）；只給畫面當參考，不擋
 SUGGEST_NIGHTS = 7            # 🔴 設計決策
 SUGGEST_MIN_MEASURED = 3      # 🔴 設計決策
 SUGGEST_ROUND_MINUTES = 5
@@ -79,9 +80,6 @@ def bedtime_for(wake_hhmm, sleep_minutes):
     return to_hhmm(to_minutes(wake_hhmm) - sleep_minutes)
 
 
-def clamp_sleep(sleep_minutes):
-    """不到 7 小時一律用 7 小時（轉盤本身不限制，只有 Journey 排的作息有下限）。"""
-    return max(int(sleep_minutes), MIN_SLEEP_MINUTES)
 
 
 def first_night_for(moment):

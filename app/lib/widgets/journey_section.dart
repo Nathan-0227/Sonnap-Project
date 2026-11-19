@@ -400,8 +400,8 @@ class _JourneySetupState extends State<_JourneySetup> {
   String? _error;
 
   int _initialSleep() {
-    final dial = sleepSpan(widget.dialBedtime, widget.dialWake).inMinutes;
-    return dial < widget.info.minSleepMinutes ? widget.info.minSleepMinutes : dial;
+    // 預設＝轉盤上現在睡多久；不設下限（使用者 11-19：每個人需要的不一樣）
+    return sleepSpan(widget.dialBedtime, widget.dialWake).inMinutes;
   }
 
   /// 只是畫面上的預覽（就寢＝起床 − 睡多久、起點 ±5 分）；真正的每一站由後端排。
@@ -417,11 +417,11 @@ class _JourneySetupState extends State<_JourneySetup> {
         _error = null;
       });
 
-  /// 拖月亮：改的是睡多久；不到 [JourneyInfo.minSleepMinutes] 就停在下限（7 小時）。
+  /// 拖月亮：改的是睡多久，拖到哪就是哪（不設下限）。
   void _onBed(TimeOfDay t) {
     final len = sleepSpan(t, _goalWake).inMinutes;
     setState(() {
-      _sleep = len < widget.info.minSleepMinutes ? widget.info.minSleepMinutes : len;
+      _sleep = len;
       _error = null;
     });
   }
@@ -467,7 +467,6 @@ class _JourneySetupState extends State<_JourneySetup> {
   @override
   Widget build(BuildContext context) {
     final info = widget.info;
-    final atMin = _sleep <= info.minSleepMinutes;
     // 不透明的底（同加習慣那一頁）：showReportSheet 本身是透明的。
     // ⚠️ 不包捲動：轉盤是用拖的，外面有捲動的話上下拖會被捲動吃掉。
     return Container(
@@ -575,12 +574,10 @@ class _JourneySetupState extends State<_JourneySetup> {
               const SizedBox(height: 4),
               Center(
                 child: Text(
-                  '${_hm(_sleep)} of sleep · at least ${_hm(info.minSleepMinutes)} is recommended',
+                  '${_hm(_sleep)} of sleep · ${_hm(info.recommendedSleepMinutes)} or more is recommended',
                   key: const Key('journey-setup-min-note'),
-                  style: TextStyle(
-                      color: atMin ? ReportColors.gold : ReportColors.faint,
-                      fontSize: 12,
-                      fontWeight: atMin ? FontWeight.w700 : FontWeight.w400),
+                  // 只寫事實＋參考，不變色、不判斷夠不夠
+                  style: const TextStyle(color: ReportColors.faint, fontSize: 12),
                 ),
               ),
               if (_error != null) ...[

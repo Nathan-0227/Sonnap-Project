@@ -1078,7 +1078,7 @@ async def get_journey(user_id: str = Query(...)):
     return {
         "journey": state,
         "suggested_start": journey.suggested_start(rows),
-        "min_sleep_minutes": journey.MIN_SLEEP_MINUTES,
+        "recommended_sleep_minutes": journey.RECOMMENDED_SLEEP_MINUTES,
         "step_minutes": journey.STEP_MINUTES,
     }
 
@@ -1093,7 +1093,7 @@ async def post_journey(req: JourneyStartRequest):
         raise HTTPException(status_code=422,
                             detail="already_there: end_wake is not earlier than start_wake.")
     db.start_journey(req.user_id, req.start_wake, req.end_wake,
-                     journey.clamp_sleep(req.sleep_minutes),
+                     req.sleep_minutes,
                      journey.first_night_for(datetime.now()))
     _, state, _ = _sync_journey(req.user_id)
     return {"journey": state}
