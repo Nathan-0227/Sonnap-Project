@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/journey_service.dart';
 import '../services/sleep_plan.dart';
+import 'journey_section.dart';
 
 // ── 首頁小卡 ───────────────────────────────────────────────────────────
 
@@ -13,12 +15,16 @@ class TodayPlanCard extends StatefulWidget {
   final VoidCallback onOpen;
   final DateTime Function() clock;
 
+  /// Journey 前進一站／走完時，小卡多一行提示（看過就收起來，打開計畫頁算看過）。
+  final JourneyController? journey;
+
   const TodayPlanCard({
     super.key,
     required this.plan,
     required this.wake,
     required this.onOpen,
     this.clock = DateTime.now,
+    this.journey,
   });
 
   @override
@@ -32,6 +38,7 @@ class _TodayPlanCardState extends State<TodayPlanCard> {
   void initState() {
     super.initState();
     widget.plan.addListener(_onChange);
+    widget.journey?.addListener(_onChange);
     if (!widget.plan.loaded) unawaited(widget.plan.load());
     unawaited(widget.wake().then((w) {
       if (mounted) setState(() => _wake = w);
@@ -41,6 +48,7 @@ class _TodayPlanCardState extends State<TodayPlanCard> {
   @override
   void dispose() {
     widget.plan.removeListener(_onChange);
+    widget.journey?.removeListener(_onChange);
     super.dispose();
   }
 
@@ -93,6 +101,14 @@ class _TodayPlanCardState extends State<TodayPlanCard> {
                     Text(line,
                         key: const Key('today-plan-summary'),
                         style: const TextStyle(color: Color(0xFFB7BEDC), fontSize: 12)),
+                    if ((widget.journey?.showNotice ?? false) && widget.journey?.journey != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(journeyNoticeText(widget.journey!.journey!),
+                            key: const Key('today-plan-journey-notice'),
+                            style: const TextStyle(
+                                color: Color(0xFFFFD772), fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
                   ],
                 ),
               ),

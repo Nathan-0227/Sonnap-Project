@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/alarm.dart';
+import '../services/journey_service.dart';
 import '../theme/sonnap_colors.dart';
 import 'sleep_dial.dart';
 
@@ -24,6 +25,8 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
 }) async {
   final wake = await alarmSettings.wakeTime(bedtime);
   final enabled = await alarmSettings.enabled();
+  // Journey 進行中：就寢與起床跟著這一站走，轉盤鎖住（使用者定 Q14）。鬧鐘開關照樣能改。
+  final locked = await journeyLocksSchedule(alarmSettings.store);
   if (!context.mounted) return null;
   final result = await showModalBottomSheet<SleepScheduleResult>(
     context: context,
@@ -38,6 +41,7 @@ Future<SleepScheduleResult?> showSleepScheduleSheet(
       alarmEnabled: enabled,
       scheduler: scheduler,
       confirmLabel: confirmLabel,
+      journeyLocked: locked,
     ),
   );
   if (result != null) {
@@ -126,6 +130,10 @@ class SleepScheduleSheet extends StatefulWidget {
   /// 先看一眼就寢／起床／鬧鐘，按了才開始睡覺）。
   final String confirmLabel;
 
+  /// Journey 進行中：轉盤整個鎖住、上面寫 Following your journey（Q14）。
+  /// 鎖在這裡而不是三個入口各鎖一次——漏一個就能在那裡把 Journey 的目標轉掉。
+  final bool journeyLocked;
+
   const SleepScheduleSheet({
     super.key,
     required this.bedtime,
@@ -137,6 +145,7 @@ class SleepScheduleSheet extends StatefulWidget {
     this.bedLocked = false,
     this.showAlarm = true,
     this.confirmLabel = 'Save',
+    this.journeyLocked = false,
   });
 
   @override
@@ -231,13 +240,28 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+            if (widget.journeyLocked) ...[
+              const SizedBox(height: 6),
+              const Text(
+                'Following your journey · stop it on your sleep plan to change',
+                key: Key('schedule-journey-lock'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: SonnapColors.textSecondary, fontSize: 13),
+              ),
+            ],
             const SizedBox(height: 16),
-            SleepDial(
-              bedtime: _bed,
-              wake: _wake,
-              onBedtimeChanged: (t) => setState(() => _bed = t),
-              onWakeChanged: (t) => setState(() => _wake = t),
-              bedLocked: widget.tonightOnly || widget.bedLocked,
+            IgnorePointer(
+              ignoring: widget.journeyLocked,
+              child: Opacity(
+                opacity: widget.journeyLocked ? 0.6 : 1,
+                child: SleepDial(
+                  bedtime: _bed,
+                  wake: _wake,
+                  onBedtimeChanged: (t) => setState(() => _bed = t),
+                  onWakeChanged: (t) => setState(() => _wake = t),
+                  bedLocked: widget.tonightOnly || widget.bedLocked,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             SleepTimesCard(bedtime: _bed, wake: _wake, alarmOn: _alarm),

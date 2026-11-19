@@ -15,6 +15,8 @@ import '../widgets/plan_check_button.dart';
 import '../widgets/plan_habit_editor.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
+import '../services/journey_service.dart';
+import '../widgets/journey_section.dart';
 
 /// 睡眠計畫頁（2026-11-19；版面照使用者給的參考圖，配色維持深色）。由上到下：
 ///   場景＋寵物 → 作息條 → 「今天還有幾條」＋ ＋ → 自己勾的習慣（右邊大方形勾勾）
@@ -47,6 +49,9 @@ class PlanScreen extends StatefulWidget {
   final Future<String?> Function()? petMood;
   final DateTime Function() clock;
 
+  /// Journey（作息條底下）。null＝不畫（測試、沒接上的地方）。
+  final JourneyController? journey;
+
   const PlanScreen({
     super.key,
     required this.plan,
@@ -61,6 +66,7 @@ class PlanScreen extends StatefulWidget {
     this.petMood,
     this.loadChallenges,
     this.clock = DateTime.now,
+    this.journey,
   });
 
   @override
@@ -137,6 +143,9 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     super.initState();
     widget.plan.addListener(_onChange);
     widget.nightly?.addListener(_onChange);
+    widget.journey?.addListener(_onJourney);
+    // 打開這一頁時問一次（後端會重算、需要就換站）
+    unawaited(widget.journey?.refresh());
     if (!widget.plan.loaded) unawaited(widget.plan.load());
     unawaited(_loadWake());
     unawaited(_loadGame());
@@ -156,12 +165,36 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
   void dispose() {
     widget.plan.removeListener(_onChange);
     widget.nightly?.removeListener(_onChange);
+    widget.journey?.removeListener(_onJourney);
+    // 「Next stop from tonight」在這一頁看到了，離開就算看過（首頁小卡也跟著收起來）
+    if (widget.journey?.showNotice ?? false) unawaited(widget.journey!.markSeen());
     _hop.dispose();
     super.dispose();
   }
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  /// 這一站就是目標：開始、前進、走完時作息條跟著換（主程式那邊也會換掉目標與鬧鐘）。
+  void _onJourney() {
+    if (!mounted) return;
+    final j = widget.journey?.journey;
+    final cur = j?.current;
+    setState(() {
+      if (j != null && cur != null && j.status != JourneyStatus.stopped) {
+        _bedtime = cur.bedtime;
+        _wake = cur.wake;
+      }
+    });
+    _resyncReminders();
+  }
+
+  Future<void> _startJourney() async {
+    final c = widget.journey;
+    final wake = _wake;
+    if (c == null || wake == null) return;
+    await showJourneySetupSheet(context, controller: c, dialBedtime: _bedtime, dialWake: wake);
   }
 
   Future<void> _loadWake() async {
@@ -300,6 +333,8 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
                 padding: EdgeInsets.fromLTRB(18, 14, 18, 32 + pad.bottom),
                 children: [
                   _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
+                  if (widget.journey != null)
+                    JourneySection(controller: widget.journey!, onStart: () => unawaited(_startJourney())),
                   _habitHeader(today),
                   const SizedBox(height: 10),
                   if (today != null) ..._habitRows(today, wake!),
