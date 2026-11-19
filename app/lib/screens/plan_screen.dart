@@ -83,6 +83,42 @@ const double kPlanRoomAspect = 2335 / 1080; // 圖的高÷寬
 /// 地毯中心落在圖高的幾成（量使用者那張圖：地毯 36%–50%）。換圖要重量。
 const double kPlanRugCenter = 0.43;
 
+/// 跳一下的某一刻：[lift] 0＝在地上、1＝最高點；[scaleX]／[scaleY] 從腳底壓扁或拉長。
+typedef PetJumpPose = ({double lift, double scaleX, double scaleY});
+
+/// 寵物跳一下的四段（t：0→1）：
+///   0–0.2   蹲下蓄力（壓扁，還沒離地）
+///   0.2–0.75 在空中：高度是拋物線（起跳快、頂端慢、落下加速，像重力），越快越拉長
+///   0.75–0.88 落地壓扁
+///   0.88–1  微微彈回原狀
+PetJumpPose petJumpPose(double t) {
+  double ease(double x) => math.sin(math.pi * x.clamp(0.0, 1.0)); // 0→1→0
+  if (t <= 0 || t >= 1) return (lift: 0.0, scaleX: 1.0, scaleY: 1.0);
+  if (t < 0.2) {
+    final k = math.sin(math.pi / 2 * (t / 0.2)); // 0→1
+    return (lift: 0.0, scaleX: 1 + 0.08 * k, scaleY: 1 - 0.12 * k);
+  }
+  if (t < 0.75) {
+    final p = (t - 0.2) / 0.55;
+    // 起跳、落下最快就拉最長；碰到地之前收回原狀，接落地的壓扁不會一格跳掉
+    final speed = (1 - 2 * p).abs() * (p > 0.88 ? (1 - p) / 0.12 : 1.0);
+    final sx = 1 - 0.05 * speed, sy = 1 + 0.08 * speed;
+    // 起跳那一下從蹲的樣子（1.08／0.88）漸漸接過來，不要一格跳掉
+    final w = p < 0.12 ? p / 0.12 : 1.0;
+    return (
+      lift: 4 * p * (1 - p),
+      scaleX: 1.08 + (sx - 1.08) * w,
+      scaleY: 0.88 + (sy - 0.88) * w,
+    );
+  }
+  if (t < 0.88) {
+    final k = ease((t - 0.75) / 0.13);
+    return (lift: 0.0, scaleX: 1 + 0.07 * k, scaleY: 1 - 0.10 * k);
+  }
+  final k = ease((t - 0.88) / 0.12);
+  return (lift: 0.0, scaleX: 1 - 0.015 * k, scaleY: 1 + 0.03 * k);
+}
+
 class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateMixin {
   late TimeOfDay _bedtime = widget.bedtime;
   TimeOfDay? _wake;
@@ -94,7 +130,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
 
   /// 勾下去時寵物跳一下（只動作，**臉不換**：臉是後端判的心情，Q40）。
   late final AnimationController _hop =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 680));
 
   @override
   void initState() {
@@ -228,7 +264,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     // 背景用 cover、靠上對齊：圖實際畫出來的高度
     final imgH = math.max(size.height, size.width * kPlanRoomAspect);
     final rugY = imgH * kPlanRugCenter;
-    const petSize = 150.0;
+    const petSize = 200.0;
     // 清單從寵物腳下開始捲，**不蓋過寵物**（使用者 11-19 定：要看得到牠跳）
     final listTop = rugY + petSize * 0.22;
     return ReportFont(
@@ -351,30 +387,47 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
         ],
       );
 
-  /// 寵物＋勾下去時跳一下、頭上冒小星星。減少動態效果時 [_hop] 不會跑，就是靜止的。
+  /// 寵物＋勾下去時跳一下（11-19 使用者：原本整張平移上下像被線提起來，改成自然的跳）。
+  /// 不冒星星：方格那邊已經有光點和 Nice!，兩邊同時演眼睛不知道看哪。
+  /// 腳下一直有淡影子，跳高時變小變淡。減少動態效果時 [_hop] 不會跑，就是靜止的。
   Widget _pet(double size) => AnimatedBuilder(
         key: const Key('plan-pet'),
         animation: _hop,
         builder: (context, child) {
-          final t = _hop.isAnimating ? _hop.value : 0.0;
-          final up = math.sin(math.pi * t) * 22;
+          final j = petJumpPose(_hop.isAnimating ? _hop.value : 0.0);
+          final feetY = size * 0.84;
+          final shadowW = size * 0.46 * (1 - 0.35 * j.lift);
           return SizedBox(
             width: size,
             height: size,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Transform.translate(offset: Offset(0, -up), child: child),
-                if (_hop.isAnimating)
-                  for (final (dx, delay) in const [(-34.0, 0.0), (0.0, 0.12), (34.0, 0.06)])
-                    Positioned(
-                      left: size / 2 + dx - 10,
-                      top: 6 - 40 * ((t - delay).clamp(0.0, 1.0)),
-                      child: Opacity(
-                        opacity: (1 - (t - delay).clamp(0.0, 1.0)).clamp(0.0, 1.0),
-                        child: const Icon(Icons.auto_awesome, size: 20, color: ReportColors.gold),
+                Positioned(
+                  left: (size - shadowW) / 2,
+                  top: feetY - size * 0.04,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: const Key('plan-pet-shadow'),
+                      width: shadowW,
+                      height: size * 0.08,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.all(Radius.elliptical(shadowW / 2, size * 0.04)),
+                        color: Colors.black.withValues(alpha: 0.24 * (1 - 0.55 * j.lift)),
                       ),
                     ),
+                  ),
+                ),
+                Transform.translate(
+                  key: const Key('plan-pet-body'),
+                  offset: Offset(0, -j.lift * size * 0.17),
+                  child: Transform(
+                    // 從腳底壓扁／拉長，不是從中心
+                    alignment: Alignment(0, feetY / size * 2 - 1),
+                    transform: Matrix4.diagonal3Values(j.scaleX, j.scaleY, 1),
+                    child: child,
+                  ),
+                ),
               ],
             ),
           );

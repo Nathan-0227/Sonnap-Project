@@ -315,12 +315,16 @@ void main() {
   });
 
   group('勾下去的回饋（Q36、Q40–Q46：只有當下，不累積）', () {
-    testWidgets('勾下去：Nice! 出現、一會兒就消失；寵物冒星星；沒有任何點數', (tester) async {
+    testWidgets('勾下去：Nice! 出現、一會兒就消失；寵物跳起來；沒有任何點數', (tester) async {
       await pumpPlanForFeedback(tester);
+      final rest = tester.getRect(find.descendant(of: find.byKey(const Key('plan-pet-body')), matching: find.byType(HomePet))).top;
       await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.byKey(const Key('plan-nice')), findsOneWidget);
-      expect(find.byIcon(Icons.auto_awesome), findsWidgets, reason: '寵物跳一下、冒星星');
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(tester.getRect(find.descendant(of: find.byKey(const Key('plan-pet-body')), matching: find.byType(HomePet))).top, lessThan(rest - 10),
+          reason: '寵物跳一下');
+      expect(find.byIcon(Icons.auto_awesome), findsNothing, reason: '不冒星星：回饋只在方格那邊演');
       expect(find.textContaining('XP'), findsNothing);
       expect(find.textContaining('+'), findsNothing, reason: '不累積：沒有 +1、+5 這種數字');
       await tester.pump(const Duration(seconds: 1));
@@ -338,6 +342,20 @@ void main() {
       expect(find.byIcon(Icons.auto_awesome), findsNothing);
     });
 
+    test('跳的每一格都接得上（不會一格突然變形）、最後回到原狀', () {
+      var prev = petJumpPose(0);
+      for (var i = 1; i <= 400; i++) {
+        final j = petJumpPose(i / 400);
+        expect((j.scaleX - prev.scaleX).abs(), lessThan(0.01), reason: 't=${i / 400}');
+        expect((j.scaleY - prev.scaleY).abs(), lessThan(0.01), reason: 't=${i / 400}');
+        expect((j.lift - prev.lift).abs(), lessThan(0.02), reason: 't=${i / 400}');
+        prev = j;
+      }
+      expect(petJumpPose(1), (lift: 0.0, scaleX: 1.0, scaleY: 1.0));
+      expect(petJumpPose(0.1).lift, 0, reason: '先蹲、還沒離地');
+      expect(petJumpPose(0.1).scaleY, lessThan(1), reason: '蹲＝壓扁');
+    });
+
     testWidgets('寵物的臉維持後端的心情，勾了也不換成開心', (tester) async {
       await pumpPlanForFeedback(tester, mood: 'anxious');
       await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
@@ -352,7 +370,9 @@ void main() {
       await tester.tap(find.byKey(const Key('plan-check-late_caffeine')));
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.byKey(const Key('plan-nice')), findsOneWidget);
-      expect(find.byIcon(Icons.auto_awesome), findsNothing);
+      final rest = tester.getRect(find.descendant(of: find.byKey(const Key('plan-pet-body')), matching: find.byType(HomePet))).top;
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(tester.getRect(find.descendant(of: find.byKey(const Key('plan-pet-body')), matching: find.byType(HomePet))).top, rest, reason: '寵物不動');
       await tester.pump(const Duration(seconds: 1));
     });
 
