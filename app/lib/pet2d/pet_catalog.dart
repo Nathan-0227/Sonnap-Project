@@ -611,14 +611,14 @@ const accessories = <AccessoryDefinition>[
     shadowAt: 0.887,
     // 使用者 2026-11-19 逐格挑的戴法（每種姿勢一組）
     poseFits: {
-      'dog01.happy': AccessoryFit(fit: 0.86, drop: -0.08, dx: 0.14, rotationDeg: 16),
+      'dog01.happy': AccessoryFit(fit: 0.86, drop: -0.03, dx: 0.06, rotationDeg: 16),
       'dog01.bored': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
       'dog01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: 0.0),
       'dog01.anxious': AccessoryFit(fit: 0.86, drop: -0.16, dx: 0.0),
       'cat01.happy': AccessoryFit(fit: 0.8, drop: -0.02, dx: 0.0),
-      'cat01.bored': AccessoryFit(fit: 0.8, drop: -0.02, dx: -0.06),
+      'cat01.bored': AccessoryFit(fit: 0.74, drop: -0.02, dx: -0.12),
       'cat01.tired': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
-      'cat01.anxious': AccessoryFit(fit: 0.72, drop: -0.16, dx: -0.06),
+      'cat01.anxious': AccessoryFit(fit: 0.72, drop: -0.09, dx: -0.06),
     },
   ),
   AccessoryDefinition(
