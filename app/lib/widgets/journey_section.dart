@@ -435,16 +435,29 @@ class _JourneyRoadState extends State<JourneyRoad>
   int? _selected; // -1＝起點，0..n-1＝第幾站
   bool _started = false;
 
+  /// 這一次從哪裡走過來（剛前進、或點了寵物時＝上一個點；起點是 -1）。
+  bool _walking = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_started) return;
     _started = true;
-    if (widget.walkFromPrevious && !MediaQuery.disableAnimationsOf(context)) {
-      _walk.forward(from: 0);
+    if (widget.walkFromPrevious) {
+      _replay();
     } else {
       _walk.value = 1;
     }
+  }
+
+  /// 點寵物：從上一個點再走一次（11-19 使用者：想看動畫）。減少動態效果時不走。
+  void _replay() {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _walk.value = 1;
+      return;
+    }
+    setState(() => _walking = true);
+    _walk.forward(from: 0);
   }
 
   @override
@@ -470,6 +483,12 @@ class _JourneyRoadState extends State<JourneyRoad>
           final cy = _height / 2;
 
           void tapAt(Offset p) {
+            // 點在寵物身上：再走一次（這一站的時間上面那列已經寫了）
+            if ((p.dx - x(j.stopIndex)).abs() <= _marker / 2) {
+              setState(() => _selected = null);
+              _replay();
+              return;
+            }
             int? best;
             var bestD = 22.0;
             for (var i = -1; i < n; i++) {
@@ -492,9 +511,7 @@ class _JourneyRoadState extends State<JourneyRoad>
               animation: _walk,
               builder: (context, _) {
                 final t = Curves.easeInOut.transform(_walk.value);
-                final from = widget.walkFromPrevious
-                    ? x(j.stopIndex - 1)
-                    : x(j.stopIndex);
+                final from = _walking ? x(j.stopIndex - 1) : x(j.stopIndex);
                 final hereX = from + (x(j.stopIndex) - from) * t;
                 // 走的時候上下輕輕晃（像在走路），停下來就不晃
                 final bob = _walk.isAnimating
@@ -611,7 +628,8 @@ class _JourneyRoadState extends State<JourneyRoad>
     height: size,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: fill,
+      // 不透明：半透明的話後面那條路會穿過圖示（11-19 實機：早晨的圖示被一條線劃過）
+      color: Color.alphaBlend(fill, const Color(0xFF262C66)),
       border: Border.all(color: border, width: 2),
     ),
     child: Center(child: child),

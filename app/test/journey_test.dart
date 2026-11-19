@@ -279,6 +279,24 @@ void main() {
       expect(tester.getRect(find.byKey(const Key('journey-here'))).left, a);
     });
 
+    testWidgets('點寵物：從上一個點再走一次（第 1 站從起點走）；減少動態效果不走', (tester) async {
+      await pump(tester, _info(_state()));
+      final here = find.byKey(const Key('journey-here'));
+      final rest = tester.getRect(here).left;
+      await tester.tapAt(tester.getCenter(here));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getRect(here).left, lessThan(rest - 20), reason: '從起點那邊走過來');
+      expect(find.byKey(const Key('journey-bubble')), findsNothing, reason: '點寵物不是看時間');
+      await settle(tester);
+      expect(tester.getRect(here).left, rest);
+
+      await pump(tester, _info(_state()), reduceMotion: true);
+      final still = tester.getRect(here).left;
+      await tester.tapAt(tester.getCenter(here));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getRect(here).left, still);
+    });
+
     testWidgets('看過的那一站不再走；寵物的頭跟著選的小狗或貓', (tester) async {
       await pump(tester, _info(_state(idx: 1)), seen: true);
       final a = tester.getRect(find.byKey(const Key('journey-here'))).left;
