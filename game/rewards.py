@@ -26,7 +26,12 @@ from datetime import date as date_cls
 # 領一次挑戰獎勵給多少 XP。
 # ⚠️ 'time'（今晚準時）只給 10：那一晚的準時已經在 xp.py 給過 30 了，
 #    這裡只是「你記得來領」的小獎勵，不能讓同一件事拿兩份大獎。
-CLAIM_XP = {"time": 10, "streak": 40, "consistency": 40}
+# 一晚的挑戰 10、多晚的 40。
+# 2026-11-19 補上 phone_in_bed 與 wake_time（使用者定）：原本 phone_in_bed 沒列在表上，
+# 完成了領到 0 XP——那是漏掉，不是設計。⚠️ 新增挑戰型別時這張表也要加，
+# 不然 .get(kind, 0) 會安靜地給 0（tests/test_game_rewards.py 有一條守著）。
+CLAIM_XP = {"time": 10, "phone_in_bed": 10, "wake_time": 10,
+            "streak": 40, "consistency": 40}
 
 BADGES = (
     {

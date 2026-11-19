@@ -232,6 +232,15 @@ left = {t: conn.execute(f"SELECT COUNT(*) FROM {t} WHERE user_id = ?", (good,)).
 conn.close()
 check("三張遊戲表都沒有殘留", left, {"user_game_state": 0, "user_inventory": 0, "achievements": 0})
 
+# ═══════════════════════════════════════════════════════════════════
+# 每一種挑戰型別都有領獎 XP（2026-11-19）
+# ═══════════════════════════════════════════════════════════════════
+# rewards.claimable() 用 CLAIM_XP.get(kind, 0)：新增型別忘了加表就安靜地給 0。
+# phone_in_bed 就這樣漏了兩個多月。
+from behavior import challenges as _ch_engine
+missing = sorted(set(_ch_engine.PROGRESS_FUNCS) - set(rewards.CLAIM_XP))
+check("每種挑戰型別都在 CLAIM_XP 裡", missing, [])
+
 print()
 if fails:
     print(f"✗ {len(fails)} 條沒過：")
