@@ -25,7 +25,11 @@ class JourneySection extends StatelessWidget {
   /// 按 Start a journey（開設定面板）。
   final VoidCallback onStart;
 
-  const JourneySection({super.key, required this.controller, required this.onStart});
+  const JourneySection({
+    super.key,
+    required this.controller,
+    required this.onStart,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -48,48 +52,86 @@ class JourneySection extends StatelessWidget {
   }
 
   Widget _title(String text, {Widget? trailing}) => Row(
-        children: [
-          const Icon(Icons.route_rounded, color: ReportColors.gold, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+    children: [
+      const Icon(Icons.route_rounded, color: ReportColors.gold, size: 20),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
           ),
-          ?trailing,
-        ],
-      );
+        ),
+      ),
+      ?trailing,
+    ],
+  );
 
   Widget _notice(JourneyState j) => Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(journeyNoticeText(j),
-            key: const Key('journey-notice'),
-            style: const TextStyle(color: ReportColors.gold, fontSize: 14, fontWeight: FontWeight.w800)),
-      );
+    padding: const EdgeInsets.only(top: 8),
+    child: Text(
+      journeyNoticeText(j),
+      key: const Key('journey-notice'),
+      style: const TextStyle(
+        color: ReportColors.gold,
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 
-  Widget _idle(BuildContext context, JourneyState? j, JourneyInfo? info, bool noBackend) {
+  Widget _idle(
+    BuildContext context,
+    JourneyState? j,
+    JourneyInfo? info,
+    bool noBackend,
+  ) {
     final step = info?.stepMinutes ?? 30;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _title('Journey'),
-        if (j != null && j.status == JourneyStatus.done && controller.showNotice) _notice(j),
+        if (j != null &&
+            j.status == JourneyStatus.done &&
+            controller.showNotice)
+          _notice(j),
         const SizedBox(height: 6),
-        Text('Move your wake time earlier, $step minutes at a time. '
-            'Your bedtime moves with it.',
-            style: const TextStyle(color: ReportColors.muted, fontSize: 13, height: 1.35)),
+        Text(
+          'Move your wake time earlier, $step minutes at a time. '
+          'Your bedtime moves with it.',
+          style: const TextStyle(
+            color: ReportColors.muted,
+            fontSize: 13,
+            height: 1.35,
+          ),
+        ),
         const SizedBox(height: 10),
         if (noBackend)
-          const Text('Needs the backend',
-              key: Key('journey-no-backend'),
-              style: TextStyle(color: ReportColors.dim, fontSize: 13, fontWeight: FontWeight.w700))
+          const Text(
+            'Needs the backend',
+            key: Key('journey-no-backend'),
+            style: TextStyle(
+              color: ReportColors.dim,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          )
         // 有後端但還沒問到（連不上）：照實說，不要只是一顆灰掉的按鈕（11-19 實機：看不出為什麼按不了）
         else if (info == null)
           Row(
             children: [
               const Expanded(
-                child: Text("Can't reach the backend right now",
-                    key: Key('journey-unreachable'),
-                    style: TextStyle(color: ReportColors.dim, fontSize: 13, fontWeight: FontWeight.w700)),
+                child: Text(
+                  "Can't reach the backend right now",
+                  key: Key('journey-unreachable'),
+                  style: TextStyle(
+                    color: ReportColors.dim,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               TextButton(
                 key: const Key('journey-retry'),
@@ -105,7 +147,10 @@ class JourneySection extends StatelessWidget {
               key: const Key('journey-start'),
               onPressed: onStart,
               icon: const Icon(Icons.flag_rounded, size: 18),
-              label: const Text('Start a journey', style: TextStyle(fontWeight: FontWeight.w800)),
+              label: const Text(
+                'Start a journey',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: ReportColors.purple,
                 foregroundColor: Colors.white,
@@ -123,13 +168,15 @@ class JourneySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _title('Journey · stop ${j.stopIndex + 1} of $n',
-            trailing: TextButton(
-              key: const Key('journey-stop'),
-              onPressed: () => unawaited(_confirmStop(context)),
-              style: TextButton.styleFrom(foregroundColor: ReportColors.faint),
-              child: const Text('Stop journey'),
-            )),
+        _title(
+          'Journey · stop ${j.stopIndex + 1} of $n',
+          trailing: TextButton(
+            key: const Key('journey-stop'),
+            onPressed: () => unawaited(_confirmStop(context)),
+            style: TextButton.styleFrom(foregroundColor: ReportColors.faint),
+            child: const Text('Stop journey'),
+          ),
+        ),
         if (controller.showNotice) _notice(j),
         const SizedBox(height: 12),
         _JourneyPath(journey: j),
@@ -141,17 +188,27 @@ class JourneySection extends StatelessWidget {
               (i) => Padding(
                 padding: const EdgeInsets.only(right: 4),
                 child: Icon(
-                  i < j.onTimeStreak ? Icons.wb_sunny_rounded : Icons.circle_outlined,
+                  i < j.onTimeStreak
+                      ? Icons.wb_sunny_rounded
+                      : Icons.circle_outlined,
                   size: 16,
-                  color: i < j.onTimeStreak ? ReportColors.gold : ReportColors.dim,
+                  color: i < j.onTimeStreak
+                      ? ReportColors.gold
+                      : ReportColors.dim,
                 ),
               ),
             ),
             const SizedBox(width: 6),
             Expanded(
-              child: Text('${j.onTimeStreak} of ${j.onTimeNeeded} on-time mornings',
-                  key: const Key('journey-streak'),
-                  style: const TextStyle(color: ReportColors.soft, fontSize: 13, fontWeight: FontWeight.w700)),
+              child: Text(
+                '${j.onTimeStreak} of ${j.onTimeNeeded} on-time mornings',
+                key: const Key('journey-streak'),
+                style: const TextStyle(
+                  color: ReportColors.soft,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -159,7 +216,11 @@ class JourneySection extends StatelessWidget {
         Text(
           'Up within an hour of ${hhmm(j.current!.wake)}, ${j.onTimeNeeded} mornings in a row, '
           'and the next stop starts. A missed morning starts the count again.',
-          style: const TextStyle(color: ReportColors.faint, fontSize: 12, height: 1.35),
+          style: const TextStyle(
+            color: ReportColors.faint,
+            fontSize: 12,
+            height: 1.35,
+          ),
         ),
       ],
     );
@@ -170,25 +231,35 @@ class JourneySection extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ReportColors.sheet,
-        title: const Text('Stop this journey?', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Stop this journey?',
+          style: TextStyle(color: Colors.white),
+        ),
         content: const Text(
           'Your schedule stays at this stop. You can start a new journey any time.',
           style: TextStyle(color: ReportColors.muted),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep going')),
           TextButton(
-              key: const Key('journey-stop-confirm'),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Stop')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep going'),
+          ),
+          TextButton(
+            key: const Key('journey-stop-confirm'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Stop'),
+          ),
         ],
       ),
     );
     if (ok != true) return;
     final done = await controller.stop();
     if (!done && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Couldn't reach the backend. Try again later.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't reach the backend. Try again later."),
+        ),
+      );
     }
   }
 }
@@ -211,9 +282,16 @@ class _JourneyPath extends StatelessWidget {
         height: s,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: here ? ReportColors.gold : (passed ? ReportColors.lilac : Colors.transparent),
-          border: Border.all(color: here ? ReportColors.gold : ReportColors.lilac, width: 2),
-          boxShadow: here ? const [BoxShadow(color: Color(0x88FFD772), blurRadius: 10)] : null,
+          color: here
+              ? ReportColors.gold
+              : (passed ? ReportColors.lilac : Colors.transparent),
+          border: Border.all(
+            color: here ? ReportColors.gold : ReportColors.lilac,
+            width: 2,
+          ),
+          boxShadow: here
+              ? const [BoxShadow(color: Color(0x88FFD772), blurRadius: 10)]
+              : null,
         ),
       );
     }
@@ -221,12 +299,16 @@ class _JourneyPath extends StatelessWidget {
     final items = <Widget>[];
     for (var i = 0; i < j.stops.length; i++) {
       if (i > 0) {
-        items.add(Expanded(
-          child: Container(
-            height: 2,
-            color: i <= j.stopIndex ? ReportColors.lilac : ReportColors.border,
+        items.add(
+          Expanded(
+            child: Container(
+              height: 2,
+              color: i <= j.stopIndex
+                  ? ReportColors.lilac
+                  : ReportColors.border,
+            ),
           ),
-        ));
+        );
       }
       items.add(dot(i));
     }
@@ -236,16 +318,30 @@ class _JourneyPath extends StatelessWidget {
         const SizedBox(height: 8),
         Row(
           children: [
-            Text('up ${hhmm(j.startWake)}',
-                style: const TextStyle(color: ReportColors.dim, fontSize: 12)),
+            Text(
+              'up ${hhmm(j.startWake)}',
+              style: const TextStyle(color: ReportColors.dim, fontSize: 12),
+            ),
             const Spacer(),
-            Text('Tonight: bed ${hhmm(cur.bedtime)} · up ${hhmm(cur.wake)}',
-                key: const Key('journey-current'),
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800)),
+            Text(
+              'Tonight: bed ${hhmm(cur.bedtime)} · up ${hhmm(cur.wake)}',
+              key: const Key('journey-current'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const Spacer(),
-            Text('goal ${hhmm(j.endWake)}',
-                key: const Key('journey-goal'),
-                style: const TextStyle(color: ReportColors.gold, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(
+              'goal ${hhmm(j.endWake)}',
+              key: const Key('journey-goal'),
+              style: const TextStyle(
+                color: ReportColors.gold,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ],
@@ -301,7 +397,9 @@ class _JourneySetupState extends State<_JourneySetup> {
 
   int _initialSleep() {
     final dial = sleepSpan(widget.dialBedtime, widget.dialWake).inMinutes;
-    return dial < widget.info.minSleepMinutes ? widget.info.minSleepMinutes : dial;
+    return dial < widget.info.minSleepMinutes
+        ? widget.info.minSleepMinutes
+        : dial;
   }
 
   Future<void> _pick({required bool start}) async {
@@ -327,23 +425,37 @@ class _JourneySetupState extends State<_JourneySetup> {
       _busy = true;
       _error = null;
     });
-    final out = await widget.controller.start(startWake: _start, endWake: goal, sleepMinutes: _sleep);
+    final out = await widget.controller.start(
+      startWake: _start,
+      endWake: goal,
+      sleepMinutes: _sleep,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     switch (out) {
       case JourneyStartOutcome.started:
         Navigator.of(context).pop(true);
       case JourneyStartOutcome.alreadyThere:
-        setState(() => _error = "You're already there — just change your schedule.");
+        setState(
+          () => _error = "You're already there — just change your schedule.",
+        );
       case JourneyStartOutcome.failed:
         setState(() => _error = "Couldn't reach the backend. Try again later.");
     }
   }
 
-  String _hm(int minutes) => minutes % 60 == 0 ? '${minutes ~/ 60}h' : '${minutes ~/ 60}h ${minutes % 60}m';
+  String _hm(int minutes) => minutes % 60 == 0
+      ? '${minutes ~/ 60}h'
+      : '${minutes ~/ 60}h ${minutes % 60}m';
 
-  Widget _row({required Key key, required String label, required String sub, required String value,
-      VoidCallback? onTap, bool highlight = false}) {
+  Widget _row({
+    required Key key,
+    required String label,
+    required String sub,
+    required String value,
+    VoidCallback? onTap,
+    bool highlight = false,
+  }) {
     return Material(
       color: Colors.white.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(18),
@@ -359,20 +471,39 @@ class _JourneySetupState extends State<_JourneySetup> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label,
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(sub, style: const TextStyle(color: ReportColors.faint, fontSize: 12)),
+                    Text(
+                      sub,
+                      style: const TextStyle(
+                        color: ReportColors.faint,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Text(value,
-                  style: TextStyle(
-                      color: highlight ? ReportColors.gold : Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900)),
+              Text(
+                value,
+                style: TextStyle(
+                  color: highlight ? ReportColors.gold : Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(width: 4),
-              const Icon(Icons.edit_rounded, size: 16, color: ReportColors.accent),
+              const Icon(
+                Icons.edit_rounded,
+                size: 16,
+                color: ReportColors.accent,
+              ),
             ],
           ),
         ),
@@ -384,98 +515,159 @@ class _JourneySetupState extends State<_JourneySetup> {
   Widget build(BuildContext context) {
     final info = widget.info;
     final min = info.minSleepMinutes;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Start a journey',
-              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          Text('Your wake time moves ${info.stepMinutes} minutes earlier at each stop. '
-              'Bedtime follows, so you keep the same sleep length.',
-              style: const TextStyle(color: ReportColors.muted, fontSize: 13, height: 1.35)),
-          const SizedBox(height: 16),
-          _row(
-            key: const Key('journey-setup-start'),
-            label: 'You wake up now',
-            sub: info.suggestedStart != null ? 'Middle of your last 7 nights' : 'From your schedule',
-            value: hhmm(_start),
-            onTap: () => unawaited(_pick(start: true)),
-          ),
-          const SizedBox(height: 10),
-          _row(
-            key: const Key('journey-setup-goal'),
-            label: 'Goal wake time',
-            sub: 'You choose where it ends',
-            value: _goal == null ? 'Pick' : hhmm(_goal!),
-            highlight: true,
-            onTap: () => unawaited(_pick(start: false)),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
+    // 不透明的底（同加習慣那一頁）：showReportSheet 本身是透明的，不墊的話後面的計畫頁會透出來
+    return Container(
+      key: const Key('journey-setup'),
+      decoration: const BoxDecoration(
+        color: ReportColors.sheet,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const Text(
+                  'Start a journey',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your wake time moves ${info.stepMinutes} minutes earlier at each stop. '
+                  'Bedtime follows, so you keep the same sleep length.',
+                  style: const TextStyle(
+                    color: ReportColors.muted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _row(
+                  key: const Key('journey-setup-start'),
+                  label: 'You wake up now',
+                  sub: info.suggestedStart != null
+                      ? 'Middle of your last 7 nights'
+                      : 'From your schedule',
+                  value: hhmm(_start),
+                  onTap: () => unawaited(_pick(start: true)),
+                ),
+                const SizedBox(height: 10),
+                _row(
+                  key: const Key('journey-setup-goal'),
+                  label: 'Goal wake time',
+                  sub: 'You choose where it ends',
+                  value: _goal == null ? 'Pick' : hhmm(_goal!),
+                  highlight: true,
+                  onTap: () => unawaited(_pick(start: false)),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
                     children: [
-                      const Text('Sleep length',
-                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text('At least ${_hm(min)} is recommended',
-                          key: const Key('journey-setup-min-note'),
-                          style: const TextStyle(color: ReportColors.faint, fontSize: 12)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sleep length',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'At least ${_hm(min)} is recommended',
+                              key: const Key('journey-setup-min-note'),
+                              style: const TextStyle(
+                                color: ReportColors.faint,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('journey-setup-less'),
+                        onPressed: _sleep - 15 < min
+                            ? null
+                            : () => setState(() => _sleep -= 15),
+                        icon: const Icon(Icons.remove_circle_outline_rounded),
+                        color: ReportColors.accent,
+                      ),
+                      Text(
+                        _hm(_sleep),
+                        key: const Key('journey-setup-sleep'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('journey-setup-more'),
+                        onPressed: _sleep + 15 > 12 * 60
+                            ? null
+                            : () => setState(() => _sleep += 15),
+                        icon: const Icon(Icons.add_circle_outline_rounded),
+                        color: ReportColors.accent,
+                      ),
                     ],
                   ),
                 ),
-                IconButton(
-                  key: const Key('journey-setup-less'),
-                  onPressed: _sleep - 15 < min ? null : () => setState(() => _sleep -= 15),
-                  icon: const Icon(Icons.remove_circle_outline_rounded),
-                  color: ReportColors.accent,
-                ),
-                Text(_hm(_sleep),
-                    key: const Key('journey-setup-sleep'),
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-                IconButton(
-                  key: const Key('journey-setup-more'),
-                  onPressed: _sleep + 15 > 12 * 60 ? null : () => setState(() => _sleep += 15),
-                  icon: const Icon(Icons.add_circle_outline_rounded),
-                  color: ReportColors.accent,
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _error!,
+                    key: const Key('journey-setup-error'),
+                    style: const TextStyle(
+                      color: ReportColors.gold,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const Key('journey-setup-go'),
+                    onPressed: _goal == null || _busy
+                        ? null
+                        : () => unawaited(_go()),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: ReportColors.purple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Text(
+                      _busy ? 'Starting…' : 'Start journey',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(_error!,
-                key: const Key('journey-setup-error'),
-                style: const TextStyle(color: ReportColors.gold, fontSize: 13, fontWeight: FontWeight.w700)),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              key: const Key('journey-setup-go'),
-              onPressed: _goal == null || _busy ? null : () => unawaited(_go()),
-              style: FilledButton.styleFrom(
-                backgroundColor: ReportColors.purple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const StadiumBorder(),
-              ),
-              child: Text(_busy ? 'Starting…' : 'Start journey',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
