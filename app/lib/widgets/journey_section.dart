@@ -82,6 +82,22 @@ class JourneySection extends StatelessWidget {
           const Text('Needs the backend',
               key: Key('journey-no-backend'),
               style: TextStyle(color: ReportColors.dim, fontSize: 13, fontWeight: FontWeight.w700))
+        // 有後端但還沒問到（連不上）：照實說，不要只是一顆灰掉的按鈕（11-19 實機：看不出為什麼按不了）
+        else if (info == null)
+          Row(
+            children: [
+              const Expanded(
+                child: Text("Can't reach the backend right now",
+                    key: Key('journey-unreachable'),
+                    style: TextStyle(color: ReportColors.dim, fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+              TextButton(
+                key: const Key('journey-retry'),
+                onPressed: () => unawaited(controller.refresh()),
+                child: const Text('Try again'),
+              ),
+            ],
+          )
         else
           SizedBox(
             width: double.infinity,

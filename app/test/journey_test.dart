@@ -245,6 +245,17 @@ void main() {
       expect(find.byKey(const Key('journey-no-backend')), findsOneWidget);
     });
 
+    testWidgets('有後端但連不上：照實說＋Try again，連上之後出現 Start', (tester) async {
+      final (_, api) = await pump(tester, null);
+      expect(find.byKey(const Key('journey-unreachable')), findsOneWidget,
+          reason: '不能只是一顆灰掉的按鈕');
+      expect(find.byKey(const Key('journey-start')), findsNothing);
+      api.next = _info(null);
+      await tester.tap(find.byKey(const Key('journey-retry')));
+      await settle(tester);
+      expect(find.byKey(const Key('journey-start')), findsOneWidget);
+    });
+
     testWidgets('開始：起點用後端的建議；不選終點按不了；睡不到 7 小時照 7 小時送', (tester) async {
       final (_, api) = await pump(tester, _info(null, suggested: '11:05'));
       await tester.tap(find.byKey(const Key('journey-start')));
