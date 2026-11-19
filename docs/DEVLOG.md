@@ -50,6 +50,29 @@ MSYS_NO_PATHCONV=1 adb shell settings get secure enabled_accessibility_services
    11-19 當下存的是 `start` 00:40 → `end` 07:10，正好 6.5 小時
    （目標就寢 01:10 的前 30 分 + 後 6 小時），日期是當天的。
 
+### ✅ 補記（同日稍晚）：方案 B 第一次拿到手機真的送的候選
+
+早上查的時候那一欄是空的，原因是**新 APK 晚了 9 分鐘**才裝上
+（手機 06:05:54 上傳 → APK 06:14:22 才裝好，`adb shell dumpsys package` 的 `lastUpdateTime`）。
+使用者稍後開過 App，它重新偵測、重新上傳（毫秒數 `.511` → `.812`），這次帶了候選：
+
+```
+2026-11-19  lights_out_at 01:12:31.812   pick=phone
+  候選 1   2026-11-18T18:53:12   安靜  99 分鐘
+  候選 2   2026-11-19T01:12:31   安靜 290 分鐘  ← 手機挑這段（最長）
+```
+
+裁判（`behavior/lights_out_resolve.decide()`）實跑的結果，**含反面對照**：
+
+| 輸入 | 回傳 | 為什麼 |
+|---|---|---|
+| 真實的手錶入睡 01:24（容許到 01:54） | `('2026-11-19T01:12:31.812', 'phone')` | 兩段都過關 → 挑**最晚** → 01:12，與手機相同，不用改 |
+| 假設手錶 00:30 就睡著（容許到 01:00） | `('2026-11-18T18:53:12.858', 'watch')` | 01:12 晚於容許 → 刷掉 → 改挑 18:53 |
+
+所以 `resolve_lights_out.py` 印的「換成手錶挑的那一段：0」**不是裁判沒跑**，
+是昨晚手機剛好挑對了。⚠️ 這條反面對照很重要：少了它，「0 晚改正」與
+「程式根本沒在跑」在畫面上長得一模一樣。
+
 ### 另一件順便確認的
 
 送上去的 Health Connect 視窗與 Garmin 自己量的**逐分相同**
@@ -113,7 +136,8 @@ API 也確認過：`/insights` 的熬夜比率 0.48，分母是 **25 個有判�
 （`sonnap-data\lights-out-evidence\20261116_keyguard_events.txt`，也是
 `app/test/fixtures/lights_out_20261116.txt` 的來源），長度 88 / 218 分鐘由
 `app/test/lights_out_candidates_test.dart` 逐段驗算過。
-→ **第一個真正由手機送上來的候選還沒出現過**，實機那一層的驗證還欠著。
+→ ~~第一個真正由手機送上來的候選還沒出現過~~
+✅ **2026-11-19 出現了，整條驗完**（見下面 11-19 那則的補記）。
 
 改動前的原值存在 `sonnap-data\lights-out-evidence\before_resolve_20261117.json`
 （8 晚的 `lights_out_at` / `adherence_minutes` / `is_late`），要改回去隨時可以。
