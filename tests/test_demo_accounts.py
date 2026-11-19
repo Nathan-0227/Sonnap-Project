@@ -9,8 +9,8 @@ tests/test_demo_accounts.py —— 成果展示範帳號不得污染真實資料
   【5】每晚的達成度跟手機上傳走同一個函式（adherence.evaluate_night）
   【6】手錶資料（2026-11-16 起也產生）：source 一律 "demo"、分數由既有評分器算、
        API 重排的睡眠階段跟評分時同一份（demo_sleep 是決定性的）、白天資料有寫
-  【7】動態牆：每張卡帶自己選的場景與寵物；只寫準時與否的人階梯圖沒有時刻；
-       只開預設的人沒有階梯圖；回應裡沒有任何 user_id
+  【7】動態牆：每張卡帶自己選的場景與寵物；11-19 起示範帳號分享全開（每人都有階梯、時刻、
+       起床自評），沒有攝影機的人照樣沒有攝影機資料；回應裡沒有任何 user_id
   【9】🐾（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪本人一次；重建不累積；
        --remove 之後本人收到的拜訪一筆不剩；回傳的摘要裡沒有 user_id
   【8】Garmin 原始檔是本人的：示範帳號（沒有 garmin 來源）的「昨天」一次都不讀它，
@@ -171,12 +171,15 @@ check("4 位朋友都有卡", len(latest), 4)
 check("各自的場景", {n: c["scene"] for n, c in latest.items()},
       {"Mia (demo)": "lake", "Leo (demo)": "campfire", "Yuki (demo)": "rooftop", "Ken (demo)": "treehouse"})
 mia = latest["Mia (demo)"]["items"]
-check("Mia（只寫準時與否）：有階梯", bool(mia.get("stages", {}).get("segments")), True)
-check("Mia：階梯沒有兩端時刻", sorted(set(mia["stages"]) & {"start", "end"}), [])
-check("Mia：沒有放下手機的時刻", "phone_down_time" in mia, False)
+check("Mia：有階梯", bool(mia.get("stages", {}).get("segments")), True)
+check("Mia（11-19 起全開、時刻準確）：階梯兩端有時刻、有放下手機的時刻",
+      (all(mia["stages"].get(k) for k in ("start", "end")), "phone_down_time" in mia), (True, True))
+check("每個人都有起床自評（1–5）",
+      {n: (c["items"].get("morning_rating") or {}).get("rested") in (1, 2, 3, 4, 5) for n, c in latest.items()},
+      {n: True for n in latest})
 leo = latest["Leo (demo)"]["items"]
 check("Leo（準確時刻）：階梯兩端有時刻", all(leo["stages"].get(k) for k in ("start", "end")), True)
-check("Ken（只開預設）：沒有階梯", "stages" in latest["Ken (demo)"]["items"], False)
+check("Ken（11-19 起全開）：也有階梯", "stages" in latest["Ken (demo)"]["items"], True)
 moves = {n: c["items"].get("camera_moves") for n, c in latest.items()}
 check("Mia／Leo／Yuki 有每小時動幾次（預設分享）、Ken 沒有攝影機", 
       ({n: isinstance(v, (int, float)) for n, v in moves.items()}),
@@ -193,7 +196,7 @@ check("Mia：攝影機時間軸有光柱、總次數、動了多久、跟平常�
       (True, True, True, True))
 check("攝影機時間軸只給第幾分鐘，不給時刻",
       any("T" in str(p.get("m")) for p in tl.get("points") or []), False)
-check("Ken（只開預設）：沒有攝影機時間軸（預設關）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
+check("Ken 沒有攝影機：全開也沒有攝影機時間軸（不編）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
 # 排行榜 Chill：示範帳號每天有平均壓力（腳本產生），壓力多的人平均高
 _since = (date.today() - timedelta(days=30)).isoformat()
 _avg = {}

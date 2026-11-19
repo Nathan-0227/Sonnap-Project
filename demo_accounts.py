@@ -24,7 +24,9 @@ demo_accounts.py —— 成果展用的示範帳號。
      （healthconnect_adapter.to_wearable_row，跟手機用 Health Connect 上傳同一條路），
      不是手寫的數字
    - garmin_daily：白天資料（步數、壓力、Body Battery…），給動態卡的「Yesterday」
-   - friend_sharing：每個人公開哪些項目、選哪隻寵物、哪個場景（讓動態卡各有樣子）
+   - friend_sharing：選哪隻寵物、哪個場景。**分享項目 2026-11-19 起全開、時刻準確**
+     （使用者要小鎮資訊面板每一格都有圖）。隱私設定本身由 tests/test_friend_sharing.py 守
+   - morning_ratings：有開 App 的晚上都有一筆起床自評（各人有自己的傾向），面板 Felt 那格用
    - friend_visits（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪手機帳號一次，
      成果展上自己的卡才看得到「🐾 2 paws · See who」。**這是唯一寫進本人帳號的示範資料**：
      送的人是示範帳號，刪示範帳號時 CASCADE 一起刪，--remove 之後本人一筆都不剩
@@ -44,6 +46,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import db
 import db_backend
 import demo_sleep
+from social import sharing as social_sharing
 from behavior import adherence
 from behavior.sleep_efficiency import evaluate_efficiency
 from wearable.healthconnect_adapter import to_wearable_row
@@ -83,6 +86,7 @@ PERSONAS = [
         "share": ("stages", "sleep_duration", "score", "awake", "steps", "sleeping_hr",
                   "camera_timeline", "morning_rating", "level"),
         "camera": (12, 3),
+        "rested": (4.3, 0.6),
     },
     {   # 一開始常熬夜，後來收斂 → 最近幾晚開始有連續紀錄
         "name": "Leo (demo)", "target": "00:00",
@@ -93,6 +97,7 @@ PERSONAS = [
         "share": ("stages", "sleep_duration", "time_in_bed", "awake", "sleeping_hr",
                   "level", "steps", "stress", "camera_timeline", "target_bedtime", "fell_asleep"),
         "camera": (19, 5),
+        "rested": (3.3, 0.8),
     },
     {   # 夜貓子，常常晚一兩個小時 → 寵物是 tired
         "name": "Yuki (demo)", "target": "01:00",
@@ -103,6 +108,7 @@ PERSONAS = [
         "share": ("stages", "sleep_duration", "bed_times", "awake", "stress", "body_battery",
                   "sleeping_hr", "camera_timeline", "efficiency", "time_in_bed"),
         "camera": (27, 6),
+        "rested": (2.4, 0.7),
     },
     {   # 不規律，每 4 晚有 1 晚沒開 App → 缺晚會中斷連續紀錄（紅線 5）。只公開預設那幾項
         "name": "Ken (demo)", "target": "23:00",
@@ -112,6 +118,7 @@ PERSONAS = [
         "device": "Garmin Vivoactive 5", "phone": "Samsung Galaxy A54",
         "share": (),
         "camera": None,
+        "rested": (3.0, 1.0),
     },
 ]
 
@@ -306,10 +313,17 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
                 source=night["source"], efficiency=eff,
                 bed_start_kind="tap", bed_end_kind="tap", phone_model=p.get("phone"),
                 db_path=db_path)
+            # 起床自評（腳本產生、跟著帳號標 demo）：起床後 3–25 分鐘填的
+            db.upsert_morning_rating(
+                uid, night["date"],
+                min(5, max(1, round(rng.gauss(*p["rested"])))), [],
+                minutes_after_wake=rng.randint(3, 25), db_path=db_path)
             written += 1
             late += bool(night["is_late"])
-        db.set_friend_sharing(uid, items={k: True for k in p["share"]},
-                              time_precision=p["precision"], pet_species=p["species"],
+        # 2026-11-19 使用者定：示範帳號分享全開、時刻準確（小鎮面板每一格都有圖）。
+        # PERSONAS 裡的 share／precision 是之前「每人分享不同」的設定，留著當說明、不再使用
+        db.set_friend_sharing(uid, items={k: True for k in social_sharing.ITEM_KEYS},
+                              time_precision="exact", pet_species=p["species"],
                               scene=p["scene"], db_path=db_path)
         code = db.ensure_invite_code(uid, db_path=db_path)
         if friend_of:
