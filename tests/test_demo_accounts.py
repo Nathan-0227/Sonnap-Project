@@ -236,6 +236,30 @@ finally:
     main._garmin_records = real_records
 
 print()
+print("【即時狀態】示範帳號（2026-11-19）")
+noon = datetime(2026, 11, 25, 14, 0)
+check("白天：Mia 睡著、Leo 起床了、Yuki／Ken 醒著（看時鐘）",
+      demo_accounts.set_live_demo(now=noon, db_path=TMP),
+      {"Ken (demo)": "awake", "Leo (demo)": "up", "Mia (demo)": "asleep", "Yuki (demo)": "awake"})
+night = datetime(2026, 11, 25, 23, 45)
+check("晚上：Leo 改成睡著（18:00 以後不能是 up）、Ken 過了 23:00 的目標",
+      demo_accounts.set_live_demo(now=night, db_path=TMP),
+      {"Ken (demo)": "past_bedtime", "Leo (demo)": "asleep", "Mia (demo)": "asleep", "Yuki (demo)": "awake"})
+db.set_live_sleep_status(me, started_at="2026-11-25T23:00:00", db_path=TMP)
+demo_accounts.set_live_demo(now=night, db_path=TMP)
+check("--live 不碰本人的即時狀態", db.get_live_sleep_status(me, db_path=TMP)["started_at"],
+      "2026-11-25T23:00:00")
+seen = {f["display_name"]: f for f in client.get("/friends", params={"user_id": me}).json()["friends"]}
+check("好友頁看得到示範帳號的即時狀態（分享全開含 live_status）",
+      all(f["live_state"] is not None for f in seen.values()), True)
+demo_accounts.remove_all(TMP)
+_c = db.connect(TMP)
+left = _c.execute("SELECT COUNT(*) AS n FROM live_sleep_status").fetchall()[0]["n"]
+_c.close()
+check("刪示範帳號連它們的即時狀態一起刪（只剩本人那一列）", left, 1)
+check("本人的即時狀態還在", db.get_live_sleep_status(me, db_path=TMP) is not None, True)
+
+print()
 if fails:
     print(f"✗ {len(fails)} 項失敗")
     sys.exit(1)
