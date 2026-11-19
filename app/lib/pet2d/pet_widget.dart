@@ -228,11 +228,12 @@ class _LayeredPetState extends State<LayeredPet>
     final tweak = widget.accessoryTweak;
     final factor = widget.size / pose.designSize;
     final sourceSize = 512.0;
-    // 這一件自己的大小：以底邊中點縮放（見 AccessoryDefinition.fit）
+    // 這一件在這個姿勢的戴法：以底邊中點縮放、再位移與轉動（見 AccessoryFit）
+    final fit = accessory.fitFor(widget.pet.id, widget.pet.resolve(widget.mood));
     final box = sourceSize * base.scale * tweak.scale;
-    final scale = base.scale * tweak.scale * accessory.fit;
+    final scale = base.scale * tweak.scale * fit.fit;
     final size = sourceSize * scale * factor;
-    final fitDropY = box * (1 - accessory.fit) / 2 + box * accessory.drop;
+    final fitDropY = box * (1 - fit.fit) / 2 + box * fit.drop;
 
     // Head/face accessories follow the head. Neck accessories follow the body,
     // so a scarf stays attached to the chest/neck instead of being pulled by
@@ -240,7 +241,7 @@ class _LayeredPetState extends State<LayeredPet>
     final followsHead = accessory.slot == AccessorySlot.head ||
         accessory.slot == AccessorySlot.face;
     final followsBody = accessory.slot == AccessorySlot.neck;
-    final x = base.position.dx + tweak.dx +
+    final x = base.position.dx + tweak.dx + box * fit.dx +
         (followsHead ? headOffsetX : (followsBody ? bodyOffsetX : 0.0));
     final animatedOffsetY = followsHead
         ? headOffsetY
@@ -267,7 +268,7 @@ class _LayeredPetState extends State<LayeredPet>
               },
         child: Transform.rotate(
           angle: _deg(
-            base.rotationDeg + tweak.rotationDeg + animatedRotation,
+            base.rotationDeg + tweak.rotationDeg + fit.rotationDeg + animatedRotation,
           ),
           alignment: Alignment.bottomCenter,
           child: accessory.shadowAt == null

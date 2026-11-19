@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/pet2d/pet_catalog.dart' show accessories;
+import 'package:app/pet2d/pet_models.dart' show PetMood;
 
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/closet_screen.dart';
@@ -464,7 +465,22 @@ void main() {
       for (final a in accessories) {
         final hard = a.id == 'star_top_hat' || a.id == 'moon_crown';
         expect(a.fit < 1, hard, reason: a.id);
-        if (!hard) expect(a.drop, 0, reason: a.id);
+        if (!hard) {
+          expect(a.drop, 0, reason: a.id);
+          expect(a.poseFits, isEmpty, reason: a.id);
+        }
+      }
+    });
+
+    test('禮帽、皇冠：小狗與貓的四種心情各有使用者挑的戴法', () {
+      // 漏一個姿勢的話那個姿勢會退回預設大小，畫面不會報錯
+      for (final id in ['star_top_hat', 'moon_crown']) {
+        final a = accessories.firstWhere((x) => x.id == id);
+        for (final pet in ['dog01', 'cat01']) {
+          for (final mood in PetMood.values) {
+            expect(a.poseFits.containsKey('$pet.${mood.name}'), isTrue, reason: '$id $pet.${mood.name}');
+          }
+        }
       }
     });
 

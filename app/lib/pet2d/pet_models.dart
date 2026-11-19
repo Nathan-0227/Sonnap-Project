@@ -163,6 +163,23 @@ class PetDefinition {
   }
 }
 
+/// 一件衣服在某一個姿勢上怎麼戴（相對於插槽錨點）。
+/// [fit]：大小，以底邊中點縮放；[drop]：往下移（錨點框邊長的比例，負的往上）；
+/// [dx]：往右移（同一個比例，負的往左）；[rotationDeg]：再多轉幾度。
+class AccessoryFit {
+  const AccessoryFit({
+    this.fit = 1,
+    this.drop = 0,
+    this.dx = 0,
+    this.rotationDeg = 0,
+  });
+
+  final double fit;
+  final double drop;
+  final double dx;
+  final double rotationDeg;
+}
+
 class AccessoryDefinition {
   const AccessoryDefinition({
     required this.id,
@@ -172,6 +189,7 @@ class AccessoryDefinition {
     this.fit = 1,
     this.drop = 0,
     this.shadowAt,
+    this.poseFits = const {},
   });
 
   final String id;
@@ -190,6 +208,13 @@ class AccessoryDefinition {
   /// 帽子底下那道淡影子落在框高的哪裡（＝圖裡帽子的底邊，0–1）；null＝不畫。
   /// 硬帽子沒有影子看起來是「浮」在頭上（2026-11-19 使用者：很突兀）。
   final double? shadowAt;
+
+  /// 依姿勢個別調整（2026-11-19 使用者逐格挑的），鍵是「寵物 id.心情」，例如 `dog01.happy`。
+  /// 沒列到的姿勢用上面的 [fit]／[drop]。
+  final Map<String, AccessoryFit> poseFits;
+
+  AccessoryFit fitFor(String petId, PetMood mood) =>
+      poseFits['$petId.${mood.name}'] ?? AccessoryFit(fit: fit, drop: drop);
 }
 
 class AccessoryTweak {
