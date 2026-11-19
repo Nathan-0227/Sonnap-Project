@@ -41,6 +41,7 @@ import 'services/plan_reminders.dart';
 import 'services/sleep_plan.dart';
 import 'services/sleep_repository.dart';
 import 'screens/plan_screen.dart';
+import 'widgets/today_plan_card.dart';
 import 'services/user_settings.dart';
 
 void main() {
@@ -202,6 +203,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           reminders: _planReminders,
           onBedtimeChanged: _setBedtime,
           onWakeChanged: () => unawaited(_syncWake()),
+          game: _game,
+          petMood: () async => (await _repository.load()).status.petMood,
+          loadChallenges: _challenges?.fetch,
         ),
       ),
     );
