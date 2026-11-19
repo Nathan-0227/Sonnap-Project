@@ -425,8 +425,8 @@ class JourneyRoad extends StatefulWidget {
 class _JourneyRoadState extends State<JourneyRoad>
     with SingleTickerProviderStateMixin {
   static const double _end = 30; // 兩端圓的直徑
-  static const double _marker = 40;
-  static const double _height = 46;
+  static const double _marker = 50;
+  static const double _height = 54;
 
   late final AnimationController _walk = AnimationController(
     vsync: this,
