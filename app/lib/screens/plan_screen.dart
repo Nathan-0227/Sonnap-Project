@@ -83,9 +83,6 @@ const double kPlanRoomAspect = 2335 / 1080; // 圖的高÷寬
 /// 地毯中心落在圖高的幾成（量使用者那張圖：地毯 36%–50%）。換圖要重量。
 const double kPlanRugCenter = 0.43;
 
-/// 習慣的插圖：`assets/plan/<id>.png`（透明背景）。沒有就畫 Material 圖示。
-String planIconAsset(String id) => 'assets/plan/${id.startsWith('custom_') ? 'custom' : id}.png';
-
 class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateMixin {
   late TimeOfDay _bedtime = widget.bedtime;
   TimeOfDay? _wake;
@@ -214,8 +211,11 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     final wake = _wake;
     if (wake == null) return;
     final picked = await showPlanAddSheet(context, plan: widget.plan, bedtime: _bedtime, wake: wake);
-    if (picked == null) return;
-    await widget.plan.add(picked);
+    if (picked == null || !mounted) return;
+    // 先開設定頁，按了 Add 才真的加進計畫（使用者 11-19 定）
+    final out = await openPlanHabitEditor(context, item: picked, bedtime: _bedtime, wake: wake, isNew: true);
+    if (out?.item == null) return;
+    await widget.plan.add(out!.item!);
     _resyncReminders();
   }
 
@@ -229,24 +229,39 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     final imgH = math.max(size.height, size.width * kPlanRoomAspect);
     final rugY = imgH * kPlanRugCenter;
     const petSize = 150.0;
+    // 清單從寵物腳下開始捲，**不蓋過寵物**（使用者 11-19 定：要看得到牠跳）
+    final listTop = rugY + petSize * 0.22;
     return ReportFont(
       child: Scaffold(
         backgroundColor: ReportColors.bgMid,
         body: Stack(
           children: [
             Positioned.fill(child: _room()),
-            // 寵物固定在地毯上；清單排在它後面，往上捲時卡片從牠身上滑過去（Q37）
+            // 寵物固定在地毯上；清單只在牠腳下那一塊捲動
             Positioned(
               left: 0,
               right: 0,
               top: rugY - petSize * 0.82,
               child: Center(child: _pet(petSize)),
             ),
-            Positioned.fill(
-              child: ListView(
+            Positioned(
+              left: 0,
+              right: 0,
+              top: listTop,
+              bottom: 0,
+              // 上緣淡出：卡片捲上去時是慢慢消失，不是被一刀切掉
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (r) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0xFF000000)],
+                  stops: [0, 0.06],
+                ).createShader(r),
+                child: ListView(
                 key: const Key('plan-list'),
                 // 底部要讓出系統導覽列，不然最後一張卡的 Claim 會壓在手勢列底下
-                padding: EdgeInsets.fromLTRB(18, rugY + petSize * 0.32, 18, 32 + pad.bottom),
+                padding: EdgeInsets.fromLTRB(18, 14, 18, 32 + pad.bottom),
                 children: [
                   _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
                   _habitHeader(today),
@@ -255,6 +270,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
                   const SizedBox(height: 26),
                   _quests(),
                 ],
+              ),
               ),
             ),
             // 頂端固定：返回鍵＋標題，底下墊一層漸層，卡片捲上來時字還讀得到

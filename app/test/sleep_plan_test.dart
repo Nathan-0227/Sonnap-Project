@@ -262,6 +262,56 @@ void main() {
       expect(find.text('00:30'), findsWidgets);
       expect(find.text('08:30'), findsOneWidget);
     });
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    testWidgets('加一條：先開設定頁，按了 Add to my plan 才加進去；關掉就不加', (tester) async {
+      final (plan, _) = await pumpPlan(tester);
+      await tester.tap(find.byKey(const Key('plan-add')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('plan-suggest-dim_screen')));
+      await settle(tester);
+      expect(find.text('New habit'), findsOneWidget);
+      expect(plan.contains('dim_screen'), isFalse, reason: '選了建議還沒按 Add，不該先加進去');
+      await tester.tap(find.byKey(const Key('plan-editor-close')));
+      await settle(tester);
+      expect(plan.contains('dim_screen'), isFalse);
+
+      await tester.tap(find.byKey(const Key('plan-add')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('plan-suggest-dim_screen')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('plan-editor-save')));
+      await settle(tester);
+      expect(plan.contains('dim_screen'), isTrue);
+    });
+
+    testWidgets('自己寫一條：沒寫字不能加', (tester) async {
+      final (plan, _) = await pumpPlan(tester);
+      await tester.tap(find.byKey(const Key('plan-add')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('plan-custom-add')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('plan-editor-save')));
+      await settle(tester);
+      expect(plan.items.where((i) => i.isCustom), isEmpty);
+      await tester.enterText(find.byKey(const Key('plan-editor-text')), 'Stretch for 5 minutes');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('plan-editor-save')));
+      await settle(tester);
+      expect(plan.items.where((i) => i.isCustom).single.text, 'Stretch for 5 minutes');
+    });
+
+    testWidgets('清單從寵物腳下開始，捲動不會蓋到寵物', (tester) async {
+      await pumpPlan(tester);
+      final pet = tester.getRect(find.byKey(const Key('plan-pet')));
+      final list = tester.getRect(find.byKey(const Key('plan-list')));
+      expect(list.top, greaterThanOrEqualTo(pet.bottom));
+    });
   });
 
   group('勾下去的回饋（Q36、Q40–Q46：只有當下，不累積）', () {
