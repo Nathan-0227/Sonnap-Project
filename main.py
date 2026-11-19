@@ -56,7 +56,7 @@ import demo_sleep
 import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine,
-                      lights_out_resolve, morning_tips,
+                      journey, lights_out_resolve, morning_tips,
                       pet_state, sleep_efficiency, wake)
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
@@ -1014,7 +1014,102 @@ async def post_nightly(req: NightlyRequest):
     resp["bed_marks_source"] = marks_source
     resp["bed_start_kind"] = start_kind if eff.get("bed_start_at") else None
     resp["bed_end_kind"] = end_kind if eff.get("bed_end_at") else None
+    # Journey：這一晚可能是第 3 天準時，前進之後今晚的就寢就是下一站（行為列要先寫完才算得到）。
+    _sync_journey(req.user_id)
     return resp
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 睡眠計畫的 Journey（2026-11-19，behavior/journey.py）
+# ═══════════════════════════════════════════════════════════════════
+#
+# ⚠️ 「這一站就是目標」（使用者定 Q2）：進行中時 users 的 target_bedtime／target_wake
+#    一律是這一站的時間。每次同步都重設一次（冪等），舊版 App 用 PATCH 改掉也會被拉回來。
+# ⚠️ 不進評分、不給 XP、不改寵物心情。
+
+class JourneyStartRequest(BaseModel):
+    user_id: str
+    start_wake: str = Field(..., description='"HH:MM"')
+    end_wake: str = Field(..., description='"HH:MM", earlier than start_wake')
+    sleep_minutes: int = Field(..., ge=60, le=16 * 60)
+
+
+class JourneyStopRequest(BaseModel):
+    user_id: str
+
+
+def _sync_journey(user_id):
+    """
+    重算進度、需要就換站、把目標設成這一站。
+    回傳 (journey 列, 描述, 剛前進了沒)；沒有 Journey 回 (None, None, False)。
+    """
+    j = db.get_journey(user_id)
+    if not j:
+        return None, None, False
+    wakes = journey.stops(j["start_wake"], j["end_wake"])
+    if j["status"] != journey.STATUS_ACTIVE or not wakes:
+        return j, journey.describe(j, j["stop_index"], 0, j["status"] == journey.STATUS_DONE), False
+
+    rows = _behavior_rows_with_wake(user_id, GAME_HISTORY_DAYS)
+    idx, streak, done = journey.progress(rows, j["first_night"], len(wakes))
+    advanced = idx > j["stop_index"] or done
+    if idx != j["stop_index"] or done:
+        db.update_journey(user_id, stop_index=idx,
+                          status=journey.STATUS_DONE if done else None)
+        j = db.get_journey(user_id)
+    current = wakes[idx]
+    bed = journey.bedtime_for(current, j["sleep_minutes"])
+    user = db.get_user(user_id) or {}
+    if user.get("target_wake") != current or user.get("target_bedtime") != bed:
+        db.update_user(user_id, target_wake=current, target_bedtime=bed)
+    return j, journey.describe(j, idx, streak, done), advanced
+
+
+@app.get("/journey")
+async def get_journey(user_id: str = Query(...)):
+    """
+    Journey 的狀態（重算、需要就換站）＋開始新的 Journey 要用的建議起點。
+
+    suggested_start：最近 7 晚實際起床的中間值；量到的不到 3 晚是 null（App 用轉盤上的起床時間）。
+    """
+    require_user(user_id)
+    _, state, _ = _sync_journey(user_id)
+    rows = _behavior_rows_with_wake(user_id, 30)
+    return {
+        "journey": state,
+        "suggested_start": journey.suggested_start(rows),
+        "min_sleep_minutes": journey.MIN_SLEEP_MINUTES,
+        "step_minutes": journey.STEP_MINUTES,
+    }
+
+
+@app.post("/journey", status_code=201)
+async def post_journey(req: JourneyStartRequest):
+    """開始一段 Journey。終點不比起點早 → 422（App 寫 You're already there）。"""
+    require_user(req.user_id)
+    _check_hhmm("start_wake", req.start_wake)
+    _check_hhmm("end_wake", req.end_wake)
+    if journey.advance_minutes(req.start_wake, req.end_wake) is None:
+        raise HTTPException(status_code=422,
+                            detail="already_there: end_wake is not earlier than start_wake.")
+    db.start_journey(req.user_id, req.start_wake, req.end_wake,
+                     journey.clamp_sleep(req.sleep_minutes),
+                     journey.first_night_for(datetime.now()))
+    _, state, _ = _sync_journey(req.user_id)
+    return {"journey": state}
+
+
+@app.post("/journey/stop")
+async def stop_journey(req: JourneyStopRequest):
+    """Stop journey：停在這一站，目標留在這一站（不還原成開始前的時間）。"""
+    require_user(req.user_id)
+    j, _, _ = _sync_journey(req.user_id)   # 先把最新的進度算進來，停在真正的那一站
+    if not j:
+        raise HTTPException(status_code=404, detail="No journey.")
+    if j["status"] == journey.STATUS_ACTIVE:
+        db.update_journey(req.user_id, status=journey.STATUS_STOPPED)
+    _, state, _ = _sync_journey(req.user_id)
+    return {"journey": state}
 
 
 def _same_instant(a, b):

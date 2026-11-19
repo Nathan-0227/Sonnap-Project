@@ -502,6 +502,26 @@ CREATE TABLE IF NOT EXISTS live_sleep_status (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- 睡眠計畫的 Journey（2026-11-19，behavior/journey.py）：把起床一站一站往前移。
+-- 一個人一列（只記最近一次；Stop 或走完只改 status，不刪，App 才說得出「走完了」）。
+-- 進度（第幾站、連續幾天）是**讀取時從每晚的準時起床重算**的，這裡存的 stop_index
+-- 只用來知道「這次是不是剛前進」、要不要把 users 的目標換成下一站。
+-- ⚠️ 不進評分、不給 XP（準時起床的 Quest 已經給過，同一件事不獎勵兩次）。
+CREATE TABLE IF NOT EXISTS journeys (
+    user_id        TEXT NOT NULL,
+    start_wake     TEXT NOT NULL,             -- "HH:MM"，起點（最近 7 晚中間值或使用者改的）
+    end_wake       TEXT NOT NULL,             -- "HH:MM"，終點（使用者自訂）
+    sleep_minutes  INTEGER NOT NULL,          -- 就寢＝起床 − 這個；最少 420（7 小時）
+    first_night    TEXT NOT NULL,             -- 從哪一晚開始算（YYYY-MM-DD，同 nightly_behavior.date）
+    stop_index     INTEGER NOT NULL DEFAULT 0,-- 0＝第 1 站
+    status         TEXT NOT NULL,             -- active / done / stopped
+    started_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS user_game_state (
     user_id          TEXT NOT NULL,
     equipped_item_id TEXT,                    -- NULL = 什麼都沒穿
@@ -2064,6 +2084,68 @@ def set_live_sleep_status(user_id, started_at=None, ended_at=None, db_path=None)
             """,
             (user_id, new_start, new_end, now_iso()),
         )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_journey(user_id, db_path=None):
+    """journeys 那一列 → dict；沒有就 None。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM journeys WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return dict(rows[0]) if rows else None
+
+
+def start_journey(user_id, start_wake, end_wake, sleep_minutes, first_night, db_path=None):
+    """開始一段新的 Journey（蓋掉舊的那一列）。驗證由呼叫端做。"""
+    now = now_iso()
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO journeys (user_id, start_wake, end_wake, sleep_minutes, first_night,
+                                  stop_index, status, started_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, 'active', ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                start_wake    = excluded.start_wake,
+                end_wake      = excluded.end_wake,
+                sleep_minutes = excluded.sleep_minutes,
+                first_night   = excluded.first_night,
+                stop_index    = 0,
+                status        = 'active',
+                started_at    = excluded.started_at,
+                updated_at    = excluded.updated_at
+            """,
+            (user_id, start_wake, end_wake, sleep_minutes, first_night, now, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_journey(user_id, stop_index=None, status=None, db_path=None):
+    """改第幾站／狀態。"""
+    sets, args = [], []
+    if stop_index is not None:
+        sets.append("stop_index = ?")
+        args.append(stop_index)
+    if status is not None:
+        if status not in ("active", "done", "stopped"):
+            raise ValueError(f"unknown journey status: {status!r}")
+        sets.append("status = ?")
+        args.append(status)
+    if not sets:
+        return
+    sets.append("updated_at = ?")
+    args += [now_iso(), user_id]
+    conn = connect(db_path)
+    try:
+        conn.execute(f"UPDATE journeys SET {', '.join(sets)} WHERE user_id = ?", args)
         conn.commit()
     finally:
         conn.close()
