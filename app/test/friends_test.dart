@@ -377,7 +377,13 @@ void main() {
 
     testWidgets('有後端 → 邀請碼、朋友名字都是後端給的', (tester) async {
       await pump(tester, _StubFriends());
+      // 2026-11-19 起邀請碼在標題右邊的「人＋」面板裡
+      expect(find.text('K7QM2P'), findsNothing);
+      await tester.tap(find.byKey(const Key('add-friend')));
+      await tester.pumpAndSettle();
       expect(find.text('K7QM2P'), findsOneWidget);
+      Navigator.of(tester.element(find.byKey(const Key('add-friend-sheet')))).pop();
+      await tester.pumpAndSettle();
       expect(find.text('Bob'), findsWidgets);
       expect(find.text('Carol'), findsWidgets);
     });
@@ -393,16 +399,45 @@ void main() {
       );
     });
 
-    testWidgets('準時／熬夜人數照後端的 last_night_late', (tester) async {
-      await pump(tester, _StubFriends());
-      expect(
-        tester.widget<Text>(find.byKey(const Key('circle-on-time'))).data,
-        '1',
+    testWidgets('子分頁上的人數照後端的狀態算（Sleep Circle 2026-11-19 拿掉）', (tester) async {
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(stateJson(friends: [
+            friendJson('BOB234', 'Bob', live: 'asleep', liveSince: '2026-09-03T23:40:00'),
+            friendJson('CAR567', 'Carol', live: 'past_bedtime', pastBedtime: 40),
+            friendJson('DAV890', 'Dave', live: 'up'),
+          ])),
+        ),
       );
-      expect(
-        tester.widget<Text>(find.byKey(const Key('circle-late'))).data,
-        '1',
+      await pump(tester, stub);
+      String count(String tab) =>
+          tester.widget<Text>(find.byKey(Key('live-count-$tab'))).textSpan!.toPlainText();
+      expect(count('all'), 'All  3');
+      expect(count('asleep'), 'Asleep  1');
+      expect(count('stillUp'), 'Still up  1', reason: '起床了不算 still up');
+      expect(find.byKey(const Key('circle-on-time')), findsNothing);
+    });
+
+    testWidgets('排序：睡著的在最上面（睡最久的先）→ 過了就寢 → 起床了 → 沒分享', (tester) async {
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(stateJson(friends: [
+            friendJson('EVE111', 'Eve'),
+            friendJson('DAV890', 'Dave', live: 'up'),
+            friendJson('CAR567', 'Carol', live: 'past_bedtime', pastBedtime: 40),
+            friendJson('BOB234', 'Bob', live: 'asleep', liveSince: '2026-09-03T23:40:00'),
+            friendJson('ANN000', 'Ann', live: 'asleep', liveSince: '2026-09-03T22:10:00'),
+          ])),
+        ),
       );
+      await pump(tester, stub);
+      double y(String h) => tester.getTopLeft(find.byKey(Key('friend-$h'))).dy;
+      final order = ['ANN000', 'BOB234', 'CAR567', 'DAV890', 'EVE111'];
+      for (var i = 1; i < order.length; i++) {
+        expect(y(order[i]), greaterThan(y(order[i - 1])), reason: '${order[i - 1]} 要在 ${order[i]} 上面');
+      }
     });
 
     testWidgets('Friends 分頁有七個排行榜那一塊（舊的只有連續天數），照後端的順序', (tester) async {
@@ -438,8 +473,8 @@ void main() {
         'me': {'status': 'not_sharing', 'share_label': 'On time or late'},
       });
       await pump(tester, stub);
-      // 2026-11-19 起排行榜在 This Week 子分頁
-      await tester.tap(find.byKey(const Key('live-tab-week')));
+      // 2026-11-19 起排行榜是最上面的 Ranks 分頁
+      await tester.tap(find.byKey(const Key('tab-ranks')));
       for (var i = 0; i < 5; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -561,7 +596,7 @@ void main() {
       expect(find.text('K7QM2P'), findsNothing);
       await tester.tap(find.byKey(const Key('tab-friends')));
       await tester.pump();
-      expect(find.text('K7QM2P'), findsOneWidget);
+      expect(find.byKey(const Key('friend-BOB234')), findsOneWidget);
       expect(find.byKey(const Key('feed-empty')), findsNothing);
     });
 

@@ -18,6 +18,105 @@ import 'streak_card.dart' show speciesOf;
 /// ⚠️ 小長條越晚越高、只用一個顏色、不分好壞；沒資料的晚上畫一個淡點，不畫成 0。
 /// ⚠️ 時刻一律 parseWallClock（不 toLocal）。
 
+/// 列表的順序（2026-11-19 使用者定 Q4）：睡著（睡最久的在前）→ 過了就寢 → 醒著 → 起床了 → 沒分享。
+/// 同一種再照名字。⚠️ 只排版，狀態本身照抄後端。
+List<FriendSummary> sortByLiveState(List<FriendSummary> friends) {
+  int rank(String? s) => switch (s) {
+        'asleep' => 0,
+        'past_bedtime' => 1,
+        'awake' => 2,
+        'up' => 3,
+        _ => 4,
+      };
+  final out = [...friends];
+  out.sort((a, b) {
+    final r = rank(a.liveState).compareTo(rank(b.liveState));
+    if (r != 0) return r;
+    if (a.liveState == 'asleep') {
+      final sa = parseWallClock(a.liveSince);
+      final sb = parseWallClock(b.liveSince);
+      if (sa != null && sb != null && sa != sb) return sa.compareTo(sb);
+    }
+    return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+  });
+  return out;
+}
+
+/// 列表最上面的「You」卡（Q5）：好友現在看到的你。
+/// [shared]：分享設定的 live_status；false＝好友看不到，給一顆去分享設定的按鈕；null＝還不知道。
+class YouLiveCard extends StatelessWidget {
+  final FriendSummary me;
+  final DateTime now;
+  final bool? shared;
+  final VoidCallback? onOpenSharing;
+
+  const YouLiveCard({
+    super.key,
+    required this.me,
+    required this.now,
+    required this.shared,
+    this.onOpenSharing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hidden = shared == false;
+    return Container(
+      key: const Key('you-card'),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: const Color(0x14FFFFFF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x339B7BFF)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: ClipOval(
+              child: ColoredBox(
+                color: const Color(0xFF2A2F70),
+                child: Center(
+                  child: HomePet(
+                    mood: me.liveState == 'asleep' ? 'tired' : me.petMood,
+                    species: speciesOf(me.petSpecies),
+                    size: 36,
+                    animate: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('You',
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(
+                  hidden ? "Friends can't see your live status" : liveStatusLine(me),
+                  key: const Key('you-status'),
+                  maxLines: 2,
+                  style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          if (hidden && onOpenSharing != null)
+            TextButton(
+              key: const Key('you-share'),
+              onPressed: onOpenSharing,
+              child: const Text('Share'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 子分頁的篩選：'asleep'／'still_up'；別的（Up、沒分享）只出現在 All。
 String? liveFilterOf(FriendSummary f) => switch (f.liveState) {
       'asleep' => 'asleep',

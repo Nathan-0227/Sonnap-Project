@@ -12,6 +12,7 @@ import 'package:app/services/friends_service.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/live_sleep_status.dart';
 import 'package:app/widgets/friend_live_card.dart';
+import 'package:app/widgets/friend_live_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,6 +39,7 @@ class LiveStub implements FriendsService {
   FriendsResult<SharingSettings> sharing;
   final List<Map<String, bool>?> patches = [];
   int sharingCalls = 0;
+  bool noFriends = false;
   LiveStub(this.sharing);
 
   @override
@@ -45,8 +47,14 @@ class LiveStub implements FriendsService {
         FriendsStatus.ok,
         value: FriendsState.fromJson({
           'my_invite_code': 'K7QM2P',
+          'me': {
+            'handle': 'ME0001',
+            'display_name': 'Nathan',
+            'recorded_nights': 1,
+            'live_state': 'awake',
+          },
           'friends': [
-            {'handle': 'BOB234', 'display_name': 'Bob', 'recorded_nights': 1},
+            if (!noFriends) {'handle': 'BOB234', 'display_name': 'Bob', 'recorded_nights': 1},
           ],
           'leaderboard': const [],
           'notes': const {},
@@ -216,12 +224,22 @@ void main() {
       expect(await store.getString(FriendsScreenKeys.liveAsked), 'off');
     });
 
-    testWidgets('問過了就不再問（連後端都不問）', (tester) async {
+    testWidgets('問過了就不再問；You 卡照實說好友看不到、給一顆 Share', (tester) async {
       final stub = LiveStub(sharingWith(false));
       await pumpFriends(tester, stub, InMemoryKeyValueStore({FriendsScreenKeys.liveAsked: 'off'}));
       await openFriendsTab(tester);
-      expect(stub.sharingCalls, 0);
       expect(find.byKey(const Key('live-ask')), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const Key('you-status'))).data,
+          "Friends can't see your live status");
+      expect(find.byKey(const Key('you-share')), findsOneWidget);
+    });
+
+    testWidgets('打開了：You 卡寫好友看到的狀態，沒有 Share 鈕', (tester) async {
+      final stub = LiveStub(sharingWith(true));
+      await pumpFriends(tester, stub, InMemoryKeyValueStore());
+      await openFriendsTab(tester);
+      expect(find.byKey(const Key('you-card')), findsOneWidget);
+      expect(find.byKey(const Key('you-share')), findsNothing);
     });
 
     testWidgets('連不到後端：不問、也不記成問過（下次再問）', (tester) async {
@@ -240,6 +258,50 @@ void main() {
       await openFriendsTab(tester);
       expect(find.byKey(const Key('live-ask')), findsNothing);
       expect(await store.getString(FriendsScreenKeys.liveAsked), 'on');
+    });
+  });
+
+  group('【5】點朋友的那一頁（2026-11-19 第二輪 Q6）', () {
+    testWidgets('現在的狀態 → 7 晚放下手機（星期＋時刻，沒資料寫「—」）', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final f = FriendSummary.fromJson({
+        'handle': 'BOB234',
+        'display_name': 'Bob',
+        'recorded_nights': 2,
+        'live_state': 'asleep',
+        'live_since': '2026-11-19T23:40:00',
+        'recent_lights_out': [
+          {'date': '2026-11-18', 'time': '01:23'},
+          {'date': '2026-11-19', 'time': null},
+        ],
+      });
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: FriendLiveSheet(friend: f, now: now, onRemove: () {})),
+      ));
+      expect(tester.widget<Text>(find.byKey(const Key('sheet-big'))).data, '1h 32m');
+      expect(tester.widget<Text>(find.byKey(const Key('sheet-status'))).data, 'Asleep since 23:40');
+      expect(find.byKey(const Key('week-lights-out')), findsOneWidget);
+      expect(find.text('Wed'), findsOneWidget, reason: '2026-11-18 是星期三');
+      expect(find.text('01:23'), findsOneWidget);
+      expect(find.text('—'), findsOneWidget, reason: '沒資料寫「—」不畫成 0');
+      expect(find.byKey(const Key('remove-friend')), findsOneWidget);
+    });
+  });
+
+  group('【6】沒有朋友（Q7）', () {
+    testWidgets('大的 Add friend 打開加好友面板（我的邀請碼在裡面）', (tester) async {
+      final stub = LiveStub(sharingWith(true))..noFriends = true;
+      await pumpFriends(tester, stub, InMemoryKeyValueStore());
+      await openFriendsTab(tester);
+      expect(find.byKey(const Key('friends-empty')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('empty-add-friend')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('add-friend-sheet')), findsOneWidget);
+      expect(find.text('K7QM2P'), findsOneWidget);
     });
   });
 
