@@ -483,6 +483,7 @@ class _MainPageState extends State<MainPage> {
         // 導覽列中間的月亮 → 首頁照原本的流程開始睡覺；首頁右上角的人像 → 設定
         startSleepRequests: _startSleepRequests,
         onOpenSettings: () => setState(() => currentIndex = _settingsIndex),
+        sleepStatus: _friends?.sendSleepStatus,
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,

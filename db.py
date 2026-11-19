@@ -481,6 +481,20 @@ CREATE TABLE IF NOT EXISTS friend_sharing (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- 好友頁的即時狀態（2026-11-19，social/live_status.py）：按 Start Sleep 寫 started_at、
+-- Out of bed 寫 ended_at、Cancel 整列刪掉。一個人只有一列（只記最近一次）。
+-- 時刻是手機的牆鐘時間（不帶時區，同 nightly_behavior.bed_start_at）。
+-- ⚠️ 這張表不進評分、不給 XP；好友看不看得到由 friend_sharing 的 live_status 決定（預設關）。
+CREATE TABLE IF NOT EXISTS live_sleep_status (
+    user_id     TEXT NOT NULL,
+    started_at  TEXT,
+    ended_at    TEXT,
+    updated_at  TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS user_game_state (
     user_id          TEXT NOT NULL,
     equipped_item_id TEXT,                    -- NULL = 什麼都沒穿
@@ -1972,6 +1986,56 @@ def set_friend_sharing(user_id, items=None, time_precision=None, pet_species=Non
              scene if scene is not None else old.get("scene"),
              now_iso()),
         )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_live_sleep_status(user_id, db_path=None):
+    """live_sleep_status 那一列 → dict；沒有就 None。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM live_sleep_status WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return dict(rows[0]) if rows else None
+
+
+def set_live_sleep_status(user_id, started_at=None, ended_at=None, db_path=None):
+    """
+    寫即時狀態。started_at 有給＝剛按 Start Sleep（ended_at 清掉）；
+    只給 ended_at＝按了 Out of bed（started_at 留著）。驗證由呼叫端做。
+    """
+    old = get_live_sleep_status(user_id, db_path) or {}
+    if started_at is not None:
+        new_start, new_end = started_at, None
+    else:
+        new_start, new_end = old.get("started_at"), ended_at
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO live_sleep_status (user_id, started_at, ended_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                started_at = excluded.started_at,
+                ended_at   = excluded.ended_at,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, new_start, new_end, now_iso()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_live_sleep_status(user_id, db_path=None):
+    """按了 Cancel：整列刪掉（沒開始過就不該留著 Asleep）。"""
+    conn = connect(db_path)
+    try:
+        conn.execute("DELETE FROM live_sleep_status WHERE user_id = ?", (user_id,))
         conn.commit()
     finally:
         conn.close()

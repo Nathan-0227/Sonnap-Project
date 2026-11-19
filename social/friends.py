@@ -25,6 +25,11 @@ FRIEND_FIELDS = (
     "recorded_nights",
     "pet_species",          # 狗／貓（畫他的寵物用；2026-11-15）
     "streak_week",          # 這一週（週一→週日）每天：on_time / late / none / future
+    # 即時狀態（2026-11-19，social/live_status.py）。分享設定的 live_status 預設關 → 三個都是 None
+    "live_state",           # asleep / up / past_bedtime / awake
+    "live_since",           # 那個狀態從幾點開始（牆鐘）；awake 是 None
+    "minutes_past_bedtime", # 只有 past_bedtime 有；後端算好，目標時刻本身不分享
+    "recent_lights_out",    # 最近 7 晚每晚幾點放下手機 [{date, time}]，好友卡右邊的小長條
 )
 
 
@@ -57,7 +62,8 @@ def best_streak(rows):
     return best
 
 
-def build_friend_summary(user, handle, behavior_rows, pet_species="dog", today=None):
+def build_friend_summary(user, handle, behavior_rows, pet_species="dog", today=None,
+                         live_row=None, now=None):
     """
     一個朋友可以分享的摘要。user 是 db.get_user() 的那一列，
     handle 是他的邀請碼，behavior_rows 是他的 nightly_behavior（由舊到新）。
@@ -71,7 +77,11 @@ def build_friend_summary(user, handle, behavior_rows, pet_species="dog", today=N
     streak, _ = current_streak(rows)
     from datetime import date as _date
     from social.sharing import streak_week
+    from datetime import datetime as _dt
+    from social import live_status
     week = streak_week(rows, today or _date.today(), night_achieved)
+    now = now or _dt.now()
+    live = live_status.live_state(live_row, user.get("target_bedtime"), now)
 
     summary = {
         "handle": handle,
@@ -89,6 +99,10 @@ def build_friend_summary(user, handle, behavior_rows, pet_species="dog", today=N
         "recorded_nights": recorded,
         "pet_species": pet_species,
         "streak_week": week,
+        "live_state": live["state"],
+        "live_since": live["since"],
+        "minutes_past_bedtime": live["minutes_past_bedtime"],
+        "recent_lights_out": live_status.recent_lights_out(rows, today or now.date()),
     }
     assert tuple(summary) == FRIEND_FIELDS, "摘要欄位必須剛好是白名單"
     return summary
@@ -103,6 +117,16 @@ def apply_sharing(summary, settings):
     out = dict(summary)
     if not items.get("phone_down_time") or settings["time_precision"] == "on_time_only":
         out["last_lights_out_at"] = None
+        out["recent_lights_out"] = None
+    # 即時狀態預設關（2026-11-19 使用者定）：它等於讓好友知道你此刻在不在睡
+    if not items.get("live_status"):
+        out["live_state"] = None
+        out["live_since"] = None
+        out["minutes_past_bedtime"] = None
+    elif settings["time_precision"] == "on_time_only":
+        # 只寫準時與否的人：狀態照給，時刻與分鐘數拿掉
+        out["live_since"] = None
+        out["minutes_past_bedtime"] = None
     if not items.get("on_time"):
         out["last_night_late"] = None
         out["late_night_ratio"] = None

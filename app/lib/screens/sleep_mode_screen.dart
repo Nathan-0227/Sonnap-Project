@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/live_sleep_status.dart';
 import '../services/pet_choice.dart';
 import '../services/alarm.dart';
 import '../services/bed_marks.dart';
@@ -55,6 +56,9 @@ class SleepModeScreen extends StatefulWidget {
   /// 才把睡覺畫面收掉——自己先關掉的話，讀手機儲存那幾格會露出首頁（有分數卡）。
   final void Function(DateTime end)? onEnded;
 
+  /// 好友頁的即時狀態：Out of bed／I already got up 送 end、Cancel 送 cancel。null＝不送。
+  final SleepStatusSink? sleepStatus;
+
   /// 剛按 Start Sleep 才是 true：先播 [kSleepIntroGif]。半夜重開 App 回到這頁時是 false。
   final bool playIntro;
 
@@ -70,6 +74,7 @@ class SleepModeScreen extends StatefulWidget {
     this.alarm,
     this.sounds,
     this.onEnded,
+    this.sleepStatus,
     this.playIntro = false,
     this.sceneAsset = kSleepLoopGif,
     this.introAsset = kSleepIntroGif,
@@ -344,6 +349,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     await widget.alarm?.cancelTonight();
     final end = widget.clock();
     await widget.store.markEnd(end);
+    unawaited(sendSleepStatus(widget.sleepStatus, 'end', end));
     // 回傳 true = 這一晚結束了，首頁接著打開早晨報告（Cancel 不回 true）
     if (mounted) _ended(end);
   }
@@ -382,6 +388,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.markEnd(end, recalled: true);
+    unawaited(sendSleepStatus(widget.sleepStatus, 'end', end));
     if (mounted) _ended(end);
   }
 
@@ -418,6 +425,7 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
     unawaited(widget.sounds?.stop());
     await widget.alarm?.cancelTonight();
     await widget.store.cancelStart();
+    unawaited(sendSleepStatus(widget.sleepStatus, 'cancel', null));
     if (mounted) Navigator.of(context).pop();
   }
 

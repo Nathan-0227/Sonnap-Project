@@ -96,6 +96,9 @@ Map<String, dynamic> stateJson({bool friends = true}) => {
 };
 
 class TownStub implements FriendsService {
+  @override
+  Future<void> sendSleepStatus(String event, DateTime? at) async {}
+
   FriendsResult<TownState> town;
   FriendsResult<FriendsState> state;
   FriendsResult<String> visitResult = const FriendsResult(
