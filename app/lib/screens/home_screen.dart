@@ -34,6 +34,7 @@ import '../widgets/sleep_stages_card.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
 import '../services/report_loader.dart';
+import '../services/usage_stats.dart';
 import 'morning_report_screen.dart';
 import 'report_loading_screen.dart';
 import 'rested_screen.dart';
@@ -101,8 +102,12 @@ class HomeScreen extends StatefulWidget {
   /// 右上角的人像：設定頁（2026-11-13 起不在導覽列）。null＝不畫那顆。
   final VoidCallback? onOpenSettings;
 
+  /// 手機使用權限（偵測放下手機的時刻要它）。沒開時首頁出現一條提示（2026-11-19 使用者定）。
+  final UsageStatsService usageStats;
+
   const HomeScreen({
     super.key,
+    this.usageStats = const UsageStatsService(),
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
     this.alarmScheduler = const PlatformAlarmScheduler(),
     this.soundPlayer = const PlatformSleepSoundPlayer(),
@@ -189,6 +194,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 上層傳來新值時以上層為準（見 didUpdateWidget）。
   late TimeOfDay _bedtime;
 
+  /// 系統的「使用情況存取」還沒開 → 首頁出現提示。開了就消失。
+  bool _needsUsageAccess = false;
+
   /// 睡覺畫面開著時不要再推一次。
   bool _sleepRouteOpen = false;
 
@@ -205,6 +213,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadGame();
     _loadCamera();
     _loadMarks();
+    _checkUsageAccess();
     // 之前連不到後端、沒送出去的自評，這次補送
     final rested = widget.rested;
     if (rested != null) _ratings.retryUnsent(rested);
@@ -267,7 +276,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 半夜打開 App：直接回到睡覺畫面（還沒按下床、未滿 14 小時）。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _loadMarks();
+    if (state == AppLifecycleState.resumed) {
+      _loadMarks();
+      // 從系統設定開完權限回來，提示要立刻消失
+      _checkUsageAccess();
+    }
+  }
+
+  /// 沒開「使用情況存取」就偵測不到幾點放下手機，熬夜、挑戰、Phone down 全部沒資料。
+  /// 原本的按鈕在 Insights 的「手機分心」卡裡，改版後搬到首頁（新使用者不會點進詳細頁找）。
+  /// 不支援的平台（iOS、測試）不出現。
+  Future<void> _checkUsageAccess() async {
+    final service = widget.usageStats;
+    if (!service.isSupported) return;
+    final ok = await service.hasAccess();
+    if (mounted && ok == _needsUsageAccess) {
+      setState(() => _needsUsageAccess = !ok);
+    }
+  }
+
+  Widget _buildUsageAccessBanner() {
+    return Material(
+      key: const Key('usage-access-banner'),
+      color: const Color(0x33FFC83D),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: widget.usageStats.openSettings,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.phonelink_lock_rounded,
+                  color: Color(0xFFFFC83D), size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Allow usage access so Sonnap can see when you put your '
+                  'phone down.',
+                  style: TextStyle(
+                    color: SonnapColors.textPrimary,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Color(0xFFFFC83D)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadMarks() async {
@@ -1118,6 +1177,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
+                      if (_needsUsageAccess) ...[
+                        const SizedBox(height: 8),
+                        _buildUsageAccessBanner(),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         display.moodDescription,
