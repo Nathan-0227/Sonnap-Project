@@ -338,6 +338,23 @@ void main() {
       expect(stub.equipCalls, isEmpty);
     });
 
+    testWidgets('左上 ‹ 是不存直接離開：試穿過也不送後端', (tester) async {
+      final stub = _StubGame();
+      await pumpScreen(tester, ClosetScreen(service: stub));
+      await tester.tap(find.byKey(const Key('closet-scarf')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('closet-back')));
+      await tester.pump();
+      expect(stub.equipCalls, isEmpty);
+    });
+
+    testWidgets('最上面大字是暱稱（寵物沒有名字），底下 Lv', (tester) async {
+      final stub = _StubGame();
+      await pumpScreen(tester, ClosetScreen(service: stub, displayName: 'Nathan'));
+      expect(find.text('Nathan'), findsOneWidget);
+      expect(find.text('Lv. 2'), findsOneWidget);
+    });
+
     testWidgets('解鎖與否照抄後端：等級不夠但穿過的，照樣能穿', (tester) async {
       // 後端刻意「穿過就不收回」。Dart 用 level >= unlockLevel 自己判斷的話，
       // 第 2 級的人點皇冠會被擋下來——而後端說他可以穿。
@@ -426,11 +443,12 @@ void main() {
     });
 
     testWidgets('沒有圖的那件 → 疊 emoji（看得到比好看重要）', (tester) async {
+      // 2026-11-19 起後端 6 件都有真圖；這裡用一件「後端之後新增、還沒有圖」的假衣服守退路。
       await pumpScreen(tester, const Scaffold(
-        body: HomePet(mood: 'happy', equippedItemId: 'crown', accessoryEmoji: '👑'),
+        body: HomePet(mood: 'happy', equippedItemId: 'party_hat', accessoryEmoji: '🥳'),
       ));
       expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
-      expect(find.text('👑'), findsOneWidget);
+      expect(find.text('🥳'), findsOneWidget);
     });
 
     testWidgets('沒穿就什麼都不畫', (tester) async {
@@ -438,14 +456,17 @@ void main() {
       expect(find.byKey(const Key('pet-accessory')), findsNothing);
     });
 
-    test('衣櫃 item_id 對得上隊友的四件圖', () {
+    test('衣櫃 item_id 對得上六件圖', () {
       expect(layeredAccessoryFor('cap')?.id, 'sleep_hat');
       expect(layeredAccessoryFor('glasses')?.id, 'round_glasses');
       expect(layeredAccessoryFor('scarf')?.id, 'night_scarf');
       expect(layeredAccessoryFor('bow')?.id, 'pink_bow');
-      // ⚠️ 反面：還沒有圖的那兩件必須回 null（會改疊 emoji）。
+      // 2026-11-19 使用者生成的兩頂
+      expect(layeredAccessoryFor('top_hat')?.id, 'star_top_hat');
+      expect(layeredAccessoryFor('crown')?.id, 'moon_crown');
+      // ⚠️ 反面：沒有圖的必須回 null（會改疊 emoji）。
       //    少了這一條，哪天隨便對應一個不存在的 id 也不會被抓到。
-      for (final none in ['top_hat', 'crown', null]) {
+      for (final none in ['party_hat', null]) {
         expect(layeredAccessoryFor(none), isNull, reason: '$none');
       }
       // 每一個對應得到的 id 都必須真的在 accessories 裡（打錯字就會回 null）。

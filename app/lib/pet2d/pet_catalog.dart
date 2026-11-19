@@ -599,4 +599,18 @@ const accessories = <AccessoryDefinition>[
     slot: AccessorySlot.neck,
     assetPath: 'assets/accessories/neck/pink_bow.png',
   ),
+  // 2026-11-19 使用者生成，取代 top_hat／crown 原本的 emoji。都是 head 插槽，
+  // 沿用睡帽那組頭部錨點（小狗、貓各一組），不另外對位。
+  AccessoryDefinition(
+    id: 'star_top_hat',
+    label: 'Star Top Hat',
+    slot: AccessorySlot.head,
+    assetPath: 'assets/accessories/head/star_top_hat.png',
+  ),
+  AccessoryDefinition(
+    id: 'moon_crown',
+    label: 'Moon Crown',
+    slot: AccessorySlot.head,
+    assetPath: 'assets/accessories/head/moon_crown.png',
+  ),
 ];
