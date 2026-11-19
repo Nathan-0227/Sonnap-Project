@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/sleep_session.dart';
-import '../models/wall_clock.dart';
 import '../services/account_service.dart';
 import '../services/sleep_sounds.dart';
 import '../services/alarm.dart';
@@ -34,6 +33,7 @@ import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
+import '../services/report_loader.dart';
 import 'morning_report_screen.dart';
 import 'report_loading_screen.dart';
 import 'rested_screen.dart';
@@ -372,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final date = reportDateKey(nightDateOf(startAt));
         // 分數那份在動畫一開始就去抓，填完自評多半已經回來了。
         // AI 那段讀起床自評，要等自評送出之後才去要（等待畫面打開時）。
-        final early = _ReportFetch(
+        final early = ReportFetch(
           home: widget.morningReport?.fetchNight(date),
           game: widget.game?.fetchGame(),
         );
@@ -393,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   ///
   /// [cover]：目前蓋在最上面的那一頁（起床動畫；沒播動畫時是睡覺畫面），
   /// 自評卡蓋上去之後才收掉。[instant]：沒播動畫時自評卡直接出現、不從下面滑上來。
-  Future<void> _wakeUpFlow(String date, DateTime? wakeAt, _ReportFetch early,
+  Future<void> _wakeUpFlow(String date, DateTime? wakeAt, ReportFetch early,
       {required Route<void> cover, required bool instant}) async {
     final navigator = Navigator.of(context);
     void removeWhenCovered(ModalRoute<dynamic> top, Route<dynamic>? below) {
@@ -575,61 +575,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (rating != null && mounted) await _openReport(date);
   }
 
-  /// 組報告要用的、手機上已經有的東西。
-  Future<_ReportInputs> _reportInputs(String date) async {
-    final marks = await widget.bedMarks.read(now: widget.clock());
-    final localRating = await _ratings.read(date);
-    CameraNight? camera;
-    for (final n in _camera?.nights ?? const <CameraNight>[]) {
-      if (n.date == date) camera = n;
-    }
-    SleepSession? session;
-    try {
-      session = await _sessionFuture;
-    } catch (_) {
-      session = null;
-    }
-    // 睡眠目標＝轉盤上「就寢→起床」的長度（使用者定，預設 8 小時）
-    final wake = await _alarm.settings.wakeTime(_bedtime);
-    return _ReportInputs(
-      marks: marks,
-      localRating: localRating,
-      camera: camera,
-      session: session,
-      goalMinutes: sleepSpan(_bedtime, wake).inMinutes,
-    );
-  }
+  /// 組報告的那一份（首頁與 Insights 的 Day 共用，見 report_loader.dart）。
+  late final ReportLoader _loader = ReportLoader(
+    clock: widget.clock,
+    bedMarks: widget.bedMarks,
+    ratings: _ratings,
+    cameraInsights: widget.cameraInsights,
+    morningReport: widget.morningReport,
+    game: widget.game,
+    session: () => _sessionFuture,
+    goalMinutes: () async {
+      final wake = await _alarm.settings.wakeTime(_bedtime);
+      return sleepSpan(_bedtime, wake).inMinutes;
+    },
+    cachedCamera: () => _camera,
+    cachedGame: () => _game?.value,
+  );
 
-  /// 先畫手上已經有的（XP 用首頁已經讀到的那一份）。
-  MorningReport _initialReport(String date, _ReportInputs i) =>
-      buildMorningReport(date: date, marks: i.marks).withExtras(
-        game: _game?.value,
-        goalMinutes: i.goalMinutes,
-        camera: i.camera,
-        localRating: i.localRating,
-        ratingIsFresh: i.ratingIsFresh,
-      );
+  Future<ReportInputs> _reportInputs(String date) => _loader.inputs(date);
 
-  /// 問後端之後的完整版。[early] 是已經先發出去的請求（起床流程）。
-  Future<MorningReport> _fetchReport(String date, _ReportInputs i,
-      [_ReportFetch? early]) async {
-    final homeF = early?.home ?? widget.morningReport?.fetchNight(date);
-    final gameF = early?.game ?? widget.game?.fetchGame();
-    final home = await homeF;
-    final game = (await gameF)?.value ?? _game?.value;
-    return buildMorningReport(
-      date: date,
-      marks: i.marks,
-      home: home,
-      session: i.session,
-    ).withExtras(
-      game: game,
-      goalMinutes: i.goalMinutes,
-      camera: i.camera,
-      localRating: i.localRating,
-      ratingIsFresh: i.ratingIsFresh,
-    );
-  }
+  MorningReport _initialReport(String date, ReportInputs i) =>
+      _loader.initial(date, i);
+
+  Future<MorningReport> _fetchReport(String date, ReportInputs i,
+          [ReportFetch? early]) =>
+      _loader.fetch(date, i, early);
 
   PageRoute<String> _reportRoute(
     String date, {
@@ -639,7 +609,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) =>
       MaterialPageRoute<String>(
         fullscreenDialog: true,
-        builder: (_) => MorningReportScreen(
+        builder: (_) => MorningReportScreen.fromLoader(
+          _loader,
           // 今天早上起床的那一晚才說「在等手錶資料」
           pending: date == reportDateKey(widget.clock()),
           canOpenInsights: widget.onOpenInsights != null,
@@ -651,60 +622,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             }
           },
           isNotesRead: (version) => _notesReads.isRead(date, version),
-          loadBedTimes: _bedTimes,
-                    loadEfficiencyNights: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.status == CameraInsightsStatus.ok
-                ? camera!.efficiencyNights
-                : null;
-          },
-          loadCameraNights: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.status == CameraInsightsStatus.ok
-                ? camera!.nights
-                : null;
-          },
-          loadSleepHeartRates: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.status == CameraInsightsStatus.ok
-                ? camera!.sleepHeartRates
-                : null;
-          },
-          loadAwakeMinutes: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.status == CameraInsightsStatus.ok
-                ? camera!.awakeMinutes
-                : null;
-          },
-          loadAwakeCounts: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.status == CameraInsightsStatus.ok
-                ? camera!.awakeCounts
-                : null;
-          },
-          loadPhoneDowns: () async {
-            var camera = _camera;
-            if (camera == null && widget.cameraInsights != null) {
-              camera = await widget.cameraInsights!.load();
-            }
-            return camera?.phoneDowns ?? const {};
-          },
-          loadSleepSeries: () async => _sleepMinutesSeries((await _sessionFuture).history),
           initial: initial,
           load: load,
           loadSummary: loadSummary,
@@ -1830,39 +1747,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static String _fmtPts(double v) => '${v.round()}%';
   static String _fmtRate(double v) => '${v.toStringAsFixed(0)} /hr';
 
-  /// 報告 Time in bed 一週圖的資料：按鈕（後端 /insights，連不到就沒有）＋手錶入睡→醒來（打包檔）。
-  Future<
-    ({
-      Map<String, (DateTime?, DateTime?)> buttons,
-      Map<String, (DateTime?, DateTime?)> watch,
-    })
-  >
-  _bedTimes() async {
-    final watch = <String, (DateTime?, DateTime?)>{};
-    try {
-      for (final e in (await _sessionFuture).history) {
-        watch[e.date] = (parseWallClock(e.bedtime), parseWallClock(e.wakeTime));
-      }
-    } catch (_) {}
-    var camera = _camera;
-    if (camera == null && widget.cameraInsights != null) {
-      try {
-        camera = await widget.cameraInsights!.load();
-      } catch (_) {}
-    }
-    // 手錶的入睡→醒來：後端的比打包檔新，有就蓋過去（「躺多久才睡著」要這一晚的入睡）
-    return (
-      buttons: camera?.bedButtons ?? const {},
-      watch: {...watch, ...?camera?.watchSleep},
-    );
-  }
-
-  /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Time asleep 的一週圖共用）。
   static List<NightValue> _sleepMinutesSeries(List<HistoryEntry> history) =>
-      _series(
-        history,
-        (e) => e.sleepDurationHours == null ? null : e.sleepDurationHours! * 60,
-      );
+      sleepMinutesSeries(history);
 
   Future<void> _showSleepWeek(
       SleepSession session, List<NightValue> series) async {
@@ -2589,43 +2475,6 @@ class _NoExitAnimationRoute<T> extends MaterialPageRoute<T> {
 }
 
 /// 組報告要用的、手機上已經有的東西。
-class _ReportInputs {
-  final BedMarks marks;
-  final MorningRating? localRating;
-  final CameraNight? camera;
-  final SleepSession? session;
-  final int goalMinutes;
-
-  /// localRating 是起床流程裡剛填的（見 MorningReport.withExtras）。
-  final bool ratingIsFresh;
-
-  const _ReportInputs({
-    required this.marks,
-    required this.localRating,
-    required this.camera,
-    required this.session,
-    required this.goalMinutes,
-    this.ratingIsFresh = false,
-  });
-
-  _ReportInputs withFreshRating(MorningRating rating) => _ReportInputs(
-        marks: marks,
-        localRating: rating,
-        camera: camera,
-        session: session,
-        goalMinutes: goalMinutes,
-        ratingIsFresh: true,
-      );
-}
-
-/// 起床流程在動畫一開始就先發出去的請求。
-class _ReportFetch {
-  final Future<Map<String, dynamic>?>? home;
-  final Future<GameResult<GameState>>? game;
-
-  const _ReportFetch({this.home, this.game});
-}
-
 /// 首頁日記本最多往回找幾晚（2026-11-19 使用者定：只往回 1 晚）。
 const kHomeNotesLookbackNights = 1;
 

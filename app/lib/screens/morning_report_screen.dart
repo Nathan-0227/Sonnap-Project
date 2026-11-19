@@ -34,6 +34,7 @@ import '../widgets/steps_sheet.dart';
 import '../widgets/kcal_sheet.dart';
 import '../widgets/active_sheet.dart';
 import '../widgets/stress_sheet.dart';
+import '../services/report_loader.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -107,7 +108,13 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚的攝影機資料（後端 /insights 的 camera.history）。Movement 點開的一週用；沒給或連不到就只看這一晚。
   final Future<List<CameraNight>?> Function()? loadCameraNights;
 
+  /// 嵌在 Insights 的 Day 分頁裡（2026-11-19 grill 定）：不畫頂端日期與關閉鈕
+  /// （Insights 自己有「‹ 日期 ›」）、不畫經驗條（XP 是遊戲層的、屬於起床那一刻）、
+  /// 不畫底部 View sleep insights／Back to home（在 Insights 裡沒有地方可去）。
+  final bool embedded;
+
   const MorningReportScreen({
+    this.embedded = false,
     super.key,
     required this.initial,
     this.load,
@@ -125,6 +132,27 @@ class MorningReportScreen extends StatefulWidget {
     this.loadSleepHeartRates,
     this.loadCameraNights,
   });
+
+  /// 用共用的 [ReportLoader] 接上各詳細頁的一週資料（首頁與 Insights 同一份）。
+  MorningReportScreen.fromLoader(
+    ReportLoader loader, {
+    super.key,
+    required this.initial,
+    this.load,
+    this.loadSummary,
+    this.pending = true,
+    this.canOpenInsights = false,
+    this.onNotesOpened,
+    this.isNotesRead,
+    this.embedded = false,
+  })  : loadSleepSeries = loader.sleepSeries,
+        loadBedTimes = loader.bedTimes,
+        loadPhoneDowns = loader.phoneDowns,
+        loadAwakeMinutes = loader.awakeMinutes,
+        loadAwakeCounts = loader.awakeCounts,
+        loadEfficiencyNights = loader.efficiencyNights,
+        loadSleepHeartRates = loader.sleepHeartRates,
+        loadCameraNights = loader.cameraNights;
 
   @override
   State<MorningReportScreen> createState() => _MorningReportScreenState();
@@ -272,10 +300,12 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       ),
                       Column(
                         children: [
-                          _header(r),
-                          const SizedBox(height: 14),
+                          if (!widget.embedded) ...[
+                            _header(r),
+                            const SizedBox(height: 14),
+                          ],
                           _hero(r),
-                          if (r.level != null) ...[
+                          if (r.level != null && !widget.embedded) ...[
                             const SizedBox(height: 4),
                             _xp(r),
                           ],
@@ -339,7 +369,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     ),
                   ],
                   // 夢境改成小狗頭上的對話框（_hero），這裡不再放一列（2026-11-13）
-                  if (widget.canOpenInsights) ...[
+                  if (widget.canOpenInsights && !widget.embedded) ...[
                     const SizedBox(height: 14),
                     _linkRow(
                       key: const Key('report-insights'),
@@ -358,6 +388,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                       style: TextStyle(color: ReportColors.muted, fontSize: 12),
                     ),
                   ],
+                  if (!widget.embedded) ...[
                   const SizedBox(height: 14),
                   FilledButton(
                     key: const Key('report-done'),
@@ -375,6 +406,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                     ),
                     child: const Text('Back to home'),
                   ),
+                  ],
                 ],
               ),
             ),
