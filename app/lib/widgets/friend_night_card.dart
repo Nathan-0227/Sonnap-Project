@@ -1156,8 +1156,8 @@ class FriendNightPage extends StatefulWidget {
 
 class _FriendNightPageState extends State<FriendNightPage> {
   static const _page = Color(0xFF081326);
-  // 跟夜空圖下半的底色接起來（同小鎮面板）
-  static const _sheet = Color(0xFF0E1B4D);
+  // 跟星座圖下半的底色接起來（實測圖最底一列平均 #071547）
+  static const _sheet = Color(0xFF071547);
 
   /// 資訊卡現在佔畫面多少（0–1）。拉到最上面時整個畫面都是它（同 Strava，2026-11-16 使用者定）。
   double? _extent;
@@ -1265,7 +1265,7 @@ class _FriendNightPageState extends State<FriendNightPage> {
                     BoxShadow(color: Color(0x66000000), blurRadius: 16),
                   ],
                 ),
-                // 背景是小鎮面板同一張夜空（2026-11-19 使用者定），圖固定在資訊卡頂端、內容在上面捲
+                // 背景是星座線條圖（2026-11-19 使用者定：小鎮那張夜空有月亮，跟上面的場景太像），圖固定在資訊卡頂端、內容在上面捲
                 child: ClipRRect(
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(24 * (1 - full)),
@@ -1277,7 +1277,7 @@ class _FriendNightPageState extends State<FriendNightPage> {
                         left: 0,
                         right: 0,
                         child: Image.asset(
-                          'assets/backgrounds/town_sheet_sky.jpg',
+                          'assets/backgrounds/feed_sheet_sky.jpg',
                           key: const Key('night-sheet-sky'),
                           fit: BoxFit.fitWidth,
                           alignment: Alignment.topCenter,
