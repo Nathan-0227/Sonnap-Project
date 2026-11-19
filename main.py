@@ -48,10 +48,11 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 import camera_clips
 import camera_usual
+import demo_sleep
 import db
 import score_claim
 from behavior import (adherence, challenges as challenge_engine,
@@ -64,6 +65,7 @@ from game import inventory, state as game_state
 
 # 好友。⚠️ 只分享行為指標，別人的 user_id 永遠不出後端，見 social/__init__.py。
 from social import friends as social_friends
+from social import sharing as social_sharing
 
 # ⚠️ 直接 import 舊路徑的映射函式，**不要在這裡重寫一份**。
 #    pet_mood 的 Tier B 規則（QUALITY_TO_MOOD + anxious 生理覆寫）
@@ -72,6 +74,8 @@ from social import friends as social_friends
 from build_app_payload import DISPLAY_STRINGS, QUALITY_TO_COLOR, map_pet_mood
 import build_app_payload as _payload
 import camera_curve  # noqa: E402  攝影機曲線只留睡著那段（純函式，不載入 OpenCV）
+from social import leaderboard as social_leaderboard  # noqa: E402  好友排行榜（純函式）
+from social import town as social_town  # noqa: E402  好友小鎮（純函式）
 from build_app_payload import sleep_heart_rate  # noqa: E402  garmin/ 由 build_app_payload 加進 sys.path
 
 app = FastAPI(title="Sonnap API")
@@ -216,6 +220,8 @@ class NightlyRequest(BaseModel):
     # 2026-11-15：App 偵測這一晚時跨過了幾次半夜的短解鎖（規則在 app/lib/services/lights_out.dart）。
     # 沒送（舊版 App）存 NULL，不是 0——「沒跨」與「不知道」要分得開。只存、不顯示、不進任何計算。
     bridged_unlocks: Optional[int] = Field(None, ge=0)
+    # 那一晚用的手機（App 給的顯示名稱）；好友頁「用了哪些設備」用
+    phone_model: Optional[str] = Field(None, max_length=60)
     # 2026-11-16：那一晚**所有** ≥60 分鐘的安靜期。手機端的規則是「挑最長的
     # 那一段」，半夜起來用幾分鐘手機就會挑錯（11-16 挑到晚 88 分鐘的那段）。
     # 早晨匯入寫完手錶之後，resolve_lights_out.py 會拿手錶認定的入睡時刻當裁判
@@ -296,6 +302,18 @@ def display_for(mood, driver, w_row):
 _STANDARD_CACHE = {"mtime": None, "records": None}
 
 
+def _owns_garmin_file(user_id):
+    """
+    電腦上那份 Garmin 原始檔是**本人（手機帳號）**的。只有手錶夜晚來源是 garmin 的帳號
+    才可以從它讀整天心率、壓力曲線、醒著的心率。
+
+    ⚠️ 2026-11-16 發現：yesterday_block 原本對任何有白天資料的帳號都去讀這份檔；
+       示範帳號有了白天資料之後，它們的「昨天」會讀到本人的心率（那時還沒有項目把它分享出去）。
+       順便也讓動態牆不用為每一位朋友掃一次 25 MB 的檔（6.3 秒 → App 3 秒就放棄）。
+    """
+    return db.has_wearable_source(user_id, "garmin")
+
+
 def _garmin_records():
     path = _payload.GARMIN_DATA / "garmin_standard_data.json"
     try:
@@ -367,7 +385,9 @@ def yesterday_block(user_id, night_date):
     row = db.get_garmin_daily(user_id, day.isoformat())
     if not row or not any(row.get(k) not in (None, []) for k in db.GARMIN_DAILY_FIELDS):
         return None
-    stress_curve = sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
+    owns_raw = _owns_garmin_file(user_id)
+    stress_curve = (sleep_heart_rate.day_stress(_garmin_records() or [], day.isoformat())
+                    if owns_raw else None)
     vo2 = db.latest_vo2max(
         user_id, on_or_before=day.isoformat(),
         since=(day - timedelta(days=VO2MAX_LOOKBACK_DAYS - 1)).isoformat())
@@ -415,11 +435,12 @@ def yesterday_block(user_id, night_date):
         "activity_quarters": row.get("activity_quarters"),
         # 2026-11-14：報告的圖形格子用（步數那座「山」、點開的長條圖、整天心率線）。
         # 形狀跟打包檔 activity_block 的 history／heart_rate 一樣，App 用同一個解析。
-        "history": _yesterday_history(user_id, day),
-        "heart_rate": sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat()),
+        "history": _yesterday_history(user_id, day, owns_raw),
+        "heart_rate": (sleep_heart_rate.day_heart_rate(_garmin_records() or [], day.isoformat())
+                       if owns_raw else None),
         # 2026-11-15 Awake HR：扣掉睡著之後的平均、最高、各區間分鐘＋整天的原始讀數。
         # 不給靜止心率、最低、Normal／High（Research-Background/心率門檻.md）。打包檔不帶（每 2 分鐘的讀數太大）
-        "awake_heart_rate": _awake_hr(user_id, day, row),
+        "awake_heart_rate": _awake_hr(user_id, day, row) if owns_raw else None,
     }
 
 
@@ -451,10 +472,12 @@ def _sleeping_sec(row):
     return 86400 - sum(parts)
 
 
-def _yesterday_history(user_id, day):
-    """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。"""
+def _yesterday_history(user_id, day, owns_raw=True):
+    """最近 ACTIVITY_HISTORY_DAYS 天（到那一天為止）的步數、活動卡路里、活動分鐘；沒資料的日子不放。
+    owns_raw=False：不讀 Garmin 原始檔（那是本人的，見 _owns_garmin_file），平均壓力與醒著心率留 None。"""
     since = (day - timedelta(days=_payload.ACTIVITY_HISTORY_DAYS - 1)).isoformat()
-    stress_avgs = sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+    stress_avgs = (sleep_heart_rate.stress_day_averages(_garmin_records() or [])
+                   if owns_raw else {})
     windows = db.list_sleep_windows(user_id, since, (day + timedelta(days=1)).isoformat())
     out = []
     for r in db.list_garmin_daily(user_id, since, day.isoformat()):
@@ -475,7 +498,7 @@ def _yesterday_history(user_id, day):
             "stress_minutes": _payload.stress_minutes(r),
             "stress_avg": stress_avgs.get(r["date"]),
             # Awake HR 一週圖：醒著的平均與最高（只帶兩個數，整天的讀數太大）
-            "awake_hr": _awake_hr_summary(user_id, r, windows),
+            "awake_hr": _awake_hr_summary(user_id, r, windows) if owns_raw else None,
             # Move IQ 一週圖（11-15）：那天的每一段（沒有是 []、沒抓到是 null），照抄 Garmin
             "move_iq": r.get("move_iq"),
         })
@@ -499,6 +522,9 @@ def night_stages(w_row):
        Health Connect 上傳時有逐段資料，但後端算完分數就沒存——那些晚上 App 改畫比例條。
     ⚠️ 圖例數字用手錶自己的總數，還原出來的段只畫曲線（理由同 build_app_payload.sleep_stages_block）。
     """
+    if w_row and w_row.get("source") == "demo":
+        # 🔴 示範帳號：demo_accounts 產生的假資料，用同一份種子重排一次（見 demo_sleep.py）
+        return demo_sleep.stages_block(w_row)
     if not w_row or w_row.get("source") != "garmin":
         return None
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
@@ -536,6 +562,9 @@ def night_heart_rate(w_row):
     ⚠️ 平均與最低從曲線那一段自己算，不用 w_row["avg_hr"]（那個混了清醒時段）。
     ⚠️ 不判斷 Normal／High（紅線 2）。資料不夠 → None，App 整張卡不畫。
     """
+    if w_row and w_row.get("source") == "demo":
+        # 🔴 示範帳號：用那一晚的階梯排出一條假的心率線（見 demo_sleep.py）
+        return demo_sleep.heart_rate_block(w_row)
     if not w_row or w_row.get("source") != "garmin":
         return None
     start, wake = w_row.get("sleep_start_time"), w_row.get("wake_time")
@@ -935,6 +964,7 @@ async def post_nightly(req: NightlyRequest):
         bed_start_kind=start_kind,
         bed_end_kind=end_kind,
         bridged_unlocks=req.bridged_unlocks,
+        phone_model=(req.phone_model or "").strip() or None,
         # ⚠️ 原樣存起來、這裡**不挑**：上傳是早上你開 App 的時候，
         #    那時候手錶那一晚還沒進資料庫（要等 morning_import.py），
         #    裁判不在場。挑選在 resolve_lights_out.py，匯入手錶之後才跑。
@@ -1731,11 +1761,110 @@ class AddFriendRequest(BaseModel):
     invite_code: str
 
 
-def _friend_summary(friend_id):
+class VisitRequest(BaseModel):
+    user_id: str
+    kind: str
+
+
+FEED_DAYS = 7
+
+
+class SharingPatch(BaseModel):
+    user_id: str
+    # ⚠️ StrictBool：一般的 bool 會把 "yes"／"1" 自動轉成 True，偷偷打開分享（測試抓到）
+    items: Optional[Dict[str, StrictBool]] = None
+    time_precision: Optional[str] = None
+    pet_species: Optional[str] = None
+    scene: Optional[str] = None
+
+
+def _sharing(user_id):
+    return social_sharing.effective(db.get_friend_sharing(user_id))
+
+
+def _friend_summary(friend_id, masked=True):
     user = db.get_user(friend_id)
     handle = db.ensure_invite_code(friend_id)
     rows = db.get_nightly_behavior(friend_id, days=FRIEND_HISTORY_DAYS)
-    return social_friends.build_friend_summary(user, handle, rows)
+    settings = _sharing(friend_id)
+    summary = social_friends.build_friend_summary(
+        user, handle, rows, pet_species=settings["pet_species"])
+    return social_friends.apply_sharing(summary, settings) if masked else summary
+
+
+async def _night_card(user_id, date, settings, game=None, closet=None, challenges=None):
+    """那一晚好友看得到的卡（只有打開的項目）。數字跟本人的 /home 同一份。"""
+    home = await get_home(user_id=user_id, date=date)
+    latest = (home.get("behavior") or {})
+    mood, _ = social_friends.pet_state.mood_for_adherence(latest.get("adherence_minutes"))
+    # 「跟他自己平常比」要看這一晚之前的夜晚 → 整串一起標（同 /insights）
+    cam_rows = camera_usual.annotate(db.get_camera_nightly(user_id, days=60))
+    cam = next((r for r in cam_rows if r.get("date") == date), None)
+    ctx = {
+        "home": home,
+        "game": game,
+        "closet": closet,
+        "challenges": challenges,
+        "camera": cam,
+        "phone_model": next((r.get("phone_model") for r in db.get_nightly_behavior(user_id, days=60)
+                             if r.get("date") == date), None),
+        "prebed_minutes": db.prebed_phone_minutes(user_id, date),
+        "behavior_mood": mood if latest.get("lights_out_at") else None,
+    }
+    return social_sharing.night_card(ctx, settings)
+
+
+def _recent_dates(user_id, days=FEED_DAYS):
+    """最近 days 個日曆日裡有記錄（行為或手錶）的晚上，新的在前。"""
+    from datetime import date as _d, timedelta
+    today = _d.today()
+    window = {(today - timedelta(days=i)).isoformat() for i in range(days)}
+    have = {r["date"] for r in db.get_nightly_behavior(user_id, days=days + 2)}
+    have |= {r["date"] for r in db.get_wearable_nightly(user_id, days=days + 2)}
+    return sorted(have & window, reverse=True)
+
+
+async def _cards_for(user_id, days=FEED_DAYS):
+    settings = _sharing(user_id)
+    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
+    game = game_state.build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated)
+    closet = db.get_game_state(user_id) or {}
+    return [
+        {"date": d, "scene": settings["scene"],
+         "items": await _night_card(user_id, d, settings, game, closet, evaluated)}
+        for d in _recent_dates(user_id, days)
+    ]
+
+
+def _require_sharing_user(user_id):
+    require_user(user_id)
+    return _sharing(user_id)
+
+
+@app.get("/sharing")
+async def get_sharing(user_id: str = Query(...)):
+    """我讓好友看到什麼：分組的開關、時刻要不要準確、永遠不給的三項（只是說明）。"""
+    return social_sharing.view(_require_sharing_user(user_id))
+
+
+@app.patch("/sharing")
+async def patch_sharing(req: SharingPatch):
+    """改分享設定。不認得的項目（含永遠不給的那三個）→ 422，一個都不改。"""
+    require_user(req.user_id)
+    try:
+        social_sharing.validate_patch(req.items, req.time_precision, req.pet_species, req.scene)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    db.set_friend_sharing(req.user_id, req.items, req.time_precision, req.pet_species, req.scene)
+    return social_sharing.view(_sharing(req.user_id))
+
+
+@app.get("/sharing/preview")
+async def sharing_preview(user_id: str = Query(...)):
+    """朋友看到的我：摘要（遮過）＋最近一晚的卡。設定頁的預覽用。"""
+    require_user(user_id)
+    cards = await _cards_for(user_id, days=FEED_DAYS)
+    return {"friend": _friend_summary(user_id), "card": cards[0] if cards else None}
 
 
 def _friend_by_handle(user_id, handle):
@@ -1757,12 +1886,14 @@ async def get_friends(user_id: str = Query(...)):
     summaries = [_friend_summary(fid) for fid in db.list_friend_ids(user_id)]
     return {
         "my_invite_code": db.ensure_invite_code(user_id),
+        # 我自己的 Streak 卡（自己看自己，不遮）
+        "me": _friend_summary(user_id, masked=False),
         "friends": summaries,
         "leaderboard": social_friends.leaderboard(summaries),
         "notes": {
             "what_is_shared": (
-                "Friends only see behaviour: when the phone was put down, streaks and late nights. "
-                "Sleep scores, sleep stages and heart rate are never shared."
+                "Each friend chooses what you can see. Camera clips, Move IQ times and the apps "
+                "used before bed are never shared."
             ),
             "streak_breaks_on_missing_nights": (
                 "A night without a record breaks the streak, so streaks cannot be built by only "
@@ -1790,10 +1921,210 @@ async def add_friend(req: AddFriendRequest):
     return {"friend": _friend_summary(friend_id)}
 
 
+@app.get("/friends/feed")
+async def get_friends_feed(user_id: str = Query(...)):
+    """
+    朋友們與我自己最近 7 天每一晚的卡（新的在前），每張只有那個人打開的項目。
+    我自己的卡（mine: true，2026-11-16 使用者定）一樣照我的分享設定——
+    看到的就是朋友看到的我，不會比朋友多。同一天我的排最前面。
+    ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "feed" 會被當成邀請碼。
+    """
+    require_user(user_id)
+    from datetime import datetime as _dt
+    today = social_town.visit_day(_dt.now())
+    ids = [user_id, *db.list_friend_ids(user_id)]
+    # 🐾（2026-11-19 使用者定，像 Strava 的 kudos）：一個 🐾＝那一天的一次拜訪，跟小鎮是同一件事。
+    # 數字大家都看得到；**是誰只給卡片主人**——朋友的朋友不一定是我的朋友，名字不能給。
+    paws = {}
+    for rid, sid, day in db.list_visits_received(
+            ids, (date_cls.today() - timedelta(days=social_town.VISIT_KEEP_DAYS)).isoformat()):
+        paws.setdefault((rid, day), []).append(sid)
+    _, sent = db.list_friend_visits(user_id, today)
+    names = {}
+    cards = []
+    for fid in ids:
+        s = _friend_summary(fid)
+        names[fid] = s["display_name"]
+        mine = fid == user_id
+        for c in await _cards_for(fid):
+            got = paws.get((fid, c["date"]), [])
+            card = {"handle": s["handle"], "display_name": s["display_name"],
+                    "pet_species": s["pet_species"], "mine": mine, **c, "paws": len(got)}
+            if mine:
+                card["paw_from"] = got
+            else:
+                # 只有「今天」那張卡能按（拜訪一天一次，以起床日算）
+                card["can_paw"] = c["date"] == today
+                card["paw_sent"] = c["date"] == today and fid in sent
+            cards.append(card)
+    for card in cards:
+        if card["mine"]:
+            card["paw_from"] = [names.get(sid) or (db.get_user(sid) or {}).get("display_name", "")
+                                for sid in card["paw_from"]]
+    cards.sort(key=lambda c: (c["date"], c["mine"], c["display_name"]), reverse=True)
+    return {"cards": cards}
+
+
+def _daily_stress_avgs(uid):
+    """{日期: 那天平均壓力}。存在資料庫的（示範帳號）＋電腦上的原始檔（只有它的主人，見 _owns_garmin_file）。
+    兩邊都有的那天以原始檔為準——那是每 3 分鐘讀數算出來的，跟早晨報告 Stress 那一格同一個數字。"""
+    since = date_cls(date_cls.today().year - 1, 1, 1).isoformat()
+    out = {r["date"]: r["stress_avg"] for r in db.list_garmin_daily(uid, since, date_cls.today().isoformat())
+           if r.get("stress_avg") is not None}
+    if _owns_garmin_file(uid):
+        out.update(sleep_heart_rate.stress_day_averages(_garmin_records() or []))
+    return out
+
+
+@app.get("/friends/leaderboard")
+async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query("on_time"),
+                                  period: Optional[str] = Query(None)):
+    """
+    好友排行榜（七個標籤之一 × 時段）。名次、門檻、並列、跟上個時段比的變化都在這裡算，App 照抄。
+    參加的人＝我＋我的好友；**只有公開那一項的人才上榜**（我也一樣）。不回任何 user_id。
+    ⚠️ 路徑要排在 /friends/{handle} 前面，不然 "leaderboard" 會被當成邀請碼。
+    """
+    require_user(user_id)
+    spec = social_leaderboard.METRICS.get(metric)
+    if spec is None:
+        raise HTTPException(status_code=422, detail=f"metric must be one of {social_leaderboard.METRIC_ORDER}.")
+    period = period or spec["periods"][0]
+    if period not in spec["periods"]:
+        raise HTTPException(status_code=422, detail=f"{metric} can be shown for {spec['periods']}.")
+    today = date_cls.today()
+    since = date_cls(today.year - 1, 1, 1).isoformat()
+    people, info = [], {}
+    for uid in [user_id, *db.list_friend_ids(user_id)]:
+        settings = _sharing(uid)
+        summary = _friend_summary(uid, masked=False)
+        user = db.get_user(uid) or {}
+        key = summary["handle"]
+        people.append({
+            "key": key,
+            "shares": bool(settings["items"].get(spec["share"])),
+            "behavior": db.get_nightly_behavior(uid, days=800),
+            "wearable": db.get_wearable_nightly(uid, days=800),
+            "daily": db.list_garmin_daily(uid, since, today.isoformat()),
+            "streak": (summary.get("current_streak"), summary.get("best_streak")),
+            "stress": _daily_stress_avgs(uid),
+        })
+        info[key] = {
+            "handle": key,
+            "display_name": summary["display_name"],
+            "mine": uid == user_id,
+            "demo": user.get("study_cohort") == db.DEMO_COHORT,
+            "pet_species": settings["pet_species"],
+            # 寵物的心情只有他有分享「寵物心情」才給（自己的照給）；沒有 → App 畫 bored，不編一個開心的
+            "pet_mood": summary.get("pet_mood")
+            if (uid == user_id or settings["items"].get("pet_mood")) else None,
+        }
+    b = social_leaderboard.board(people, metric, period, today)
+    me_key = next(k for k, v in info.items() if v["mine"])
+    entries = [{**info[k], "rank": r, "display": shown, "nights": n,
+                "change": (b["prev"][k] - r) if k in b["prev"] else None}
+               for k, r, _value, shown, n in b["ranked"]]
+    below = [{**info[k], "nights": n} for k, n in b["below"]]
+    mine = next((e for e in entries if e["mine"]), None)
+    if me_key in b["hidden"]:
+        me = {"status": "not_sharing", "share_item": spec["share"],
+              "share_label": social_sharing.item_label(spec["share"])}
+    elif mine:
+        me = {"status": "ranked", **mine}
+    else:
+        me = {"status": "below", **next(x for x in below if x["mine"])}
+    return {
+        "metric": metric,
+        "period": period,
+        "label": spec["label"],
+        "title": spec["title"],
+        "need": b["need"],
+        "unit": social_leaderboard.unit(metric),
+        "window": {"from": b["window"][0], "to": b["window"][1]},
+        "metrics": [{"key": k, "label": social_leaderboard.METRICS[k]["label"]}
+                    for k in social_leaderboard.METRIC_ORDER],
+        "periods": [{"key": q, "label": social_leaderboard.PERIOD_LABELS[q]} for q in spec["periods"]],
+        "entries": entries,
+        "below": below,
+        "me": me,
+    }
+
+
+@app.get("/friends/town")
+async def get_friends_town(user_id: str = Query(...)):
+    """
+    好友小鎮：我＋朋友（照加好友的先後，App 把我放中間）、誰昨晚發光、今天誰來看過我。
+    發光＝昨晚準時放下手機且有分享 On time（我自己照亮）。沒發光**不給原因**。
+    card＝那個人昨晚的卡（只有他打開的項目），沒有就是 null → App 不畫「See last night」。
+    不回任何 user_id。⚠️ 路徑要排在 /friends/{handle} 前面。
+    """
+    require_user(user_id)
+    from datetime import datetime as _dt
+    night = date_cls.today().isoformat()
+    day = social_town.visit_day(_dt.now())
+    received, sent = db.list_friend_visits(user_id, day)
+    people, names = [], {}
+    for uid in [user_id, *db.list_friend_ids(user_id)]:
+        settings = _sharing(uid)
+        summary = _friend_summary(uid, masked=False)
+        user = db.get_user(uid) or {}
+        mine = uid == user_id
+        cards = await _cards_for(uid, days=1)
+        card = next((c for c in cards if c["date"] == night and c["items"]), None)
+        names[uid] = summary["display_name"]
+        people.append({
+            "handle": summary["handle"],
+            "display_name": summary["display_name"],
+            "mine": mine,
+            "demo": user.get("study_cohort") == db.DEMO_COHORT,
+            "pet_species": settings["pet_species"],
+            # 心情只有他有分享才給（自己的照給）；沒有 → App 畫 bored
+            "pet_mood": summary.get("pet_mood") if (mine or settings["items"].get("pet_mood")) else None,
+            "glow": social_town.glows(db.get_nightly_behavior(uid, days=3), night,
+                                      mine or bool(settings["items"].get("on_time"))),
+            "sent": None if mine else sent.get(uid),
+            "card": card,
+        })
+    me_species = people[0]["pet_species"]
+    visits = [{
+        "display_name": names.get(sid) or (db.get_user(sid) or {}).get("display_name", ""),
+        "kind": kind,
+        "message": social_town.message(kind, social_town.display_name(
+            names.get(sid) or (db.get_user(sid) or {}).get("display_name", "")), me_species),
+    } for sid, kind in received]
+    return {
+        "night": night,
+        "day": day,
+        "people": people,
+        "visits": visits,
+        "kinds": [{"key": k, "label": social_town.button_label(k)} for k in social_town.KIND_ORDER],
+    }
+
+
+@app.post("/friends/{handle}/visit", status_code=201)
+async def visit_friend(handle: str, req: VisitRequest):
+    """
+    拜訪朋友：摸摸或一句預設的話。同一個朋友一天（起床日）一次 → 第二次 409。
+    不給 XP、不影響分數、不推播。不認得的動作 422；不是朋友 404。
+    """
+    require_user(req.user_id)
+    if req.kind not in social_town.KINDS:
+        raise HTTPException(status_code=422, detail=f"kind must be one of {social_town.KIND_ORDER}.")
+    friend_id = _friend_by_handle(req.user_id, handle)
+    from datetime import datetime as _dt, timedelta as _td
+    now = _dt.now()
+    day = social_town.visit_day(now)
+    keep_since = social_town.visit_day(now - _td(days=social_town.VISIT_KEEP_DAYS))
+    if not db.add_friend_visit(req.user_id, friend_id, day, req.kind, keep_since):
+        raise HTTPException(status_code=409, detail="You already visited today. Come back tomorrow.")
+    return {"sent": req.kind, "label": social_town.button_label(req.kind), "day": day}
+
+
 @app.get("/friends/{handle}")
 async def get_friend(handle: str, user_id: str = Query(...)):
     require_user(user_id)
-    return {"friend": _friend_summary(_friend_by_handle(user_id, handle))}
+    fid = _friend_by_handle(user_id, handle)
+    cards = await _cards_for(fid)
+    return {"friend": _friend_summary(fid), "card": cards[0] if cards else None}
 
 
 @app.delete("/friends/{handle}")

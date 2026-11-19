@@ -18,8 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
 import 'package:app/services/user_identity.dart';
+import 'package:app/widgets/friend_night_card.dart' show FriendNightPage;
 import 'package:app/widgets/mood_filter_bar.dart';
-import 'package:app/widgets/top_streak_card.dart';
 
 const String testUserId = '00000000-5017-4e01-9a30-000000000001';
 
@@ -31,46 +31,116 @@ Map<String, dynamic> friendJson(
   bool? late = false,
   int streak = 2,
   int best = 3,
-}) =>
-    {
-      'handle': handle,
-      'display_name': name,
-      'pet_mood': mood,
-      'last_night_date': '2026-09-03',
-      'last_lights_out_at': lightsOut,
-      'last_night_late': late,
-      'current_streak': streak,
-      'best_streak': best,
-      'late_night_ratio': 0.25,
-      'late_nights': 1,
-      'recorded_nights': 4,
-    };
+  List<String>? week,
+}) => {
+  'handle': handle,
+  'display_name': name,
+  'pet_mood': mood,
+  'last_night_date': '2026-09-03',
+  'last_lights_out_at': lightsOut,
+  'last_night_late': late,
+  'current_streak': streak,
+  'best_streak': best,
+  'late_night_ratio': 0.25,
+  'late_nights': 1,
+  'recorded_nights': 4,
+  if (week != null)
+    'streak_week': [
+      for (final (i, st) in week.indexed)
+        {'date': '2026-09-${(i + 1).toString().padLeft(2, '0')}', 'status': st},
+    ],
+};
 
-Map<String, dynamic> stateJson({List<Map<String, dynamic>>? friends, List<Map<String, dynamic>>? board}) => {
-      'my_invite_code': 'K7QM2P',
-      'friends': friends ??
-          [
-            friendJson('BOB234', 'Bob'),
-            friendJson('CAR567', 'Carol', mood: 'tired', lightsOut: '2026-09-03T02:30:00+08:00', late: true, streak: 0, best: 1),
-          ],
-      'leaderboard': board ??
-          const [
-            {'rank': 1, 'handle': 'BOB234', 'display_name': 'Bob', 'current_streak': 2, 'best_streak': 3},
-            {'rank': 2, 'handle': 'CAR567', 'display_name': 'Carol', 'current_streak': 0, 'best_streak': 1},
-          ],
-      'notes': const {'what_is_shared': 'Friends only see behaviour.'},
-    };
+Map<String, dynamic> stateJson({
+  List<Map<String, dynamic>>? friends,
+  List<Map<String, dynamic>>? board,
+}) => {
+  'my_invite_code': 'K7QM2P',
+  'friends':
+      friends ??
+      [
+        friendJson('BOB234', 'Bob'),
+        friendJson(
+          'CAR567',
+          'Carol',
+          mood: 'tired',
+          lightsOut: '2026-09-03T02:30:00+08:00',
+          late: true,
+          streak: 0,
+          best: 1,
+        ),
+      ],
+  'leaderboard':
+      board ??
+      const [
+        {
+          'rank': 1,
+          'handle': 'BOB234',
+          'display_name': 'Bob',
+          'current_streak': 2,
+          'best_streak': 3,
+        },
+        {
+          'rank': 2,
+          'handle': 'CAR567',
+          'display_name': 'Carol',
+          'current_streak': 0,
+          'best_streak': 1,
+        },
+      ],
+  'notes': const {'what_is_shared': 'Friends only see behaviour.'},
+};
 
 class _StubFriends implements FriendsService {
+  LeaderboardBoard? board;
+  final List<(String, String?)> boardCalls = [];
+  @override
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(
+    String metric, {
+    String? period,
+  }) async {
+    boardCalls.add((metric, period));
+    return board == null
+        ? const FriendsResult(FriendsStatus.failed)
+        : FriendsResult(FriendsStatus.ok, value: board);
+  }
+
   FriendsResult<FriendsState> result;
   FriendsResult<FriendSummary> addResult;
   final List<String> addCalls = [];
   final List<String> removeCalls = [];
+  List<FriendNightCard> feed = const [];
+  FriendsResult<TownState> town = const FriendsResult(FriendsStatus.failed);
+  final List<(String, String)> visitCalls = [];
+  FriendsResult<String> visitResult = const FriendsResult(
+    FriendsStatus.ok,
+    value: 'pet',
+  );
 
-  _StubFriends({FriendsResult<FriendsState>? result, FriendsResult<FriendSummary>? addResult})
-      : result = result ?? FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(stateJson())),
-        addResult = addResult ??
-            FriendsResult(FriendsStatus.ok, value: FriendSummary.fromJson(friendJson('DAV890', 'Dave')));
+  @override
+  Future<FriendsResult<TownState>> fetchTown() async => town;
+
+  @override
+  Future<FriendsResult<String>> visit(String handle, String kind) async {
+    visitCalls.add((handle, kind));
+    return visitResult;
+  }
+
+  _StubFriends({
+    FriendsResult<FriendsState>? result,
+    FriendsResult<FriendSummary>? addResult,
+  }) : result =
+           result ??
+           FriendsResult(
+             FriendsStatus.ok,
+             value: FriendsState.fromJson(stateJson()),
+           ),
+       addResult =
+           addResult ??
+           FriendsResult(
+             FriendsStatus.ok,
+             value: FriendSummary.fromJson(friendJson('DAV890', 'Dave')),
+           );
 
   @override
   Future<FriendsResult<FriendsState>> fetch() async => result;
@@ -87,6 +157,32 @@ class _StubFriends implements FriendsService {
     return FriendsResult(FriendsStatus.ok, value: handle);
   }
 
+  // 2026-11-15：分享設定與動態卡。這幾支畫面測試不看它們，回空的就好
+  @override
+  Future<FriendsResult<List<FriendNightCard>>> fetchFeed() async =>
+      FriendsResult(FriendsStatus.ok, value: feed);
+
+  @override
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchFriend(
+    String handle,
+  ) async => const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<SharingSettings>> fetchSharing() async =>
+      const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<SharingSettings>> patchSharing({
+    Map<String, bool>? items,
+    String? timePrecision,
+    String? petSpecies,
+    String? scene,
+  }) async => const FriendsResult(FriendsStatus.failed);
+
+  @override
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>>
+  fetchPreview() async => const FriendsResult(FriendsStatus.failed);
+
   @override
   String get baseUrl => 'stub';
 
@@ -102,6 +198,7 @@ class _FakeBackend {
   final List<Map<String, dynamic>> received = [];
   int addStatus = 201;
   Map<String, dynamic> addBody = {'friend': friendJson('BOB234', 'Bob')};
+  Duration feedDelay = Duration.zero;
 
   Future<String> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -114,7 +211,22 @@ class _FakeBackend {
         'body': body.isEmpty ? null : jsonDecode(body),
       });
       request.response.headers.contentType = ContentType.json;
-      if (request.method == 'GET') {
+      if (request.method == 'GET' && request.uri.path == '/friends/feed') {
+        await Future<void>.delayed(feedDelay);
+        request.response.write(
+          jsonEncode({
+            'cards': [
+              {
+                'handle': 'BOB234',
+                'display_name': 'Bob',
+                'date': '2026-09-03',
+                'scene': 'lake',
+                'items': {'on_time': true},
+              },
+            ],
+          }),
+        );
+      } else if (request.method == 'GET') {
         request.response.write(jsonEncode(stateJson()));
       } else if (request.method == 'POST') {
         request.response.statusCode = addStatus;
@@ -130,13 +242,28 @@ class _FakeBackend {
   Future<void> stop() => server.close(force: true);
 }
 
-Future<void> pump(WidgetTester tester, FriendsService? service) async {
+/// 打開好友頁。2026-11-17 起預設在 Town 分頁；名單、邀請碼、排行在 Friends 分頁，
+/// 所以預設切過去（要看 Feed 的傳 tab: 'feed'，要看小鎮的傳 tab: 'town'）。
+Future<void> pump(
+  WidgetTester tester,
+  FriendsService? service, {
+  String tab = 'friends',
+}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: FriendsScreen(service: service))));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(body: FriendsScreen(service: service)),
+    ),
+  );
   await tester.pump();
   await tester.pump();
+  final button = find.byKey(Key('tab-$tab'));
+  if (tab != 'town' && button.evaluate().isNotEmpty) {
+    await tester.tap(button);
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -157,9 +284,9 @@ void main() {
     });
 
     FriendsService service() => FriendsService(
-          baseUrl: baseUrl,
-          identity: const BuildTimeUserIdentity(overrideId: testUserId),
-        );
+      baseUrl: baseUrl,
+      identity: const BuildTimeUserIdentity(overrideId: testUserId),
+    );
 
     test('GET /friends 帶 user_id，解析得出來', () async {
       final r = await service().fetch();
@@ -169,9 +296,28 @@ void main() {
       expect(r.value!.friends.map((f) => f.displayName), ['Bob', 'Carol']);
     });
 
+    test('動態牆比一般逾時慢也等得到（2026-11-16 實機：後端 6.3 秒、App 3 秒就放棄，畫面說沒有動態）', () async {
+      backend.feedDelay = const Duration(milliseconds: 1500);
+      final quick = FriendsService(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        timeout: const Duration(seconds: 1),
+      );
+      final r = await quick.fetchFeed();
+      expect(r.isOk, isTrue);
+      expect(r.value!.single.scene, 'lake');
+      expect(
+        FriendsService.feedTimeout,
+        greaterThanOrEqualTo(const Duration(seconds: 10)),
+      );
+    });
+
     test('加好友：body 帶 user_id 與去掉空白的邀請碼', () async {
       await service().add('  bob234  ');
-      expect(backend.received.single['body'], {'user_id': testUserId, 'invite_code': 'bob234'});
+      expect(backend.received.single['body'], {
+        'user_id': testUserId,
+        'invite_code': 'bob234',
+      });
     });
 
     test('加好友被拒：後端的話原樣帶出來', () async {
@@ -196,8 +342,22 @@ void main() {
     testWidgets('沒有後端 → 老實講，而且原本的假朋友一個都不出現', (tester) async {
       await pump(tester, null);
       expect(find.byKey(const Key('friends-no-backend')), findsOneWidget);
-      for (final fake in ['Katy', 'Andrew', 'Emil', 'Heidi', 'Jamie', 'Mochi', 'Coco', 'Nala', 'Dango']) {
-        expect(find.textContaining(fake), findsNothing, reason: '不要拿任何人的名字當佔位符');
+      for (final fake in [
+        'Katy',
+        'Andrew',
+        'Emil',
+        'Heidi',
+        'Jamie',
+        'Mochi',
+        'Coco',
+        'Nala',
+        'Dango',
+      ]) {
+        expect(
+          find.textContaining(fake),
+          findsNothing,
+          reason: '不要拿任何人的名字當佔位符',
+        );
       }
     });
 
@@ -211,26 +371,70 @@ void main() {
     testWidgets('放下手機的時刻是牆鐘時間，不是 UTC', (tester) async {
       await pump(tester, _StubFriends());
       expect(find.textContaining('Phone down 23:05'), findsOneWidget);
-      expect(find.textContaining('15:05'), findsNothing,
-          reason: 'DateTime.tryParse("...+08:00") 回 UTC，.hour 會早 8 小時');
+      expect(
+        find.textContaining('15:05'),
+        findsNothing,
+        reason: 'DateTime.tryParse("...+08:00") 回 UTC，.hour 會早 8 小時',
+      );
     });
 
     testWidgets('準時／熬夜人數照後端的 last_night_late', (tester) async {
       await pump(tester, _StubFriends());
-      expect(tester.widget<Text>(find.byKey(const Key('circle-on-time'))).data, '1');
-      expect(tester.widget<Text>(find.byKey(const Key('circle-late'))).data, '1');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('circle-on-time'))).data,
+        '1',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('circle-late'))).data,
+        '1',
+      );
     });
 
-    testWidgets('排行照後端的順序，Dart 不重排', (tester) async {
-      // 後端把連續 0 晚的 Carol 排第一——就算看起來不合理也照抄。
-      // Dart 自己依 streak 重排的話，同分規則就有第二個定義處。
-      await pump(tester, _StubFriends(result: FriendsResult(FriendsStatus.ok,
-          value: FriendsState.fromJson(stateJson(board: const [
-            {'rank': 1, 'handle': 'CAR567', 'display_name': 'Carol', 'current_streak': 0, 'best_streak': 1},
-            {'rank': 2, 'handle': 'BOB234', 'display_name': 'Bob', 'current_streak': 2, 'best_streak': 3},
-          ])))));
-      final card = tester.widget<TopStreakCard>(find.byType(TopStreakCard));
-      expect(card.users.map((u) => u.name), ['Carol', 'Bob']);
+    testWidgets('Friends 分頁有七個排行榜那一塊（舊的只有連續天數），照後端的順序', (tester) async {
+      final stub = _StubFriends();
+      stub.board = LeaderboardBoard.fromJson({
+        'metric': 'on_time',
+        'period': 'week',
+        'label': 'On time',
+        'title': 'Phone-down champ',
+        'need': 3,
+        'metrics': [
+          {'key': 'on_time', 'label': 'On time'},
+        ],
+        'periods': [
+          {'key': 'week', 'label': 'Week'},
+        ],
+        // 後端把 0/3 的 Carol 排第一——看起來不合理也照抄
+        'entries': [
+          {
+            'handle': 'CAR567',
+            'display_name': 'Carol',
+            'rank': 1,
+            'display': '0 / 3 nights',
+          },
+          {
+            'handle': 'BOB234',
+            'display_name': 'Bob',
+            'rank': 2,
+            'display': '3 / 3 nights',
+          },
+        ],
+        'below': [],
+        'me': {'status': 'not_sharing', 'share_label': 'On time or late'},
+      });
+      await pump(tester, stub);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(stub.boardCalls.first, ('on_time', null));
+      expect(find.byKey(const Key('leaderboard')), findsOneWidget);
+      final carol = tester
+          .getCenter(find.byKey(const Key('lb-podium-CAR567')))
+          .dx;
+      final bob = tester
+          .getCenter(find.byKey(const Key('lb-podium-BOB234')))
+          .dx;
+      expect(carol, greaterThan(bob)); // 後端的第一名站中間
     });
 
     testWidgets('篩選列沒有「Sick」', (tester) async {
@@ -261,7 +465,12 @@ void main() {
 
     testWidgets('加好友被拒：照抄後端的話', (tester) async {
       final stub = _StubFriends(
-          addResult: const FriendsResult(FriendsStatus.failed, httpStatus: 422, message: 'That is your own invite code.'));
+        addResult: const FriendsResult(
+          FriendsStatus.failed,
+          httpStatus: 422,
+          message: 'That is your own invite code.',
+        ),
+      );
       await pump(tester, stub);
       await tester.tap(find.byKey(const Key('add-friend')));
       await tester.pumpAndSettle();
@@ -275,15 +484,544 @@ void main() {
       final stub = _StubFriends();
       await pump(tester, stub);
       await tester.tap(find.byKey(const Key('friend-BOB234')));
-      await tester.pumpAndSettle();
+      // 彈出來的卡上有會動的寵物與火，pumpAndSettle 等不到停——一格一格推到滑上來
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.ensureVisible(find.byKey(const Key('remove-friend')));
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('remove-friend')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
       expect(stub.removeCalls, ['BOB234']);
     });
 
+    testWidgets('Feed：沒有動態時講清楚，名單在另一個分頁', (tester) async {
+      await pump(tester, _StubFriends(), tab: 'feed');
+      expect(find.byKey(const Key('feed-empty')), findsOneWidget);
+      expect(find.text('K7QM2P'), findsNothing);
+      await tester.tap(find.byKey(const Key('tab-friends')));
+      await tester.pump();
+      expect(find.text('K7QM2P'), findsOneWidget);
+      expect(find.byKey(const Key('feed-empty')), findsNothing);
+    });
+
+    testWidgets('Feed：每張卡是他選的場景；連續天數的橫幅只在他最近那一晚、3 晚以上才出現', (tester) async {
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(
+            stateJson(
+              friends: [
+                friendJson(
+                  'BOB234',
+                  'Bob',
+                  streak: 4,
+                  week: [
+                    'late',
+                    'on_time',
+                    'on_time',
+                    'on_time',
+                    'on_time',
+                    'future',
+                    'future',
+                  ],
+                ),
+                friendJson('CAR567', 'Carol', streak: 2),
+              ],
+            ),
+          ),
+        ),
+      );
+      stub.feed = const [
+        // 項目多到資訊卡要捲（才驗得到最底下那一排有沒有被系統按鍵列蓋住）
+        FriendNightCard(
+          handle: 'BOB234',
+          displayName: 'Bob',
+          date: '2026-09-03',
+          scene: 'lake',
+          items: {
+            'sleep_duration': 412,
+            'on_time': true,
+            'awake': {'count': 2},
+            'sleeping_hr': {'avg': 56},
+            'stress': {'high': 1980},
+            'steps': {'steps': 8000},
+            'calories': {'active': 420},
+            'level': {'level': 4},
+            'outfit': {'badges': 3},
+            'phone_down_time': '23:10',
+            'time_in_bed': 440,
+            'resting_hr': 55,
+          },
+        ),
+        FriendNightCard(
+          handle: 'CAR567',
+          displayName: 'Carol',
+          date: '2026-09-03',
+          items: {'on_time': false},
+        ),
+        FriendNightCard(
+          handle: 'BOB234',
+          displayName: 'Bob',
+          date: '2026-09-02',
+          scene: 'lake',
+          items: {'on_time': true},
+        ),
+      ];
+      await pump(tester, stub, tab: 'feed');
+      // 手機大小（內容要長到會捲）＋底部的系統按鍵列
+      tester.view.physicalSize = const Size(400, 560);
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      await tester.pump();
+      expect(
+        find.byKey(const Key('feed-card-BOB234-2026-09-03')),
+        findsOneWidget,
+      );
+      final scenes = tester
+          .widgetList<Image>(find.byKey(const Key('card-scene')))
+          .map((i) => (i.image as AssetImage).assetName)
+          .toList();
+      expect(scenes, [
+        'assets/backgrounds/scene_lake.jpg',
+        'assets/backgrounds/scene_campfire.jpg', // 沒選 → 預設
+        'assets/backgrounds/scene_lake.jpg',
+      ]);
+      // 換一天才插分隔線：兩條（9/3、9/2），同一天的兩張卡之間沒有
+      expect(find.text('Thu, Sep 3'), findsOneWidget);
+      expect(find.text('Wed, Sep 2'), findsOneWidget);
+      expect(find.byKey(const Key('feed-day-0')), findsOneWidget);
+      expect(find.byKey(const Key('feed-day-1')), findsNothing);
+      expect(find.byKey(const Key('feed-day-2')), findsOneWidget);
+      expect(find.byKey(const Key('card-streak')), findsOneWidget);
+      expect(find.text('Bob reached a 4-night streak'), findsOneWidget);
+      expect(find.textContaining('Carol reached'), findsNothing); // 只有 2 晚
+      // 火焰在場景裡寵物後面：Bob 4 晚＝大火、Carol 2 晚＝小火，只在各自最近那一晚的卡上
+      expect(find.byKey(const Key('streak-flames-2')), findsOneWidget);
+      expect(find.byKey(const Key('streak-flames-1')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('feed-card-BOB234-2026-09-03')),
+          matching: find.byKey(const Key('streak-flames-2')),
+        ),
+        findsOneWidget,
+      );
+      // 這週的軌道不在外面的卡上（11-19 Feed 精簡：火焰已經在講連續幾晚），點進去才有
+      expect(find.byKey(const Key('card-week')), findsNothing);
+
+      // 點卡片＝See all：同一張卡的完整版
+      await tester.tap(find.byKey(const Key('feed-card-BOB234-2026-09-03')));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('night-detail')), findsOneWidget);
+      // 火和這週的軌道都在完整頁的卡上，不再另外放一張 Streak 卡
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-detail')),
+          matching: find.byKey(const Key('card-week')),
+        ),
+        findsOneWidget,
+      );
+      // Strava 式（2026-11-16 使用者定）：上面是場景＋寵物（火在後面），下面一張資訊卡
+      final page = find.byType(FriendNightPage);
+      expect(
+        find.descendant(
+          of: page,
+          matching: find.byKey(const Key('night-scene')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: page,
+          matching: find.byKey(const Key('streak-flames-2')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('night-streak')), findsNothing);
+      // 不連到好友頁
+      expect(find.byKey(const Key('night-open-friend')), findsNothing);
+      expect(find.text('Friend settings'), findsNothing);
+      // 一開始資訊卡停在寵物腳下：場景（寵物）沒被蓋住
+      final sheetTop0 = tester
+          .getTopLeft(find.byKey(const Key('night-detail')))
+          .dy;
+      final pet = tester.getRect(
+        find.descendant(
+          of: page,
+          matching: find.byKey(const Key('streak-flames-2')),
+        ),
+      );
+      expect(pet.bottom, lessThanOrEqualTo(sheetTop0 + 1));
+      // 往上拉到底（同 Strava）：資訊卡佔滿整個畫面、上面不留場景，頂端換成深色列寫名字
+      expect(
+        tester
+            .widget<Opacity>(
+              find.descendant(
+                of: find.byKey(const Key('night-topbar')),
+                matching: find.byType(Opacity),
+              ),
+            )
+            .opacity,
+        0,
+      );
+      await tester.drag(
+        find.byKey(const Key('night-detail')),
+        const Offset(0, -560),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(
+        tester.getTopLeft(find.byKey(const Key('night-detail'))).dy,
+        lessThanOrEqualTo(0.5),
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.descendant(
+                of: find.byKey(const Key('night-topbar')),
+                matching: find.byType(Opacity),
+              ),
+            )
+            .opacity,
+        1,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-topbar')),
+          matching: find.text('Bob'),
+        ),
+        findsOneWidget,
+      );
+      // 名字在頂端列下面，沒被它蓋住
+      final barBottom = tester
+          .getBottomLeft(find.byKey(const Key('night-topbar')))
+          .dy;
+      final nameTop = tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byKey(const Key('night-detail')),
+              matching: find.text('Bob'),
+            ),
+          )
+          .dy;
+      expect(nameTop, greaterThanOrEqualTo(barBottom));
+      for (var k = 0; k < 3; k++) {
+        await tester.drag(
+          find.byKey(const Key('night-detail')),
+          const Offset(0, -3000),
+        );
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
+      final screenH =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      final navBar = tester.view.padding.bottom / tester.view.devicePixelRatio;
+      // 最底下那一段（Game）
+      final last = tester.getRect(find.byKey(const Key('section-game')));
+      expect(last.bottom, lessThanOrEqualTo(screenH - navBar));
+    });
+
+    testWidgets('🐾（2026-11-19）：數字照抄後端；只有能按的那張有按鈕；按了＝拜訪（摸摸），重拿一次變 Sent', (
+      tester,
+    ) async {
+      FriendNightCard bob({
+        required String date,
+        int paws = 0,
+        bool canPaw = false,
+        bool sent = false,
+      }) => FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: date,
+        items: const {'on_time': true},
+        paws: paws,
+        canPaw: canPaw,
+        pawSent: sent,
+      );
+      final stub = _StubFriends()
+        ..feed = [
+          bob(date: '2026-09-03', paws: 3, canPaw: true),
+          bob(date: '2026-09-02', paws: 0),
+          bob(date: '2026-09-01', paws: 1),
+        ];
+      await pump(tester, stub, tab: 'feed');
+      final today = find.byKey(const Key('feed-card-BOB234-2026-09-03'));
+      expect(
+        find.descendant(of: today, matching: find.text('3 paws')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('card-paw-button')),
+        findsOneWidget,
+        reason: '舊的卡不能按',
+      );
+      expect(
+        find.descendant(
+          of: today,
+          matching: find.byKey(const Key('card-paw-button')),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('1 paw'), findsOneWidget, reason: '舊的卡照樣寫數字（單數）');
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('feed-card-BOB234-2026-09-02')),
+          matching: find.textContaining('paw'),
+        ),
+        findsNothing,
+        reason: '0 個不寫',
+      );
+      // 朋友的卡看不到是誰
+      expect(find.byKey(const Key('card-paws-who')), findsNothing);
+
+      stub.feed = [
+        bob(date: '2026-09-03', paws: 4, canPaw: true, sent: true),
+        bob(date: '2026-09-02'),
+        bob(date: '2026-09-01', paws: 1),
+      ];
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(stub.visitCalls, [('BOB234', 'pet')]);
+      expect(find.text('4 paws'), findsOneWidget);
+      expect(find.text('Sent'), findsOneWidget);
+      // Sent 之後再按不會再送
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      await tester.pump();
+      expect(stub.visitCalls, hasLength(1));
+    });
+
+    testWidgets('🐾 連按：只送一次，按下當下就是 Sent（11-19 實機：一次 201 後面跟三次 409）；送失敗才變回 Paw', (tester) async {
+      FriendNightCard bob() => const FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: '2026-09-03',
+        items: {'on_time': true},
+        paws: 1,
+        canPaw: true,
+      );
+      // 後端重拿還是舊的（還沒 Sent）也一樣：只靠 App 自己記得按過
+      final stub = _StubFriends()..feed = [bob()];
+      await pump(tester, stub, tab: 'feed');
+      final button = find.byKey(const Key('card-paw-button'));
+      await tester.tap(button);
+      await tester.tap(button);
+      await tester.tap(button);
+      await tester.pump();
+      expect(stub.visitCalls, hasLength(1));
+      expect(find.text('Sent'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Sent'), findsOneWidget);
+    });
+
+    testWidgets('🐾 送失敗（連不上）：變回 Paw、照實說', (tester) async {
+      FriendNightCard bob() => const FriendNightCard(
+        handle: 'BOB234',
+        displayName: 'Bob',
+        date: '2026-09-03',
+        items: {'on_time': true},
+        paws: 1,
+        canPaw: true,
+      );
+      final failing = _StubFriends()
+        ..feed = [bob()]
+        ..visitResult = const FriendsResult(FriendsStatus.failed, message: 'Could not reach the backend.');
+      await pump(tester, failing, tab: 'feed');
+      await tester.tap(find.byKey(const Key('card-paw-button')));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Paw'), findsOneWidget);
+      expect(find.text('Could not reach the backend.'), findsOneWidget);
+    });
+
+    testWidgets('🐾：自己的卡沒有按鈕，點數字看是誰（名單只有自己的卡有）', (tester) async {
+      final stub = _StubFriends()
+        ..feed = const [
+          FriendNightCard(
+            handle: 'K7QM2P',
+            displayName: 'Nathan',
+            date: '2026-09-03',
+            mine: true,
+            items: {'on_time': true},
+            paws: 2,
+            pawFrom: ['Bob', 'Carol'],
+          ),
+        ];
+      await pump(tester, stub, tab: 'feed');
+      expect(find.byKey(const Key('card-paw-button')), findsNothing);
+      expect(find.text('2 paws'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('card-paws-who')));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final sheet = find.byKey(const Key('paw-from-sheet'));
+      expect(
+        find.descendant(of: sheet, matching: find.text('Bob')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.text('Carol')),
+        findsOneWidget,
+      );
+    });
+
+    test('🐾：卡片照抄後端的 paws／can_paw／paw_sent／paw_from，沒給就是 0／不能按', () {
+      final c = FriendNightCard.fromJson({
+        'handle': 'B',
+        'display_name': 'Bob',
+        'date': '2026-09-03',
+        'items': <String, dynamic>{},
+        'paws': 2,
+        'can_paw': true,
+        'paw_sent': true,
+        'paw_from': ['Bob', 7],
+      });
+      expect((c.paws, c.canPaw, c.pawSent), (2, true, true));
+      expect(c.pawFrom, ['Bob']);
+      final old = FriendNightCard.fromJson({
+        'handle': 'B',
+        'date': '2026-09-03',
+        'items': <String, dynamic>{},
+      });
+      expect((old.paws, old.canPaw, old.pawSent), (0, false, false));
+      expect(old.pawFrom, isEmpty);
+    });
+
+    testWidgets('自己的卡也在動態牆上：寫 You、用自己的連續天數，點開最下面是分享設定；睡眠圖在卡上是細長條', (
+      tester,
+    ) async {
+      final json = stateJson(friends: [friendJson('BOB234', 'Bob', streak: 4)]);
+      json['me'] = friendJson(
+        'K7QM2P',
+        'Nathan',
+        streak: 5,
+        week: [
+          'on_time',
+          'on_time',
+          'on_time',
+          'on_time',
+          'on_time',
+          'future',
+          'future',
+        ],
+      );
+      final stub = _StubFriends(
+        result: FriendsResult(
+          FriendsStatus.ok,
+          value: FriendsState.fromJson(json),
+        ),
+      );
+      stub.feed = const [
+        FriendNightCard(
+          handle: 'K7QM2P',
+          displayName: 'Nathan',
+          date: '2026-09-03',
+          mine: true,
+          items: {
+            'on_time': true,
+            'stages': {
+              'rem_measured': false,
+              'segments': [
+                {'stage': 'light', 'from': 0, 'to': 40},
+                {'stage': 'deep', 'from': 40, 'to': 90},
+              ],
+            },
+          },
+        ),
+        FriendNightCard(
+          handle: 'BOB234',
+          displayName: 'Bob',
+          date: '2026-09-03',
+          items: {'on_time': true},
+        ),
+      ];
+      await pump(tester, stub, tab: 'feed');
+      final mine = find.byKey(const Key('feed-card-K7QM2P-2026-09-03'));
+      expect(mine, findsOneWidget);
+      expect(
+        find.descendant(of: mine, matching: find.text('You')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: mine, matching: find.text('Nathan')),
+        findsNothing,
+      );
+      // 自己的卡要一眼認得：紫框＋「What friends see」；朋友的卡沒有
+      expect(find.byKey(const Key('card-mine-glow')), findsOneWidget);
+      expect(
+        find.descendant(of: mine, matching: find.text('What friends see')),
+        findsOneWidget,
+      );
+      expect(find.text('What friends see'), findsOneWidget);
+      expect(find.text('You reached a 5-night streak'), findsOneWidget);
+      // 11-19 Feed 精簡：卡上沒有這週的軌道、睡眠圖只剩一條細長條（標題、圖例在點進去的頁面）
+      expect(
+        find.descendant(of: mine, matching: find.byKey(const Key('card-week'))),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: mine,
+          matching: find.byKey(const Key('card-stages-strip')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: mine, matching: find.text('Sleep stages')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: mine, matching: find.text('REM not measured')),
+        findsNothing,
+      );
+
+      await tester.tap(mine);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.drag(
+        find.byKey(const Key('night-detail')),
+        const Offset(0, -3000),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // 完整頁一樣寫 You＋What friends see；不放任何設定按鈕（使用者定：不連到別處）
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-detail')),
+          matching: find.text('You'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('night-detail')),
+          matching: find.text('What friends see'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Sharing settings'), findsNothing);
+      expect(find.text('Friend settings'), findsNothing);
+    });
+
     testWidgets('還沒有朋友 → 講清楚怎麼加', (tester) async {
-      await pump(tester, _StubFriends(result: FriendsResult(FriendsStatus.ok,
-          value: FriendsState.fromJson(stateJson(friends: const [], board: const [])))));
+      await pump(
+        tester,
+        _StubFriends(
+          result: FriendsResult(
+            FriendsStatus.ok,
+            value: FriendsState.fromJson(
+              stateJson(friends: const [], board: const []),
+            ),
+          ),
+        ),
+      );
       expect(find.byKey(const Key('friends-empty')), findsOneWidget);
     });
   });

@@ -5,7 +5,11 @@ import 'package:flutter/foundation.dart';
 
 import 'user_identity.dart';
 
-/// 好友：`GET /friends`、`POST /friends`、`DELETE /friends/{邀請碼}`。
+/// 好友：`GET /friends`、`POST /friends`、`DELETE /friends/{邀請碼}`，
+/// 以及 2026-11-15 的分享設定（`GET`／`PATCH /sharing`、`/sharing/preview`）與動態卡（`/friends/feed`）。
+///
+/// ⚠️ 每個人自己選讓好友看到什麼，**選擇與遮蔽全在後端**（social/sharing.py）。
+///    App 只畫後端給的；沒給的（None）就不畫，不寫成 0。
 ///
 /// ═══════════════════════════════════════════════════════════════════
 /// ⚠️ 這裡拿到的只有行為指標，而且沒有任何一個別人的 user_id
@@ -48,13 +52,21 @@ class FriendSummary {
   /// ISO8601（含 +08:00）。⚠️ 顯示時一律走 parseWallClock()。
   final String? lastLightsOutAt;
   final bool? lastNightLate;
-  final int currentStreak;
-  final int bestStreak;
 
-  /// null = 還沒有任何一晚有記錄，不是 0。
+  /// null＝他沒公開連續天數（不是 0）。
+  final int? currentStreak;
+  final int? bestStreak;
+
+  /// null = 還沒有任何一晚有記錄，或沒公開，不是 0。
   final double? lateNightRatio;
-  final int lateNights;
+  final int? lateNights;
   final int recordedNights;
+
+  /// 'dog'／'cat'；null＝沒公開（畫小狗）。
+  final String? petSpecies;
+
+  /// 這一週（週一→週日）每天的狀態；null＝沒公開準時與否。
+  final List<StreakDay>? streakWeek;
 
   const FriendSummary({
     required this.handle,
@@ -68,6 +80,8 @@ class FriendSummary {
     required this.lateNightRatio,
     required this.lateNights,
     required this.recordedNights,
+    this.petSpecies,
+    this.streakWeek,
   });
 
   factory FriendSummary.fromJson(Map<String, dynamic> json) => FriendSummary(
@@ -77,11 +91,159 @@ class FriendSummary {
         lastNightDate: json['last_night_date'] as String?,
         lastLightsOutAt: json['last_lights_out_at'] as String?,
         lastNightLate: json['last_night_late'] as bool?,
-        currentStreak: (json['current_streak'] as num?)?.toInt() ?? 0,
-        bestStreak: (json['best_streak'] as num?)?.toInt() ?? 0,
+        currentStreak: (json['current_streak'] as num?)?.toInt(),
+        bestStreak: (json['best_streak'] as num?)?.toInt(),
         lateNightRatio: (json['late_night_ratio'] as num?)?.toDouble(),
-        lateNights: (json['late_nights'] as num?)?.toInt() ?? 0,
+        lateNights: (json['late_nights'] as num?)?.toInt(),
         recordedNights: (json['recorded_nights'] as num?)?.toInt() ?? 0,
+        petSpecies: json['pet_species'] as String?,
+        streakWeek: json['streak_week'] is List
+            ? [
+                for (final d in (json['streak_week'] as List)
+                    .whereType<Map<String, dynamic>>())
+                  StreakDay(
+                    (d['date'] as String?) ?? '',
+                    (d['status'] as String?) ?? 'none',
+                  ),
+              ]
+            : null,
+      );
+}
+
+/// Streak 卡那一排的一天：'on_time'／'late'／'none'（沒資料）／'future'（還沒到）。
+@immutable
+class StreakDay {
+  final String date;
+  final String status;
+  const StreakDay(this.date, this.status);
+}
+
+/// 動態卡：某位朋友某一晚，只有他公開的項目（key 見 social/sharing.py）。
+@immutable
+class FriendNightCard {
+  final String handle;
+  final String displayName;
+  final String? petSpecies;
+  final String date;
+  final Map<String, dynamic> items;
+
+  /// 他選的場景（social/sharing.SCENES）；null／不認得 → 畫預設那張。
+  final String? scene;
+
+  /// 我自己的卡（後端標的）。內容照我的分享設定＝朋友看到的我。
+  final bool mine;
+
+  /// 那一晚收到幾個 🐾（＝那天的拜訪數，2026-11-19）。大家都看得到。
+  final int paws;
+
+  /// 這張卡能不能按 🐾（只有朋友「今天」那張；後端判斷）。
+  final bool canPaw;
+
+  /// 我今天已經拜訪過他（小鎮或這裡）。
+  final bool pawSent;
+
+  /// 是誰給的。**只有我自己的卡有**（後端只給卡片主人）。
+  final List<String> pawFrom;
+
+  const FriendNightCard({
+    required this.handle,
+    required this.displayName,
+    required this.date,
+    required this.items,
+    this.petSpecies,
+    this.scene,
+    this.mine = false,
+    this.paws = 0,
+    this.canPaw = false,
+    this.pawSent = false,
+    this.pawFrom = const [],
+  });
+
+  factory FriendNightCard.fromJson(Map<String, dynamic> json) => FriendNightCard(
+        handle: (json['handle'] as String?) ?? '',
+        displayName: (json['display_name'] as String?) ?? '',
+        petSpecies: json['pet_species'] as String?,
+        date: (json['date'] as String?) ?? '',
+        items: ((json['items'] as Map?) ?? const {}).cast<String, dynamic>(),
+        scene: json['scene'] as String?,
+        mine: json['mine'] == true,
+        paws: (json['paws'] as num?)?.toInt() ?? 0,
+        canPaw: json['can_paw'] == true,
+        pawSent: json['paw_sent'] == true,
+        pawFrom: [
+          for (final n in (json['paw_from'] as List?) ?? const [])
+            if (n is String) n,
+        ],
+      );
+}
+
+@immutable
+class SharingItem {
+  final String key;
+  final String label;
+  final bool enabled;
+  const SharingItem(this.key, this.label, this.enabled);
+}
+
+@immutable
+class SharingGroup {
+  final String id;
+  final String label;
+  final List<SharingItem> items;
+  const SharingGroup(this.id, this.label, this.items);
+}
+
+/// GET／PATCH /sharing 的回應。
+@immutable
+class SharingSettings {
+  final List<SharingGroup> groups;
+
+  /// 'exact'／'on_time_only'
+  final String timePrecision;
+  final String petSpecies;
+
+  /// 動態卡的場景與可選的清單（後端定，Dart 不寫死有哪幾張）。
+  final String scene;
+  final List<String> scenes;
+
+  /// 永遠不給的三項（只是說明，不是選項）。
+  final List<String> neverShared;
+
+  const SharingSettings({
+    required this.groups,
+    required this.timePrecision,
+    required this.petSpecies,
+    required this.neverShared,
+    this.scene = 'campfire',
+    this.scenes = const [],
+  });
+
+  factory SharingSettings.fromJson(Map<String, dynamic> json) => SharingSettings(
+        groups: [
+          for (final g in ((json['groups'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>())
+            SharingGroup(
+              (g['id'] as String?) ?? '',
+              (g['label'] as String?) ?? '',
+              [
+                for (final i in ((g['items'] as List?) ?? const [])
+                    .whereType<Map<String, dynamic>>())
+                  SharingItem(
+                    (i['key'] as String?) ?? '',
+                    (i['label'] as String?) ?? '',
+                    i['enabled'] == true,
+                  ),
+              ],
+            ),
+        ],
+        timePrecision: (json['time_precision'] as String?) ?? 'exact',
+        scene: (json['scene'] as String?) ?? 'campfire',
+        scenes: [for (final x in (json['scenes'] as List?) ?? const []) if (x is String) x],
+        petSpecies: (json['pet_species'] as String?) ?? 'dog',
+        neverShared: [
+          for (final s in ((json['never_shared'] as List?) ?? const []))
+            if (s is String) s,
+        ],
       );
 }
 
@@ -113,6 +275,9 @@ class LeaderboardEntry {
 @immutable
 class FriendsState {
   final String myInviteCode;
+
+  /// 我自己（不遮），好友頁最上面那張 Streak 卡用。
+  final FriendSummary? me;
   final List<FriendSummary> friends;
 
   /// ⚠️ 已經由後端排好。Dart 不重排——同分怎麼排是後端的規則。
@@ -121,6 +286,7 @@ class FriendsState {
 
   const FriendsState({
     required this.myInviteCode,
+    this.me,
     required this.friends,
     required this.leaderboard,
     required this.notes,
@@ -128,6 +294,9 @@ class FriendsState {
 
   factory FriendsState.fromJson(Map<String, dynamic> json) => FriendsState(
         myInviteCode: (json['my_invite_code'] as String?) ?? '',
+        me: json['me'] is Map<String, dynamic>
+            ? FriendSummary.fromJson(json['me'] as Map<String, dynamic>)
+            : null,
         friends: ((json['friends'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(FriendSummary.fromJson)
@@ -140,6 +309,227 @@ class FriendsState {
           for (final e in ((json['notes'] as Map?) ?? const {}).entries)
             if (e.value is String) '${e.key}': e.value as String,
         },
+      );
+}
+
+/// 排行榜上的一個人（上榜的有名次；不到門檻的 rank 是 null）。
+@immutable
+class RankedFriend {
+  final String handle;
+  final String displayName;
+  final bool mine;
+  final bool demo;
+  final String? petSpecies;
+  final String? petMood;
+  final int? rank;
+  final String? display;
+  final int nights;
+
+  /// 跟上一個時段比：正＝名次往上、負＝往下、0＝不變、null＝上個時段沒上榜。
+  final int? change;
+
+  const RankedFriend({
+    required this.handle,
+    required this.displayName,
+    this.mine = false,
+    this.demo = false,
+    this.petSpecies,
+    this.petMood,
+    this.rank,
+    this.display,
+    this.nights = 0,
+    this.change,
+  });
+
+  factory RankedFriend.fromJson(Map<String, dynamic> j) => RankedFriend(
+        handle: (j['handle'] as String?) ?? '',
+        displayName: (j['display_name'] as String?) ?? '',
+        mine: j['mine'] == true,
+        demo: j['demo'] == true,
+        petSpecies: j['pet_species'] as String?,
+        petMood: j['pet_mood'] as String?,
+        rank: (j['rank'] as num?)?.toInt(),
+        display: j['display'] as String?,
+        nights: (j['nights'] as num?)?.toInt() ?? 0,
+        change: (j['change'] as num?)?.toInt(),
+      );
+}
+
+/// 一張排行榜（一個指標 × 一個時段）。
+@immutable
+class LeaderboardBoard {
+  final String metric;
+  final String period;
+  final String label;
+  final String title;
+  final int need;
+
+  /// 'night' 或 'day'（步數、壓力數天）。照抄後端，舊版後端沒給就當 night。
+  final String unit;
+  final List<(String, String)> metrics;
+  final List<(String, String)> periods;
+  final List<RankedFriend> entries;
+  final List<RankedFriend> below;
+
+  /// 我自己：ranked／below／not_sharing。
+  final String meStatus;
+  final RankedFriend? me;
+  final String? shareLabel;
+
+  const LeaderboardBoard({
+    required this.metric,
+    required this.period,
+    required this.label,
+    required this.title,
+    required this.need,
+    this.unit = 'night',
+    required this.metrics,
+    required this.periods,
+    required this.entries,
+    required this.below,
+    required this.meStatus,
+    this.me,
+    this.shareLabel,
+  });
+
+  factory LeaderboardBoard.fromJson(Map<String, dynamic> j) {
+    List<(String, String)> pairs(dynamic v) => [
+          for (final m in (v as List? ?? const []).whereType<Map>())
+            ((m['key'] as String?) ?? '', (m['label'] as String?) ?? ''),
+        ];
+    List<RankedFriend> people(dynamic v) => [
+          for (final e in (v as List? ?? const []).whereType<Map<String, dynamic>>())
+            RankedFriend.fromJson(e),
+        ];
+    final me = (j['me'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final status = (me['status'] as String?) ?? 'not_sharing';
+    return LeaderboardBoard(
+      metric: (j['metric'] as String?) ?? '',
+      period: (j['period'] as String?) ?? '',
+      label: (j['label'] as String?) ?? '',
+      title: (j['title'] as String?) ?? '',
+      need: (j['need'] as num?)?.toInt() ?? 1,
+      unit: (j['unit'] as String?) == 'day' ? 'day' : 'night',
+      metrics: pairs(j['metrics']),
+      periods: pairs(j['periods']),
+      entries: people(j['entries']),
+      below: people(j['below']),
+      meStatus: status,
+      me: status == 'not_sharing' ? null : RankedFriend.fromJson(me),
+      shareLabel: me['share_label'] as String?,
+    );
+  }
+}
+
+/// 好友小鎮的一個人（`GET /friends/town`，2026-11-17）。
+///
+/// ⚠️ 沒發光的三種情況（晚了、沒資料、沒分享）後端給的一模一樣——只有 `glow: false`，
+///    不給原因。畫面也就畫得一模一樣，不要在這裡加任何能分辨它們的東西。
+@immutable
+class TownPerson {
+  final String handle;
+  final String displayName;
+  final bool mine;
+  final bool demo;
+
+  /// 'dog'／'cat'；null＝畫小狗。
+  final String? petSpecies;
+
+  /// 只有他有分享心情才有（自己的照給）；只用在點開的小卡上，小鎮裡不畫心情。
+  final String? petMood;
+  final bool glow;
+
+  /// 我今天送過他什麼（'pet'…）；null＝還沒送。自己永遠是 null。
+  final String? sent;
+
+  /// 他昨晚的卡（只有他打開的項目）；null＝不畫「See last night」。
+  final FriendNightCard? card;
+
+  const TownPerson({
+    required this.handle,
+    required this.displayName,
+    this.mine = false,
+    this.demo = false,
+    this.petSpecies,
+    this.petMood,
+    this.glow = false,
+    this.sent,
+    this.card,
+  });
+
+  factory TownPerson.fromJson(Map<String, dynamic> j) {
+    final handle = (j['handle'] as String?) ?? '';
+    final name = (j['display_name'] as String?) ?? '';
+    final species = j['pet_species'] as String?;
+    final mine = j['mine'] == true;
+    final c = j['card'];
+    return TownPerson(
+      handle: handle,
+      displayName: name,
+      mine: mine,
+      demo: j['demo'] == true,
+      petSpecies: species,
+      petMood: j['pet_mood'] as String?,
+      glow: j['glow'] == true,
+      sent: j['sent'] as String?,
+      card: c is Map
+          ? FriendNightCard.fromJson({
+              'handle': handle,
+              'display_name': name,
+              'pet_species': species,
+              'mine': mine,
+              ...c.cast<String, dynamic>(),
+            })
+          : null,
+    );
+  }
+}
+
+/// 今天來看過我的人。message 照抄後端（字只在 social/town.py）。
+@immutable
+class TownVisit {
+  final String displayName;
+  final String kind;
+  final String message;
+  const TownVisit(this.displayName, this.kind, this.message);
+}
+
+@immutable
+class TownState {
+  final String night;
+
+  /// 我＋朋友，順序照後端（我第一個、朋友照加好友的先後）。誰放哪裡由畫面決定。
+  final List<TownPerson> people;
+  final List<TownVisit> visits;
+
+  /// 拜訪的四種動作：(key, 按鈕上的字)，順序與字都照抄後端。
+  final List<(String, String)> kinds;
+
+  const TownState({
+    required this.night,
+    required this.people,
+    this.visits = const [],
+    this.kinds = const [],
+  });
+
+  TownPerson? get me => people.where((p) => p.mine).firstOrNull;
+  List<TownPerson> get friends => [for (final p in people) if (!p.mine) p];
+
+  factory TownState.fromJson(Map<String, dynamic> j) => TownState(
+        night: (j['night'] as String?) ?? '',
+        people: [
+          for (final p in ((j['people'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            TownPerson.fromJson(p),
+        ],
+        visits: [
+          for (final v in ((j['visits'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            TownVisit((v['display_name'] as String?) ?? '', (v['kind'] as String?) ?? '',
+                (v['message'] as String?) ?? ''),
+        ],
+        kinds: [
+          for (final k in ((j['kinds'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            ((k['key'] as String?) ?? '', (k['label'] as String?) ?? ''),
+        ],
       );
 }
 
@@ -158,6 +548,105 @@ class FriendsService {
     final r = await _request('GET', '/friends');
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(r.value!));
+  }
+
+  /// 朋友們最近 7 天每一晚的卡（新的在前）。
+  /// 動態牆比別的端點慢（每位朋友每一晚都要組一次 /home），3 秒常常不夠——
+  /// 2026-11-16 實機：後端 6.3 秒、App 3 秒就放棄，畫面只說「沒有動態」，看起來像沒有朋友的資料。
+  static const feedTimeout = Duration(seconds: 15);
+
+  Future<FriendsResult<List<FriendNightCard>>> fetchFeed() async {
+    final r = await _request('GET', '/friends/feed', wait: feedTimeout);
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: [
+      for (final c in ((r.value!['cards'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>())
+        FriendNightCard.fromJson(c),
+    ]);
+  }
+
+  /// 好友排行榜（第二批）。名次、門檻、並列、名次變化全在後端算，Dart 照抄、不重排。
+  /// period 給 null＝那個指標預設的時段。比別的端點慢（每個人要撈一年的資料），用動態牆的等待時間。
+  Future<FriendsResult<LeaderboardBoard>> fetchLeaderboard(
+    String metric, {
+    String? period,
+  }) async {
+    final r = await _request(
+      'GET',
+      '/friends/leaderboard',
+      query: {'metric': metric, 'period': ?period},
+      wait: feedTimeout,
+    );
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: LeaderboardBoard.fromJson(r.value!));
+  }
+
+  /// 好友小鎮。比一般端點慢（每個人要組一次昨晚的卡），用動態牆的等待時間。
+  Future<FriendsResult<TownState>> fetchTown() async {
+    final r = await _request('GET', '/friends/town', wait: feedTimeout);
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: TownState.fromJson(r.value!));
+  }
+
+  /// 拜訪朋友（摸摸或一句話）。一天一次：第二次後端回 409，message 照抄後端那句。
+  Future<FriendsResult<String>> visit(String handle, String kind) async {
+    final r = await _request('POST', '/friends/${Uri.encodeComponent(handle)}/visit', body: {'kind': kind});
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: (r.value!['sent'] as String?) ?? kind);
+  }
+
+  /// 一位朋友：摘要＋最近一晚的卡（可能沒有）。
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchFriend(String handle) async {
+    final r = await _request('GET', '/friends/${Uri.encodeComponent(handle)}');
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: _summaryAndCard(r.value!));
+  }
+
+  /// 我讓好友看到什麼。
+  Future<FriendsResult<SharingSettings>> fetchSharing() async {
+    final r = await _request('GET', '/sharing');
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: SharingSettings.fromJson(r.value!));
+  }
+
+  /// 改分享設定（只送有改的）。
+  Future<FriendsResult<SharingSettings>> patchSharing({
+    Map<String, bool>? items,
+    String? timePrecision,
+    String? petSpecies,
+    String? scene,
+  }) async {
+    final r = await _request('PATCH', '/sharing', body: {
+      'items': ?items,
+      'time_precision': ?timePrecision,
+      'pet_species': ?petSpecies,
+      'scene': ?scene,
+    });
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: SharingSettings.fromJson(r.value!));
+  }
+
+  /// 朋友看到的我（設定頁的預覽）。
+  Future<FriendsResult<(FriendSummary, FriendNightCard?)>> fetchPreview() async {
+    final r = await _request('GET', '/sharing/preview');
+    if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    return FriendsResult(FriendsStatus.ok, value: _summaryAndCard(r.value!));
+  }
+
+  static (FriendSummary, FriendNightCard?) _summaryAndCard(Map<String, dynamic> v) {
+    final f = FriendSummary.fromJson((v['friend'] as Map?)?.cast<String, dynamic>() ?? const {});
+    final c = v['card'];
+    return (
+      f,
+      c is Map
+          ? FriendNightCard.fromJson({
+              'handle': f.handle,
+              'display_name': f.displayName,
+              'pet_species': f.petSpecies,
+              ...c.cast<String, dynamic>(),
+            })
+          : null,
+    );
   }
 
   /// 用邀請碼加好友。成功時 value 是那位朋友的摘要。
@@ -181,18 +670,24 @@ class FriendsService {
     String method,
     String path, {
     Map<String, dynamic>? body,
+    Duration? wait,
+    Map<String, String>? query,
   }) async {
+    final timeout = wait ?? this.timeout;
     if (baseUrl.trim().isEmpty) return const FriendsResult(FriendsStatus.noBackend);
     final userId = await identity.currentUserId();
     if (userId == null) return const FriendsResult(FriendsStatus.noUser);
 
     final base = Uri.parse('$baseUrl$path');
-    final uri = method == 'POST' ? base : base.replace(queryParameters: {'user_id': userId});
+    final hasBody = method == 'POST' || method == 'PATCH';
+    final uri = hasBody
+        ? base
+        : base.replace(queryParameters: {...?query, 'user_id': userId});
     final client = HttpClient()..connectionTimeout = timeout;
 
     try {
       final request = await client.openUrl(method, uri).timeout(timeout);
-      if (method == 'POST') {
+      if (hasBody) {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode({'user_id': userId, ...?body}));
       }

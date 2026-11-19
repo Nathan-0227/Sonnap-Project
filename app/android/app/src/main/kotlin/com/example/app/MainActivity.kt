@@ -106,6 +106,17 @@ class MainActivity : FlutterFragmentActivity() {
 
             when (call.method) {
 
+                // 手機型號（好友頁「用了哪些設備」）：只給廠商與型號代碼，
+                // 不給使用者自己取的裝置名稱（常含本人的名字）
+                "deviceModel" -> {
+                    result.success(
+                        mapOf(
+                            "manufacturer" to Build.MANUFACTURER,
+                            "model" to Build.MODEL
+                        )
+                    )
+                }
+
                 "hasUsageAccess" -> {
                     result.success(
                         usageStatsService.hasUsageAccess()

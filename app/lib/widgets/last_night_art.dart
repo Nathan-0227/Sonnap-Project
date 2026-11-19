@@ -483,7 +483,11 @@ class SleepHrWavePainter extends CustomPainter {
 class CameraBarsPainter extends CustomPainter {
   /// (時刻, 0–1)；空的＝沒有曲線（只畫星星與雲）。
   final List<(DateTime, double)> points;
-  CameraBarsPainter(this.points);
+
+  /// 給了就**不標整點**，時間軸兩端改寫這兩個字（例如 Fell asleep／Woke up）。
+  /// 朋友選了「只寫準時與否」時用：光柱照畫，但不露幾點（2026-11-19 使用者定）。
+  final (String, String)? endLabels;
+  CameraBarsPainter(this.points, {this.endLabels});
 
   static const lavender = Color(0xFF8C7BEA);
   static const gold = Color(0xFFFFD96A);
@@ -539,6 +543,22 @@ class CameraBarsPainter extends CustomPainter {
         ..color = lavender.withValues(alpha: 0.55)
         ..strokeWidth = 1.2,
     );
+    if (endLabels case (final left, final right)) {
+      for (final (text, atLeft) in [(left, true), (right, false)]) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: const TextStyle(
+              color: Color(0xB3C9C0FF),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(atLeft ? x0 : x1 - tp.width, base + 12));
+      }
+    }
     final every = span >= 4 * 3600 ? 3 : 1;
     var tick = DateTime(
       t0.year,
@@ -546,7 +566,7 @@ class CameraBarsPainter extends CustomPainter {
       t0.day,
       t0.hour,
     ).add(const Duration(hours: 1));
-    while (!tick.isAfter(t1)) {
+    while (endLabels == null && !tick.isAfter(t1)) {
       if (tick.hour % every == 0) {
         final x = xOf(tick);
         canvas.drawLine(
@@ -610,7 +630,8 @@ class CameraBarsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CameraBarsPainter old) => old.points != points;
+  bool shouldRepaint(CameraBarsPainter old) =>
+      old.points != points || old.endLabels != endLabels;
 }
 
 /// Movement (camera) 的大字：「18 moves / hour」（後端的 events_per_hour，四捨五入到整數；1 次寫 move）。

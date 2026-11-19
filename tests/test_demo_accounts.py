@@ -7,11 +7,20 @@ tests/test_demo_accounts.py —— 成果展示範帳號不得污染真實資料
   【3】示範帳號都加成本人的好友，好友頁看得到，且暱稱都帶 (demo)
   【4】重跑 --create 不會越長越多；--remove 清乾淨，本人的資料一筆不少
   【5】每晚的達成度跟手機上傳走同一個函式（adherence.evaluate_night）
+  【6】手錶資料（2026-11-16 起也產生）：source 一律 "demo"、分數由既有評分器算、
+       API 重排的睡眠階段跟評分時同一份（demo_sleep 是決定性的）、白天資料有寫
+  【7】動態牆：每張卡帶自己選的場景與寵物；11-19 起示範帳號分享全開（每人都有階梯、時刻、
+       起床自評），沒有攝影機的人照樣沒有攝影機資料；回應裡沒有任何 user_id
+  【9】🐾（2026-11-19 使用者同意）：Mia、Leo 在最後一天各拜訪本人一次；重建不累積；
+       --remove 之後本人收到的拜訪一筆不剩；回傳的摘要裡沒有 user_id
+  【8】Garmin 原始檔是本人的：示範帳號（沒有 garmin 來源）的「昨天」一次都不讀它，
+       整天心率／壓力線／醒著心率是 null；有 garmin 來源的帳號照讀（反向對照）
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_demo_accounts.py
 """
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -48,7 +57,7 @@ for d in range(1, 6):
                                night["lights_out_at"], night["adherence_minutes"],
                                night["is_late"], db_path=TMP)
 
-from datetime import date
+from datetime import date, timedelta
 rows = demo_accounts.create_all(nights=21, end=date(2026, 11, 6), db_path=TMP)
 
 print("【1】示範帳號不會被當成手機帳號")
@@ -75,13 +84,32 @@ check("全部是本人的好友", friends == demo_ids, True)
 check("暱稱都帶 (demo)", all(n.endswith("(demo)") for _, n in demo_accounts.demo_users(TMP)), True)
 check("每個都有邀請碼", all(r["code"] for r in rows), True)
 
+
+def visits_to_me():
+    c = db.connect(TMP)
+    try:
+        return sorted((u["display_name"], v["day"], v["kind"]) for v in c.execute(
+            "SELECT sender_id, day, kind FROM friend_visits WHERE receiver_id = ?", (me,))
+            for u in [c.execute("SELECT display_name FROM users WHERE user_id = ?",
+                                (v["sender_id"],)).fetchone()])
+    finally:
+        c.close()
+
+
+print("【9】🐾 給本人")
+check("Mia、Leo 在最後一天各拜訪一次", visits_to_me(),
+      [("Leo (demo)", "2026-11-06", "sleep_well"), ("Mia (demo)", "2026-11-06", "pet")])
+check("摘要裡沒有 user_id", any("uid" in r or any(v in str(r) for v in demo_ids) for r in rows), False)
+
 print("【4】重建不累積、刪除不傷本人")
 demo_accounts.create_all(nights=21, end=date(2026, 11, 6), db_path=TMP)
 check("重建後仍是 4 個", len(demo_accounts.demo_users(TMP)), 4)
 check("本人的好友仍是 4 個（舊的那批已被清掉）", len(db.list_friend_ids(me, TMP)), 4)
+check("【9】重建後本人收到的拜訪仍是 2 筆", len(visits_to_me()), 2)
 check("刪除回報 4 個", demo_accounts.remove_all(TMP), 4)
 check("本人的 5 晚還在", len(db.get_nightly_behavior(me, days=3650, db_path=TMP)), 5)
 check("本人沒有好友殘留", db.list_friend_ids(me, TMP), [])
+check("【9】--remove 之後本人收到的拜訪一筆不剩", visits_to_me(), [])
 conn = db.connect(TMP)
 orphans = conn.execute(
     "SELECT COUNT(*) AS n FROM nightly_behavior WHERE user_id NOT IN (SELECT user_id FROM users)"
@@ -98,6 +126,114 @@ for r in db.get_nightly_behavior(uid, days=3650, db_path=TMP):
     mismatch += (again["adherence_minutes"], again["is_late"], again["date"]) != \
                 (r["adherence_minutes"], bool(r["is_late"]), r["date"])
 check("每一晚都對得上", mismatch, 0)
+
+print("【6】手錶資料是示範來源、分數走既有評分器")
+import demo_sleep  # noqa: E402
+conn = db.connect(TMP)
+sources = {r["source"] for r in conn.execute(
+    "SELECT DISTINCT source FROM wearable_nightly WHERE user_id IN "
+    "(SELECT user_id FROM users WHERE study_cohort = ?)", (db.DEMO_COHORT,)).fetchall()}
+daily = conn.execute(
+    "SELECT COUNT(*) AS n FROM garmin_daily WHERE user_id IN "
+    "(SELECT user_id FROM users WHERE study_cohort = ?)", (db.DEMO_COHORT,)).fetchone()["n"]
+conn.close()
+check("示範帳號的手錶資料 source 只有 demo", sources, {"demo"})
+check("白天資料每人 21 天", daily, 4 * 21)
+rows_w = db.get_wearable_nightly(uid, days=3650, db_path=TMP)
+check("每晚都有手錶資料", len(rows_w), 21)
+check("每晚都有分數與等級", all(r["final_score"] is not None and r["final_quality"] for r in rows_w), True)
+bad = 0
+for r in rows_w:
+    blk = demo_sleep.stages_block(r)
+    segs = blk["segments"] if blk else []
+    asleep = sum((datetime.fromisoformat(x["end"]) - datetime.fromisoformat(x["start"])).total_seconds() / 60
+                 for x in segs if x["stage"] != "awake")
+    bad += (not segs or round(asleep) != round(r["duration_min"])
+            or segs[0]["start"] != r["sleep_start_time"]
+            or demo_sleep.awake_count(segs) != r["awake_count"])
+check("重排的階梯跟存下來的睡眠分鐘、入睡時刻、醒來次數一致", bad, 0)
+check("同一晚重排兩次一模一樣", demo_sleep.stages_block(rows_w[-1]) == demo_sleep.stages_block(rows_w[-1]), True)
+
+print("【7】動態牆")
+import main  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+# 動態牆只看最近 7 天 → 這裡重建到今天為止
+demo_accounts.create_all(nights=21, db_path=TMP)
+client = TestClient(main.app, raise_server_exceptions=False)
+r = client.get("/friends/feed", params={"user_id": me})
+check("200", r.status_code, 200)
+cards = r.json()["cards"]
+latest = {}
+for c in cards:
+    if not c["mine"]:
+        latest.setdefault(c["display_name"], c)
+check("4 位朋友都有卡", len(latest), 4)
+check("各自的場景", {n: c["scene"] for n, c in latest.items()},
+      {"Mia (demo)": "lake", "Leo (demo)": "campfire", "Yuki (demo)": "rooftop", "Ken (demo)": "treehouse"})
+mia = latest["Mia (demo)"]["items"]
+check("Mia：有階梯", bool(mia.get("stages", {}).get("segments")), True)
+check("Mia（11-19 起全開、時刻準確）：階梯兩端有時刻、有放下手機的時刻",
+      (all(mia["stages"].get(k) for k in ("start", "end")), "phone_down_time" in mia), (True, True))
+check("每個人都有起床自評（1–5）",
+      {n: (c["items"].get("morning_rating") or {}).get("rested") in (1, 2, 3, 4, 5) for n, c in latest.items()},
+      {n: True for n in latest})
+leo = latest["Leo (demo)"]["items"]
+check("Leo（準確時刻）：階梯兩端有時刻", all(leo["stages"].get(k) for k in ("start", "end")), True)
+check("Ken（11-19 起全開）：也有階梯", "stages" in latest["Ken (demo)"]["items"], True)
+moves = {n: c["items"].get("camera_moves") for n, c in latest.items()}
+check("Mia／Leo／Yuki 有每小時動幾次（預設分享）、Ken 沒有攝影機", 
+      ({n: isinstance(v, (int, float)) for n, v in moves.items()}),
+      {"Mia (demo)": True, "Leo (demo)": True, "Yuki (demo)": True, "Ken (demo)": False})
+# 完整頁的區塊（2026-11-16）：整晚的心率線、攝影機時間軸（自己一個開關、預設關）
+mia_hr = latest["Mia (demo)"]["items"].get("sleeping_hr") or {}
+check("Mia：心率有整晚的線（≥ 30 點）", len(mia_hr.get("curve") or []) >= 30, True)
+check("Mia：心率線只給第幾分鐘，不給時刻",
+      all(set(p) == {"m", "v"} and isinstance(p["m"], (int, float)) for p in mia_hr.get("curve") or []), True)
+tl = latest["Mia (demo)"]["items"].get("camera_timeline") or {}
+check("Mia：攝影機時間軸有光柱、總次數、動了多久、跟平常比",
+      (len(tl.get("points") or []) >= 30, isinstance(tl.get("total"), int),
+       isinstance(tl.get("moving_sec"), int), isinstance(tl.get("usual"), str)),
+      (True, True, True, True))
+check("攝影機時間軸只給第幾分鐘，不給時刻",
+      any("T" in str(p.get("m")) for p in tl.get("points") or []), False)
+check("Ken 沒有攝影機：全開也沒有攝影機時間軸（不編）", "camera_timeline" in latest["Ken (demo)"]["items"], False)
+# 排行榜 Chill：示範帳號每天有平均壓力（腳本產生），壓力多的人平均高
+_since = (date.today() - timedelta(days=30)).isoformat()
+_avg = {}
+for _uid, _name in demo_accounts.demo_users(TMP):
+    _vals = [r["stress_avg"] for r in db.list_garmin_daily(_uid, _since, date.today().isoformat(), db_path=TMP)
+             if r.get("stress_avg") is not None]
+    _avg[_name] = sum(_vals) / len(_vals) if _vals else None
+check("每個示範帳號都有平均壓力", all(v is not None for v in _avg.values()), True)
+check("壓力設定最高的 Yuki 平均比最低的 Mia 高", _avg["Yuki (demo)"] > _avg["Mia (demo)"], True)
+devs = {n: [d["name"] for d in (c["items"].get("devices") or [])] for n, c in latest.items()}
+check("設備（預設分享）：手錶、攝影機、手機都寫型號；沒有攝影機的就沒有那一台",
+      (devs["Mia (demo)"], devs["Ken (demo)"]),
+      (["Garmin Forerunner 265", "Tapo C210", "Google Pixel 8"],
+       ["Garmin Vivoactive 5", "Samsung Galaxy A54"]))
+all_ids = {me} | {u for u, _ in demo_accounts.demo_users(TMP)}
+check("回應裡沒有任何 user_id", any(u in r.text for u in all_ids), False)
+seg_iso = any("T" in str(s.get("from", "")) for c in cards for s in (c["items"].get("stages") or {}).get("segments", []))
+check("每一段只給第幾分鐘，不給 ISO 時刻", seg_iso, False)
+
+print("【8】Garmin 原始檔只給本人讀")
+calls = []
+real_records = main._garmin_records
+main._garmin_records = lambda: calls.append(1) or []
+try:
+    demo_uid = demo_accounts.demo_users(TMP)[0][0]
+    y = main.yesterday_block(demo_uid, date.today().isoformat())
+    check("示範帳號有白天資料（步數）", y is not None and y["steps"] is not None, True)
+    check("示範帳號的昨天一次都沒讀原始檔", len(calls), 0)
+    check("整天心率／壓力線／醒著心率都是 null",
+          [y["heart_rate"], y["stress_curve"], y["awake_heart_rate"]], [None, None, None])
+    # 反向對照：本人有一晚 garmin 來源 → 會去讀
+    db.upsert_wearable_nightly(me, "2026-11-01", "garmin", {"duration_min": 400}, db_path=TMP)
+    db.upsert_garmin_daily(me, "2026-10-31", {"steps": 5000}, db_path=TMP)
+    main.yesterday_block(me, "2026-11-01")
+    check("有 garmin 來源的帳號照讀原始檔", len(calls) > 0, True)
+finally:
+    main._garmin_records = real_records
 
 print()
 if fails:

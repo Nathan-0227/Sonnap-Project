@@ -60,6 +60,9 @@ class _StubUploader implements NightlyUploader {
   _StubUploader(this.result, {this.acceptsMarks = true, this.queued = false});
 
   @override
+  Future<String?> Function()? get phoneModel => null;
+
+  @override
   Future<NightlyUploadResult> upload(
     LightsOutResult lightsOut, {
     BedMarks marks = BedMarks.none,
