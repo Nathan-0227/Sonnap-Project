@@ -430,7 +430,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 資料：App 一次要 `/insights?days=365`（`_insightsYear`，等 8 秒）；連不到後端時 Week 用打包檔、**Month／Year 照實寫 Needs the backend** | 拿 30 晚冒充一年 |
 | **分數組成與警語不在 App 上**（使用者 11-19 定，只留書面報告） | — |
 | 舊卡去處：挑戰＝Day 與 W/M/Y 最底下一行（`widgets/challenges_sheet.dart`）；睡前 App＝Phone down 詳細頁最底下、**只有最近一次放下手機那一晚**；資料即時與否／昨晚送到沒／來源＝設定頁「Data」；Sleep basics＝助理頁（預設收合） | — |
-| 🔴 **偵測就寢＋上傳＋問挑戰在 App 層的 `services/nightly_sync.dart`**：開 App（帳號解析完之後）與每次回到前景都跑，**跟停在哪一頁無關**。原本藏在舊 Insights 頁的 initState | 漏跑不會報錯，只是昨晚沒上傳、熬夜與挑戰少一晚 |
+| 🔴 **偵測就寢＋上傳＋問挑戰在 App 層的 `services/nightly_sync.dart`**：開 App（帳號解析完之後）與每次回到前景都跑，**跟停在哪一頁無關**。原本藏在舊 Insights 頁的 initState。✅ **2026-11-20 實機驗證過**（設定頁 Data 寫「Last night sent」）；`nightly_trigger_test.dart` 守著三條：打開跑一次、回到前景再跑、帳號沒解析完不跑（拿掉任一處觸發都會紅）。測試靠 `SonnapApp(nightly:)` 注入 | 漏跑不會報錯，只是昨晚沒上傳、熬夜與挑戰少一晚 |
 | 手機使用權限沒開時**首頁**寵物下方一條提示（`usage-access-banner`），點了去系統設定、回來開了就消失 | 原本按鈕在舊 Insights 卡裡，新使用者找不到 |
 | **W/M/Y 的格子與心情卡點了開詳細頁**（`widgets/period_detail_sheet.dart`，PR 3）：開在**同一個期間**，頁裡也有 D/W/M/Y 與「‹ 期間 ›」；切到 Day 停在那段期間**最後一個有資料的晚上**、跟上一個有資料的晚上比；Year 一欄＝那個月的中位數；時刻（Phone down）畫點、上早下晚；點長條寫那一天。規矩同格子（中位數、「—」、只代表方向、不放常模、分數頁不呈現組成）。每一項怎麼取值、怎麼寫只在 `kPeriodMetrics` 一份。**Day 分頁的格子點開的是報告原本的詳細頁**（這一晚＋這一週），那些頁刻意不加 Month／Year（11-19 使用者定）——要看月、年從頂端切到 Month 再點 | — |
 
@@ -1791,7 +1791,7 @@ python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**1040 條全過**，2026-11-20 實測（Journey、助理對話合併之後））：
+Flutter（在 `app/` 底下跑，**1043 條全過**，2026-11-20 實測）：
 
 ```bash
 flutter test
@@ -1807,6 +1807,7 @@ flutter analyze     # No issues found
 | `account_test.dart` | 建置參數優先於問暱稱；建完一定要存下來（否則使用者每天都是新的一個人）；建不了帳號不能擋住 App |
 | `history_pet_test.dart` | 心情不可以從 `final_quality` 推（實測資料裡存在「Good 但 anxious」的夜晚）。⚠️ 釘住日期的那兩條隨效率計不計分改過兩次期望值（10-01 停止計分：08-09 Poor→Bad、08-23 Good→Normal；11-07 恢復計分又改回 Poor／Good），**真正要守的那件事改成由資料推導**（anxious 要橫跨多個品質等級），下次分數位移時才不會又無預警地紅 |
 | `measured_efficiency_test.dart` | 只剩服務層：兩個效率的欄位解析得出來、算不出來是 null 不是 0（舊 Insights 那張卡 2026-11-19 拿掉了） |
+| `nightly_trigger_test.dart` | 上傳（`NightlySync`）真的有被觸發：打開 App 一次、每次回到前景一次、帳號還沒解析完不跑。拿掉 `main.dart` 任一處觸發，App 照樣開得起來、畫面正常，只有這支會紅 |
 | `usage_stats_test.dart` | 服務層的解析與合併；上傳規則改測 `NightlySync`：按過的標記要送、**沒按不得擋住上傳**、後端沒收下（`marksStored`）或進佇列都**不清**標記、送的是待送格就只清待送格 |
 | `pre_bed_apps_test.dart` | 睡前 60 分鐘的 App 切段。三個寫錯不會報錯的地方：未配對的 `resumed` 要延續（拿著手機睡著了）、螢幕關閉要關掉區段、區段要與視窗**取交集**不是整段算 |
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
