@@ -699,14 +699,20 @@ class FriendsService {
     return FriendsResult(FriendsStatus.ok, value: (r.value!['removed'] as String?) ?? handle);
   }
 
-  /// 即時狀態（[SleepStatusSink] 的實作）。短逾時、只試一次；結果不重要（不補送）。
+  /// 即時狀態（[SleepStatusSink] 的實作）。只試一次、不補送。
+  /// 回應裡的攝影機狀態放進 [cameraStatusBoard]（睡覺畫面讀它）。
+  /// ⚠️ start 的逾時比較長：後端開錄之後要等錄影程式接上攝影機（最多約 8 秒）。
+  /// ⚠️ 簽名不要加參數：測試裡有假的服務覆寫這個方法。
   Future<void> sendSleepStatus(String event, DateTime? at) async {
-    await _request(
+    final target = cameraStatusBoard;
+    if (event == 'start') target.value = null; // 不顯示上一晚的
+    final r = await _request(
       'POST',
       '/sleep-status',
       body: {'event': event, if (at != null) 'at': wallClockIso(at)},
-      wait: const Duration(seconds: 5),
+      wait: Duration(seconds: event == 'start' ? 12 : 5),
     );
+    target.value = r.isOk ? CameraStatus.fromJson(r.value!['camera']) : null;
   }
 
   /// ⚠️ user_id：GET／DELETE 放 query、POST 放 body（後端定的介面）。

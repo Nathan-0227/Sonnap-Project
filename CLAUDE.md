@@ -497,6 +497,28 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來 |
 | 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
 
+### ✅ 按 Start Sleep 自動開攝影機（2026-11-21 grill Q1–Q17，`feature/camera-auto-start`）
+
+手機按 Start Sleep → `POST /sleep-status`（start）→ `camera_auto.py` 另外開一個獨立的 `tapo_metric_logger.py`；
+Out of bed／Cancel → 放停止旗標 `tapo_metrics/STOP`，錄影程式自己收尾。睡覺畫面在副標底下多一行 `Camera recording`
+（沒插電加 `· laptop on battery`）。設定在 `tapo_metrics/camera_auto.json`（沒有就用預設：框 34,129,288,231、影片 840 分、最多 14 小時）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| **只認手機帳號（`resolve_phone_account`）＋私有網段／本機**（`camera_auto.decide()`、`is_local_network()`；Tailscale 100.64/10 不算） | API 沒密碼、user_id 就是鑰匙：拿到 id 的人能從外面讓臥室攝影機開錄 |
+| **停錄只放旗標檔，不從外面砍** | Windows 的 terminate 是硬砍，熱區圖、影片檔尾不會寫，影片壞掉 |
+| 「有沒有在錄」看錄影程式自己寫的 `tapo_metrics/logger.lock`（pid＋phase）；**手動開的也算**，Out of bed 一樣停它；程式死了或超過 15 小時當作沒在錄；`--selftest` 不寫鎖檔 | 鎖檔沒清掉就永遠開不了錄；自測會擋住當晚的 Start Sleep |
+| 已在錄不開第二個；最多錄 14 小時由**錄影程式自己的 `--max-hours`** 守 | 兩個程式搶串流；後端半夜重開的話後端計時就沒了 |
+| Cancel：收尾（鎖檔消失）之後把那一晚的檔案**搬到 `tapo_metrics/cancelled/`，不刪**；錄影程式不結束就不搬 | 誤按 Cancel 刪了救不回；正在寫的檔案搬了會壞。早上匯入只看第一層，不會挑到 |
+| 錄影期間 `--keep-awake`（SetThreadExecutionState）；⚠️ **擋得住閒置待機，擋不住闔上螢幕** | 09-20 用電池 4 分鐘就待機、錄影斷掉 |
+| 手機只在**確定在錄**（recording／already_recording）時寫那一行；沒回應、還在接、沒開成一律不寫（`cameraStatusLine`）。回應放進 `cameraStatusBoard`，**按 Start Sleep 先清掉** | 手機分不出後端沒開還是網路慢；寫 Camera off 可能是錯的；不清會顯示上一晚的 |
+| `/sleep-status` 裡攝影機的任何錯誤都吞掉（好友狀態照記）；開錄等接上最多約 8 秒，在執行緒裡跑；手機 start 的逾時 12 秒 | 攝影機只是附加的，不能讓好友狀態跟著壞 |
+| **攝影機有沒有移動**（`camera_alignment.py`）：錄影程式在第 15／30／60／90／120 分鐘各存一張 `_frame_NNN.png`、第 60 分鐘多存一張畫上框的 `_snapshot.png`；**只比框上方那一條**（牆、層架）、**多張取中間值**，> **30 像素**（設計決策，沒有文獻）判「可能移動」 | grill 原本定「開錄 90 秒拍一張、比整張」：10 晚實測人常常正對鏡頭、被子每晚不同，攝影機沒動也 2～259 像素亂跳。改了之後 9/10 晚 1～4 像素，11-09 真的擺歪那晚 32 |
+| 早上匯入偵測到移動：**手錶照常、那一晚攝影機不匯入**；`--camera-ok` 硬匯；沒有畫面或沒有基準不擋 | 框歪了那晚的動作數字全錯，但跟手錶無關 |
+| 抓不到「床移動、攝影機沒動」——那種情況靠 `_snapshot.png` 給人看 | — |
+| 基準在 `tapo_metrics/reference/`（frame.png＋roi.json），第一次：`python camera_alignment.py --make-reference tapo_metrics/20260903_020631.mp4 --roi 34,129,288,231`（當初推出框的第 3 晚，第 30 分鐘那格） | — |
+| 重新框：`python camera_reframe.py`——熱區推一個框畫在照片上，**人按 Enter 才存**（或 D 自己拖）；存時**同時換基準**，舊的框與基準備份到 `reference/backup-<時間>/`；**下一晚**開始用；0.75% 門檻沒在新框底下重新驗證 | 自動推框有室友那晚選錯過；基準不換的話之後每晚都判移動 |
+
 ### ✅ 睡眠計畫（2026-11-19，`feature/sleep-plan`）
 
 首頁「不按也沒關係」底下的 **Today's plan** 小卡 → Plan 頁：作息（就寢、起床，同轉盤）→ This week（連續準時、作息收斂）→ **Measured** 三列（準時放下手機、上床少滑手機、**準時起床**）→ 自己勾的習慣 → Add a habit。點一條開編輯頁（照使用者給的參考圖：Time、Notify me、Repeat、Save）。**決定、措辭、文獻全在 `Research-Background/睡眠計畫.md`**。
@@ -1782,6 +1804,7 @@ python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規�
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
 python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不讀它、刪帳號一起刪
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
+python tests/test_camera_auto.py         # 2026-11-21 新增：按 Start Sleep 自動開錄——只認手機帳號＋區網、在錄不開第二個、停錄只放旗標（錄影程式自己收尾，拿掉檢查會紅）、Cancel 搬檔不刪、鎖檔死了當沒在錄、攝影機移動偵測（平移 40 判移動、亮度與床上的人不算、中間值）、早上匯入移動了只擋攝影機、重新框有備份並換基準、API 出錯不讓端點失敗
 ```
 
 ⚠️ `compare_night_sources.py` 不是測試但屬於同一條驗收路徑：它把同一晚的
@@ -1792,7 +1815,7 @@ python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**1043 條全過**，2026-11-20 實測）：
+Flutter（在 `app/` 底下跑，**1054 條全過**，2026-11-21 實測）：
 
 ```bash
 flutter test

@@ -45,11 +45,13 @@ from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, StrictBool
 
+import camera_auto  # 按 Start Sleep 自動開錄（只用標準庫，不載入 OpenCV）
 import camera_clips
 import camera_usual
 import demo_sleep
@@ -2067,20 +2069,45 @@ class SleepStatusRequest(BaseModel):
     at: Optional[str] = None
 
 
+def _camera_for_sleep_status(event, user_id, client_ip):
+    """
+    按 Start Sleep 自動開錄、Out of bed／Cancel 停（camera_auto.py，2026-11-21）。
+    回傳給手機的那一小段，或 None（跟攝影機無關）。
+    ⚠️ 任何錯誤都吞掉：好友狀態照記，攝影機只是附加的，不能讓這個端點失敗。
+    ⚠️ 只認手機帳號（與手錶／攝影機匯入同一個判準）＋私有網段，判斷在 camera_auto.decide()。
+    ⚠️ 開錄會等錄影程式回報接上攝影機（最多約 8 秒），所以在執行緒裡跑、不卡住其他請求。
+    """
+    try:
+        phone, info = db.resolve_phone_account()
+        if info.get("reason") != "ok":
+            phone = None
+        return camera_auto.handle(event, user_id, client_ip, phone_account=phone)
+    except Exception as exc:  # noqa: BLE001
+        print(f"camera_auto: {type(exc).__name__}（攝影機沒動，好友狀態照記）")
+        return None
+
+
+async def _camera_reply(event, user_id, request):
+    client_ip = request.client.host if request.client else None
+    camera = await run_in_threadpool(_camera_for_sleep_status, event, user_id, client_ip)
+    return {"ok": True, **({"camera": camera} if camera else {})}
+
+
 @app.post("/sleep-status")
-async def post_sleep_status(req: SleepStatusRequest):
+async def post_sleep_status(req: SleepStatusRequest, request: Request):
     """
     好友頁的即時狀態（2026-11-19）。App 按 Start Sleep／Out of bed／Cancel 的當下各送一次，
     **連不到就算了、不補送**（半夜補送「我在睡」沒有意義）。
     ⚠️ 不進評分、不給 XP、不碰 nightly_behavior——上床／下床的正式紀錄照舊早上跟 POST /nightly 一起送。
     ⚠️ 好友看不看得到由分享設定的 live_status 決定（預設關）；這裡照樣收，開了之後下一次按就看得到。
+    2026-11-21 起順便開／停攝影機錄影（只對手機帳號、只從區網），結果放在回應的 `camera`。
     """
     require_user(req.user_id)
     if req.event not in ("start", "end", "cancel"):
         raise HTTPException(status_code=422, detail="event must be start, end or cancel.")
     if req.event == "cancel":
         db.clear_live_sleep_status(req.user_id)
-        return {"ok": True}
+        return await _camera_reply("cancel", req.user_id, request)
     from datetime import datetime as _dt
     try:
         at = _dt.fromisoformat(str(req.at)).replace(tzinfo=None) if req.at else None
@@ -2093,7 +2120,7 @@ async def post_sleep_status(req: SleepStatusRequest):
         db.set_live_sleep_status(req.user_id, started_at=at_iso)
     else:
         db.set_live_sleep_status(req.user_id, ended_at=at_iso)
-    return {"ok": True}
+    return await _camera_reply(req.event, req.user_id, request)
 
 
 @app.get("/sharing")
