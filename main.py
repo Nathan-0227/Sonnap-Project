@@ -323,6 +323,26 @@ def _light_minutes(w_row: dict) -> Optional[float]:
     return round(max(0.0, total - deep - rem), 1)
 
 
+def _stage_legend_light(w_row: dict) -> Optional[float]:
+    """
+    Sleep Stages 卡圖例的淺睡（2026-11-21）：**手錶自己的淺睡總數**，沒量到 REM 也給。
+
+    Garmin 的淺睡永遠等於「總睡眠 − 深睡 − REM」（131 晚實測差值全是 0）；
+    沒量到 REM 的晚上就是「總睡眠 − 深睡」——那段時間圖上本來就畫成淺睡那一層，
+    圖例寫同一個數字才對得上。打包檔（首頁那張卡）一直是這樣給的。
+
+    ⚠️ 只給圖例用。比例條與 Insights 仍用 [_light_minutes]（沒量到 REM 是 null）：
+       比例條上淺睡吃掉 REM，比例會看起來像整晚沒有 REM。
+    """
+    total, deep = w_row.get("duration_min"), w_row.get("deep_min")
+    if total is None or deep is None:
+        return None
+    rem = w_row.get("rem_min") if w_row.get("rem_measured") else 0
+    if rem is None:
+        return None
+    return round(max(0.0, total - deep - rem), 1)
+
+
 def display_for(mood, driver, w_row):
     """畫面上的那幾句話：兩層各有自己的文案，依 driver 決定用哪一套。
     /home 與早晨報告的 AI 退回文字共用這一份（兩份的話同一晚會講兩種話）。"""
@@ -588,7 +608,7 @@ def night_stages(w_row):
         "minutes": {
             "awake": w_row.get("waso_min"),
             "rem": w_row.get("rem_min"),
-            "light": _light_minutes(w_row),
+            "light": _stage_legend_light(w_row),
             "deep": w_row.get("deep_min"),
         },
         "rem_measured": bool(w_row.get("rem_measured")),

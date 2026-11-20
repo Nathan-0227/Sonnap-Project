@@ -2,7 +2,7 @@
 //
 // 守的是壞掉時不會報錯的地方：
 // - 時間照牆鐘讀（+08:00 不能被換成 UTC，否則軸上的時間差 8 小時）
-// - 沒量到 REM 的晚上：圖例寫 not measured，不寫 0m
+// - 沒量到 REM 的晚上：圖例寫 N/A（2026-11-21 前是 not measured），不寫 0m；淺睡照寫
 // - 沒有資料時老實講「Not available yet」，不畫假的
 import 'package:app/models/sleep_stages.dart';
 import 'package:app/widgets/sleep_stages_card.dart';
@@ -77,7 +77,8 @@ void main() {
         stages: SleepStages.fromJsonOrNull(block(remMeasured: false))!,
       ),
     );
-    expect(find.text('not measured'), findsOneWidget);
+    expect(find.text('N/A'), findsOneWidget);
+    expect(find.text('2h 18m'), findsOneWidget, reason: '沒量到 REM 也要顯示淺睡');
     expect(
       find.text('0m'),
       findsOneWidget,
