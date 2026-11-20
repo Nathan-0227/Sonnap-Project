@@ -3,6 +3,7 @@
 // 心情一律先過 pet.resolve()（缺圖畫 bored，不畫 happy）。預覽用的調位置工具照留、App 不開。
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -227,8 +228,12 @@ class _LayeredPetState extends State<LayeredPet>
     final tweak = widget.accessoryTweak;
     final factor = widget.size / pose.designSize;
     final sourceSize = 512.0;
-    final scale = base.scale * tweak.scale;
+    // 這一件在這個姿勢的戴法：以底邊中點縮放、再位移與轉動（見 AccessoryFit）
+    final fit = accessory.fitFor(widget.pet.id, widget.pet.resolve(widget.mood));
+    final box = sourceSize * base.scale * tweak.scale;
+    final scale = base.scale * tweak.scale * fit.fit;
     final size = sourceSize * scale * factor;
+    final fitDropY = box * (1 - fit.fit) / 2 + box * fit.drop;
 
     // Head/face accessories follow the head. Neck accessories follow the body,
     // so a scarf stays attached to the chest/neck instead of being pulled by
@@ -236,12 +241,12 @@ class _LayeredPetState extends State<LayeredPet>
     final followsHead = accessory.slot == AccessorySlot.head ||
         accessory.slot == AccessorySlot.face;
     final followsBody = accessory.slot == AccessorySlot.neck;
-    final x = base.position.dx + tweak.dx +
+    final x = base.position.dx + tweak.dx + box * fit.dx +
         (followsHead ? headOffsetX : (followsBody ? bodyOffsetX : 0.0));
     final animatedOffsetY = followsHead
         ? headOffsetY
         : (followsBody ? bodyOffsetY : 0.0);
-    final y = base.position.dy + tweak.dy + animatedOffsetY;
+    final y = base.position.dy + tweak.dy + animatedOffsetY + fitDropY;
     final animatedRotation = followsHead ? headRotationDeg : 0.0;
 
     return Positioned(
@@ -263,14 +268,47 @@ class _LayeredPetState extends State<LayeredPet>
               },
         child: Transform.rotate(
           angle: _deg(
-            base.rotationDeg + tweak.rotationDeg + animatedRotation,
+            base.rotationDeg + tweak.rotationDeg + fit.rotationDeg + animatedRotation,
           ),
           alignment: Alignment.bottomCenter,
-          child: Image.asset(
-            accessory.assetPath,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-          ),
+          child: accessory.shadowAt == null
+              ? Image.asset(
+                  accessory.assetPath,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                )
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 落在頭上的淡影子：在帽子底邊、比帽子窄一點，看起來是戴著不是貼著
+                    Positioned(
+                      key: const Key('pet-accessory-shadow'),
+                      left: size * 0.16,
+                      width: size * 0.68,
+                      top: size * accessory.shadowAt! - size * 0.07,
+                      height: size * 0.13,
+                      child: ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                          sigmaX: size * 0.035,
+                          sigmaY: size * 0.035,
+                        ),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Color(0x4D5A2A12),
+                            borderRadius: BorderRadius.all(Radius.elliptical(100, 30)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: Image.asset(
+                        accessory.assetPath,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

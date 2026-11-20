@@ -1,6 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../pet2d/pet_catalog.dart' show accessories;
 import '../pet2d/pet_models.dart';
+import '../services/account_service.dart' show kFallbackDisplayName;
 import '../services/game_service.dart';
 import '../widgets/home_pet.dart';
 
@@ -8,6 +12,12 @@ import '../widgets/home_pet.dart';
 ///
 /// 2026-11-18 改版（隊友交來的版面，重做在我們的寵物引擎上）：上面一隻活的寵物戴著
 /// 現在選的那一件，下面是真的配件圖，**先試穿、按 Confirm 才送後端**。
+///
+/// 2026-11-19 第二版（使用者給參考圖，遊戲換裝畫面）：上半是使用者生成的更衣室
+/// （`assets/backgrounds/closet_room.jpg`），寵物站在中間的地毯上；最上面大字是**暱稱**
+/// （寵物沒有名字）、底下 Lv；左上 ‹＝不存離開、右上 ✓＝存起來（取代底部的 Confirm 長鈕）；
+/// 分類是一排菱形鈕（All · 頭 · 臉 · 脖子，圖示用那一類的配件圖）；格子選中的金框＋勾、
+/// 身上那件底下一個小點、沒解鎖的變暗＋鎖＋Lv。**一次只穿一件**（後端只存一件）。
 ///
 /// ⚠️ 隊友原版直接用 `LayeredPet` 並自帶一份 `PetAppearance`（選哪隻寵物）。這裡改用
 /// [HomePet]：選小狗或貓（`PetChoice`，存在手機上）、缺圖的心情退回 **bored** 不是 happy、
@@ -30,11 +40,15 @@ class ClosetScreen extends StatefulWidget {
   final String? mood;
   final String? growthStage;
 
+  /// 最上面那行大字：帳號的暱稱（寵物沒有名字）。
+  final String displayName;
+
   const ClosetScreen({
     super.key,
     required this.service,
     this.mood,
     this.growthStage,
+    this.displayName = kFallbackDisplayName,
   });
 
   @override
@@ -64,10 +78,19 @@ class _ClosetScreenState extends State<ClosetScreen> {
   String? _selected;
   AccessorySlot? _filter;
 
-  static const _bg = Color(0xFF081326);
-  static const _card = Color(0xFF10265A);
-  static const _cardOn = Color(0xFF233A73);
+  // 跟更衣室圖最底下的顏色接起來（圖下 40% 淡成深藍）
+  static const _bg = Color(0xFF0F1745);
+  static const _card = Color(0xFF1B2A66);
+  static const _cardOn = Color(0xFF2B3C82);
   static const _gold = Color(0xFFFFD96A);
+  static const _purple = Color(0xFF7B61FF);
+  static const _room = 'assets/backgrounds/closet_room.jpg';
+
+  /// 圖的長寬比（941×1672）；寵物要站在地毯上，位置照圖算。
+  static const _roomAspect = 1672 / 941;
+
+  /// 地毯中心在圖高的哪裡（量過：約 0.555）。
+  static const _rugY = 0.555;
 
   @override
   void initState() {
@@ -126,93 +149,257 @@ class _ClosetScreenState extends State<ClosetScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: Colors.white,
-        title: const Text('Closet'),
+      body: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          final imgH = w * _roomAspect;
+          return Stack(
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: imgH,
+                child: Image.asset(
+                  _room,
+                  key: const Key('closet-room'),
+                  fit: BoxFit.fitWidth,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+              _buildBody(imgH),
+            ],
+          );
+        },
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(double imgH) {
     final r = _result;
+    final top = MediaQuery.paddingOf(context).top;
     if (r == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF7657FF)),
+      return Stack(
+        children: [
+          _topBar(top),
+          const Center(child: CircularProgressIndicator(color: _purple)),
+        ],
       );
     }
     final closet = r.value;
     if (!r.isOk || closet == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'The closet lives on the backend, and it cannot be reached right now.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70),
+      return Stack(
+        children: [
+          _topBar(top),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'The closet lives on the backend, and it cannot be reached right now.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
           ),
-        ),
+        ],
       );
     }
 
     final shown = closet.items
         .where((i) => _filter == null || kClosetSlotFor[i.itemId] == _filter)
         .toList();
+    // 寵物腳踩在地毯中心；下半的面板從地毯下緣開始
+    const petSize = 190.0;
+    final rugY = imgH * _rugY;
+    final panelTop = math.min(rugY + 40, imgH * 0.66);
 
-    return Column(
+    return Stack(
       children: [
-        _preview(closet),
-        _chips(),
-        Expanded(
-          child: GridView.count(
-            key: const Key('closet-grid'),
-            crossAxisCount: 3,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.85,
-            children: [_noneTile(), for (final item in shown) _tile(item)],
+        Positioned(
+          top: rugY - petSize * 0.80,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: SizedBox(
+              key: const Key('closet-preview'),
+              width: petSize,
+              height: petSize,
+              child: HomePet(
+                mood: widget.mood,
+                size: petSize,
+                equippedItemId: _selected,
+                accessoryEmoji: _itemOf(_selected)?.emoji,
+                growthStage: widget.growthStage,
+              ),
+            ),
           ),
         ),
-        _confirmButton(closet),
+        _topBar(top),
+        Positioned(
+          top: top + 64,
+          left: 24,
+          right: 24,
+          child: _header(closet),
+        ),
+        Positioned(
+          top: panelTop,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Column(
+            children: [
+              _tabs(),
+              Expanded(
+                child: GridView.count(
+                  key: const Key('closet-grid'),
+                  crossAxisCount: 3,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    6,
+                    20,
+                    MediaQuery.paddingOf(context).bottom + 20,
+                  ),
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 0.92,
+                  children: [
+                    _noneTile(closet),
+                    for (final item in shown) _tile(item, closet),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  /// 上面那隻活的寵物，戴著**現在試穿的**那一件。
-  Widget _preview(ClosetState closet) {
-    final trying = _itemOf(_selected);
-    return Container(
-      key: const Key('closet-preview'),
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
+  /// 左上 ‹＝不存直接離開；右上 ✓＝存起來（沒改就直接關、不發請求）。
+  Widget _topBar(double top) {
+    final closet = _result?.value;
+    final changed = closet != null && _selected != closet.equippedItemId;
+    return Positioned(
+      top: top + 8,
+      left: 16,
+      right: 16,
+      child: Row(
         children: [
-          HomePet(
-            mood: widget.mood,
-            size: 168,
-            equippedItemId: _selected,
-            accessoryEmoji: trying?.emoji,
-            growthStage: widget.growthStage,
+          _roundButton(
+            key: const Key('closet-back'),
+            icon: Icons.chevron_left_rounded,
+            onTap: () => Navigator.of(context).maybePop(),
           ),
-          Text(
-            trying == null ? 'Nothing on' : trying.name,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+          const Expanded(
+            child: Text(
+              'Closet',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            _selected == closet.equippedItemId
-                ? 'Level ${closet.level}'
-                : 'Trying it on · not saved yet',
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          _roundButton(
+            key: const Key('closet-confirm'),
+            icon: Icons.check_rounded,
+            highlight: changed,
+            busy: _busy,
+            onTap: closet == null || _busy ? null : _confirm,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _roundButton({
+    required Key key,
+    required IconData icon,
+    required VoidCallback? onTap,
+    bool highlight = false,
+    bool busy = false,
+  }) => Semantics(
+    button: true,
+    child: GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: highlight ? _purple : const Color(0xCC1B2A66),
+          border: Border.all(
+            color: highlight ? _gold : const Color(0x33FFFFFF),
+            width: highlight ? 2 : 1,
+          ),
+        ),
+        child: busy
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Icon(icon, color: Colors.white, size: 26),
+      ),
+    ),
+  );
+
+  /// 大字暱稱＋Lv；試穿中多一行「還沒存」。
+  Widget _header(ClosetState closet) {
+    const shadow = [Shadow(color: Color(0xAA000000), blurRadius: 8)];
+    return Column(
+      children: [
+        Text(
+          widget.displayName,
+          key: const Key('closet-name'),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w900,
+            shadows: shadow,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xCC1B2A66),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0x55FFD96A)),
+          ),
+          child: Text(
+            'Lv. ${closet.level}',
+            style: const TextStyle(
+              color: _gold,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (_selected != closet.equippedItemId) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xB30F1745),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'Trying it on · not saved yet',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -224,152 +411,229 @@ class _ClosetScreenState extends State<ClosetScreen> {
     return null;
   }
 
-  Widget _chips() => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
+  /// 一排菱形鈕：All · 頭 · 臉 · 脖子。圖示用那一類的配件圖（讀不到退回圖示）。
+  Widget _tabs() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
     child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _chip('All', null),
-        _chip('Head', AccessorySlot.head),
-        _chip('Face', AccessorySlot.face),
-        _chip('Neck', AccessorySlot.neck),
+        _tab('All', null, null),
+        _tab('Head', AccessorySlot.head, 'sleep_hat'),
+        _tab('Face', AccessorySlot.face, 'round_glasses'),
+        _tab('Neck', AccessorySlot.neck, 'night_scarf'),
       ],
     ),
   );
 
-  Widget _chip(String label, AccessorySlot? slot) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: ChoiceChip(
-      key: Key('closet-filter-${slot?.name ?? 'all'}'),
-      label: Text(label),
-      selected: _filter == slot,
-      onSelected: (_) => setState(() => _filter = slot),
-      selectedColor: const Color(0xFF7657FF),
-      backgroundColor: _card,
-      labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
-      side: BorderSide.none,
-      showCheckmark: false,
-    ),
-  );
+  Widget _tab(String label, AccessorySlot? slot, String? artId) {
+    final on = _filter == slot;
+    final size = on ? 58.0 : 50.0;
+    final art = artId == null
+        ? null
+        : accessories.where((a) => a.id == artId).firstOrNull;
+    final fallback = Icon(
+      slot == null ? Icons.grid_view_rounded : Icons.checkroom_rounded,
+      color: Colors.white,
+      size: on ? 24 : 20,
+    );
+    return Semantics(
+      button: true,
+      selected: on,
+      label: label,
+      child: GestureDetector(
+        key: Key('closet-filter-${slot?.name ?? 'all'}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _filter = slot),
+        child: SizedBox(
+          width: 72,
+          height: 72,
+          child: Center(
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Transform.rotate(
+                angle: math.pi / 4,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: on ? _purple : _card,
+                    borderRadius: BorderRadius.circular(on ? 14 : 12),
+                    border: Border.all(
+                      color: on ? _gold : const Color(0x33FFFFFF),
+                      width: on ? 2 : 1,
+                    ),
+                    boxShadow: on
+                        ? const [
+                            BoxShadow(color: Color(0x667B61FF), blurRadius: 14),
+                          ]
+                        : null,
+                  ),
+                  child: Transform.rotate(
+                    angle: -math.pi / 4,
+                    child: Padding(
+                      padding: EdgeInsets.all(on ? 6 : 5),
+                      child: art == null
+                          ? fallback
+                          : Image.asset(
+                              art.assetPath,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) => fallback,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// 「什麼都不戴」。⚠️ 不分分類一律放第一格——它不屬於任何一個插槽，
   /// 跟著分類藏起來的話就沒有辦法脫掉衣服。
-  Widget _noneTile() {
-    final selected = _selected == null;
-    return _frame(
-      tileKey: const Key('closet-none'),
-      selected: selected,
-      onTap: () {
-        if (!_busy) setState(() => _selected = null);
-      },
-      art: const Center(
-        child: Icon(Icons.block_rounded, color: Colors.white38, size: 30),
-      ),
-      name: 'None',
-      nameColor: Colors.white,
-      status: selected ? 'Wearing' : 'Take it off',
-      statusColor: selected ? _gold : Colors.white38,
-    );
-  }
+  Widget _noneTile(ClosetState closet) => _frame(
+    tileKey: const Key('closet-none'),
+    selected: _selected == null,
+    wornNow: closet.equippedItemId == null,
+    onTap: () {
+      if (!_busy) setState(() => _selected = null);
+    },
+    art: const Center(
+      child: Icon(Icons.block_rounded, color: Colors.white38, size: 34),
+    ),
+    name: 'None',
+  );
 
-  Widget _tile(ClosetItem item) {
+  Widget _tile(ClosetItem item, ClosetState closet) {
     final art = layeredAccessoryFor(item.itemId);
-    final selected = _selected == item.itemId;
+    // 真圖優先。⚠️ errorBuilder 不能省：圖讀不到時 Image.asset 會丟例外，退回 emoji。
+    final emoji = Center(
+      child: Text(item.emoji, style: const TextStyle(fontSize: 34)),
+    );
     return _frame(
       tileKey: Key('closet-${item.itemId}'),
-      selected: selected,
+      selected: _selected == item.itemId,
+      wornNow: closet.equippedItemId == item.itemId,
+      locked: item.unlocked ? null : item.unlockLevel,
       onTap: () => _tap(item),
-      art: Opacity(
-        opacity: item.unlocked ? 1 : 0.3,
-        // 真圖優先。⚠️ errorBuilder 不能省：圖讀不到時 Image.asset 會丟例外，
-        // 而 top_hat／crown 本來就沒有圖，一律退回 emoji。
-        child: art == null
-            ? Center(
-                child: Text(item.emoji, style: const TextStyle(fontSize: 30)),
-              )
-            : Image.asset(
-                art.assetPath,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => Center(
-                  child: Text(item.emoji, style: const TextStyle(fontSize: 30)),
-                ),
-              ),
-      ),
+      art: art == null
+          ? emoji
+          : Image.asset(
+              art.assetPath,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => emoji,
+            ),
       name: item.name,
-      nameColor: item.unlocked ? Colors.white : Colors.white38,
-      status: selected
-          ? 'Wearing'
-          : item.unlocked
-          ? 'Tap to try on'
-          : 'Level ${item.unlockLevel}',
-      statusColor: selected ? _gold : Colors.white38,
     );
   }
 
+  /// 一格：深色圓角方塊、配件圖、名字。
+  /// 選中＝金框＋右上金色勾；身上那件＝名字底下一個小點；沒解鎖＝變暗＋鎖＋Lv。
   Widget _frame({
     required Key tileKey,
     required bool selected,
+    required bool wornNow,
     required VoidCallback onTap,
     required Widget art,
     required String name,
-    required Color nameColor,
-    required String status,
-    required Color statusColor,
+    int? locked,
   }) {
-    return InkWell(
+    final lockedNow = locked != null;
+    return GestureDetector(
       key: tileKey,
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: selected ? _cardOn : _card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? _gold : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(child: art),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: nameColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: selected
+                      ? const [_cardOn, Color(0xFF1F2E6E)]
+                      : const [_card, Color(0xFF131F52)],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: selected ? _gold : const Color(0x22FFFFFF),
+                  width: selected ? 3 : 1,
+                ),
+                boxShadow: selected
+                    ? const [BoxShadow(color: Color(0x55FFD96A), blurRadius: 14)]
+                    : const [BoxShadow(color: Color(0x55000000), blurRadius: 8)],
+              ),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Opacity(opacity: lockedNow ? 0.3 : 1, child: art),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: lockedNow ? Colors.white38 : Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  // 身上現在穿的那件（還沒換之前）：一個小點
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: wornNow ? _gold : Colors.transparent,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(status, style: TextStyle(color: statusColor, fontSize: 10)),
-          ],
-        ),
+          ),
+          if (lockedNow)
+            Positioned.fill(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_rounded, color: Colors.white70, size: 22),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Lv $locked',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (selected)
+            Positioned(
+              top: -6,
+              right: -6,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _gold,
+                  border: Border.all(color: _bg, width: 2),
+                ),
+                child: const Icon(Icons.check_rounded, size: 15, color: _bg),
+              ),
+            ),
+        ],
       ),
     );
   }
-
-  Widget _confirmButton(ClosetState closet) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-    child: SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: FilledButton(
-        key: const Key('closet-confirm'),
-        onPressed: _busy ? null : _confirm,
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF7657FF),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: Text(_busy ? 'Saving…' : 'Confirm outfit'),
-      ),
-    ),
-  );
 }
