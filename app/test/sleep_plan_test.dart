@@ -235,6 +235,14 @@ void main() {
           ch('up_on_time', ChallengeState.insufficientData, 'SENTINEL-C'),
         ]),
       );
+      // 說明那句點開才出現（11-19 精簡成一列）；點開之後整句照抄
+      for (final s in ['SENTINEL-A', 'SENTINEL-B', 'SENTINEL-C']) {
+        expect(find.text(s), findsNothing);
+      }
+      for (final id in ['on_time_tonight', 'phone_in_bed_tonight', 'up_on_time']) {
+        await tester.tap(find.byKey(Key('plan-measured-tap-$id')));
+        await tester.pump();
+      }
       for (final s in ['SENTINEL-A', 'SENTINEL-B', 'SENTINEL-C']) {
         expect(find.text(s), findsOneWidget);
       }

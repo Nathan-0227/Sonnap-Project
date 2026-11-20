@@ -447,6 +447,18 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 背景兩張圖（山丘、湖面）是使用者以 prompt 生成的原創圖，左右翻轉過；**只鋪到內容結束**（Positioned） | 不用 Positioned 的話頁面被圖撐長，底下多一大段空白 |
 | 星星與流星是程式畫的；系統開「減少動態效果」時靜止 | — |
 
+### ✅ 衣櫃改版（2026-11-19，PR #148，`feature/closet-redesign`）
+
+照使用者給的遊戲換裝參考圖（`screens/closet_screen.dart`）：上半是使用者生成的更衣室 `assets/backgrounds/closet_room.jpg`，寵物站在地毯上；最上面大字是**暱稱**（寵物沒有名字）＋「Lv. N」；左上 ‹＝**不存離開**、右上 ✓＝存起來（取代底部 Confirm 長鈕，有改才亮）；分類是一排菱形鈕（All · 頭 · 臉 · 脖子）；格子選中金框＋勾、身上那件底下小點、沒解鎖變暗＋鎖＋Lv。**一次只穿一件**（後端只存一件）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 禮帽、皇冠是使用者生成的圖（`assets/accessories/head/star_top_hat.png`、`moon_crown.png`），粗黑外框已改細、改同色系＋底下淡影子（`shadowAt`）；後端 item_id 經 `home_pet.dart` 的 `kLayeredAccessoryFor` 對到圖 | 外框粗、沒接觸點時像貼紙浮在頭上（使用者連說兩次「突兀」） |
+| **這兩頂每種姿勢各有一組戴法**：`AccessoryDefinition.poseFits`，鍵是「寵物 id.心情」（`dog01.happy`…），值是 `AccessoryFit(fit, drop, dx, rotationDeg)`；**8 格（小狗／貓 × 4 種心情）都是使用者逐格看圖挑的**，改之前先出預覽給使用者看 | 只調一個共用值會把別的姿勢弄歪——各姿勢的頭位置、耳朵開合差很多 |
+| 🔴 **漏一格會悄悄退回預設大小**（`fitFor()` 找不到鍵就用 `fit`／`drop`），不報錯；新增寵物或心情時要為這兩頂補齊。`game_test.dart` 守著：兩頂對 dog01／cat01 × 每個 `PetMood` 都要有 | 某個心情的帽子突然變大、浮起來，只有剛好那晚是那個心情才看得到 |
+| 其他衣服（睡帽、眼鏡、圍巾、蝴蝶結）**不用 poseFits**，`fit` 1、`drop` 0，照隊友的錨點；測試守著只有那兩頂 `fit` < 1 | 錨點是隊友逐姿勢對過的，再疊一層調整就有兩個定義處 |
+| 位置以錨點框為單位（`fit` 以底邊中點縮放、`drop`／`dx` 是框邊長的比例），跟著寵物大小走 | 寫像素的話首頁與衣櫃的寵物大小不同，會一邊對一邊歪 |
+
 ### ✅ 好友頁的即時狀態（2026-11-19，`feature/friends-live-status`，疊在 `feature/friends-sharing` 上）
 
 最上面的大分頁：**Town · Feed · Friends · Ranks**（2026-11-19 第二輪，排行榜自成一頁；四個放不下時整排等比縮小）。
@@ -485,7 +497,22 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 習慣提醒走 `sonnap/notify` 的 **slot 1..20**、可只在星期幾響；**slot 0 是就寢提醒，計畫永遠不碰**；改了就全部取消再排 | 拿掉一條後舊位置不取消會每天響 |
 | 寵物 notes 對得上的建議有 **Add to my plan**（`kTipToPlan`），加的是**清單那句**不是 AI 改寫的；「說明」那幾句沒有 | AI 那句每晚不一樣 |
 | 挑戰卡**搬到 Plan**，Insights 不再有那一行；領 XP 仍在獎勵頁（準時起床、上床少滑各 10） | 只在一個地方出現 |
-| 不做：一天幾次、沒完成延到下次、Link（清單裡沒有適合連的）；**Journey 是第二個 PR** | 使用者定 |
+| 不做：一天幾次、沒完成延到下次、Link（清單裡沒有適合連的） | 使用者定 |
+
+#### Journey（2026-11-19 grill，`feature/journey`）：起床一站一站往前移
+
+計畫頁作息條底下（`widgets/journey_section.dart`）。**作息條與 Journey 合成一張卡**（11-19 使用者定）：上半是作息（點了開轉盤），下半進行中是**一條路**（參考圖、少字）：「Stop 2 of 5」，起點 ━ 寵物的頭 ┄•┄ 🏁，**點一個點冒出那一站的起床時間**，下面三顆太陽＝連續幾天準時；說明與 Stop 收進 ⋯；剛前進時寵物沿路走過來一次（減少動態效果不走）。寵物的頭是 `assets/plan/journey_dog.png`／`journey_cat.png`（使用者生成，**側面走路、不帶心情**——心情臉只代表後端心情），缺圖退回 🐾。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 🔴 **這一站就是目標**：進行中時後端每次同步都把 `users.target_bedtime／target_wake` 設成這一站（冪等）；App 開啟、回到前景、上傳完 `/nightly` 都問一次 `GET /journey`，再把就寢、鬧鐘、提醒、守門換過去（`main._applyJourney`） | 兩組時間：提醒說還有 30 分、Journey 說要早睡，熬夜用舊目標判 |
+| 進度**每次從每晚的 `up_on_time` 重算**（同挑戰引擎）；`journeys.stop_index` 只用來知道剛前進了沒 | 手錶晚到、事後補按鈕時進度不會自己更正 |
+| 每晚照**當晚的快照**判準時；前進之後以前的夜晚不重判 | — |
+| Journey 進行中**轉盤鎖住**，鎖在 `showSleepScheduleSheet` 一處（讀 `journey_active`），四個入口共用 | 鎖在入口的話漏一個就能把目標轉掉 |
+| 站、跨午夜、「已經到了」（422 `already_there`）**都在後端**；Dart 照抄 `stops`，30 分、建議睡 7 小時從 `step_minutes`／`recommended_sleep_minutes` 拿。**睡眠長度不設下限**（使用者 11-19 改：每個人需要的不一樣），7 小時只寫成參考、不擋、不變色 | 第二個定義處 |
+| 前進／走完：**不給 XP、不發通知**，計畫頁與首頁小卡各一行（`journeyNoticeText`），**離開計畫頁算看過**；第 1 站不提示 | 準時起床的 Quest 已給過 XP，同一件事不獎勵兩次 |
+| Stop：停在這一站、目標不還原；停了之後轉盤解鎖、後端不再拉回 | — |
+| ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `journeys`），再重開後端 | 後端啟動不建表 |
 
 ### ✅ 轉盤＋鬧鐘（2026-11-12，`feature/alarm-dial`）
 
@@ -1736,6 +1763,7 @@ python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 
 python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
+python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不讀它、刪帳號一起刪
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
 ```
 
@@ -1768,7 +1796,7 @@ flutter analyze     # No issues found
 | `bed_mark_buttons_test.dart` | 首頁那兩個按鈕。⚠️ 第一條驗的是**畫面上要寫「不按也沒關係」**——少了它，忘記按的人會以為那一晚白過了 |
 | `bed_marks_test.dart` | 上床／下床標記的保存。過期（>36 小時）與順序顛倒的一律當作沒有——不然上禮拜按的會被配成今晚的一對，算出 40 小時的臥床時間而且不會報錯 |
 | `camera_night_parse_test.dart` | 攝影機每晚資料的解析：相對網址接上 baseUrl、clips／usual 欄位有沒有、點了某一晚沒有錄影時**不退回最近一晚**（2026-11-19 舊攝影機卡拿掉，畫面那一半刪了） |
-| `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」。衣櫃（2026-11-18 改版）另守三條：**點一下只是試穿、Confirm 才送後端**（壞掉會變成點到就存進後端，畫面看起來一樣正常）、沒解鎖的連試穿都不行、**`kClosetSlotFor` 要含沒有真圖的那兩件**（top_hat／crown；漏了就點分類整件消失、不報錯）。⚠️ 衣櫃的預覽用 `HomePet`，不另開一份「現在選哪隻寵物」的狀態——隊友原版自帶 `PetAppearance`，那會是第二個定義處 |
+| `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」。衣櫃（2026-11-19 第二版）另守：**點一下只是試穿、右上 ✓ 才送後端，左上 ‹ 離開不送**（壞掉會變成點到就存進後端，畫面看起來一樣正常）、沒解鎖的連試穿都不行、**`kClosetSlotFor` 要含每一件**（漏了就點分類整件消失、不報錯）、禮帽與皇冠的逐姿勢戴法 8 格齊全（見「衣櫃改版」）。⚠️ 衣櫃的預覽用 `HomePet`，不另開一份「現在選哪隻寵物」的狀態——隊友原版自帶 `PetAppearance`，那會是第二個定義處 |
 | `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
 | `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |
 | `bedtime_reminder_test.dart` | 提醒時刻（含跨午夜）；關掉要 cancel；改目標要重排；提前量不得寫進 Kotlin（含 `1800000L` 這種 Long 寫法） |

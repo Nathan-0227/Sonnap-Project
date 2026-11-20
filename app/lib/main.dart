@@ -39,6 +39,7 @@ import 'services/pending_nightly.dart';
 import 'services/phone_model.dart';
 import 'services/plan_reminders.dart';
 import 'services/sleep_plan.dart';
+import 'services/journey_service.dart';
 import 'services/sleep_repository.dart';
 import 'screens/plan_screen.dart';
 import 'widgets/today_plan_card.dart';
@@ -120,11 +121,15 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     bedMarks: BedMarkStore(widget.store ?? const PlatformKeyValueStore()),
   );
 
-  void _runNightly() => unawaited(_nightly.run(
-        uploader: _uploader,
-        challengesService: _challenges,
-        homeService: _home,
-      ));
+  /// 上傳完再同步一次 Journey：這一晚可能是第 3 天準時，後端剛把目標換成下一站。
+  void _runNightly() => unawaited(() async {
+        await _nightly.run(
+          uploader: _uploader,
+          challengesService: _challenges,
+          homeService: _home,
+        );
+        await _syncJourney();
+      }());
 
   /// 設定頁「Data」那一段的來源清單（打包檔或後端那一份的 data_sources）。
   late final Future<SleepSession> _sessionForData = _repository.load();
@@ -135,6 +140,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     // 起床目標先送：POST /nightly 存的是當晚的目標快照，後端要先知道新的目標。
     if (state == AppLifecycleState.resumed && _account != null) {
       unawaited(() async {
+        await _syncJourney();
         await _syncWake();
         _runNightly();
       }());
@@ -206,6 +212,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           game: _game,
           petMood: () async => (await _repository.load()).status.petMood,
           loadChallenges: _challenges?.fetch,
+          journey: _journey,
         ),
       ),
     );
@@ -382,6 +389,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 計畫頁開始／停止 Journey、或同步拿到新的一站 → 目標、鬧鐘、提醒跟著換
+    _journey.addListener(() => unawaited(_applyJourney()));
     _start();
   }
 
@@ -410,6 +419,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     await _resolveAccount();
     await restore;
     await _syncBedtime();
+    // Journey 先：這一站就是目標，後端可能已經換站了，要先換好再送起床目標
+    await _syncJourney();
     // 排在 _runNightly 前面：POST /nightly 存的是當晚的起床目標快照。
     await _syncWake();
     unawaited(_syncPlanReminders());
@@ -496,6 +507,38 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       targetBedtime: stored.targetBedtime!,
     );
     if (ok) await _settings.markSynced(stored.targetBedtime!);
+  }
+
+  /// Journey（睡眠計畫，2026-11-19）。整個 App 一份，計畫頁與首頁小卡都聽它。
+  late final JourneyController _journey =
+      JourneyController(store: widget.store ?? const PlatformKeyValueStore());
+
+  /// 問後端現在第幾站（後端順便重算、需要就換站）。連不到就留著上一份。
+  Future<void> _syncJourney() async {
+    final baseUrl = ApiSleepRepository.configuredBaseUrl.trim();
+    final userId = _account?.userId;
+    if (baseUrl.isEmpty || userId == null || userId.isEmpty) return;
+    _journey.api = HttpJourneyApi(baseUrl: baseUrl, identity: ResolvedUserIdentity(userId));
+    await _journey.refresh();
+  }
+
+  /// **這一站就是目標**（使用者定 Q2）：就寢、鬧鐘的起床、提醒、守門都換成這一站。
+  /// 後端那邊已經換好了，這裡只是讓手機跟上。停掉的 Journey 不碰（目標留在停下的那一站）。
+  Future<void> _applyJourney() async {
+    final j = _journey.journey;
+    final cur = j?.current;
+    if (j == null || cur == null || j.status == JourneyStatus.stopped) return;
+    final alarm = AlarmSettingsStore(widget.store ?? const PlatformKeyValueStore());
+    final wake = await alarm.wakeTime(targetBedtime);
+    if (wake != cur.wake) {
+      await alarm.save(wake: cur.wake, enabled: await alarm.enabled());
+    }
+    if (cur.bedtime != targetBedtime) {
+      await _setBedtime(cur.bedtime); // 裡面會送起床目標、重排提醒
+    } else if (wake != cur.wake) {
+      await _syncWake();
+      unawaited(_syncPlanReminders());
+    }
   }
 
   /// 補送目標起床時間（睡眠計畫的「準時起床」要在後端判）。
@@ -603,7 +646,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         startSleepRequests: _startSleepRequests,
         onOpenSettings: () => setState(() => currentIndex = _settingsIndex),
         sleepStatus: _friends?.sendSleepStatus,
-        planCard: TodayPlanCard(plan: _plan, wake: _wakeNow, onOpen: _openPlan),
+        planCard: TodayPlanCard(plan: _plan, wake: _wakeNow, onOpen: _openPlan, journey: _journey),
         targetBedtime: targetBedtime,
         reminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
