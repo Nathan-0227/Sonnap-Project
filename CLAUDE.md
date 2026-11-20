@@ -396,8 +396,8 @@ Garmin 回報那幾晚睡眠期間內零清醒），那些不是壞資料，不�
 | 功能 | 在哪 | 不能破的規則 |
 |---|---|---|
 | 遊戲化（XP／等級／衣櫃／成就） | `game/`、`GET /game`、`POST /game/claim`、`GET /closet`、`POST /closet/equip` | 紅線 4、5。一晚 XP = 行為（準時 30／容許內 15／熬夜 0）＋品質（Good 20／Normal 10／Poor・Bad 0）→ 熬夜又睡不好 = 0。行為上限大於品質上限，沒戴錶的人也升得了級。**XP 不存**，每次從 `nightly_behavior`／`wearable_nightly` 即時算；表只存使用者動作（領取、穿戴） |
-| 好友 | `social/friends.py`、`social/sharing.py`、`/friends`、`/friends/feed`、`/friends/{handle}`、`/sharing`、`/sharing/preview` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。**2026-11-15 起每個人自己選讓好友看到什麼**（使用者定，grill）：能分享的仍是**白名單**（`sharing.ITEMS`，每一項一個 picker 從那一晚的 `/home` 挑值——跟本人報告同一份）；**預設只開行為**（放下手機、準時、連續、寵物心情、衣服與徽章、挑戰），其他（分數、睡多久、心率、壓力、步數…）預設關、自己打開；**三項永遠不給**、連選項都沒有：攝影機片段、Move IQ 每段時刻、睡前用了哪些 App（PATCH 送進來 422；`items` 用 StrictBool，"yes" 不會被轉成 true）。對所有好友同一組設定；時刻可選「只寫準時與否」。沒公開的值是 null、App 不畫（不寫 0）。好友頁最上面是自己的 **Streak 大卡**（他選的狗／貓＋火：0 晚沒有、1–2 小、3+ 大，減少動態效果不動；週一→週日一排，晚了空心圈不打叉不用紅）＋底下分 **Feed（動態牆，預設）／Friends（邀請碼、名單、排行）** 兩個分頁。**動態卡（2026-11-16 使用者定）**：整張卡是他自己選的場景（`friend_sharing.scene`，`sharing.SCENES` 四張使用者生成的圖；像大頭貼，**不依心情或好壞換**），寵物站在圖裡的地上、不放圓框；前三個有公開的項目寫成大數字，連續 3 晚以上在他最近那一晚的卡上出現一條只寫事實的橫幅，公開了 Sleep Stages 就畫那一晚的階梯（每一段只給「第幾分鐘」不給 ISO 時刻，選「只寫準時與否」的人兩端只寫 Fell asleep／Woke up）。寵物狗／貓由 App 送到 `friend_sharing.pet_species`。心情用純行為版。⚠️ 夢境不能分享（後端沒有每個人一份的夢）；手機使用只給睡前 60 分鐘加總。排行榜（七個標籤＋晚／日·週·月·年）是**第二批**、還沒做 |
-| 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段 |
+| 好友 | `social/friends.py`、`social/sharing.py`、`/friends`、`/friends/feed`、`/friends/{handle}`、`/sharing`、`/sharing/preview` | **別人的 `user_id` 永遠不出後端**，好友之間用邀請碼（handle）當名牌。**2026-11-15 起每個人自己選讓好友看到什麼**（使用者定，grill）：能分享的仍是**白名單**（`sharing.ITEMS`，每一項一個 picker 從那一晚的 `/home` 挑值——跟本人報告同一份）；**預設開 10 項**（以 `sharing.defaults()` 為準）：放下手機、準時、連續、寵物心情、**分數、睡多久、攝影機每小時動幾次**（動態卡那三個大數字，2026-11-16 使用者定「預設分享、可關」）、用了哪些裝置、衣服與徽章、挑戰；其他（心率、壓力、步數、起床自評…）預設關、自己打開；即時狀態 `live_status` 也預設關；**三項永遠不給**、連選項都沒有：攝影機片段、Move IQ 每段時刻、睡前用了哪些 App（PATCH 送進來 422；`items` 用 StrictBool，"yes" 不會被轉成 true）。對所有好友同一組設定；時刻可選「只寫準時與否」。沒公開的值是 null、App 不畫（不寫 0）。好友頁最上面是自己的 **Streak 大卡**（他選的狗／貓＋火：0 晚沒有、1–2 小、3+ 大，減少動態效果不動；週一→週日一排，晚了空心圈不打叉不用紅）＋底下分 **Feed（動態牆，預設）／Friends（邀請碼、名單、排行）** 兩個分頁。**動態卡（2026-11-16 使用者定）**：整張卡是他自己選的場景（`friend_sharing.scene`，`sharing.SCENES` 四張使用者生成的圖；像大頭貼，**不依心情或好壞換**），寵物站在圖裡的地上、不放圓框；前三個有公開的項目寫成大數字，連續 3 晚以上在他最近那一晚的卡上出現一條只寫事實的橫幅，公開了 Sleep Stages 就畫那一晚的階梯（每一段只給「第幾分鐘」不給 ISO 時刻，選「只寫準時與否」的人兩端只寫 Fell asleep／Woke up）。寵物狗／貓由 App 送到 `friend_sharing.pet_species`。心情用純行為版。⚠️ 夢境不能分享（後端沒有每個人一份的夢）；手機使用只給睡前 60 分鐘加總。排行榜（七個標籤＋晚／日·週·月·年）是**第二批**、還沒做 |
+| 睡眠助理 | `ai/chat.py`、`POST /chat` | 見下方「程式碼結構」最後一段（2026-11-19 起是對話，帶前文） |
 | 就寢提醒 | `bedtime_reminder.dart`、`sonnap/notify`（AlarmManager） | 提前 30 分鐘，**留在 Dart**。關掉開關要 cancel（不是只是不排新的）。⚠️ 手機重開機後鬧鐘會消失，要等下次開 App 才重排 |
 | 就寢守門（Accessibility） | `bedtime_guard.dart`、`sonnap/guard` | 守「目標前 30 分 → 目標後 6 小時」，判斷全在 Dart，Kotlin 只照做。`canRetrieveWindowContent="false"`（不讀畫面內容，設定頁的承諾靠它）。⚠️ **Google Play 不會讓它上架**；Android 13+ 側載要先「允許受限設定」。實機清單見 [BEDTIME_GUARD.md](docs/BEDTIME_GUARD.md) |
 | Health Connect | `health_connect.dart`、`sonnap/health` → `POST /wearable` | 只要 `READ_SLEEP`。**每個起床日只送最長的一段**（午覺照順序送會蓋掉那一晚，後端照樣回 201）。**那一晚已有 Garmin 就回 409、不蓋**（見「同一晚兩個來源」）。`minSdk` 因此 24 → 26。實機清單見 [HEALTH_CONNECT.md](docs/HEALTH_CONNECT.md) |
@@ -1599,7 +1599,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 - `main.py` — FastAPI。23 個端點：
   使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
   上傳 `POST /nightly /wearable`；
-  讀取 `GET /home /insights /challenges /get-sleep-data /health`；
+  讀取 `GET /home /insights /challenges /get-sleep-data /health`（`database_available` 照實際用的那種資料庫去問：MariaDB 真的連一次，2026-11-20 前一律看 SQLite 檔、跑 MariaDB 時永遠是 false）；
   攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
   遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
@@ -1758,7 +1758,7 @@ python tests/test_camera_nightly.py      # PR #50
 python tests/test_game_rewards.py        # PR #51。含紅線 4、5
 python tests/test_friends.py             # PR #51。含「user_id 不出後端」「只回白名單欄位」
 python tests/test_live_status.py         # 2026-11-19 新增：四種狀態與三個時間邊界、分享預設關、只寫準時與否拿掉時刻、Cancel 刪整列、不碰 nightly_behavior、刪帳號一起刪
-python tests/test_friend_sharing.py      # 2026-11-15 新增：預設只給行為、沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪、場景跟著動態卡帶出去且不認得的 422
+python tests/test_friend_sharing.py      # 2026-11-15 新增：預設那 10 項以外沒打開的一個字都不出後端（哨兵值）、永遠不給的三項 422、只寫準時與否、沒公開連續天數不上榜、Streak 週列、刪帳號連設定一起刪、場景跟著動態卡帶出去且不認得的 422
 python tests/test_chat.py                # PR #51。⚠️ 三道保險確保不打真的 Claude API
 python tests/test_migrate_accounts.py    # 2026-09-13 新增：戴錶者分帳號；同一晚兩個來源時 Garmin 優先（PR #63）；評分檔已沒有的夜晚備份後清掉
 python tests/test_morning_import.py      # 2026-09-15 新增：沒過就停不寫、手錶少夜晚要還原、抓資料只抓最近幾天且不覆寫；【1b】守錄影中間斷掉（三條擋法缺一不可）；評分前要先匯出按鈕、匯出失敗要停
@@ -1816,7 +1816,7 @@ flutter analyze     # No issues found
 | `camera_night_parse_test.dart` | 攝影機每晚資料的解析：相對網址接上 baseUrl、clips／usual 欄位有沒有、點了某一晚沒有錄影時**不退回最近一晚**（2026-11-19 舊攝影機卡拿掉，畫面那一半刪了） |
 | `game_test.dart` | 等級、解鎖、衣服**照抄後端**（Dart 不反推等級）；沒有後端時要說「需要後端」而不是「以後才有」。衣櫃（2026-11-19 第二版）另守：**點一下只是試穿、右上 ✓ 才送後端，左上 ‹ 離開不送**（壞掉會變成點到就存進後端，畫面看起來一樣正常）、沒解鎖的連試穿都不行、**`kClosetSlotFor` 要含每一件**（漏了就點分類整件消失、不報錯）、禮帽與皇冠的逐姿勢戴法 8 格齊全（見「衣櫃改版」）。⚠️ 衣櫃的預覽用 `HomePet`，不另開一份「現在選哪隻寵物」的狀態——隊友原版自帶 `PetAppearance`，那會是第二個定義處 |
 | `friends_test.dart` | 沒有後端時原本的假朋友**一個都不出現**；排行照後端的順序、Dart 不重排；放下手機的時刻是牆鐘時間不是 UTC |
-| `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表 |
+| `assistant_chat_test.dart` | 助理只走 `POST /chat`；後端答不出來（503）時照實說，不退回查表；前文只送最近 5 輪完整的一問一答；失敗的問題不存進手機 |
 | `bedtime_reminder_test.dart` | 提醒時刻（含跨午夜）；關掉要 cancel；改目標要重排；提前量不得寫進 Kotlin（含 `1800000L` 這種 Long 寫法） |
 | `bedtime_guard_test.dart` | 守門的時間窗（半夜滑手機守的是「昨晚那一窗」）；改目標要重推到原生端；不讀畫面內容；三個 30 分鐘一致 |
 | `health_connect_test.dart` | 每個起床日只送最長一段；起床日照牆鐘時間不是 UTC；連不上的下次再送、422 的不再送；沒有後端的 build 不碰 Health Connect；只要睡眠權限 |
@@ -1925,6 +1925,16 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
   最多試 `MAX_ATTEMPTS = 2` 次，都沒過就回 **503**，App 照實說答不出來——
   **不交出沒通過驗證的回答，也不退回舊的查表**。
 - 伺服器沒設金鑰時同樣回 503。
+
+**助理頁是對話**（2026-11-19，`screens/assistant_screen.dart`、`services/chat_thread.dart`）：說話的是寵物「Your buddy」，背景是使用者生成的寵物房間 `assets/backgrounds/assistant_room.jpg`。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| **追問要帶前文**：App 每次送最近 **5 輪**（`kChatContextRounds`，只取一問一答都在的）到 `POST /chat` 的 `history`；後端最多收 10 則（超過 422）、角色只收 user／assistant，再夾一次取最後 10 則（`ai/chat.MAX_HISTORY_MESSAGES`） | 「為什麼？」接不上；送整串會讓 prompt 與額度一直長 |
+| 🔴 **前文不是事實來源**：數字驗證照舊只認 FACTS，前文裡的數字不算（`test_chat.py`【6c】守著）；前文排在 FACTS 之後、QUESTION 之前 | 使用者說「我睡了 9 小時」，AI 就能照抄成事實 |
+| 對話**只存在手機上**（`sonnap/store` 的 `assistant_thread_v1`，最多 40 則），不送後端存；✎ 開新對話＝清掉；**沒有歷史頁** | 使用者定 |
+| **只存一問一答都成功的**：答不出來（503）的問題留在畫面上可以重試（`assistant-retry`），但不存、也不當前文送出 | 存了的話重開 App 會留一句沒有回答的孤兒問題，下一次還會被當成前文（2026-11-20 修，`assistant_chat_test.dart` 守著） |
+| 建議問題是固定清單（`kAssistantSuggestions`）；原本寫死的「What affected your sleep」拿掉了 | — |
 
 ---
 
