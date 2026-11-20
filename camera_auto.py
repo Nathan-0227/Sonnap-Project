@@ -228,8 +228,12 @@ def launch_logger(argv, metrics_dir=METRICS_DIR):
     kwargs = {"cwd": str(ROOT), "stdout": log, "stderr": subprocess.STDOUT,
               "stdin": subprocess.DEVNULL, "env": {**os.environ, "PYTHONIOENCODING": "utf-8"}}
     if sys.platform == "win32":
-        kwargs["creationflags"] = (subprocess.DETACHED_PROCESS
-                                   | subprocess.CREATE_NEW_PROCESS_GROUP
+        # ⚠️ 不要加回 DETACHED_PROCESS（2026-11-21 實機：每次開錄跳出一個黑色終端機視窗，
+        #    關掉它錄影就斷）。venv 的 python.exe 只是轉介，真正跑的是它叫起來的系統 Python；
+        #    轉介那支「沒有主控台」時，系統 Python 會自己開一個看得見的新視窗。
+        #    CREATE_NO_WINDOW 給它一個隱藏的主控台、往下繼承，就沒有視窗。
+        #    一樣跟後端脫鉤：不在後端那個終端機裡，Ctrl+C／關掉後端都碰不到它。
+        kwargs["creationflags"] = (subprocess.CREATE_NEW_PROCESS_GROUP
                                    | subprocess.CREATE_NO_WINDOW)
     else:
         kwargs["start_new_session"] = True
