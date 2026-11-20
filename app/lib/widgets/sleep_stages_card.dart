@@ -12,7 +12,7 @@ import 'curve_path.dart';
 /// ⚠️ 曲線是**圓角的階梯**，不是平滑波浪：平滑曲線會穿過那一刻沒發生過的階段
 ///    （例如深睡直接醒來時會畫過淺睡那一層），等於畫出假的資料。
 /// ⚠️ 那晚沒量到 REM（[SleepStages.remMeasured] 為 false）時不畫 REM 那一層，
-///    圖例寫 not measured——畫成空的一層會讓人以為整晚沒有 REM。
+///    圖例寫 N/A——畫成空的一層會讓人以為整晚沒有 REM。
 /// ⚠️ 不放警語（2026-11-12 使用者決定）。圖例的分鐘數用手錶自己的總數。
 ///
 /// **疊線（2026-11-13 使用者定，照 Garmin Connect 的做法）**：圖下面兩顆 Heart rate／Movement，
@@ -283,7 +283,9 @@ class _SleepStagesCardState extends State<SleepStagesCard> {
                 'REM',
                 SleepStagesCard.rem,
                 stages.remMinutes,
-                note: stages.remMeasured ? null : 'not measured',
+                // 2026-11-21 使用者定：not measured 太長（四欄裡折成兩行）。
+                // 寫 N/A 不寫 0m——0m 會被讀成整晚沒有 REM
+                note: stages.remMeasured ? null : 'N/A',
               ),
               _legend('Light', SleepStagesCard.light, stages.lightMinutes),
               _legend('Deep', SleepStagesCard.deep, stages.deepMinutes),

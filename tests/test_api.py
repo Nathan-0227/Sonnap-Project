@@ -229,6 +229,12 @@ check("/home?date= 指定那一晚也拿得到", client.get(
 check("⚠️ 沒量到 REM → 淺睡回 null（不然 REM 會被算進淺睡）",
       main._light_minutes({"rem_measured": 0, "duration_min": 400,
                            "deep_min": 60, "rem_min": None}), None)
+check("Sleep Stages 圖例：沒量到 REM 也給淺睡＝總睡眠 − 深睡（Garmin 自己的淺睡，11-21）",
+      main._stage_legend_light({"rem_measured": 0, "duration_min": 401,
+                                "deep_min": 98, "rem_min": 0}), 303.0)
+check("Sleep Stages 圖例：量到 REM 時跟比例條同一個數",
+      main._stage_legend_light({"rem_measured": 1, "duration_min": 400,
+                                "deep_min": 60, "rem_min": 75}), 265.0)
 check("REM 量到是 0 分鐘也算有量到（不可用真假值判斷）",
       main._light_minutes({"rem_measured": 1, "duration_min": 400,
                            "deep_min": 60, "rem_min": 0}), 340.0)

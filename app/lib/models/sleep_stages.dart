@@ -7,7 +7,7 @@ import 'wall_clock.dart';
 ///
 /// - [segments] 只用來畫曲線（後端從原始資料還原，118 晚中 116 晚與手錶總數差 2 分鐘內）。
 /// - [minutes] 是圖例的數字，**用手錶自己的總數**，所以圖例與曲線可能差幾分鐘，以圖例為準。
-/// - [remMeasured] 為 false 時那晚手錶沒量到 REM：不畫 REM 那一層，圖例寫 not measured。
+/// - [remMeasured] 為 false 時那晚手錶沒量到 REM：不畫 REM 那一層，圖例寫 N/A（2026-11-21 前是 not measured）。
 @immutable
 class SleepStages {
   final List<StageSegment> segments;
