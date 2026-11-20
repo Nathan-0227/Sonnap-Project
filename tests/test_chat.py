@@ -228,6 +228,24 @@ check("後端只取最後 10 則",
       chat._conversation_block([("user", f"m{i}") for i in range(14)]).count("User:"), 10)
 
 # ═══════════════════════════════════════════════════════════════════
+section("【6d】寵物心情：跟首頁同一隻，只說由哪一類訊號決定（2026-11-21）")
+# ═══════════════════════════════════════════════════════════════════
+fake = FakeLLM("Your buddy is happy because you put the phone down on time.")
+use(fake)
+r = client.post("/chat", json={"user_id": alice, "message": "How is my pet's mood related to my sleep?"})
+check("問寵物心情 → 200", r.status_code, 200)
+p0 = fake.prompts[0] if fake.prompts else ""
+home_mood = client.get(f"/home?user_id={alice}").json()["status"]["pet_mood"]
+ok("事實裡有寵物心情，而且跟 /home 同一隻", '"pet_mood"' in p0 and f'"mood": "{home_mood}"' in p0)
+ok("說明由哪一類訊號決定（Alice 只有行為 → 放下手機）",
+   chat.PET_MOOD_DECIDED_BY["behavior"] in p0)
+ok("不給規則標籤（mood_reason）", "final_quality=" not in p0 and "adherence_minutes=" not in p0)
+ok("不給壓力", "stress" not in p0.lower())
+ok("沒有心情時不出現那一項",
+   "pet_mood" not in chat.build_facts({"target_bedtime": "23:30"}, None, None, 0, (0, 0, 0), pet=(None, None, "none")))
+ok("anxious 那條的說法不提壓力", "stress" not in chat.PET_MOOD_DECIDED_BY["wearable_override"].lower())
+
+# ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")
 # ═══════════════════════════════════════════════════════════════════
 import ast  # noqa: E402
