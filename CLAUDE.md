@@ -1775,7 +1775,7 @@ python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副�
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**982 條全過**，2026-11-19 實測（併入好友那一批之後））：
+Flutter（在 `app/` 底下跑，**1040 條全過**，2026-11-20 實測（Journey、助理對話合併之後））：
 
 ```bash
 flutter test
