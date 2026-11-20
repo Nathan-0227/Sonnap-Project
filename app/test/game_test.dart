@@ -580,11 +580,18 @@ void main() {
       final pet = tester.getRect(find.byKey(const Key('home-pet')));
       final title = tester.getRect(find.byKey(const Key('day-title')));
       expect(badge.bottom, lessThanOrEqualTo(pet.top));
-      expect(badge.center.dx, closeTo(pet.center.dx, 2));
+      // 11-21 起是一橫排（徽章＋細條＋字），置中的是整排
+      expect(tester.getRect(find.byKey(const Key('level-progress'))).center.dx,
+          closeTo(pet.center.dx, 2));
       expect(badge.top, greaterThan(title.bottom));
       // Hi 上方加留白之後，時鐘卡曾經壓到這個徽章（實機截圖抓到）
       final clock = tester.getRect(find.byKey(const Key('bedtime-countdown')));
       expect(badge.top, greaterThanOrEqualTo(clock.bottom));
+      // ⚠️ 量整張時鐘卡，不是裡面那行倒數字：11-21 實機上「Lv 7」壓到卡片右下角，
+      //    卡片底下的內距讓上面那條量字的檢查照樣過
+      final card = tester.getRect(find.byKey(const Key('countdown-border')));
+      final level = tester.getRect(find.byKey(const Key('level-progress')));
+      expect(level.overlaps(card), isFalse);
     });
 
     testWidgets('點衣櫃 → 打開衣櫃畫面', (tester) async {

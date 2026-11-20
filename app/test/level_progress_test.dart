@@ -83,6 +83,18 @@ void main() {
       expect(find.text('185 XP to Lv 7'), findsOneWidget);
     });
 
+    testWidgets('⚠️ 一橫排：整塊跟徽章一樣高（疊成兩三層的話首頁會頂到時鐘卡）', (tester) async {
+      await _pumpBar(tester, _state());
+      final all = tester.getRect(find.byKey(const Key('level-progress')));
+      final badge = tester.getRect(find.byKey(const Key('level-badge')));
+      final bar = tester.getRect(find.byKey(const Key('level-bar')));
+      final text = tester.getRect(find.byKey(const Key('level-caption')));
+      expect(all.height, closeTo(badge.height, 1),
+          reason: '11-21 實機：徽章底下疊細條＋字，往上長了約 30dp，壓到時鐘卡');
+      expect(bar.left, greaterThan(badge.right));
+      expect(text.left, greaterThan(bar.right));
+    });
+
     testWidgets('條填多少照抄 progress，不從 xp_total 自己算', (tester) async {
       await _pumpBar(tester, _state(progress: 0.4));
       final fill = tester.getSize(find.byKey(const Key('level-bar-fill'))).width;
