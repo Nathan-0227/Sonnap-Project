@@ -11,6 +11,8 @@ import '../services/plan_reminders.dart';
 import '../services/sleep_plan.dart';
 import '../theme/report_style.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/level_progress.dart';
+import 'rewards_screen.dart';
 import '../widgets/plan_check_button.dart';
 import '../widgets/plan_habit_editor.dart';
 import '../widgets/sleep_dial.dart';
@@ -131,6 +133,8 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
   String? _mood;
   bool _weekly = false;
   List<ClaimableReward> _claimable = const [];
+  // 寵物頭上的等級條（2026-11-21）。null＝沒有後端或還沒拿到，不畫
+  GameState? _game;
   String? _claiming;
   ChallengesResult? _fresh;
 
@@ -218,7 +222,18 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     if (g == null) return;
     final r = await g.fetchGame();
     if (!mounted) return;
-    setState(() => _claimable = r.value?.claimable ?? const []);
+    setState(() {
+      _claimable = r.value?.claimable ?? const [];
+      _game = r.value ?? _game;
+    });
+  }
+
+  Future<void> _openRewards() async {
+    final g = widget.game;
+    if (g == null) return;
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => RewardsScreen(service: g)));
+    if (mounted) await _loadGame();
   }
 
   Future<void> _claim(ClaimableReward reward) async {
@@ -313,6 +328,16 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
               top: rugY - petSize * 0.82,
               child: Center(child: _pet(petSize)),
             ),
+            // 等級條在寵物頭上（同首頁，11-21 使用者定）；不能比標題列還高
+            if (_game != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: math.max(pad.top + 60, rugY - petSize * 0.82 - 46),
+                child: Center(
+                  child: LevelProgress(game: _game!, onTap: _openRewards),
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,

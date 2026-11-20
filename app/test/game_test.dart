@@ -572,6 +572,8 @@ void main() {
           closetResult: GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf'))));
       await pumpHome(tester, stub);
       expect(find.byKey(const Key('level-badge')), findsOneWidget);
+      // 11-21：徽章底下的細條＋還差幾 XP（照抄 xp_for_next）
+      expect(find.text('100 XP to Lv 3'), findsOneWidget);
       expect(find.byKey(const Key('pet-accessory')), findsOneWidget);
       // 2026-11-13 使用者定：等級在寵物上面，不在標題旁邊
       final badge = tester.getRect(find.byKey(const Key('level-badge')));

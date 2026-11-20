@@ -18,6 +18,7 @@ import '../services/night_compare.dart';
 import '../services/sleep_repository.dart';
 import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
+import '../widgets/level_progress.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
@@ -1372,37 +1373,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _levelBadge(int level) {
-    return InkWell(
-      key: const Key('level-badge'),
-      onTap: _openRewards,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        decoration: BoxDecoration(
-          color: SonnapColors.accent.withValues(alpha: 0.25),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: SonnapColors.accent),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.star_rounded, color: Color(0xFFFFD96A), size: 14),
-            const SizedBox(width: 3),
-            Text(
-              'Lv $level',
-              style: const TextStyle(
-                color: SonnapColors.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── 寵物：照後端的心情，右下角掛心情標籤 ─────────────────────────
 
   Widget _buildPet(String mood, GameState? game, SleepSession session) {
@@ -1486,13 +1456,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               );
             },
           );
-    // 等級在寵物上面（2026-11-13 使用者定）。照抄後端（GET /game），Dart 不從 XP 反推；
-    // 點了開獎勵。沒有後端就不畫。
+    // 等級在寵物上面（2026-11-13 使用者定）；11-21 起底下多一條細條＋「還差幾 XP」。
+    // 照抄後端（GET /game），Dart 不從 XP 反推；點了開獎勵。沒有後端就不畫。
     if (game == null) return petWithNotes;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _levelBadge(game.level),
+        LevelProgress(game: game, onTap: _openRewards),
         const SizedBox(height: 4),
         petWithNotes,
       ],
