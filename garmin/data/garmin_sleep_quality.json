@@ -2049,18 +2049,34 @@
   },
   {
     "date": "2026-11-20",
-    "score": 80.5,
+    "score": 80.7,
     "quality": "Good",
     "age_band": "young_adult",
     "duration_score": 12.7,
     "efficiency_score": 25.0,
     "waso_score": 25.0,
-    "deep_score": 8.7,
+    "deep_score": 9.0,
     "rem_score": 9.1,
     "rem_measured": true,
     "efficiency_basis": "watch_tst__phone_tats",
     "efficiency_used": 87.8,
     "efficiency_recalled": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
+  },
+  {
+    "date": "2026-11-21",
+    "score": 95.2,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 26.8,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 8.8,
+    "rem_score": null,
+    "rem_measured": false,
+    "efficiency_basis": "watch_tst__watch_onset_to_wake",
+    "efficiency_used": 98.77,
+    "efficiency_recalled": false,
     "recommendation": "Sleep quality was good. Keep your current routine. "
   }
 ]
