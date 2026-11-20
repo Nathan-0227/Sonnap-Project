@@ -382,6 +382,22 @@ ok("回傳內容與磁碟上的 app_payload.json 逐位元組相同", old.json()
 hh = client.get("/health").json()
 check("/health status", hh["status"], "ok")
 ok("/health 有 payload_available", "payload_available" in hh)
+# 2026-11-20：原本一律看 SQLite 檔在不在，跑 MariaDB 時資料庫好好的也回 false
+check("/health SQLite 建好了 → 可用", (hh["database_backend"], hh["database_available"]), ("sqlite", True))
+_saved_path = db.DB_PATH
+db.DB_PATH = TMP.parent / "health_missing.db"
+hh_missing = client.get("/health").json()
+check("/health SQLite 檔不在 → 不可用", hh_missing["database_available"], False)
+ok("/health 不會建出空的 SQLite 檔（沒有副作用）", not db.DB_PATH.exists())
+db.DB_PATH = _saved_path
+_os.environ["SONNAP_DB_URL"] = "mysql://root@127.0.0.1:1/sonnap"   # 沒有人在聽的埠
+try:
+    hh_my = client.get("/health").json()
+finally:
+    _os.environ.pop("SONNAP_DB_URL", None)
+check("/health MariaDB 連不上 → backend=mariadb、不可用",
+      (hh_my["database_backend"], hh_my["database_available"]), ("mariadb", False))
+ok("/health 連不上資料庫時本身照樣回 ok", hh_my["status"] == "ok")
 
 print()
 print("=" * 78)

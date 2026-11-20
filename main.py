@@ -54,6 +54,7 @@ import camera_clips
 import camera_usual
 import demo_sleep
 import db
+import db_backend
 import score_claim
 from behavior import (adherence, challenges as challenge_engine,
                       journey, lights_out_resolve, morning_tips,
@@ -154,13 +155,48 @@ async def get_sleep_data():
 @app.get("/health")
 async def health():
     """讓前端/隊友快速確認伺服器活著、以及資料檔在不在。"""
+    backend, available = database_health()
     return {
         "status": "ok",
         "payload_available": PAYLOAD_PATH.exists(),
-        # 新增：資料庫在不在。D2 期間最常見的問題會是「忘了跑 db.py --init」，
+        # 資料庫在不在。D2 期間最常見的問題會是「忘了跑 db.py --init」，
         # 讓它在這裡一眼看得到，不用去猜。
-        "database_available": db.DB_PATH.exists(),
+        "database_available": available,
+        "database_backend": backend,
     }
+
+
+def database_health():
+    """（backend, 連得上而且有建表）。
+
+    ⚠️ 2026-11-20 修：原本一律看 SQLite 檔在不在，後端跑 MariaDB 時
+    （`SONNAP_DB_URL`）那個檔根本不存在，於是**資料庫好好的也回 false**；
+    反過來 MariaDB 當掉時又可能因為剛好有個舊 sqlite 檔而回 true。
+    現在照後端實際用的那一種去問：MariaDB 真的連一次、查 users 表。
+    SQLite 先看檔案在不在——直接 connect 會**建出一個空檔**，
+    /health 不該有副作用。
+    """
+    if db_backend.mysql_config():
+        try:
+            conn = db.connect()
+            try:
+                conn.execute("SELECT 1 FROM users LIMIT 1").fetchall()
+            finally:
+                conn.close()
+            return "mariadb", True
+        except Exception:
+            return "mariadb", False
+    if not db.DB_PATH.exists():
+        return "sqlite", False
+    try:
+        conn = db.connect()
+        try:
+            conn.execute("SELECT 1 FROM users LIMIT 1").fetchall()
+        finally:
+            conn.close()
+        return "sqlite", True
+    except Exception:
+        return "sqlite", False
 
 
 # ═══════════════════════════════════════════════════════════════════
