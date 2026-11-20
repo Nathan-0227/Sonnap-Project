@@ -497,7 +497,22 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 習慣提醒走 `sonnap/notify` 的 **slot 1..20**、可只在星期幾響；**slot 0 是就寢提醒，計畫永遠不碰**；改了就全部取消再排 | 拿掉一條後舊位置不取消會每天響 |
 | 寵物 notes 對得上的建議有 **Add to my plan**（`kTipToPlan`），加的是**清單那句**不是 AI 改寫的；「說明」那幾句沒有 | AI 那句每晚不一樣 |
 | 挑戰卡**搬到 Plan**，Insights 不再有那一行；領 XP 仍在獎勵頁（準時起床、上床少滑各 10） | 只在一個地方出現 |
-| 不做：一天幾次、沒完成延到下次、Link（清單裡沒有適合連的）；**Journey 是第二個 PR** | 使用者定 |
+| 不做：一天幾次、沒完成延到下次、Link（清單裡沒有適合連的） | 使用者定 |
+
+#### Journey（2026-11-19 grill，`feature/journey`）：起床一站一站往前移
+
+計畫頁作息條底下（`widgets/journey_section.dart`）。**作息條與 Journey 合成一張卡**（11-19 使用者定）：上半是作息（點了開轉盤），下半進行中是**一條路**（參考圖、少字）：「Stop 2 of 5」，起點 ━ 寵物的頭 ┄•┄ 🏁，**點一個點冒出那一站的起床時間**，下面三顆太陽＝連續幾天準時；說明與 Stop 收進 ⋯；剛前進時寵物沿路走過來一次（減少動態效果不走）。寵物的頭是 `assets/plan/journey_dog.png`／`journey_cat.png`（使用者生成，**側面走路、不帶心情**——心情臉只代表後端心情），缺圖退回 🐾。**規則與理由全在 `Research-Background/睡眠計畫.md`「Journey 的規則」**；判定只在 `behavior/journey.py`。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 🔴 **這一站就是目標**：進行中時後端每次同步都把 `users.target_bedtime／target_wake` 設成這一站（冪等）；App 開啟、回到前景、上傳完 `/nightly` 都問一次 `GET /journey`，再把就寢、鬧鐘、提醒、守門換過去（`main._applyJourney`） | 兩組時間：提醒說還有 30 分、Journey 說要早睡，熬夜用舊目標判 |
+| 進度**每次從每晚的 `up_on_time` 重算**（同挑戰引擎）；`journeys.stop_index` 只用來知道剛前進了沒 | 手錶晚到、事後補按鈕時進度不會自己更正 |
+| 每晚照**當晚的快照**判準時；前進之後以前的夜晚不重判 | — |
+| Journey 進行中**轉盤鎖住**，鎖在 `showSleepScheduleSheet` 一處（讀 `journey_active`），四個入口共用 | 鎖在入口的話漏一個就能把目標轉掉 |
+| 站、跨午夜、「已經到了」（422 `already_there`）**都在後端**；Dart 照抄 `stops`，30 分、建議睡 7 小時從 `step_minutes`／`recommended_sleep_minutes` 拿。**睡眠長度不設下限**（使用者 11-19 改：每個人需要的不一樣），7 小時只寫成參考、不擋、不變色 | 第二個定義處 |
+| 前進／走完：**不給 XP、不發通知**，計畫頁與首頁小卡各一行（`journeyNoticeText`），**離開計畫頁算看過**；第 1 站不提示 | 準時起床的 Quest 已給過 XP，同一件事不獎勵兩次 |
+| Stop：停在這一站、目標不還原；停了之後轉盤解鎖、後端不再拉回 | — |
+| ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `journeys`），再重開後端 | 後端啟動不建表 |
 
 ### ✅ 轉盤＋鬧鐘（2026-11-12，`feature/alarm-dial`）
 
@@ -1748,6 +1763,7 @@ python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 
 python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
+python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不讀它、刪帳號一起刪
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
 ```
 

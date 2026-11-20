@@ -15,6 +15,8 @@ import '../widgets/plan_check_button.dart';
 import '../widgets/plan_habit_editor.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
+import '../services/journey_service.dart';
+import '../widgets/journey_section.dart';
 
 /// 睡眠計畫頁（2026-11-19；版面照使用者給的參考圖，配色維持深色）。由上到下：
 ///   場景＋寵物 → 作息條 → 「今天還有幾條」＋ ＋ → 自己勾的習慣（右邊大方形勾勾）
@@ -47,6 +49,9 @@ class PlanScreen extends StatefulWidget {
   final Future<String?> Function()? petMood;
   final DateTime Function() clock;
 
+  /// Journey（作息條底下）。null＝不畫（測試、沒接上的地方）。
+  final JourneyController? journey;
+
   const PlanScreen({
     super.key,
     required this.plan,
@@ -61,6 +66,7 @@ class PlanScreen extends StatefulWidget {
     this.petMood,
     this.loadChallenges,
     this.clock = DateTime.now,
+    this.journey,
   });
 
   @override
@@ -137,6 +143,9 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     super.initState();
     widget.plan.addListener(_onChange);
     widget.nightly?.addListener(_onChange);
+    widget.journey?.addListener(_onJourney);
+    // 打開這一頁時問一次（後端會重算、需要就換站）
+    unawaited(widget.journey?.refresh());
     if (!widget.plan.loaded) unawaited(widget.plan.load());
     unawaited(_loadWake());
     unawaited(_loadGame());
@@ -156,12 +165,36 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
   void dispose() {
     widget.plan.removeListener(_onChange);
     widget.nightly?.removeListener(_onChange);
+    widget.journey?.removeListener(_onJourney);
+    // 「Next stop from tonight」在這一頁看到了，離開就算看過（首頁小卡也跟著收起來）
+    if (widget.journey?.showNotice ?? false) unawaited(widget.journey!.markSeen());
     _hop.dispose();
     super.dispose();
   }
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  /// 這一站就是目標：開始、前進、走完時作息條跟著換（主程式那邊也會換掉目標與鬧鐘）。
+  void _onJourney() {
+    if (!mounted) return;
+    final j = widget.journey?.journey;
+    final cur = j?.current;
+    setState(() {
+      if (j != null && cur != null && j.status != JourneyStatus.stopped) {
+        _bedtime = cur.bedtime;
+        _wake = cur.wake;
+      }
+    });
+    _resyncReminders();
+  }
+
+  Future<void> _startJourney() async {
+    final c = widget.journey;
+    final wake = _wake;
+    if (c == null || wake == null) return;
+    await showJourneySetupSheet(context, controller: c, dialBedtime: _bedtime, dialWake: wake);
   }
 
   Future<void> _loadWake() async {
@@ -299,7 +332,17 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
                 // 底部要讓出系統導覽列，不然最後一張卡的 Claim 會壓在手勢列底下
                 padding: EdgeInsets.fromLTRB(18, 14, 18, 32 + pad.bottom),
                 children: [
-                  _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
+                  // 有 Journey 時作息跟路合成一張卡（11-19 使用者定）
+                  if (widget.journey != null)
+                    JourneySection(
+                      controller: widget.journey!,
+                      onStart: () => unawaited(_startJourney()),
+                      bedtime: _bedtime,
+                      wake: wake,
+                      onEditSchedule: _editSchedule,
+                    )
+                  else
+                    _ScheduleBar(bedtime: _bedtime, wake: wake, onTap: _editSchedule),
                   _habitHeader(today),
                   const SizedBox(height: 10),
                   if (today != null) ..._habitRows(today, wake!),
@@ -643,6 +686,8 @@ class _IconTile extends StatelessWidget {
       );
 }
 
+/// 習慣一列（11-19 使用者選 A：照參考圖精簡成一列，高度約原本一半）。
+/// 圖示 40、字最多兩行、時間小字放右邊、勾勾 42。「睡前 50 分」那種相對說法在編輯頁看得到。
 class _HabitCard extends StatelessWidget {
   final PlanItem item;
   final bool due;
@@ -666,58 +711,66 @@ class _HabitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sub = due ? '${relativeLabel(item)} · ${_hm(time)}' : 'Not today';
     return Opacity(
       opacity: due ? 1 : 0.5,
       child: Container(
         key: Key('plan-habit-${item.id}'),
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
           color: const Color(0xE62A3070),
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: ReportColors.border),
-          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 4))],
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3))],
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(20),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
               child: Row(
                 children: [
-                  _IconTile(asset: planIconAsset(item.id), fallback: item.icon),
-                  const SizedBox(width: 14),
+                  _IconTile(asset: planIconAsset(item.id), fallback: item.icon, size: 42),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(item.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w800, height: 1.25)),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(sub, style: const TextStyle(color: ReportColors.muted, fontSize: 12)),
-                            ),
-                            if (item.notify) ...[
-                              const SizedBox(width: 6),
-                              const Icon(Icons.notifications_active_rounded, size: 13, color: ReportColors.dim),
-                            ],
-                          ],
-                        ),
-                        if (streak >= 2) ...[
-                          const SizedBox(height: 3),
-                          Text('$streak days in a row',
-                              key: Key('plan-streak-${item.id}'),
-                              style: const TextStyle(color: ReportColors.gold, fontSize: 12, fontWeight: FontWeight.w800)),
-                        ],
+                                color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800, height: 1.2)),
+                        if (streak >= 2)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text('$streak days in a row',
+                                key: Key('plan-streak-${item.id}'),
+                                style: const TextStyle(
+                                    color: ReportColors.gold, fontSize: 11, fontWeight: FontWeight.w800)),
+                          ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(due ? _hm(time) : 'Not today',
+                          key: Key('plan-time-${item.id}'),
+                          style: const TextStyle(
+                              color: ReportColors.muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                      if (item.notify)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(Icons.notifications_active_rounded, size: 12, color: ReportColors.dim),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
                   // ⚠️ 沒勾是空的方格，不打叉、不用紅；勾下去只有當下的回饋（Q36）
                   PlanCheckButton(
                     key: Key('plan-check-${item.id}'),
@@ -725,6 +778,7 @@ class _HabitCard extends StatelessWidget {
                     enabled: due,
                     onToggle: onToggle,
                     onChecked: onChecked,
+                    size: 42,
                   ),
                 ],
               ),
@@ -786,7 +840,9 @@ const Map<String, IconData> _questIcons = {
   'bedtime_consistency_7d': Icons.timeline_rounded,
 };
 
-class _QuestCard extends StatelessWidget {
+/// 任務一列（11-19 使用者選 A）：圖示 40、標題一行、細進度條，右邊 ✓／—／Claim。
+/// 後端那句說明（「還差 2 晚」）**點一下才展開**——少字，但照樣整句照抄、不改寫。
+class _QuestCard extends StatefulWidget {
   final ChallengeProgress challenge;
   final ClaimableReward? claimable;
   final bool claiming;
@@ -800,87 +856,124 @@ class _QuestCard extends StatelessWidget {
   });
 
   @override
+  State<_QuestCard> createState() => _QuestCardState();
+}
+
+class _QuestCardState extends State<_QuestCard> {
+  bool _open = false;
+
+  @override
   Widget build(BuildContext context) {
-    final c = challenge;
+    final c = widget.challenge;
     final done = c.state == ChallengeState.completed;
     final noData = c.state == ChallengeState.insufficientData;
-    final reward = claimable;
+    final reward = widget.claimable;
     return Container(
       key: Key('plan-measured-${c.challengeId}'),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: reward != null ? const Color(0xEB3A3466) : const Color(0xE6242A62),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: reward != null ? const Color(0x80FFD772) : ReportColors.border),
       ),
-      child: Row(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _IconTile(
-                asset: 'assets/plan/${c.challengeId}.png',
-                fallback: _questIcons[c.challengeId] ?? Icons.flag_rounded,
-                size: 54,
-              ),
-              // XP 照抄 /game 的 claimable（能領的才寫，不寫死幾點）
-              if (reward != null && reward.xp > 0)
-                Positioned(
-                  right: -6,
-                  bottom: -6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('+${reward.xp}',
-                        style: const TextStyle(color: ReportColors.navy, fontSize: 11, fontWeight: FontWeight.w900)),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 14),
-          Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: Key('plan-measured-tap-${c.challengeId}'),
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(c.title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                _bar(c),
-                const SizedBox(height: 5),
-                // ⚠️ 整句照抄後端
-                Text(c.detail, style: const TextStyle(color: ReportColors.muted, fontSize: 11.5, height: 1.3)),
+                Row(
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _IconTile(
+                          asset: 'assets/plan/${c.challengeId}.png',
+                          fallback: _questIcons[c.challengeId] ?? Icons.flag_rounded,
+                          size: 42,
+                        ),
+                        // XP 照抄 /game 的 claimable（能領的才寫，不寫死幾點）
+                        if (reward != null && reward.xp > 0)
+                          Positioned(
+                            right: -6,
+                            bottom: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text('+${reward.xp}',
+                                  style: const TextStyle(
+                                      color: ReportColors.navy, fontSize: 10, fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(c.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          _bar(c),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 64,
+                      height: 42,
+                      child: Center(
+                        child: reward != null
+                            ? FilledButton(
+                                key: Key('plan-claim-${c.challengeId}'),
+                                onPressed: widget.claiming ? null : () => widget.onClaim(reward),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: ReportColors.gold,
+                                  foregroundColor: ReportColors.navy,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  minimumSize: const Size(0, 36),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text('Claim!',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                              )
+                            : noData
+                                // ⚠️ 沒量到寫「—」，不是空的（空的＝沒做到）
+                                ? const Text('—',
+                                    key: Key('plan-measured-nodata'),
+                                    style: TextStyle(
+                                        color: ReportColors.dim, fontSize: 20, fontWeight: FontWeight.w800))
+                                : Icon(done ? Icons.check_rounded : Icons.more_horiz_rounded,
+                                    color: done ? ReportColors.down : ReportColors.dim, size: done ? 28 : 22),
+                      ),
+                    ),
+                  ],
+                ),
+                // ⚠️ 整句照抄後端，點一下才出現
+                if (_open)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(52, 6, 8, 2),
+                    child: Text(c.detail,
+                        key: Key('plan-measured-detail-${c.challengeId}'),
+                        style: const TextStyle(color: ReportColors.muted, fontSize: 12, height: 1.3)),
+                  ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 74,
-            child: Center(
-              child: reward != null
-                  ? FilledButton(
-                      key: Key('plan-claim-${c.challengeId}'),
-                      onPressed: claiming ? null : () => onClaim(reward),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: ReportColors.gold,
-                        foregroundColor: ReportColors.navy,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: const Text('Claim!', style: TextStyle(fontWeight: FontWeight.w900)),
-                    )
-                  : noData
-                      // ⚠️ 沒量到寫「—」，不是空的（空的＝沒做到）
-                      ? const Text('—',
-                          key: Key('plan-measured-nodata'),
-                          style: TextStyle(color: ReportColors.dim, fontSize: 22, fontWeight: FontWeight.w800))
-                      : Icon(done ? Icons.check_rounded : Icons.more_horiz_rounded,
-                          color: done ? ReportColors.down : ReportColors.dim, size: done ? 34 : 24),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -888,11 +981,11 @@ class _QuestCard extends StatelessWidget {
   Widget _bar(ChallengeProgress c) {
     final p = c.progress;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       child: LinearProgressIndicator(
-        // 照抄後端的 progress；沒有就是空槽（旁邊寫「—」、下面那句說沒量到，不寫 0%）
+        // 照抄後端的 progress；沒有就是空槽（旁邊寫「—」、點開那句說沒量到，不寫 0%）
         value: p?.clamp(0.0, 1.0) ?? 0,
-        minHeight: 10,
+        minHeight: 6,
         backgroundColor: Colors.white.withValues(alpha: 0.08),
         valueColor: AlwaysStoppedAnimation<Color>(
           c.state == ChallengeState.completed ? ReportColors.gold : ReportColors.lilac,
