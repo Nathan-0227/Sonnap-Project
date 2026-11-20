@@ -74,6 +74,11 @@ class _GatedAccounts implements AccountService {
       false;
 
   @override
+  Future<AccountStatus> refreshBuildTimeName(AccountStatus status) async => status;
+  @override
+  String? get buildTimeUserIdOverride => null;
+
+  @override
   String get baseUrl => '';
 
   @override

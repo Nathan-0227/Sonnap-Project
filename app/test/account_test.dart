@@ -193,6 +193,74 @@ void main() {
     });
   });
 
+  group('⚠️ 建置參數那條路也要拿到暱稱（2026-11-21 實機：首頁一直是 Sleeper）', () {
+    late _FakeBackend backend;
+    late String baseUrl;
+    late InMemoryKeyValueStore store;
+    HttpOverrides? savedOverrides;
+
+    setUp(() async {
+      // 同上：要真的 client，不然一律拿到假的 400
+      savedOverrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      backend = _FakeBackend()..statusCode = 200;
+      baseUrl = await backend.start();
+      store = InMemoryKeyValueStore();
+    });
+    tearDown(() async {
+      await backend.stop();
+      HttpOverrides.global = savedOverrides;
+    });
+
+    AccountService service(String url) => AccountService(
+          baseUrl: url,
+          store: store,
+          buildTimeUserIdOverride: createdUserId,
+        );
+
+    test('向後端 GET /users/{id} 拿暱稱，記下來', () async {
+      final s = service(baseUrl);
+      final first = await s.resolve();
+      expect(first.state, AccountState.buildTime);
+      expect(first.displayName, isNull, reason: '第一次還沒記過');
+
+      final named = await s.refreshBuildTimeName(first);
+      expect(named.displayName, 'Nathan');
+      expect(named.userId, createdUserId);
+      expect(backend.received.single['path'], '/users/$createdUserId');
+
+      // 下次打開不等網路就有名字
+      final again = await s.resolve();
+      expect(again.displayName, 'Nathan');
+    });
+
+    test('不跟手機上存的帳號共用暱稱', () async {
+      await store.setString(AccountService.displayNameKey, 'Someone else');
+      final status = await service(baseUrl).resolve();
+      expect(status.displayName, isNot('Someone else'));
+    });
+
+    test('連不到或後端回錯 → 原樣回傳、不清掉上次的名字', () async {
+      await store.setString(AccountService.buildTimeDisplayNameKey, 'Nathan');
+      final unreachable = service('http://127.0.0.1:1');
+      final cached = await unreachable.resolve();
+      final after = await unreachable.refreshBuildTimeName(cached);
+      expect(after.displayName, 'Nathan');
+
+      backend.statusCode = 404;
+      final after404 = await service(baseUrl).refreshBuildTimeName(cached);
+      expect(after404.displayName, 'Nathan');
+      expect(await store.getString(AccountService.buildTimeDisplayNameKey), 'Nathan');
+    });
+
+    test('不是建置參數那條路就不去問', () async {
+      const stored = AccountStatus(AccountState.stored, userId: createdUserId);
+      final out = await service(baseUrl).refreshBuildTimeName(stored);
+      expect(identical(out, stored), isTrue);
+      expect(backend.received, isEmpty);
+    });
+  });
+
   group('⚠️ 建置參數優先於問暱稱', () {
     test('沒設定 SONNAP_USER_ID 時，才會走到 needsOnboarding', () async {
       // 這條測試在**沒有** --dart-define 的環境下跑，所以拿到的是

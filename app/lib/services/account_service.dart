@@ -71,22 +71,39 @@ class AccountService {
   static const String userIdKey = 'user_id';
   static const String displayNameKey = 'display_name';
 
+  /// 建置參數那條路的暱稱快取（2026-11-21）。
+  ///
+  /// ⚠️ 刻意不跟 [displayNameKey] 共用：那個鍵屬於「存在手機上的帳號」，
+  /// 同一支手機換裝不同 id 的 demo build 時，不能拿另一個帳號的名字來叫人。
+  static const String buildTimeDisplayNameKey = 'build_display_name';
+
   final String baseUrl;
   final KeyValueStore store;
   final Duration timeout;
+
+  /// 測試用：假裝建置時帶了這個 id。正式路徑一律讀 `--dart-define`。
+  final String? buildTimeUserIdOverride;
 
   const AccountService({
     required this.baseUrl,
     this.store = const PlatformKeyValueStore(),
     this.timeout = const Duration(seconds: 5),
+    this.buildTimeUserIdOverride,
   });
 
   /// 現在是哪一種狀態。App 啟動時問一次。
   Future<AccountStatus> resolve() async {
     // 建置參數優先。理由見類別說明。
-    final built = await const BuildTimeUserIdentity().currentUserId();
+    final built = await BuildTimeUserIdentity(overrideId: buildTimeUserIdOverride)
+        .currentUserId();
     if (built != null) {
-      return AccountStatus(AccountState.buildTime, userId: built);
+      // 暱稱先用上次記住的（不等網路，App 啟動不被卡住）；
+      // 最新的由 [refreshBuildTimeName] 在背景向後端要。
+      return AccountStatus(
+        AccountState.buildTime,
+        userId: built,
+        displayName: await store.getString(buildTimeDisplayNameKey),
+      );
     }
 
     if (baseUrl.trim().isEmpty) {
@@ -155,6 +172,52 @@ class AccountService {
     } catch (error) {
       debugPrint('AccountService: createAccount failed - $error');
       return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// 建置參數那條路：向後端要暱稱（`GET /users/{id}`），記下來、回新的狀態。
+  ///
+  /// ═══════════════════════════════════════════════════════════════
+  /// ⚠️ 少了這一步，本人手機永遠寫「Hi, Sleeper!」
+  /// ═══════════════════════════════════════════════════════════════
+  ///
+  /// 建置參數只帶 id，暱稱從來沒有人去拿（2026-11-21 實機發現：帳號完全正常、
+  /// 上傳都成功，首頁仍是 Sleeper，看起來跟「漏帶 id」一模一樣）。
+  ///
+  /// 不是建置參數那條、連不到、後端回錯 → **原樣回傳**，不拋例外、不清掉快取
+  /// （後端沒開是 demo 的常態，那時繼續用上次的名字）。
+  Future<AccountStatus> refreshBuildTimeName(AccountStatus status) async {
+    final userId = status.userId;
+    if (status.state != AccountState.buildTime ||
+        userId == null ||
+        userId.isEmpty ||
+        baseUrl.trim().isEmpty) {
+      return status;
+    }
+
+    final uri = Uri.parse('$baseUrl/users/$userId');
+    final client = HttpClient()..connectionTimeout = timeout;
+    try {
+      final request = await client.getUrl(uri).timeout(timeout);
+      final response = await request.close().timeout(timeout);
+      final body = await response.transform(utf8.decoder).join();
+      if (response.statusCode != 200) {
+        // ⚠️ 不印 uri（裡面有 user_id）
+        debugPrint('AccountService: GET user -> ${response.statusCode}');
+        return status;
+      }
+      final decoded = jsonDecode(body);
+      final name = decoded is Map<String, dynamic> ? decoded['display_name'] : null;
+      if (name is! String || name.trim().isEmpty) return status;
+      if (name != status.displayName) {
+        await store.setString(buildTimeDisplayNameKey, name);
+      }
+      return AccountStatus(AccountState.buildTime, userId: userId, displayName: name);
+    } catch (error) {
+      debugPrint('AccountService: GET user failed - $error');
+      return status;
     } finally {
       client.close(force: true);
     }
