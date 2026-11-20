@@ -72,6 +72,8 @@ Rules:
 - Write 2 to 4 short sentences in plain, friendly English. No lists, no headings.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
 - If the question needs data that is not in the facts, say plainly that Sonnap does not have that data.
+- PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text; do not
+  invent other reasons and do not say whether a sleep measure is high or low.
 - Focus on behaviour the user can change, such as when they put the phone down and keeping a steady bedtime.
 - Do not give medical advice. Do not name health conditions, medicines or treatments. If the user sounds
   worried about their health, suggest talking to a doctor or the campus health service.
@@ -84,11 +86,23 @@ class ChatUnavailable(Exception):
     """答不出來（沒設定、連不上、或兩次都沒過驗證）。訊息是給使用者看的英文。"""
 
 
-def build_facts(user, latest_behavior, latest_wearable, streak, late):
+# 寵物心情是誰決定的（main.resolve_mood 的 driver）→ 給 AI 讀的一句話。
+# ⚠️ 不給 mood_reason：那是規則標籤（final_quality=Good），而且 anxious 那條會帶出壓力，
+#    壓力不交給 AI（同寵物 notes）。這裡只說「由哪一類訊號決定」。
+PET_MOOD_DECIDED_BY = {
+    "behavior": "when the phone was put down compared with the target bedtime",
+    "wearable": "the watch's sleep quality grade for that night",
+    "wearable_override": "the watch showed the body was less settled than usual that night",
+}
+
+
+def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
     """
     事實區塊。**只放這個人自己的資料**。
 
     late 是 adherence.late_night_ratio() 的回傳值 (ratio, late_nights, recorded)。
+    pet 是 (date, mood, driver)：首頁那隻寵物的心情（2026-11-21 加，讓「寵物心情跟睡眠
+    有什麼關係」答得出來）。心情由後端判好，這裡只轉述，不給 AI 任何判斷的材料。
 
     ⚠️ 時刻直接切 ISO 字串的 HH:MM，不轉時區——那是記錄當下的牆鐘時間
        （與 App 端 parseWallClock() 同一個道理）。
@@ -121,6 +135,9 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late):
             "quality": latest_wearable.get("final_quality"),
             "sleep_minutes": round(duration) if duration is not None else None,
         }
+    if pet and pet[1] and pet[2] in PET_MOOD_DECIDED_BY:
+        facts["pet_mood"] = {"date": pet[0], "mood": pet[1],
+                             "decided_by": PET_MOOD_DECIDED_BY[pet[2]]}
     return facts
 
 

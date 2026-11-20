@@ -54,7 +54,7 @@ class AssistantScreen extends StatefulWidget {
 /// 固定的建議問題。
 const List<String> kAssistantSuggestions = [
   "Why am I tired today?",
-  "How much deep sleep did I get?",
+  "Did I put my phone down on time last night?",
   "How is my pet's mood related to my sleep?",
   "Give me some tips for tonight.",
   "How can I improve my sleep score?",

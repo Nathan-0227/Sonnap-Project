@@ -2378,12 +2378,16 @@ def chat(req: ChatRequest):
     behavior_rows = db.get_nightly_behavior(req.user_id, days=DEFAULT_HISTORY_DAYS)
     wearable_rows = db.get_wearable_nightly(req.user_id, days=DEFAULT_HISTORY_DAYS)
     streak, _ = challenge_engine.current_streak(behavior_rows)
+    # 寵物心情：跟 /home 同一套（同一晚、同一支 resolve_mood），首頁看到哪隻寵物就講哪隻
+    pet_date = pick_latest_date(behavior_rows, wearable_rows)
+    pet_mood, _, pet_driver = resolve_mood(_row_for(behavior_rows, pet_date), _row_for(wearable_rows, pet_date))
     facts = chat_engine.build_facts(
         user,
         behavior_rows[-1] if behavior_rows else None,
         wearable_rows[-1] if wearable_rows else None,
         streak,
         adherence.late_night_ratio(behavior_rows),
+        pet=(pet_date, pet_mood, pet_driver),
     )
     try:
         result = chat_engine.answer_question(
