@@ -133,6 +133,7 @@ class PetDefinition {
     required this.poses,
     required this.animations,
     required this.anchors,
+    this.accessoryAnchors = const {},
     this.blinkSpecs = const {},
   });
 
@@ -141,6 +142,10 @@ class PetDefinition {
   final Map<PetMood, PetPoseAssets> poses;
   final Map<PetMood, AnimationProfile> animations;
   final Map<PetMood, Map<AccessorySlot, AccessoryAnchor>> anchors;
+
+  /// 某一件衣服自己的定位點（隊友 v4.6.48，貝雷帽與紅蝴蝶結逐姿勢對好的）。
+  /// 鍵是衣服的圖檔 id；沒列到的衣服用上面那組插槽錨點。
+  final Map<String, Map<PetMood, AccessoryAnchor>> accessoryAnchors;
   final Map<PetMood, BlinkSpec> blinkSpecs;
 
   /// 這個心情有自己的圖就用；沒有就整組改用 bored（圖、動畫、衣服定位點、眨眼一起換）。
@@ -157,7 +162,11 @@ class PetDefinition {
 
   BlinkSpec? blinkFor(PetMood mood) => blinkSpecs[resolve(mood)];
 
-  AccessoryAnchor anchorFor(PetMood mood, AccessorySlot slot) {
+  AccessoryAnchor anchorFor(PetMood mood, AccessorySlot slot,
+      {String? accessoryId}) {
+    final specific =
+        accessoryId == null ? null : accessoryAnchors[accessoryId]?[resolve(mood)];
+    if (specific != null) return specific;
     return anchors[resolve(mood)]?[slot] ??
         const AccessoryAnchor(position: Offset(256, 160), scale: 0.28);
   }

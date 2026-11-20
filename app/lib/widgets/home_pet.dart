@@ -65,17 +65,20 @@ PetMood petMoodFromBackend(String? mood) => switch (mood) {
 };
 
 /// 衣櫃的 item_id（`game/inventory.py`）→ 隊友畫好的衣服圖。
-/// 不在表上的（之後新增、還沒有圖的）改疊 emoji。2026-11-19 起 6 件都有真圖。
-/// ⚠️ 後端那 6 件的 item_id 與這裡的圖檔 id **刻意不同名**（cap / glasses /
-///    scarf / bow ←→ sleep_hat / round_glasses / night_scarf / pink_bow），
+/// 不在表上的（之後新增、還沒有圖的）改疊 emoji。2026-11-20 起 8 件都有真圖。
+/// ⚠️ 後端的 item_id 與這裡的圖檔 id **刻意不同名**（cap / glasses /
+///    scarf / bow ←→ sleep_hat / round_glasses / night_scarf / bow_red），
 ///    所以新增一件真圖要同時改這張表，光加 AccessoryDefinition 不會生效。
+/// bow 2026-11-20 從 pink_bow 換成 bow_red（隊友 v4.6.48 刪了粉紅的，使用者定）。
 const Map<String, String> kLayeredAccessoryFor = {
   'cap': 'sleep_hat',
   'glasses': 'round_glasses',
   'scarf': 'night_scarf',
-  'bow': 'pink_bow',
+  'bow': 'bow_red',
   'top_hat': 'star_top_hat',
+  'beret': 'beret_leaf',
   'crown': 'moon_crown',
+  'sunglasses': 'sunglasses_round',
 };
 
 AccessoryDefinition? layeredAccessoryFor(String? itemId) {
