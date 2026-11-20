@@ -572,6 +572,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final status = await _accounts.resolve();
     if (!mounted) return;
     setState(() => _account = status);
+    // 建置參數只帶 id，暱稱要另外向後端拿（不擋啟動）
+    if (status.state == AccountState.buildTime) {
+      final named = await _accounts.refreshBuildTimeName(status);
+      if (!mounted || named.displayName == _account?.displayName) return;
+      setState(() => _account = named);
+    }
   }
 
   Future<bool> _createAccount(String displayName) async {

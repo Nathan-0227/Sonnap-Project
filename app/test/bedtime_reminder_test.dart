@@ -58,6 +58,11 @@ class _NoBackendAccounts implements AccountService {
   Future<bool> updateTargetWake({required String userId, required String targetWake}) async => false;
 
   @override
+  Future<AccountStatus> refreshBuildTimeName(AccountStatus status) async => status;
+  @override
+  String? get buildTimeUserIdOverride => null;
+
+  @override
   String get baseUrl => '';
 
   @override

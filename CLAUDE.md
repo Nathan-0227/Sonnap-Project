@@ -171,7 +171,7 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 🔴 **裝到本人那支手機的 APK 一定要帶 `SONNAP_USER_ID`。** 那支手機上**沒有存帳號**
 （`sonnap_store.xml` 裡沒有 `user_id` 鍵，2026-11-20 實測），一直是靠建置參數認人的。
-漏帶的話 App 不會報錯：首頁與助理寫「Hi Sleeper」、助理每一題都說
+漏帶的話 App 不會報錯：助理每一題都說
 「cannot be reached right now」、上傳與衣櫃全部對不到帳號——看起來像後端壞了，其實是 App 不知道你是誰
 （2026-11-20 連續幾支 APK 都漏帶，踩到）。⚠️ 這時 App 若跳出要填暱稱，**不要填**：那會建一個全新的空帳號，跟原本的資料分開。
 
@@ -183,7 +183,10 @@ flutter build apk --debug --dart-define=SONNAP_API_BASE=http://<當下的IP>:800
   --dart-define=SONNAP_USER_ID=$(cat <暫存資料夾>/phone_uid.txt)
 ```
 
-驗收：裝好後首頁寫的是你的暱稱，不是 `Sleeper`。
+驗收：設定頁「Data」寫「Last night sent」（上傳要帶 id 才會成功）；logcat 有 `NightlyUpload: ok`。
+⚠️ **不要拿首頁的「Hi, Sleeper!」判斷漏帶 id。** 2026-11-21 前建置參數那條路**從來不拿暱稱**，帶了 id 也一律是 Sleeper；
+現在改成打開時向後端 `GET /users/{id}` 要一次、記在手機上（`AccountService.refreshBuildTimeName`），
+所以後端連不到、又從沒連到過的時候**仍然是 Sleeper**——那代表沒連到後端，不代表沒帶 id。
 
 → **demo 當天要當場查 IP、當場重建。** 連不上不會壞——會退回打包的資料
 並在 Insights 頁如實標示「Bundled with the app / Backend unreachable」。
@@ -1815,7 +1818,7 @@ python tests/test_camera_auto.py         # 2026-11-21 新增：按 Start Sleep �
 SONNAP_DB=C:/Users/user/Projects/sonnap-data/sonnap.db   python compare_night_sources.py --metrics-dir <有錄影檔的目錄>
 ```
 
-Flutter（在 `app/` 底下跑，**1054 條全過**，2026-11-21 實測）：
+Flutter（在 `app/` 底下跑，**1058 條全過**，2026-11-21 實測）：
 
 ```bash
 flutter test
