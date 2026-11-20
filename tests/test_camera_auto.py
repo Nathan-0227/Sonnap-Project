@@ -13,6 +13,7 @@ tests/test_camera_auto.py —— 按 Start Sleep 自動開攝影機（2026-11-21
   【7】早上匯入：移動了 → 那晚攝影機不匯入（手錶照常）；--camera-ok 照樣匯；沒移動照常
   【8】重新框：舊的框與基準備份、新框寫進設定、基準換成這晚的畫面
   【9】API：外面來的請求不開錄、不是手機帳號不開錄、手機帳號從區網來才開；任何錯誤都不讓端點失敗
+  【10】（只在 Windows）經 venv 的 python.exe 開起來的錄影程式不會有看得見的視窗
 
 ⚠️ 不接真的攝影機、不開真的錄影程式：開錄用假的 launcher，錄影程式用假的串流。
 執行：python tests/test_camera_auto.py
@@ -448,6 +449,31 @@ try:
 finally:
     ca.handle.__kwdefaults__.clear()
     ca.handle.__kwdefaults__.update(handle_defaults)
+
+
+section("【10】開錄不跳出視窗（Windows）")
+# 2026-11-21 實機：舊的啟動旗標讓錄影程式自己開了一個黑色終端機視窗，關掉就斷錄。
+# 用真的 venv python.exe 走 launch_logger 開一支小程式，回報它拿到的主控台視窗看不看得見。
+if sys.platform == "win32":
+    import subprocess
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        probe, out = d / "probe.py", d / "console.txt"
+        probe.write_text(
+            "import ctypes, sys\n"
+            "h = ctypes.windll.kernel32.GetConsoleWindow()\n"
+            "v = ctypes.windll.user32.IsWindowVisible(h) if h else 0\n"
+            "open(sys.argv[1], 'w').write(str(v))\n", encoding="utf-8")
+        venv_py = Path(sys.prefix) / "Scripts" / "python.exe"
+        py = venv_py if venv_py.exists() else Path(sys.executable)
+        proc = ca.launch_logger([str(py), str(probe), str(out)], metrics_dir=d / "m")
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        check("錄影程式的視窗看不見", out.read_text() if out.exists() else "沒跑起來", "0")
+else:
+    print("  （不是 Windows，跳過）")
 
 print()
 if fails:
