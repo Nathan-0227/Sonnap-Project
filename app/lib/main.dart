@@ -669,6 +669,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       AssistantScreen(
         chat: _chat,
         username: account.displayName ?? kFallbackDisplayName,
+        store: widget.store,
+        petMood: () async => (await _repository.load()).status.petMood,
       ),
       SettingsScreen(
         username: account.displayName ?? kFallbackDisplayName,

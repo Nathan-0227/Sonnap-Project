@@ -2346,9 +2346,17 @@ async def remove_friend(handle: str, user_id: str = Query(...)):
 #    任何一支 import main 的測試都會帶著真的金鑰在跑。
 
 
+class ChatTurnIn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(..., min_length=1, max_length=1500)
+
+
 class ChatRequest(BaseModel):
     user_id: str
     message: str = Field(..., min_length=1, max_length=500)
+    # 前面幾輪的一問一答（2026-11-19 使用者定：最多 5 輪，讓「為什麼？」接得上）。
+    # 只是讓模型看懂追問；回答裡的數字照舊只能來自 FACTS（驗證沒放寬）。
+    history: List[ChatTurnIn] = Field(default_factory=list, max_length=2 * 5)
 
 
 @app.post("/chat")
@@ -2378,7 +2386,8 @@ def chat(req: ChatRequest):
         adherence.late_night_ratio(behavior_rows),
     )
     try:
-        result = chat_engine.answer_question(req.message.strip(), facts)
+        result = chat_engine.answer_question(
+            req.message.strip(), facts, history=[(t.role, t.text) for t in req.history])
     except chat_engine.ChatUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {"answer": result["answer"], "source": "llm"}
