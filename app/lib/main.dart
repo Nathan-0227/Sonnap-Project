@@ -70,6 +70,11 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 走真的 `sonnap/health`（Health Connect）。
   final HealthPlatform? health;
 
+  /// 測試用注入點。null = 自己建一個。
+  /// ⚠️ 存在的理由是「打開 App、回到前景都要跑一次上傳」只在 [MainPage] 裡接得起來，
+  /// 漏接了不會報錯——只是昨晚沒上傳（`nightly_trigger_test.dart` 守著）。
+  final NightlySync? nightly;
+
   const SonnapApp({
     super.key,
     this.store,
@@ -77,6 +82,7 @@ class SonnapApp extends StatelessWidget {
     this.reminders,
     this.guard,
     this.health,
+    this.nightly,
   });
 
   @override
@@ -89,6 +95,7 @@ class SonnapApp extends StatelessWidget {
         reminders: reminders,
         guard: guard,
         health: health,
+        nightly: nightly,
       ),
     );
   }
@@ -100,6 +107,7 @@ class MainPage extends StatefulWidget {
   final ReminderScheduler? reminders;
   final GuardPlatform? guard;
   final HealthPlatform? health;
+  final NightlySync? nightly;
 
   const MainPage({
     super.key,
@@ -108,6 +116,7 @@ class MainPage extends StatefulWidget {
     this.reminders,
     this.guard,
     this.health,
+    this.nightly,
   });
 
   @override
@@ -117,9 +126,10 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// 偵測昨晚幾點放下手機 → 上傳 → 問挑戰（2026-11-19 從舊 Insights 頁搬到 App 層）。
   /// ⚠️ 一打開、每次回到前景都跑，**跟停在哪一頁無關**——漏跑不會報錯，只是昨晚沒上傳。
-  late final NightlySync _nightly = NightlySync(
-    bedMarks: BedMarkStore(widget.store ?? const PlatformKeyValueStore()),
-  );
+  late final NightlySync _nightly = widget.nightly ??
+      NightlySync(
+        bedMarks: BedMarkStore(widget.store ?? const PlatformKeyValueStore()),
+      );
 
   /// 上傳完再同步一次 Journey：這一晚可能是第 3 天準時，後端剛把目標換成下一站。
   void _runNightly() => unawaited(() async {
@@ -150,7 +160,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _nightly.dispose();
+    // 注入的那一份由測試自己管
+    if (widget.nightly == null) _nightly.dispose();
     super.dispose();
   }
 
