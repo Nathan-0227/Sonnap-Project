@@ -126,4 +126,5 @@
 2026-11-16,70.9,Normal,young_adult,13.7,25.0,25.0,6.6,0.6,True,watch_tst__phone_tats,96.8,False,"Sleep quality was acceptable, with room to improve. REM share fell outside the age-based norm. Keep a regular schedule and reduce pre-sleep stress."
 2026-11-17,75.3,Normal,young_adult,13.2,25.0,25.0,5.4,6.8,True,watch_tst__watch_onset_to_wake,99.07,False,"Sleep quality was acceptable, with room to improve. Sleep was short (5.32 h). Try going to bed earlier; aim for 7.0–9.0 h."
 2026-11-18,17.8,Bad,young_adult,0.0,7.2,2.0,6.8,,False,watch_tst__watch_onset_to_wake,74.44,False,Sleep quality was poor; this is worth addressing. Sleep was short (2.23 h). Try going to bed earlier; aim for 7.0–9.0 h.
-2026-11-19,74.6,Normal,young_adult,6.7,25.0,25.0,10.0,7.9,True,watch_tst__watch_onset_to_wake,99.64,False,"Sleep quality was acceptable, with room to improve. Sleep was short (4.67 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-11-19,74.6,Normal,young_adult,7.0,25.0,25.0,10.0,7.6,True,watch_tst__phone_tats,96.0,False,"Sleep quality was acceptable, with room to improve. Sleep was short (4.7 h). Try going to bed earlier; aim for 7.0–9.0 h."
+2026-11-20,80.5,Good,young_adult,12.7,25.0,25.0,8.7,9.1,True,watch_tst__phone_tats,87.8,True,Sleep quality was good. Keep your current routine. 

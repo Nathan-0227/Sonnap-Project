@@ -2036,15 +2036,31 @@
     "score": 74.6,
     "quality": "Normal",
     "age_band": "young_adult",
-    "duration_score": 6.7,
+    "duration_score": 7.0,
     "efficiency_score": 25.0,
     "waso_score": 25.0,
     "deep_score": 10.0,
-    "rem_score": 7.9,
+    "rem_score": 7.6,
     "rem_measured": true,
-    "efficiency_basis": "watch_tst__watch_onset_to_wake",
-    "efficiency_used": 99.64,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 96.0,
     "efficiency_recalled": false,
-    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.67 h). Try going to bed earlier; aim for 7.0–9.0 h."
+    "recommendation": "Sleep quality was acceptable, with room to improve. Sleep was short (4.7 h). Try going to bed earlier; aim for 7.0–9.0 h."
+  },
+  {
+    "date": "2026-11-20",
+    "score": 80.5,
+    "quality": "Good",
+    "age_band": "young_adult",
+    "duration_score": 12.7,
+    "efficiency_score": 25.0,
+    "waso_score": 25.0,
+    "deep_score": 8.7,
+    "rem_score": 9.1,
+    "rem_measured": true,
+    "efficiency_basis": "watch_tst__phone_tats",
+    "efficiency_used": 87.8,
+    "efficiency_recalled": true,
+    "recommendation": "Sleep quality was good. Keep your current routine. "
   }
 ]
