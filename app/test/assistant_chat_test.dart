@@ -234,6 +234,22 @@ void main() {
       expect(saved.map((t) => t.text), ['Am I okay?', 'You slept 6h 12m.']);
     });
 
+    testWidgets('答不出來的那一輪連問題也不存（2026-11-20 實機：重開後留下沒回答的問題）', (tester) async {
+      final store = InMemoryKeyValueStore();
+      final stub = _StubChat(const ChatResult(ChatStatus.failed));
+      await pump(tester, stub, store: store);
+      await ask(tester, 'hello');
+      stub.result = const ChatResult(ChatStatus.ok, answer: 'You slept 6h 12m.');
+      await ask(tester, 'How long did I sleep?');
+      final saved = await ChatThreadStore(store).load();
+      expect(saved.map((t) => t.text), ['How long did I sleep?', 'You slept 6h 12m.']);
+
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester, stub, store: store);
+      await tester.pump();
+      expect(find.text('hello'), findsNothing);
+    });
+
     testWidgets('點建議問題就送出', (tester) async {
       final stub = _StubChat(ok);
       await pump(tester, stub);

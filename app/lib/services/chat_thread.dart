@@ -75,8 +75,20 @@ class ChatThreadStore {
     }
   }
 
+  /// 只存**有答案的一問一答**：答不出來的那一輪，問題和失敗訊息一起不存。
+  /// （2026-11-20 實機：原本只丟掉失敗訊息、問題照存，App 重開後留下一串沒有回答的問題。）
   Future<void> save(List<ChatTurn> turns) async {
-    final kept = turns.where((t) => !t.failed).toList();
+    final kept = <ChatTurn>[];
+    for (var i = 0; i + 1 < turns.length; i++) {
+      final q = turns[i];
+      final a = turns[i + 1];
+      if (q.fromUser && !a.fromUser && !a.failed) {
+        kept
+          ..add(q)
+          ..add(a);
+        i++;
+      }
+    }
     final tail = kept.length > kChatKeepTurns ? kept.sublist(kept.length - kChatKeepTurns) : kept;
     await store.setString(key, jsonEncode([for (final t in tail) t.toJson()]));
   }
