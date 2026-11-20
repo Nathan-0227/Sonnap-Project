@@ -14,6 +14,7 @@ tests/test_camera_auto.py —— 按 Start Sleep 自動開攝影機（2026-11-21
   【8】重新框：舊的框與基準備份、新框寫進設定、基準換成這晚的畫面
   【9】API：外面來的請求不開錄、不是手機帳號不開錄、手機帳號從區網來才開；任何錯誤都不讓端點失敗
   【10】（只在 Windows）經 venv 的 python.exe 開起來的錄影程式不會有看得見的視窗
+  【11】--status：錄影中／連線中／收尾中、太久沒寫入與沒插電要提醒、沒在錄時寫最近一次（不算取消掉的）
 
 ⚠️ 不接真的攝影機、不開真的錄影程式：開錄用假的 launcher，錄影程式用假的串流。
 執行：python tests/test_camera_auto.py
@@ -474,6 +475,49 @@ if sys.platform == "win32":
         check("錄影程式的視窗看不見", out.read_text() if out.exists() else "沒跑起來", "0")
 else:
     print("  （不是 Windows，跳過）")
+
+section("【11】--status：現在有沒有在錄")
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    now = datetime(2026, 11, 21, 3, 30)
+    csv = d / "20261121_010000.csv"
+    csv.write_text("x", encoding="utf-8")
+    csv.with_suffix(".mp4").write_bytes(b"0" * (3 * 1024 * 1024))
+    fresh = now.timestamp() - 5
+    for f in (csv, csv.with_suffix(".mp4")):
+        os.utime(f, (fresh, fresh))
+    lock = {"pid": 1, "csv": str(csv), "phase": "recording", "started": "2026-11-21T01:00:00"}
+
+    def lines(lk, battery=False):
+        return "\n".join(ca.status_lines(d, lock_reader=lambda _d: lk,
+                                         battery=lambda: battery, now=now))
+
+    out = lines(lock)
+    ok("錄影中：寫開始時刻與錄了多久", "● 錄影中" in out and "01:00" in out and "2 小時 30 分" in out)
+    ok("錄影中：寫影片多大", "3.0 MB" in out)
+    ok("剛寫過就不警告斷線", "沒寫入" not in out)
+    ok("插著電不警告", "沒插電" not in out)
+
+    check("連攝影機中", "正在連攝影機" in lines({**lock, "phase": "connecting"}), True)
+
+    stale = now.timestamp() - 300
+    for f in (csv, csv.with_suffix(".mp4")):
+        os.utime(f, (stale, stale))
+    ok("5 分鐘沒寫入 → 提醒可能斷線", "300 秒沒寫入" in lines(lock))
+    ok("還在連線中就不算斷線", "沒寫入" not in lines({**lock, "phase": "connecting"}))
+    ok("沒插電 → 提醒", "沒插電" in lines(lock, battery=True))
+
+    (d / ca.STOP_NAME).write_text("x", encoding="utf-8")
+    ok("放了停止旗標 → 收尾中", "收尾中" in lines(lock))
+    (d / ca.STOP_NAME).unlink()
+
+    out = lines(None)
+    ok("沒在錄：寫最近一次是哪份", "○ 沒在錄" in out and "20261121_010000" in out)
+    (d / ca.CANCELLED_DIR_NAME).mkdir()
+    (d / ca.CANCELLED_DIR_NAME / "20261122_010000.csv").write_text("x", encoding="utf-8")
+    ok("取消掉的不算最近一次", "20261122" not in lines(None))
+    ok("一份錄影都沒有也不出錯",
+       ca.status_lines(d / "empty", lock_reader=lambda _d: None, battery=lambda: False) == ["○ 沒在錄"])
 
 print()
 if fails:
