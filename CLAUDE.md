@@ -126,7 +126,7 @@ NightlyUpload: ok date=2026-09-02 adherence=189m late=true
 
 | 實作 | 身分從哪來 | 一支 APK |
 |---|---|---|
-| `BuildTimeUserIdentity` | `--dart-define=SONNAP_USER_ID` | = 一個人。demo 用 |
+| `BuildTimeUserIdentity` | `--dart-define=SONNAP_USER_ID` | = 一個人。demo 用，**本人那支手機也是走這條**（手機上沒存帳號，見下方「IP 每次都不一樣」那節） |
 | `AccountService` | 首次開啟 `POST /users`，存本機 | 給所有人。D2 用 |
 
 測試用的 id 由 `migrate_garmin_to_db.py` 的 `RESEARCHER_USER_ID` 產生。
@@ -165,9 +165,25 @@ generated plugin 檔，而這個專案不出那三個平台。同一個取捨見
 ```bash
 flutter build apk --debug \
   --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000 \
-  --dart-define=SONNAP_USER_ID=<測試用 id>     # demo build 才加
+  --dart-define=SONNAP_USER_ID=<手機帳號的 id>   # 🔴 裝到本人手機一定要帶，見下
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
 ```
+
+🔴 **裝到本人那支手機的 APK 一定要帶 `SONNAP_USER_ID`。** 那支手機上**沒有存帳號**
+（`sonnap_store.xml` 裡沒有 `user_id` 鍵，2026-11-20 實測），一直是靠建置參數認人的。
+漏帶的話 App 不會報錯：首頁與助理寫「Hi Sleeper」、助理每一題都說
+「cannot be reached right now」、上傳與衣櫃全部對不到帳號——看起來像後端壞了，其實是 App 不知道你是誰
+（2026-11-20 連續幾支 APK 都漏帶，踩到）。⚠️ 這時 App 若跳出要填暱稱，**不要填**：那會建一個全新的空帳號，跟原本的資料分開。
+
+id 不要手打、也不要印出來（它就是憑證）：從資料庫找手機帳號、只寫進暫存檔，建置時用 `$(cat 檔案)` 帶進去：
+
+```bash
+SONNAP_DB_URL=mysql://root@localhost/sonnap python -c "import db; uid, info = db.resolve_phone_account(); open('<暫存資料夾>/phone_uid.txt','w').write(uid); print(info['reason'], info['nights'])"
+flutter build apk --debug --dart-define=SONNAP_API_BASE=http://<當下的IP>:8000 \
+  --dart-define=SONNAP_USER_ID=$(cat <暫存資料夾>/phone_uid.txt)
+```
+
+驗收：裝好後首頁寫的是你的暱稱，不是 `Sleeper`。
 
 → **demo 當天要當場查 IP、當場重建。** 連不上不會壞——會退回打包的資料
 並在 Insights 頁如實標示「Bundled with the app / Backend unreachable」。
