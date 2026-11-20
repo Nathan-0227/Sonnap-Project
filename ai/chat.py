@@ -75,7 +75,9 @@ Rules:
 - Focus on behaviour the user can change, such as when they put the phone down and keeping a steady bedtime.
 - Do not give medical advice. Do not name health conditions, medicines or treatments. If the user sounds
   worried about their health, suggest talking to a doctor or the campus health service.
-- Always answer in English, even if the question is in another language."""
+- Always answer in English, even if the question is in another language.
+- CONVERSATION SO FAR (when present) is only there so you understand follow-up questions such as "why?".
+  It is not a source of facts: every number you write must still come from the FACTS block."""
 
 
 class ChatUnavailable(Exception):
@@ -145,7 +147,21 @@ def validate_answer(answer, facts_text):
     return problems
 
 
-def answer_question(question, facts):
+# 後端最多看幾則前文（5 輪＝10 則）；App 也只送這麼多，這裡再夾一次。
+MAX_HISTORY_MESSAGES = 10
+
+
+def _conversation_block(history):
+    """前文寫成一段文字（2026-11-19，讓「為什麼？」接得上）。
+    數字照舊只認 FACTS——驗證不看這一段，所以前文裡的數字不會被當成事實。"""
+    turns = [(role, (text or "").strip()) for role, text in history][-MAX_HISTORY_MESSAGES:]
+    lines = [f"{'User' if role == 'user' else 'You'}: {text}" for role, text in turns if text]
+    if not lines:
+        return ""
+    return "CONVERSATION SO FAR (oldest first):\n" + "\n".join(lines) + "\n\n"
+
+
+def answer_question(question, facts, history=()):
     """
     問一次。回傳 {"answer", "attempts", "model"}，答不出來丟 ChatUnavailable。
 
@@ -153,9 +169,10 @@ def answer_question(question, facts):
        不該傳到手機上。細節留在後端的 log。
     """
     facts_text = json.dumps(facts, ensure_ascii=False, indent=2)
+    convo = _conversation_block(history)
     feedback = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        user_prompt = f"FACTS:\n{facts_text}\n\nQUESTION:\n{question}\n{feedback}"
+        user_prompt = f"FACTS:\n{facts_text}\n\n{convo}QUESTION:\n{question}\n{feedback}"
         try:
             data, model = complete(SYSTEM_PROMPT, user_prompt, ANSWER_SCHEMA, max_tokens=2000)
         except llm_client.LLMRefusal:

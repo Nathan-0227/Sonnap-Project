@@ -49,7 +49,9 @@ class ChatService {
     this.timeout = const Duration(seconds: 150),
   });
 
-  Future<ChatResult> ask(String message) async {
+  /// [history]：前面幾輪的一問一答（見 `chat_thread.dart` 的 `chatContext`），
+  /// 讓「為什麼？」這種追問接得上。空的就不帶這個欄位（舊版後端照樣收）。
+  Future<ChatResult> ask(String message, {List<Map<String, String>> history = const []}) async {
     if (baseUrl.trim().isEmpty) return const ChatResult(ChatStatus.noBackend);
     final userId = await identity.currentUserId();
     if (userId == null) return const ChatResult(ChatStatus.noUser);
@@ -59,7 +61,11 @@ class ChatService {
       final request = await client.postUrl(Uri.parse('$baseUrl/chat')).timeout(timeout);
       request.headers.contentType = ContentType.json;
       // ⚠️ user_id 本身就是憑證——不印進 log、不放進錯誤訊息。
-      request.write(jsonEncode({'user_id': userId, 'message': message.trim()}));
+      request.write(jsonEncode({
+        'user_id': userId,
+        'message': message.trim(),
+        if (history.isNotEmpty) 'history': history,
+      }));
       final response = await request.close().timeout(timeout);
       final text = await response.transform(utf8.decoder).join();
       final decoded = text.isEmpty ? null : jsonDecode(text);
