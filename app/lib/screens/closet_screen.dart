@@ -65,7 +65,9 @@ const Map<String, AccessorySlot> kClosetSlotFor = {
   'cap': AccessorySlot.head,
   'top_hat': AccessorySlot.head,
   'crown': AccessorySlot.head,
+  'beret': AccessorySlot.head,
   'glasses': AccessorySlot.face,
+  'sunglasses': AccessorySlot.face,
   'scarf': AccessorySlot.neck,
   'bow': AccessorySlot.neck,
 };

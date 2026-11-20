@@ -319,6 +319,21 @@ const dog01 = PetDefinition(
     PetMood.tired: _tiredAnchors,
     PetMood.anxious: _anxiousAnchors,
   },
+  // 隊友 v4.6.48（2026-11-19）逐姿勢對好的位置，原樣照抄
+  accessoryAnchors: {
+    'beret_leaf': {
+      PetMood.happy: AccessoryAnchor(position: Offset(201.2, 89.5), scale: 0.299, rotationDeg: -13.3),
+      PetMood.bored: AccessoryAnchor(position: Offset(327.0, 132.1), scale: 0.665, rotationDeg: 5.0),
+      PetMood.tired: AccessoryAnchor(position: Offset(327.0, 132.1), scale: 0.665, rotationDeg: 5.0),
+      PetMood.anxious: AccessoryAnchor(position: Offset(329.0, 28.9), scale: 0.812, rotationDeg: 4.6),
+    },
+    'bow_red': {
+      PetMood.happy: AccessoryAnchor(position: Offset(187.4, 254.8), scale: 0.463, rotationDeg: 0.7),
+      PetMood.bored: AccessoryAnchor(position: Offset(348.6, 503.6), scale: 1.013, rotationDeg: -7.1),
+      PetMood.tired: AccessoryAnchor(position: Offset(264.4, 545.5), scale: 1.306, rotationDeg: -1.0),
+      PetMood.anxious: AccessoryAnchor(position: Offset(284.5, 440.5), scale: 1.449, rotationDeg: 1.5),
+    },
+  },
   blinkSpecs: {
     PetMood.happy: BlinkSpec(
       faceColor: Color(0xFFF1994B),
@@ -568,6 +583,21 @@ const cat01 = PetDefinition(
         position: Offset(554.8, 590.8), scale: 1.381, rotationDeg: -18.1),
     },
   },
+  // 隊友 v4.6.48（2026-11-19）逐姿勢對好的位置，原樣照抄
+  accessoryAnchors: {
+    'beret_leaf': {
+      PetMood.happy: AccessoryAnchor(position: Offset(377.3, 212.5), scale: 0.700, rotationDeg: -1.5),
+      PetMood.bored: AccessoryAnchor(position: Offset(401.4, 273.8), scale: 0.624, rotationDeg: -3.0),
+      PetMood.tired: AccessoryAnchor(position: Offset(412.7, 292.2), scale: 0.640, rotationDeg: -5.1),
+      PetMood.anxious: AccessoryAnchor(position: Offset(398.0, 182.0), scale: 0.690, rotationDeg: -3.5),
+    },
+    'bow_red': {
+      PetMood.happy: AccessoryAnchor(position: Offset(506.5, 574.9), scale: 1.009, rotationDeg: -19.2),
+      PetMood.bored: AccessoryAnchor(position: Offset(523.6, 597.4), scale: 0.845, rotationDeg: -28.8),
+      PetMood.tired: AccessoryAnchor(position: Offset(454.5, 642.6), scale: 0.965, rotationDeg: -10.4),
+      PetMood.anxious: AccessoryAnchor(position: Offset(402.9, 583.2), scale: 1.099, rotationDeg: -6.5),
+    },
+  },
 );
 
 const pets = <PetDefinition>[dog01, cat01];
@@ -591,13 +621,25 @@ const accessories = <AccessoryDefinition>[
     slot: AccessorySlot.neck,
     assetPath: 'assets/accessories/neck/night_scarf.png',
   ),
-  // 隊友 2026-11-15 交來的第四件真圖，補上後端 Lv4 的 bow（原本只有 emoji）。
-  // 與圍巾同一個 neck 插槽，所以共用那三種心情的 neck 錨點，不必另外對位。
+  // 隊友 v4.6.48：紅蝴蝶結取代粉紅的（後端 Lv4 的 bow，2026-11-20 使用者定）。
+  // 貝雷帽、紅蝴蝶結用自己的定位點（寵物裡的 accessoryAnchors）；墨鏡沿用 face 插槽。
   AccessoryDefinition(
-    id: 'pink_bow',
-    label: 'Pink Ribbon Bow',
+    id: 'bow_red',
+    label: 'Bright Red Bow',
     slot: AccessorySlot.neck,
-    assetPath: 'assets/accessories/neck/pink_bow.png',
+    assetPath: 'assets/accessories/neck/bow_red.png',
+  ),
+  AccessoryDefinition(
+    id: 'beret_leaf',
+    label: 'Leaf Beret',
+    slot: AccessorySlot.head,
+    assetPath: 'assets/accessories/head/beret_leaf.png',
+  ),
+  AccessoryDefinition(
+    id: 'sunglasses_round',
+    label: 'Round Sunglasses',
+    slot: AccessorySlot.face,
+    assetPath: 'assets/accessories/face/sunglasses_round.png',
   ),
   // 2026-11-19 使用者生成，取代 top_hat／crown 原本的 emoji。都是 head 插槽，
   // 沿用睡帽那組頭部錨點（小狗、貓各一組），不另外對位。

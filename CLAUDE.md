@@ -472,7 +472,8 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 禮帽、皇冠是使用者生成的圖（`assets/accessories/head/star_top_hat.png`、`moon_crown.png`），粗黑外框已改細、改同色系＋底下淡影子（`shadowAt`）；後端 item_id 經 `home_pet.dart` 的 `kLayeredAccessoryFor` 對到圖 | 外框粗、沒接觸點時像貼紙浮在頭上（使用者連說兩次「突兀」） |
 | **這兩頂每種姿勢各有一組戴法**：`AccessoryDefinition.poseFits`，鍵是「寵物 id.心情」（`dog01.happy`…），值是 `AccessoryFit(fit, drop, dx, rotationDeg)`；**8 格（小狗／貓 × 4 種心情）都是使用者逐格看圖挑的**，改之前先出預覽給使用者看 | 只調一個共用值會把別的姿勢弄歪——各姿勢的頭位置、耳朵開合差很多 |
 | 🔴 **漏一格會悄悄退回預設大小**（`fitFor()` 找不到鍵就用 `fit`／`drop`），不報錯；新增寵物或心情時要為這兩頂補齊。`game_test.dart` 守著：兩頂對 dog01／cat01 × 每個 `PetMood` 都要有 | 某個心情的帽子突然變大、浮起來，只有剛好那晚是那個心情才看得到 |
-| 其他衣服（睡帽、眼鏡、圍巾、蝴蝶結）**不用 poseFits**，`fit` 1、`drop` 0，照隊友的錨點；測試守著只有那兩頂 `fit` < 1 | 錨點是隊友逐姿勢對過的，再疊一層調整就有兩個定義處 |
+| 其他衣服（睡帽、眼鏡、圍巾、蝴蝶結、貝雷帽、墨鏡）**不用 poseFits**，`fit` 1、`drop` 0，照隊友的錨點；測試守著只有那兩頂 `fit` < 1 | 錨點是隊友逐姿勢對過的，再疊一層調整就有兩個定義處 |
+| **貝雷帽（Lv7）、紅蝴蝶結（Lv4 的 bow）用自己的定位點**：寵物的 `accessoryAnchors[圖檔 id][心情]`（隊友 v4.6.48，2026-11-20 照抄），沒列到的衣服用插槽錨點；墨鏡（Lv9）用 face 插槽。粉紅蝴蝶結 11-20 拿掉（使用者定） | 漏一格同樣悄悄退回插槽錨點；`game_test.dart` 守 8 格齊全、也守「`game/inventory.py` 每件都有圖、有分類」 |
 | 位置以錨點框為單位（`fit` 以底邊中點縮放、`drop`／`dx` 是框邊長的比例），跟著寵物大小走 | 寫像素的話首頁與衣櫃的寵物大小不同，會一邊對一邊歪 |
 
 ### ✅ 好友頁的即時狀態（2026-11-19，`feature/friends-live-status`，疊在 `feature/friends-sharing` 上）

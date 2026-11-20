@@ -224,7 +224,8 @@ class _LayeredPetState extends State<LayeredPet>
     final accessory = widget.accessory;
     if (accessory == null) return const SizedBox.shrink();
 
-    final base = widget.pet.anchorFor(widget.mood, accessory.slot);
+    final base = widget.pet
+        .anchorFor(widget.mood, accessory.slot, accessoryId: accessory.id);
     final tweak = widget.accessoryTweak;
     final factor = widget.size / pose.designSize;
     final sourceSize = 512.0;

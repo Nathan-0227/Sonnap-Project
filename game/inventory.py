@@ -17,8 +17,12 @@ CATALOG = (
     {"item_id": "bow",     "name": "Ribbon bow",      "emoji": "🎀", "unlock_level": 4},
     {"item_id": "glasses", "name": "Reading glasses", "emoji": "👓", "unlock_level": 5},
     {"item_id": "top_hat", "name": "Top hat",         "emoji": "🎩", "unlock_level": 6},
+    {"item_id": "beret",   "name": "Leaf beret",      "emoji": "🍃", "unlock_level": 7},
     {"item_id": "crown",   "name": "Crown",           "emoji": "👑", "unlock_level": 8},
+    {"item_id": "sunglasses", "name": "Round sunglasses", "emoji": "🕶️", "unlock_level": 9},
 )
+# 2026-11-20 加 beret（Lv7）、sunglasses（Lv9），圖是隊友 v4.6.48 的；等級由使用者定，
+# 原本 6 件的等級不動（已經解鎖的人不會因此少一件）。
 
 ITEMS = {item["item_id"]: item for item in CATALOG}
 

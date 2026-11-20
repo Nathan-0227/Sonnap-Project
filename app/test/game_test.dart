@@ -17,8 +17,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/pet2d/pet_catalog.dart' show accessories;
-import 'package:app/pet2d/pet_models.dart' show PetMood;
+import 'package:app/pet2d/pet_catalog.dart' show accessories, cat01, dog01;
+import 'package:app/pet2d/pet_models.dart' show AccessorySlot, PetMood;
 
 import 'package:app/models/sleep_session.dart';
 import 'package:app/screens/closet_screen.dart';
@@ -484,14 +484,18 @@ void main() {
       }
     });
 
-    test('衣櫃 item_id 對得上六件圖', () {
+    test('衣櫃 item_id 對得上八件圖', () {
       expect(layeredAccessoryFor('cap')?.id, 'sleep_hat');
       expect(layeredAccessoryFor('glasses')?.id, 'round_glasses');
       expect(layeredAccessoryFor('scarf')?.id, 'night_scarf');
-      expect(layeredAccessoryFor('bow')?.id, 'pink_bow');
+      // 2026-11-20 粉紅的換成紅的（隊友 v4.6.48）
+      expect(layeredAccessoryFor('bow')?.id, 'bow_red');
       // 2026-11-19 使用者生成的兩頂
       expect(layeredAccessoryFor('top_hat')?.id, 'star_top_hat');
       expect(layeredAccessoryFor('crown')?.id, 'moon_crown');
+      // 2026-11-20 隊友 v4.6.48 新增
+      expect(layeredAccessoryFor('beret')?.id, 'beret_leaf');
+      expect(layeredAccessoryFor('sunglasses')?.id, 'sunglasses_round');
       // ⚠️ 反面：沒有圖的必須回 null（會改疊 emoji）。
       //    少了這一條，哪天隨便對應一個不存在的 id 也不會被抓到。
       for (final none in ['party_hat', null]) {
@@ -500,6 +504,40 @@ void main() {
       // 每一個對應得到的 id 都必須真的在 accessories 裡（打錯字就會回 null）。
       for (final itemId in kLayeredAccessoryFor.keys) {
         expect(layeredAccessoryFor(itemId), isNotNull, reason: itemId);
+      }
+    });
+
+    test('後端每一件衣服都有圖、都有分類（讀 game/inventory.py）', () {
+      // 後端加了一件、這邊忘了接：不報錯，只會疊 emoji、點分類整件消失。
+      final src = File('../game/inventory.py').readAsStringSync();
+      final ids = RegExp(r'"item_id":\s*"(\w+)"')
+          .allMatches(src)
+          .map((m) => m.group(1)!)
+          .toList();
+      expect(ids, isNotEmpty);
+      for (final id in ids) {
+        expect(layeredAccessoryFor(id), isNotNull, reason: '$id 沒有圖');
+        expect(kClosetSlotFor.containsKey(id), isTrue, reason: '$id 沒有分類');
+      }
+    });
+
+    test('貝雷帽、紅蝴蝶結每個姿勢都用自己的定位點', () {
+      // 漏一格會悄悄退回插槽錨點（那是照睡帽、圍巾對的），不報錯。
+      for (final pet in [dog01, cat01]) {
+        for (final id in ['beret_leaf', 'bow_red']) {
+          for (final mood in PetMood.values) {
+            final own = pet.accessoryAnchors[id]?[mood];
+            expect(own, isNotNull, reason: '${pet.id}.${mood.name} $id');
+            final slot = id == 'beret_leaf' ? AccessorySlot.head : AccessorySlot.neck;
+            final used = pet.anchorFor(mood, slot, accessoryId: id);
+            expect(used.position, own!.position, reason: '${pet.id}.${mood.name} $id');
+          }
+        }
+        // 反面：沒有自己定位點的（墨鏡）照用插槽的
+        expect(
+          pet.anchorFor(PetMood.happy, AccessorySlot.face, accessoryId: 'sunglasses_round').position,
+          pet.anchorFor(PetMood.happy, AccessorySlot.face).position,
+        );
       }
     });
   });
