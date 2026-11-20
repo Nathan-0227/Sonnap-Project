@@ -2534,27 +2534,56 @@
    "stress_uncategorized_sec": 7140
   },
   "2026-11-19": {
-   "steps": 46,
+   "steps": 5054,
    "step_goal": 7970,
-   "distance_m": 31,
-   "active_kcal": 0,
-   "highly_active_sec": 120,
-   "active_sec": 60,
-   "sedentary_sec": 4860,
-   "floors_up": 0.0,
-   "stress_rest_sec": 16380,
-   "stress_low_sec": 1740,
-   "stress_medium_sec": 480,
-   "stress_high_sec": null,
+   "distance_m": 3356,
+   "active_kcal": 179,
+   "highly_active_sec": 1310,
+   "active_sec": 4274,
+   "sedentary_sec": 63836,
+   "floors_up": 2.3,
+   "stress_rest_sec": 30240,
+   "stress_low_sec": 16200,
+   "stress_medium_sec": 11400,
+   "stress_high_sec": 2160,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [
+    {
+     "type": "cycling",
+     "start": "14:03",
+     "minutes": 14
+    }
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1601,
+   "sleeping_sec": 16980,
+   "stress_activity_sec": 11820,
+   "stress_uncategorized_sec": 10620
+  },
+  "2026-11-20": {
+   "steps": 1306,
+   "step_goal": 7680,
+   "distance_m": 868,
+   "active_kcal": 24,
+   "highly_active_sec": 779,
+   "active_sec": 567,
+   "sedentary_sec": 9814,
+   "floors_up": 2.2,
+   "stress_rest_sec": 15360,
+   "stress_low_sec": 3720,
+   "stress_medium_sec": 2640,
+   "stress_high_sec": 180,
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
    "move_iq": [],
-   "resting_kcal": 360,
-   "total_kcal": 360,
-   "sleeping_sec": 16860,
-   "stress_activity_sec": 780,
-   "stress_uncategorized_sec": 1920
+   "resting_kcal": 497,
+   "total_kcal": 521,
+   "sleeping_sec": 19080,
+   "stress_activity_sec": 3180,
+   "stress_uncategorized_sec": 4380
   }
  }
 }
