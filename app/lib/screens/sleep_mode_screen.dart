@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -59,6 +60,10 @@ class SleepModeScreen extends StatefulWidget {
   /// 好友頁的即時狀態：Out of bed／I already got up 送 end、Cancel 送 cancel。null＝不送。
   final SleepStatusSink? sleepStatus;
 
+  /// 攝影機有沒有在錄（後端回報的，2026-11-21）。null＝讀共用的 [cameraStatusBoard]。
+  /// 只有確定在錄才寫一行，見 [cameraStatusLine]。
+  final ValueListenable<CameraStatus?>? camera;
+
   /// 剛按 Start Sleep 才是 true：先播 [kSleepIntroGif]。半夜重開 App 回到這頁時是 false。
   final bool playIntro;
 
@@ -75,6 +80,7 @@ class SleepModeScreen extends StatefulWidget {
     this.sounds,
     this.onEnded,
     this.sleepStatus,
+    this.camera,
     this.playIntro = false,
     this.sceneAsset = kSleepLoopGif,
     this.introAsset = kSleepIntroGif,
@@ -593,6 +599,34 @@ class _SleepModeScreenState extends State<SleepModeScreen> {
                           'Sleeping… your watch is tracking',
                           key: Key('sleep-since'),
                           style: TextStyle(color: Colors.white70, fontSize: 15),
+                        ),
+                        // 攝影機那一行（只有確定在錄才寫，2026-11-21 grill Q9）
+                        ValueListenableBuilder<CameraStatus?>(
+                          valueListenable: widget.camera ?? cameraStatusBoard,
+                          builder: (context, status, _) {
+                            final line = cameraStatusLine(status);
+                            if (line == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.videocam_rounded,
+                                      size: 15, color: Colors.white54),
+                                  const SizedBox(width: 6),
+                                  // 窄螢幕換行，不撐出邊界
+                                  Flexible(
+                                    child: Text(
+                                      line,
+                                      key: const Key('sleep-camera'),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                         const Spacer(),
                         // 往下挪，讓墊子落在背景地毯的中央（使用者 2026-11-12 看實機後要求）。

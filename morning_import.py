@@ -462,7 +462,14 @@ def section(title):
     print(f"\n{'═' * 70}\n{title}\n{'═' * 70}", flush=True)
 
 
-def run(args, paths, now, env, runner=None, db_check=check_database, analyse=onset.analyse):
+def check_alignment(csv_path, metrics_dir):
+    """攝影機有沒有被移動（camera_alignment.check）。用到才 import：它會載入 OpenCV。"""
+    import camera_alignment
+    return camera_alignment.check(csv_path, metrics_dir)
+
+
+def run(args, paths, now, env, runner=None, db_check=check_database, analyse=onset.analyse,
+        align=check_alignment):
     """回傳 exit code。runner(argv) → exit code，測試會換掉它。"""
     child_env = {**env, "PYTHONIOENCODING": "utf-8"}
     if runner is None:
@@ -470,13 +477,43 @@ def run(args, paths, now, env, runner=None, db_check=check_database, analyse=ons
             return run_script(argv, paths.root, child_env)
 
     try:
-        return _run(args, paths, now, runner, db_check, env, analyse)
+        return _run(args, paths, now, runner, db_check, env, analyse, align)
     except Stop as exc:
         print(f"\n✗ 停下來了：{exc}")
         return 1
 
 
-def _run(args, paths, now, runner, db_check, env, analyse):
+def _alignment_gate(camera_csv, metrics_dir, align, camera_ok):
+    """
+    攝影機可能被移動了 → 回 None（這一晚的攝影機不匯入，手錶照常）；其他情況照原樣回傳。
+    2026-11-21 使用者定（grill Q15）：框歪了那晚的動作數字全錯，但跟手錶無關，不連帶擋。
+    看了照片覺得沒歪（誤判）就加 --camera-ok 硬匯。
+    """
+    result = align(camera_csv, metrics_dir)
+    if result.status == "moved":
+        if camera_ok:
+            print(f"  ⚠ 攝影機可能被移動了（平移 {result.shift_px:.0f} 像素），"
+                  "但加了 --camera-ok，照樣匯入")
+            return camera_csv
+        lines = [f"  ⚠ 攝影機可能被移動了：跟基準比平移了 {result.shift_px:.0f} 像素"
+                 f"（門檻 30）。床鋪框可能對錯地方，這一晚的攝影機資料不匯入，手錶照常。"]
+        if result.snapshot:
+            lines.append(f"    看一下框對不對：{result.snapshot}")
+        lines.append("    → 框歪了：跑 python camera_reframe.py 重新框（下一晚開始用）")
+        lines.append("    → 其實沒歪（誤判）：加 --camera-ok 重跑")
+        print("\n".join(lines))
+        return None
+    if result.status == "no_snapshot":
+        print("  ● 這一晚沒有存畫面（舊版錄影程式、或錄不到 15 分鐘），沒辦法檢查攝影機有沒有移動")
+    elif result.status == "no_reference":
+        print("  ● 還沒有基準畫面，沒辦法檢查攝影機有沒有移動"
+              "（python camera_alignment.py --make-reference …）")
+    elif result.snapshot:
+        print(f"  ✓ 攝影機位置沒變（平移 {result.shift_px:.0f} 像素）。今晚的畫面：{result.snapshot}")
+    return camera_csv
+
+
+def _run(args, paths, now, runner, db_check, env, analyse, align=check_alignment):
     section("① 資料庫")
     ok, message = db_check(env)
     if not ok:
@@ -516,6 +553,8 @@ def _run(args, paths, now, runner, db_check, env, analyse):
                       "不擋，但這一晚不是完整的一段")
             for other in skipped:
                 print(f"  （同一晚另有 {other.name}，錄得較短，不匯入）")
+            camera_csv = _alignment_gate(camera_csv, paths.metrics_dir, align,
+                                         getattr(args, "camera_ok", False))
 
     section("③ 手錶：抓資料、評分、檢查晚數")
     before = load_final_scores(paths.final_json)
@@ -639,6 +678,8 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="每天早上：手錶與攝影機 → 資料庫（有檢查、沒過就停）")
     ap.add_argument("--skip-camera", action="store_true", help="不匯入攝影機")
     ap.add_argument("--camera-csv", help="指定要匯入的錄影 CSV（預設挑昨晚最長的那份）")
+    ap.add_argument("--camera-ok", action="store_true",
+                    help="判定攝影機可能被移動、但你看過照片確定沒歪時，照樣匯入攝影機")
     ap.add_argument("--no-ai", action="store_true", help="已經沒有作用（夢境 2026-11-17 退場）")
     ap.add_argument("--check-camera",
                     help="只檢查一份錄影的連續性就結束，不匯入任何東西")

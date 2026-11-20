@@ -57,6 +57,7 @@ tapo_metric_logger.py — 只記錄原始度量，不判事件、不設門檻、
 """
 import argparse
 import csv
+import json
 import signal
 import sys
 import time
@@ -161,12 +162,87 @@ VIDEO_FOURCC = "mp4v"
 
 FLUSH_EVERY = 100            # 每幾列 flush 一次，斷電時損失有限
 
+# ─── 給「按 Start Sleep 自動開錄」用的兩個檔（camera_auto.py，2026-11-21）─────
+# ⚠️ 名字要跟 camera_auto.LOCK_NAME／STOP_NAME 一樣（那邊不 import 這支，免得後端載入 OpenCV），
+#    tests/test_camera_auto.py 守著兩邊一致。
+# 鎖檔：開始錄就寫、結束就刪。後端靠它知道「現在有沒有在錄」——手動開的也算，
+#       所以 Out of bed 也停得了手動開的那一個（Q10）。
+LOCK_NAME = "logger.lock"
+# 停止旗標：後端要停錄時放這個檔，這支每一圈都看，看到就**自己收尾**結束。
+# ⚠️ 不能從外面砍：Windows 的 terminate() 是硬砍，熱區圖、影片檔尾都不會寫，影片會壞。
+STOP_NAME = "STOP"
+STOP_CHECK_SECONDS = 0.5     # 多久看一次旗標（每一圈都 stat 太浪費）
+# 整晚存幾張原始畫面，給 camera_alignment.py 比對攝影機有沒有被移動。
+# ⚠️ 不是開錄 90 秒就拍一張（grill 原本定的）：2026-11-21 拿 10 晚真實錄影試，
+#    開錄頭幾分鐘人常常正對著鏡頭（剛調好攝影機、正在躺下），單張比對在攝影機沒動的晚上
+#    也會從 2 跳到 259 像素。改成這幾個時間點各一張、比對時取中間值，9/10 晚穩定在 1～4 像素。
+SNAPSHOT_AT_MINUTES = (15, 30, 60, 90, 120)
+SNAPSHOT_FRAME_PATTERN = "_frame_{:03d}.png"     # {} = 第幾分鐘
+SNAPSHOT_BOX_SUFFIX = "_snapshot.png"            # 畫上床鋪框、給人看的那張
+SNAPSHOT_BOX_AT_MINUTES = 60                     # 那時人通常已經躺好
+
 _stop = False
 
 
 def _handle_stop(signum, frame):
     global _stop
     _stop = True
+
+
+def write_lock(lock_path, *, csv_path, phase):
+    """寫鎖檔（先寫暫存再換名，後端不會讀到寫一半的）。"""
+    lock_path = Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = lock_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({
+        "pid": os.getpid(),
+        "csv": str(csv_path),
+        "phase": phase,
+        "started": datetime.now().isoformat(timespec="seconds"),
+    }), encoding="utf-8")
+    os.replace(tmp, lock_path)
+
+
+def remove_lock(lock_path):
+    """只刪自己的鎖檔（別人的不碰）。"""
+    lock_path = Path(lock_path)
+    try:
+        info = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if info.get("pid") == os.getpid():
+        try:
+            lock_path.unlink()
+        except OSError:
+            pass
+
+
+def keep_awake(on):
+    """
+    錄影期間告訴 Windows「我在工作，先別閒置待機」（Q7）。
+    ⚠️ 擋得住閒置（用電池 4 分鐘就睡的那種，09-20 斷錄的原因），**擋不住闔上螢幕**。
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    flags = ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0)
+    ctypes.windll.kernel32.SetThreadExecutionState(flags)
+
+
+def save_snapshot(gray, out_path, roi, minute):
+    """存原始灰階（比對用，不能有框）；到了 SNAPSHOT_BOX_AT_MINUTES 再多存一張畫上床鋪框的（給人看）。"""
+    frame_path = out_path.with_name(out_path.stem + SNAPSHOT_FRAME_PATTERN.format(minute))
+    cv2.imwrite(str(frame_path), gray)
+    box_path = None
+    if minute == SNAPSHOT_BOX_AT_MINUTES:
+        box_path = out_path.with_name(out_path.stem + SNAPSHOT_BOX_SUFFIX)
+        shown = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        if roi:
+            x, y, w, h = roi
+            cv2.rectangle(shown, (x, y), (x + w, y + h), (0, 200, 255), 2)
+        cv2.imwrite(str(box_path), shown)
+    return frame_path, box_path
 
 
 def read_rtsp_url(env_path=None):
@@ -274,7 +350,11 @@ def open_capture(url):
     return cap
 
 
-def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
+def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None,
+        max_hours=None, stop_path=None, on_connected=None):
+    # max_hours：最多錄這麼久就自己收工（自動開錄時是 14，忘了按 Out of bed 的保險）
+    # stop_path：這個檔一出現就收工（後端放的停止旗標）
+    # on_connected：接上攝影機之後呼叫一次（鎖檔從 connecting 改成 recording）
     # ROI 是**額外一組欄位**，不取代 max_px。理由：套上去就再也回不去了，
     # 而「這個框是不是框對了」只有拿整畫面的資料才驗得出來。
     # 兩組並存，事後才有辦法比較，熱區圖也仍然照整畫面累積。
@@ -307,8 +387,15 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
                  "   檢查：相機開著嗎？在同一個網段嗎？.env 的密碼是換過之後的嗎？")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    if on_connected:
+        on_connected()
     started = datetime.now()
     deadline = time.time() + selftest_seconds if selftest_seconds else None
+    if max_hours:
+        cap_at = time.time() + max_hours * 3600
+        deadline = min(deadline, cap_at) if deadline else cap_at
+    next_stop_check = 0.0
+    snapshots_due = list(SNAPSHOT_AT_MINUTES)   # 還沒存的時間點（從開錄算）
     interval = 1.0 / TARGET_FPS
 
     prev_blur = None
@@ -373,7 +460,14 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
 
         while not _stop:
             if deadline and time.time() >= deadline:
+                if max_hours and not selftest_seconds:
+                    print(f"● 錄滿 {max_hours:g} 小時，自己收工（忘了按 Out of bed 的保險）")
                 break
+            if stop_path is not None and time.time() >= next_stop_check:
+                next_stop_check = time.time() + STOP_CHECK_SECONDS
+                if Path(stop_path).exists():
+                    print("● 看到停止旗標（手機按了 Out of bed 或 Cancel），收工")
+                    break
 
             ok, frame = cap.read()
             if not ok or frame is None:
@@ -436,6 +530,15 @@ def run(url, out_path, selftest_seconds=None, save_video_minutes=0, roi=None):
                     print(f"● 影片錄滿 {save_video_minutes:.0f} 分鐘（{vf} 幀），度量繼續")
 
             warming = 1 if (now - warm_from) < WARMUP_SECONDS else 0
+            # 到了時間點就存一張畫面，比對攝影機有沒有被移動用
+            if snapshots_due and (datetime.now() - started).total_seconds() >= snapshots_due[0] * 60:
+                minute = snapshots_due.pop(0)
+                try:
+                    _f, box = save_snapshot(gray, out_path, roi, minute)
+                    if box:
+                        print(f"● 存了今晚的畫面 {box.name}（床鋪框畫在上面，早上匯入會比對）")
+                except cv2.error:
+                    print("⚠ 今晚的畫面沒存成（不影響錄影）")
 
             # ── 照明變化否決（看空間分布，不看整幀平均）──
             illum_skip = 0
@@ -670,6 +773,10 @@ def main():
     ap.add_argument("--roi", metavar="X,Y,W,H",
                     help="只看這個矩形（床）。額外記 roi_* 五欄，max_px 照舊。"
                          "框從 tapo_roi_experiment.py 推、而且要跨晚驗過才用。")
+    ap.add_argument("--max-hours", type=float, default=None,
+                    help="最多錄這麼久就自己收工（自動開錄時是 14）")
+    ap.add_argument("--keep-awake", action="store_true",
+                    help="錄影期間不讓 Windows 閒置待機（擋不住闔上螢幕）")
     args = ap.parse_args()
 
     roi = None
@@ -692,7 +799,33 @@ def main():
         datetime.now().strftime("%Y%m%d_%H%M%S")
         + ("_selftest" if args.selftest else "") + ".csv"
     )
-    path = run(url, out, args.selftest, args.save_video, roi)
+    # 鎖檔與停止旗標放在輸出資料夾（預設 tapo_metrics/，後端看的就是那裡）。
+    # 自測不寫鎖檔：睡前跑 120 秒確認接得上，不該讓後端以為在錄、按 Start Sleep 卻不開。
+    lock_path = out.parent / LOCK_NAME if not args.selftest else None
+    stop_path = out.parent / STOP_NAME
+    # 上一次留下的旗標要先清掉，不然一開就收工
+    try:
+        stop_path.unlink()
+    except OSError:
+        pass
+    if lock_path:
+        write_lock(lock_path, csv_path=out, phase="connecting")
+    if args.keep_awake:
+        keep_awake(True)
+    try:
+        path = run(url, out, args.selftest, args.save_video, roi,
+                   max_hours=args.max_hours, stop_path=stop_path,
+                   on_connected=(lambda: write_lock(lock_path, csv_path=out, phase="recording"))
+                   if lock_path else None)
+    finally:
+        if lock_path:
+            remove_lock(lock_path)
+        if args.keep_awake:
+            keep_awake(False)
+        try:
+            stop_path.unlink()
+        except OSError:
+            pass
     preview(path)
 
 
