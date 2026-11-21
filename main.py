@@ -2626,13 +2626,43 @@ def get_night_summary(
     if not generate or not ns.key_available():
         # 不准生成（首頁）／沒設定金鑰：一次都沒試，不寫進資料庫
         return fallback()
+    tip_ids = [t["id"] for t in fallback_tips]
+    if stored:
+        _log_notes_rewrite(date, stored, digest, facts, tip_ids)
+    # 連同當時的事實一起存（2026-11-21）：下次要重寫時才比得出是哪一項變了
+    kept = {"facts": facts, "tip_ids": tip_ids}
     try:
         result = ns.summarize_night(facts, tip_list)
     except ns.SummaryUnavailable as exc:
         print(f"night-summary: fallback for one night - {exc}")   # 不印 user_id
-        db.save_night_summary(user_id, date, json.dumps({"fallback": True}), "fallback", digest)
+        db.save_night_summary(user_id, date, json.dumps({"fallback": True, **kept}, ensure_ascii=False),
+                              "fallback", digest)
         return fallback()
     notes = {"summary": result["summary"], "tips": result["tips"]}
-    db.save_night_summary(user_id, date, json.dumps(notes, ensure_ascii=False), "llm",
+    db.save_night_summary(user_id, date, json.dumps({**notes, **kept}, ensure_ascii=False), "llm",
                           digest, result.get("model"))
     return from_llm(notes)
+
+
+def _log_notes_rewrite(date, stored, digest, facts, tip_ids):
+    """
+    要重寫一份已經存過的 notes 時，印出是哪幾項事實變了（2026-11-21）。
+
+    ⚠️ 只印日期與項目名稱：不印 user_id（它是憑證）、不印數值（睡眠資料）。
+    """
+    from ai import night_summary as ns
+    if stored["facts_hash"] == digest:
+        print(f"night-summary: retrying {date} (facts unchanged; last attempt fell back)")
+        return
+    try:
+        kept = json.loads(stored["text"])
+    except (TypeError, ValueError):
+        kept = {}
+    old_facts = kept.get("facts") if isinstance(kept, dict) else None
+    if old_facts is None:
+        print(f"night-summary: rewriting {date} (earlier facts were not kept)")
+        return
+    changed = ns.changed_fact_keys(old_facts, facts)
+    if kept.get("tip_ids") != tip_ids:
+        changed.append("tip_list")
+    print(f"night-summary: rewriting {date}, changed: {', '.join(changed) or 'prompt version'}")

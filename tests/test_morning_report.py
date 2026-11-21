@@ -22,6 +22,8 @@ tests/test_morning_report.py —— 早晨報告的後端（2026-11-12）
 
 執行：python tests/test_morning_report.py
 """
+import contextlib
+import io
 import json
 import os
 import re
@@ -262,11 +264,25 @@ check("⚠️ 沒被推薦的一條都不交給 AI", [tid for tid in mt.TIPS if 
                                     and tid not in ("P2", "P3", "P1")], [])
 v_llm = r["version"]
 
+kept = json.loads(db.get_night_summary(u, D, db_path=TMP)["text"])
+check("存 notes 時連同當時的事實一起存（之後比得出哪一項變了）",
+      (kept.get("facts", {}).get("date"), kept.get("tip_ids")), (D, ["P2", "P3", "P1"]))
 client.post("/rested", json={"user_id": u, "date": D, "rested": 3, "tags": ["late_caffeine"]})
 REPLIES[:] = [notes("We slept 3h 35m together.",
                     ("T3", "Caffeine even 6 hours before bed can cut sleep short, so maybe keep coffee early."))]
-r = client.get(f"/night-summary?user_id={u}&date={D}").json()
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    r = client.get(f"/night-summary?user_id={u}&date={D}").json()
+log = buf.getvalue()
 check("補了自評（事實變了）→ 重生一次", len(CALLS), 2)
+ok("重寫前印出變了哪幾項：自評那一項、建議清單", "how_you_felt" in log and "tip_list" in log, log)
+ok("⚠️ 紀錄裡沒有 user_id（它是憑證）", u not in log, log)
+ok("⚠️ 紀錄裡只有項目名稱、沒有數值（changed: 後面只准是 a.b 這種名稱）",
+   re.fullmatch(r"[a-z_.]+(, [a-z_.]+)*", log.split("changed: ")[-1].strip()) is not None, log)
+check("比對函式：巢狀的寫成 a.b、一樣的不列、新增與拿掉都算",
+      ns.changed_fact_keys({"x": 1, "p": {"at": "01:00", "v": 2}, "gone": 1},
+                           {"x": 1, "p": {"at": "02:00", "v": 2}, "new": 1}),
+      ["gone", "new", "p.at"])
 ok("⚠️ 內容變了 → version 跟著換（App 靠它讓紅點再亮）", len({v_fallback, v_llm, r["version"]}) == 3,
    str((v_fallback, v_llm, r["version"])))
 
