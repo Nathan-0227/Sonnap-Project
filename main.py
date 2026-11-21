@@ -2365,7 +2365,8 @@ def get_friends_town(user_id: str = Query(...)):
     night = date_cls.today().isoformat()
     day = social_town.visit_day(_dt.now())
     received, sent = db.list_friend_visits(user_id, day)
-    people, names = [], {}
+    visited_me = dict(received)  # 送的人 → 他今天送我的那一種（一天一次，所以一人一筆）
+    people, names, handles, species = [], {}, {}, {}
     for uid in [user_id, *db.list_friend_ids(user_id)]:
         settings = _sharing(uid)
         summary = _friend_summary(uid, masked=False)
@@ -2374,6 +2375,8 @@ def get_friends_town(user_id: str = Query(...)):
         cards = _cards_for(uid, days=1)
         card = next((c for c in cards if c["date"] == night and c["items"]), None)
         names[uid] = summary["display_name"]
+        handles[uid] = summary["handle"]
+        species[uid] = settings["pet_species"]
         people.append({
             "handle": summary["handle"],
             "display_name": summary["display_name"],
@@ -2385,11 +2388,16 @@ def get_friends_town(user_id: str = Query(...)):
             "glow": social_town.glows(db.get_nightly_behavior(uid, days=3), night,
                                       mine or bool(settings["items"].get("on_time"))),
             "sent": None if mine else sent.get(uid),
+            # 2026-11-22：他今天送過我什麼 → 地圖上他頭頂冒那個小圖示（只是裝飾）
+            "visited_me": None if mine else visited_me.get(uid),
             "card": card,
         })
     me_species = people[0]["pet_species"]
     visits = [{
         "display_name": names.get(sid) or (db.get_user(sid) or {}).get("display_name", ""),
+        # 列表上畫他的寵物頭、Send back 開他的送禮頁（handle 是邀請碼，不是 user_id）
+        "handle": handles.get(sid),
+        "pet_species": species.get(sid),
         "kind": kind,
         "message": social_town.message(kind, social_town.display_name(
             names.get(sid) or (db.get_user(sid) or {}).get("display_name", "")), me_species),
@@ -2399,7 +2407,8 @@ def get_friends_town(user_id: str = Query(...)):
         "day": day,
         "people": people,
         "visits": visits,
-        "kinds": [{"key": k, "label": social_town.button_label(k)} for k in social_town.KIND_ORDER],
+        "kinds": [{"key": k, "label": social_town.button_label(k), "invite": social_town.invite(k)}
+                  for k in social_town.KIND_ORDER],
     }
 
 

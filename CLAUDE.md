@@ -500,6 +500,22 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來 |
 | 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
 
+### ✅ 小鎮送禮（2026-11-22 grill Q1–Q15，`feature/friend-gifts`，照 Finch 的送禮頁）
+
+點小鎮裡的朋友 → 資料卡最下面 **Send something** → 送禮頁（`widgets/visit_gift_sheet.dart`）：你的寵物＋朋友的寵物、泡泡一句、**3×3 九種**，**先選再按 Send**。
+收的一方：小鎮右下**愛心＋還沒看過的數量**（`services/visits_seen.dart`，打開就算看過、只存手機）→ Stopped by today（寵物頭＋那句＋**Send back**）；地圖上今天送過你的朋友頭頂冒那一種的小圖示（只是裝飾）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 九種的三句（按鈕、對方看到的、泡泡）**只在 `social/town.KINDS`**，App 只把 `{friend}` 換成名字；原本 4 種的 key 不改 | 第二個定義處；舊紀錄讀不到 |
+| **一句都不准評判或催促**（`test_friend_town.py`【9】掃字） | 同「不按也沒關係」 |
+| **不鎖格子、不扣能量、不給 XP、不推播**；一個朋友一天一次照舊 | 等級反映睡眠品質，睡不好的人能送的關心不該比較少（紅線 5 的反面） |
+| 預設選中那格只看**自己手機的時間**（晚上 good_night、早上 good_morning），不看朋友的即時狀態 | 即時狀態預設不分享 |
+| 圖示 `assets/visits/<key>.png`（使用者生成的 3×3 圖示表切的），讀不到退回按鈕字裡的 emoji | — |
+| 減少動態效果：圖示不飛、寵物不跳，只換字 | — |
+| 小鎮資料先畫、「看過哪幾則」晚一點補 | 讀手機儲存慢時會拖住整個小鎮（測試裡 channel 不回應時整頁空白，寫的時候踩到） |
+| 成果展：`demo_accounts.py --live` 讓 Mia／Leo／Yuki **今天**各送你一則（先刪再寫，可重跑） | 拜訪只看今天，`--create` 那天寫的到展示當天看不到 |
+
 ### ✅ 按 Start Sleep 自動開攝影機（2026-11-21 grill Q1–Q17，`feature/camera-auto-start`）
 
 手機按 Start Sleep → `POST /sleep-status`（start）→ `camera_auto.py` 另外開一個獨立的 `tapo_metric_logger.py`；

@@ -10,6 +10,8 @@
 【6】存 14 天：寫入時順手刪舊的；解除好友、刪帳號時一起刪
 【7】回應裡沒有任何 user_id；/friends/town 不會被當成邀請碼
 【8】動態卡的 🐾：數字大家看得到、是誰只給卡片主人（朋友的朋友不一定是你的朋友）；只有今天那張能按
+【9】送禮頁（2026-11-22）：9 種、原本 4 種的 key 不變、每種都有三句且不評判；收到的那幾則帶送的人的邀請碼
+    （Send back 用）不帶 user_id；地圖上 visited_me 只給收的人自己看
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_friend_town.py
 """
@@ -40,6 +42,17 @@ check("早上 10:00 送的算今天", town.visit_day(datetime(2026, 11, 17, 10, 
 check("貓的主人看到 cat", town.message("pet", "Leo", "cat"), "Leo pet your cat 🐾")
 check("不認得的種類當 dog", town.message("pet", "Leo", None), "Leo pet your dog 🐾")
 check("一句話", town.message("sleep_well", "Mia", "dog"), "Mia: Sleep well 💤")
+check("【9】9 種，3×3 的順序", town.KIND_ORDER,
+      ("pet", "good_night", "sleep_well", "proud", "good_morning", "hugs", "you_got_this", "thanks", "outfit"))
+check("【9】原本 4 種的 key 還在（舊紀錄讀得到）",
+      all(k in town.KINDS for k in ("pet", "good_night", "sleep_well", "proud")), True)
+check("【9】KINDS 跟 KIND_ORDER 是同一組", sorted(town.KINDS) == sorted(town.KIND_ORDER), True)
+check("【9】每種的泡泡都有 {friend}", all("{friend}" in town.invite(k) for k in town.KIND_ORDER), True)
+check("【9】每種對方看到的都有送的人的名字", all("{name}" in town.KINDS[k][1] for k in town.KIND_ORDER), True)
+check("【9】換字不會炸（{pet} 照收的人的寵物）", town.message("outfit", "Mia", "cat"), "Mia loves your cat's outfit 👕")
+import re  # noqa: E402
+_nag = re.compile(r"(late|should|must|go to bed|again|why|bad|poor|worse)", re.I)
+check("【9】沒有一句在催促或評判", [t for k in town.KIND_ORDER for t in town.KINDS[k] if _nag.search(t)], [])
 check("示範帳號的名字不重複寫 (demo)", town.display_name("Mia (demo)"), "Mia")
 rows = [{"date": "2026-11-17", "adherence_minutes": 0}]
 check("準時＋分享 → 亮", town.glows(rows, "2026-11-17", True), True)
@@ -97,10 +110,12 @@ def same_shape(p):
 check("【2】晚了／沒資料／沒分享：三個人的回應一模一樣（除了名字）",
       same_shape(by["Late"]) == same_shape(by["Blank"]) == same_shape(by["Shy"]), True)
 check("【2】小鎮畫面只用這幾個欄位（多了新欄位要回來看會不會洩漏原因）",
-      sorted(same_shape(by["Late"])), ["demo", "glow", "mine", "pet_species", "sent"])
+      sorted(same_shape(by["Late"])), ["demo", "glow", "mine", "pet_species", "sent", "visited_me"])
 check("【2】而且都是 glow: false", [by[n]["glow"] for n in ("Late", "Blank", "Shy")], [False] * 3)
 check("【2】反向對照：亮的那個跟他們不一樣", same_shape(by["Early"]) == same_shape(by["Shy"]), False)
-check("按鈕四種，照順序", [k["key"] for k in j["kinds"]], ["pet", "good_night", "sleep_well", "proud"])
+check("按鈕九種，照順序", [k["key"] for k in j["kinds"]], list(town.KIND_ORDER))
+check("【9】每種帶泡泡那句（照抄 town.invite）", [k["invite"] for k in j["kinds"]],
+      [town.invite(k) for k in town.KIND_ORDER])
 
 print("\n【3】拜訪")
 h = {p["display_name"]: p["handle"] for p in j["people"]}
@@ -127,8 +142,17 @@ check("【4】對方看到的那一句照他自己的寵物（貓）", [v["messa
 jl = client.get("/friends/town", params={"user_id": late}).json()
 check("【4】另一個朋友看到的", [v["message"] for v in jl["visits"]], ["Me: Good night 🌙"])
 check("【4】回送：Early 也能送我", visit(h["Me"], "proud", who=early).status_code, 201)
-check("【4】我收到", [v["message"] for v in client.get("/friends/town", params={"user_id": me}).json()["visits"]],
-      ["Early: Proud of you ⭐"])
+jm = client.get("/friends/town", params={"user_id": me}).json()
+check("【4】我收到", [v["message"] for v in jm["visits"]], ["Early: Proud of you ⭐"])
+check("【9】收到的那則帶送的人的邀請碼與寵物（Send back、頭像用）",
+      [(v["handle"], v["pet_species"], v["kind"]) for v in jm["visits"]], [(h["Early"], "cat", "proud")])
+mby = {p["display_name"]: p for p in jm["people"]}
+check("【9】地圖上 Early 頭頂：他今天送我的那一種", mby["Early"]["visited_me"], "proud")
+check("【9】沒送我的是 None", (mby["Late"]["visited_me"], mby["Me"]["visited_me"]), (None, None))
+check("【9】反過來：Early 那邊，我頭頂是我送他的 pet",
+      {p["display_name"]: p["visited_me"] for p in client.get("/friends/town", params={"user_id": early}).json()["people"]}.get("Me"),
+      "pet")
+check("【9】新的種類送得出去", visit(h["Blank"], "hugs").status_code, 201)
 
 print("\n【5】不給 XP、不影響分數")
 before = client.get("/game", params={"user_id": shy}).json()

@@ -13,6 +13,7 @@ import '../services/morning_rating.dart' show restedFaceAsset;
 import 'report_tiles.dart';
 import '../theme/report_style.dart';
 import 'streak_card.dart' show StreakWeekRow, speciesOf;
+import 'visit_gift_sheet.dart' show VisitIcon, kVisitCircle, splitVisitLabel;
 
 /// 好友小鎮（2026-11-17 使用者定，照 Finch 的做法：朋友之間只看到寵物）。
 ///
@@ -539,6 +540,31 @@ class TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
                   IgnorePointer(
                     child: TownPetSprite(species: p.petSpecies, size: pet),
                   ),
+                  // 2026-11-22（Q8、Q14）：他今天送過你東西 → 右上冒一顆那種的小圖示。只是裝飾，
+                  // 點下去跟點寵物一樣（外層 GestureDetector 接）
+                  if (p.visitedMe case final kind?)
+                    Positioned(
+                      top: -pet * 0.18,
+                      right: -pet * 0.1,
+                      child: Container(
+                        key: Key('town-gift-${p.handle}'),
+                        width: pet * 0.42,
+                        height: pet * 0.42,
+                        padding: EdgeInsets.all(pet * 0.05),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: kVisitCircle[kind] ?? const Color(0xFFE4DAFF),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4)],
+                        ),
+                        child: VisitIcon(
+                          kind: kind,
+                          emoji: splitVisitLabel(
+                            widget.town.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '💌',
+                          ).$1,
+                        ),
+                      ),
+                    ),
                   // 閃光圍著頭：從頭頂上方一點開始，兩側往下到耳朵旁；畫在寵物前面才不會被擋住
                   if (p.glow)
                     Positioned(
@@ -629,10 +655,23 @@ class TownRoundButton extends StatelessWidget {
   );
 }
 
-/// 「今天誰來看過你」（右下角小圓鈕點開）。訊息照抄後端。
+/// 「今天誰來看過你」（右下角愛心點開）。訊息照抄後端。
+/// 2026-11-22（Q13）：每一則前面是他的寵物頭；今天還沒送他的話右邊一顆 Send back，點了開他的送禮頁。
 class TownVisitsCard extends StatelessWidget {
   final List<TownVisit> visits;
-  const TownVisitsCard({super.key, required this.visits});
+
+  /// 點 Send back；null＝不畫那顆（舊版後端沒給 handle、或沒有後端）。
+  final void Function(TownVisit visit)? onSendBack;
+
+  /// 今天已經送過的朋友（邀請碼）→ 不畫 Send back。
+  final Set<String> alreadySent;
+
+  const TownVisitsCard({
+    super.key,
+    required this.visits,
+    this.onSendBack,
+    this.alreadySent = const {},
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -657,10 +696,34 @@ class TownVisitsCard extends StatelessWidget {
         const SizedBox(height: 8),
         for (final v in visits)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Text(
-              v.message,
-              style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 14),
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: HomePet(
+                    mood: 'bored',
+                    species: speciesOf(v.petSpecies),
+                    size: 38,
+                    animate: false,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    v.message,
+                    style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 14),
+                  ),
+                ),
+                if (onSendBack != null && v.handle != null && !alreadySent.contains(v.handle))
+                  TextButton(
+                    key: Key('town-send-back-${v.handle}'),
+                    onPressed: () => onSendBack!(v),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFB9A6FF)),
+                    child: const Text('Send back', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+              ],
             ),
           ),
       ],
@@ -673,15 +736,15 @@ const kTownSheetSize = 0.6;
 
 /// 點小鎮裡的人 → 下半部滑出資訊面板（2026-11-19 使用者定，照參考圖）：
 /// 名字＋寵物 → 這週每晚準不準時 → 連續 3 晚以上一行 🔥 → 昨晚他有分享的格子（最多 6 格）
-/// → See last night ›；最下面固定是四個拜訪按鈕。
+/// → See last night ›；最下面固定一顆「Send something」→ 送禮頁（2026-11-22，visit_gift_sheet.dart）。
 /// 點自己：同一個面板（朋友看到的你），最下面換成「今天誰來看過你」。
 ///
-/// [onVisit] 回傳 null＝送出成功；否則是要顯示的那句話（後端的原文）。點自己時不用給。
+/// [onOpenGifts] 打開送禮頁，回傳今天送了他什麼（null＝沒送）。點自己時不用給。
 Future<void> showTownFriendSheet(
   BuildContext context, {
   required TownPerson person,
   required List<(String, String)> kinds,
-  Future<String?> Function(String kind)? onVisit,
+  Future<String?> Function()? onOpenGifts,
   FriendSummary? summary,
   List<TownVisit> visits = const [],
 }) {
@@ -698,7 +761,7 @@ Future<void> showTownFriendSheet(
       builder: (context, scroll) => _TownFriendSheet(
         person: person,
         kinds: kinds,
-        onVisit: onVisit,
+        onOpenGifts: onOpenGifts,
         summary: summary,
         visits: visits,
         scroll: scroll,
@@ -710,14 +773,14 @@ Future<void> showTownFriendSheet(
 class _TownFriendSheet extends StatefulWidget {
   final TownPerson person;
   final List<(String, String)> kinds;
-  final Future<String?> Function(String kind)? onVisit;
+  final Future<String?> Function()? onOpenGifts;
   final FriendSummary? summary;
   final List<TownVisit> visits;
   final ScrollController scroll;
   const _TownFriendSheet({
     required this.person,
     required this.kinds,
-    required this.onVisit,
+    required this.onOpenGifts,
     required this.summary,
     required this.visits,
     required this.scroll,
@@ -729,26 +792,12 @@ class _TownFriendSheet extends StatefulWidget {
 
 class _TownFriendSheetState extends State<_TownFriendSheet> {
   late String? _sent = widget.person.sent;
-  bool _busy = false;
-  String? _error;
 
-  Future<void> _send(String kind) async {
-    final onVisit = widget.onVisit;
-    if (onVisit == null) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final error = await onVisit(kind);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      if (error == null) {
-        _sent = kind;
-      } else {
-        _error = error;
-      }
-    });
+  Future<void> _openGifts() async {
+    final open = widget.onOpenGifts;
+    if (open == null) return;
+    final sent = await open();
+    if (mounted && sent != null) setState(() => _sent = sent);
   }
 
   static const _dim = Color(0x99FFFFFF);
@@ -1003,38 +1052,28 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
     ],
   );
 
-  Widget _visitButtons() => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final (i, (key, label)) in widget.kinds.indexed)
-            _visitButton(key, label, primary: i == 0),
-        ],
+  /// 一顆大按鈕開送禮頁（Q2）。今天送過了照樣打得開（Q11：那一頁會寫送過了），字換成送了什麼。
+  Widget _visitButtons() {
+    final sentLabel = widget.kinds.where((k) => k.$1 == _sent).firstOrNull?.$2 ?? _sent;
+    return SizedBox(
+      height: 52,
+      child: FilledButton.icon(
+        key: const Key('town-send-something'),
+        onPressed: widget.onOpenGifts == null ? null : _openGifts,
+        style: FilledButton.styleFrom(
+          backgroundColor: _sent == null ? const Color(0xFF7B61FF) : const Color(0x22FFFFFF),
+          foregroundColor: _sent == null ? Colors.white : kTownGold,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        ),
+        icon: Icon(_sent == null ? Icons.card_giftcard_rounded : Icons.check_rounded, size: 22),
+        label: Text(
+          _sent == null ? 'Send something' : 'Sent today · $sentLabel',
+          key: _sent == null ? null : const Key('town-sheet-sent'),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
       ),
-      if (_sent != null) ...[
-        const SizedBox(height: 8),
-        Text(
-          '${widget.kinds.where((k) => k.$1 == _sent).firstOrNull?.$2 ?? _sent} sent · '
-          'You can visit again tomorrow.',
-          key: const Key('town-sheet-sent'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: _dim, fontSize: 13),
-        ),
-      ],
-      if (_error != null) ...[
-        const SizedBox(height: 8),
-        Text(
-          _error!,
-          key: const Key('town-sheet-error'),
-          style: const TextStyle(color: Color(0xFFFFB4A8), fontSize: 13),
-        ),
-      ],
-    ],
-  );
+    );
+  }
 
   Widget _visitors() => Column(
     key: const Key('town-sheet-visitors'),
@@ -1067,69 +1106,6 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
     ],
   );
 
-  /// 按鈕上的字照抄後端（"Good night 🌙"）：最後一段不是字母就當成圓圈裡的符號、前面當名字；
-  /// 沒有符號就用第一個字。
-  static (String, String) _split(String label) {
-    final parts = label.trim().split(RegExp(r'\s+'));
-    if (parts.length > 1 && !RegExp(r'[A-Za-z0-9]').hasMatch(parts.last)) {
-      return (parts.last, parts.sublist(0, parts.length - 1).join(' '));
-    }
-    return (label.isEmpty ? '?' : label.characters.first, label);
-  }
-
-  Widget _visitButton(String key, String label, {required bool primary}) {
-    final sentThis = _sent == key;
-    final disabled = _busy || _sent != null;
-    final (symbol, name) = _split(label);
-    return Expanded(
-      child: Opacity(
-        opacity: disabled && !sentThis ? 0.4 : 1,
-        child: Semantics(
-          button: true,
-          label: label,
-          child: GestureDetector(
-            key: Key('town-visit-$key'),
-            behavior: HitTestBehavior.opaque,
-            onTap: disabled ? null : () => _send(key),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: sentThis
-                        ? const Color(0x33FFD27A)
-                        : primary
-                        ? const Color(0xFF7B61FF)
-                        : const Color(0xFF2A3570),
-                    border: Border.all(
-                      color: sentThis ? kTownGold : const Color(0x33FFFFFF),
-                      width: sentThis ? 2 : 1,
-                    ),
-                  ),
-                  child: Text(symbol, style: const TextStyle(fontSize: 22)),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: sentThis ? kTownGold : const Color(0xDDFFFFFF),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// 面板裡的一格（2026-11-19 使用者定第二版：「有些塞太滿、有些空太多」）。

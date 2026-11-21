@@ -7,7 +7,7 @@
 - 沒發光的三種情況（晚了、沒資料、沒分享）**看起來完全一樣**：回應裡只有 glow: false，
   不給原因——給了 App 就有機會畫出不一樣的樣子。
 - 拜訪：同一個朋友一天一次（以起床日算），不給 XP、不影響分數、**不推播**。
-  四種動作的字只在這裡定義，App 照抄。
+  九種動作的字（按鈕、對方看到的、送禮頁的泡泡）只在這裡定義，App 照抄。
 - 拜訪紀錄存 VISIT_KEEP_DAYS 天；刪好友、刪帳號時一起刪（db.py）。
 """
 from datetime import timedelta
@@ -17,14 +17,26 @@ from behavior.challenges import night_achieved
 
 VISIT_KEEP_DAYS = 14
 
-# key → (按鈕上的字, 對方看到的那一句)。{name}＝送的人、{pet}＝收的人的寵物
+# key → (按鈕上的字, 對方看到的那一句, 送禮頁上你的寵物說的那句)。
+# {name}＝送的人、{pet}＝收的人的寵物、{friend}＝要送給的朋友（App 只代換名字）。
+# 2026-11-22 使用者定（照 Finch 的送禮頁）：4 → 9 種、3×3 排滿；原本 4 種的 key 不改（舊紀錄照讀）。
+# ⚠️ 一句都不准評判或催促（不准 Go to bed!、You were late）——同「不按也沒關係」。
+# ⚠️ 泡泡那句自己寫，不照抄 Finch 的原文。
 KINDS = {
-    "pet": ("Pet 🐾", "{name} pet your {pet} 🐾"),
-    "good_night": ("Good night 🌙", "{name}: Good night 🌙"),
-    "sleep_well": ("Sleep well 💤", "{name}: Sleep well 💤"),
-    "proud": ("Proud of you ⭐", "{name}: Proud of you ⭐"),
+    "pet": ("Pet 🐾", "{name} pet your {pet} 🐾", "Let's go give {friend}'s buddy a pat!"),
+    "good_night": ("Good night 🌙", "{name}: Good night 🌙", "Let's wish {friend} a good night!"),
+    "sleep_well": ("Sleep well 💤", "{name}: Sleep well 💤", "Let's send {friend} sweet dreams!"),
+    "proud": ("Proud of you ⭐", "{name}: Proud of you ⭐", "Let's tell {friend} we're proud of them!"),
+    "good_morning": ("Good morning ☀️", "{name}: Good morning ☀️", "Let's say good morning to {friend}!"),
+    "hugs": ("Hugs 🤗", "{name} sent you a hug 🤗", "Let's send {friend} a big hug!"),
+    "you_got_this": ("You got this 💪", "{name}: You got this 💪", "Let's cheer {friend} on!"),
+    "thanks": ("Thanks 💛", "{name}: Thank you 💛", "Let's say thanks to {friend}!"),
+    "outfit": ("Nice outfit 👕", "{name} loves your {pet}'s outfit 👕", "Let's tell {friend} their buddy looks great!"),
 }
-KIND_ORDER = ("pet", "good_night", "sleep_well", "proud")
+# 格子的順序（3×3，跟圖示表的順序一樣）
+KIND_ORDER = ("pet", "good_night", "sleep_well",
+              "proud", "good_morning", "hugs",
+              "you_got_this", "thanks", "outfit")
 
 
 def visit_day(now):
@@ -43,6 +55,11 @@ def glows(behavior_rows, night, shares_on_time):
 
 def button_label(kind):
     return KINDS[kind][0]
+
+
+def invite(kind):
+    """送禮頁上你的寵物說的那句（{friend} 留給 App 換成朋友的名字）。"""
+    return KINDS[kind][2]
 
 
 def message(kind, sender_name, receiver_species):
