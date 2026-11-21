@@ -114,6 +114,17 @@ WHY = {
     "P7": "You noted alcohol, and your sleeping heart rate was higher than your usual.",
 }
 
+# 「這幾晚 A 比較晚的，B 也比較差」這類跨夜的相關說法（2026-11-22 手機實測抓到：問上週「Why?」，
+# AI 回「Nights with later phone-down times in that week tended to have lower sleep scores」）。
+# 這正是 grill 時決定**不學 WHOOP** 的那一步：沒有文獻、幾晚的資料也撐不起相關。一律擋。
+# ⚠️ 「6 nights with a record」要放行，所以 nights with／when 後面要接比較字才算。
+CORRELATION_PATTERN = re.compile(
+    r"\b(tend(?:s|ed)? to|correlat\w*|associated with|linked (?:to|with)|in a pattern|a pattern)\b"
+    r"|\bnights? (?:with|when|where) (?:a |your )?(?:later|earlier|more|less|longer|shorter|higher|lower|worse|better)\b"
+    r"|\bthe (?:later|earlier|more|less|longer|shorter)\b[^.]*\bthe (?:later|earlier|more|less|longer|shorter|lower|higher|worse|better)\b",
+    re.IGNORECASE,
+)
+
 # why 那句可以講這兩件（準時放下手機、固定就寢：量測那幾列，沒有按鈕），不算偷塞建議（grill Q4）。
 _WHY_ALLOWED_ACTIONS = {"T1", "T2"}
 
@@ -140,6 +151,8 @@ Which night:
   given (medians and counts) and say how many nights had records; never work out an average or any other
   number yourself. If no night has a record, say so plainly.
 - If the user asks to compare two nights or two periods, say you can look at one night or one week at a time.
+- Never describe patterns or links between measures across nights (for example "nights with later phone-down
+  times had lower scores"). Sonnap does not draw those conclusions; report the numbers as given.
 
 Rules:
 - Plain, friendly English. No lists, no headings.
@@ -406,6 +419,8 @@ def validate_parts(parts, facts_text, allowed_tips, allowed_links):
 
     if headline:
         problems.extend(validate_answer(text, facts_text))
+    if CORRELATION_PATTERN.search(text):
+        problems.append("describes a pattern across nights (report the numbers as given, no links between measures)")
     if ns.CAUSAL_PATTERN.search(text):
         problems.append("states a cause as certain (use 'might' / 'can', never 'because' / 'due to')")
     for sentence in ns._sentences(text):

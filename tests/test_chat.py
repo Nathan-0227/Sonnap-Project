@@ -431,6 +431,13 @@ use(fake)
 check("AI 自己算的數字（不在事實裡）→ 擋下",
       client.post("/chat", json={"user_id": carol, "message": "this week?"}).status_code, 503)
 
+# 2026-11-22 手機實測：問上週「Why?」，AI 自己歸納出跨夜的相關（grill 決定不學 WHOOP 的那一步）
+ok("擋：跨夜的相關說法（手機實測那句）", any("pattern across nights" in p for p in parts_problems(
+    "Here is that week.", "Nights with later phone-down times in that week tended to have lower sleep scores.")))
+ok("擋：the later ..., the lower ...", any("pattern across nights" in p for p in parts_problems(
+    "The later you put the phone down, the lower your score.")))
+check("放行：「nights with a record」不是相關", parts_problems("You had records on 3 of the 5 recorded nights."), [])
+
 r, p0 = carol_asks("How was this week?")              # 11-23～25：只有 11-24 一晚
 ok("只有 1 晚 → 不給中位數（那一晚的數字就在 nights 裡）", "median_" not in p0 and '"2026-11-24"' in p0)
 

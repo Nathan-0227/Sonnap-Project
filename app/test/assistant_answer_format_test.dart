@@ -157,7 +157,7 @@ void main() {
       await tester.tap(find.byKey(const Key('assistant-link-total_sleep')));
       await tester.pump();
       expect(opened, ['2026-11-21 total_sleep']);
-      expect(find.text('See Total sleep for last night ›'), findsOneWidget);
+      expect(find.text('See Total sleep for this night ›'), findsOneWidget);
     });
 
     testWidgets('追問：兩顆、不出現已經問過的', (tester) async {
