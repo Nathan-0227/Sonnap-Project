@@ -267,6 +267,25 @@ check("今天那 3 筆，日期是起床日", sorted(v for v in visits_to_me() i
        ("Yuki (demo)", gift_day, "hugs")])
 check("每種都是 town 認得的", all(k in demo_accounts.social_town.KINDS
                               for k in demo_accounts.DEMO_GIFTS.values()), True)
+
+print("【衣服】示範帳號各穿一件、都是自己等級已經解鎖的（2026-11-22）")
+import main  # noqa: E402
+from game import inventory  # noqa: E402
+_dressed = {n: (db.get_game_state(u, db_path=TMP) or {}).get("equipped_item_id")
+            for u, n in demo_accounts.demo_users(TMP)}
+check("--create 之後四個人都穿上了", _dressed, demo_accounts.DEMO_OUTFITS)
+_real_path = db.DB_PATH
+db.DB_PATH = TMP  # main 的等級算法走預設資料庫 → 暫時指過來
+try:
+    _locked = [n for u, n in demo_accounts.demo_users(TMP)
+               if demo_accounts.DEMO_OUTFITS[n] not in inventory.level_unlocked(main._closet_level(u))]
+finally:
+    db.DB_PATH = _real_path
+check("每一件都是他自己等級已經解鎖的（沒有 3 級戴 8 級的皇冠）", _locked, [])
+for u, _ in demo_accounts.demo_users(TMP):
+    db.set_equipped_item(u, None, db_path=TMP)
+check("--live 會補穿（舊的示範帳號不用重建）", demo_accounts.dress_demo(db_path=TMP), demo_accounts.DEMO_OUTFITS)
+check("本人的衣服不被動到", (db.get_game_state(me, db_path=TMP) or {}).get("equipped_item_id"), None)
 demo_accounts.remove_all(TMP)
 _c = db.connect(TMP)
 left = _c.execute("SELECT COUNT(*) AS n FROM live_sleep_status").fetchall()[0]["n"]
