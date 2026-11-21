@@ -5,10 +5,13 @@
 // 【4】圖示讀不到 → 退回按鈕字裡的 emoji（不會空一格）
 // 【5】送出去：寵物跳、圖示飛過去；減少動態效果時都不動、只換字
 // 【6】按鈕上的字拆成 emoji＋名字；沒有 emoji 的整串照寫
+// 【7】兩隻寵物穿各自的衣服（朋友的要他有分享，後端判斷；App 照畫）
+// 【8】兩隻寵物各站在背景圖的一個坐墊上（位置跟著圖縮放，大小螢幕都對）
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/services/friends_service.dart';
+import 'package:app/widgets/home_pet.dart';
 import 'package:app/widgets/visit_gift_sheet.dart';
 
 const nine = [
@@ -45,8 +48,8 @@ Future<List<String>> pumpSheet(
         data: MediaQueryData(size: const Size(411, 900), disableAnimations: reduceMotion),
         child: Scaffold(
           body: VisitGiftSheet(
-            friend: const TownPerson(handle: 'MIA111', displayName: 'Mia (demo)', petSpecies: 'cat'),
-            me: const TownPerson(handle: 'ME0001', displayName: 'Me', mine: true, petMood: 'happy'),
+            friend: const TownPerson(handle: 'MIA111', displayName: 'Mia (demo)', petSpecies: 'cat', equippedItemId: 'crown'),
+            me: const TownPerson(handle: 'ME0001', displayName: 'Me', mine: true, petMood: 'happy', equippedItemId: 'top_hat'),
             kinds: kinds,
             invites: invites,
             clock: () => now ?? DateTime(2026, 11, 22, 14),
@@ -150,4 +153,55 @@ void main() {
     expect(splitVisitLabel('PROUD-FROM-BACKEND'), ('P', 'PROUD-FROM-BACKEND'));
     expect(visitInvite('Hi {friend}!', 'Mia'), 'Hi Mia!');
   });
+
+  testWidgets('【7】兩隻寵物穿各自的衣服', (tester) async {
+    await pumpSheet(tester);
+    final friend = tester.widget<HomePet>(find.byKey(const Key('visit-gift-friend-pet')));
+    expect(friend.equippedItemId, 'crown');
+    final mine = tester.widget<HomePet>(
+      find.descendant(of: find.byKey(const Key('visit-gift-my-pet')), matching: find.byType(HomePet)),
+    );
+    expect(mine.equippedItemId, 'top_hat');
+  });
+
+  test('【8】坐墊的位置跟著圖縮放：cover、貼下緣置中', () {
+    // 盒子跟原圖同比例 → 就是比例本身
+    final same = visitSeatAt(const Size(543, 724), const Offset(0.5, 0.75));
+    expect(same.dx, closeTo(271.5, 0.01));
+    expect(same.dy, closeTo(543, 0.01));
+    // 比較矮的盒子：寬度撐滿、上面被裁掉，下緣對齊 → 那一點離下緣的距離不變比例
+    final short = visitSeatAt(const Size(400, 300), const Offset(0.5, 1.0));
+    expect(short.dy, closeTo(300, 0.01));
+    expect(short.dx, closeTo(200, 0.01));
+  });
+
+  for (final view in const [Size(411, 900), Size(360, 700)]) {
+    testWidgets('【8】$view：兩隻寵物各站在一個坐墊上', (tester) async {
+      tester.view.physicalSize = view;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: VisitGiftSheet(
+            friend: const TownPerson(handle: 'M', displayName: 'Mia'),
+            kinds: nine,
+            onSend: (_) async => null,
+          ),
+        ),
+      ));
+      await tester.pump();
+      final bg = tester.getRect(find.byKey(const Key('visit-gift-background')));
+      for (final (key, seat) in [
+        ('visit-gift-my-pet', kVisitSeatMine),
+        ('visit-gift-friend-pet', kVisitSeatFriend),
+      ]) {
+        final want = bg.topLeft + visitSeatAt(bg.size, seat);
+        final pet = tester.getRect(find.byKey(Key(key)));
+        expect(pet.center.dx, closeTo(want.dx, 1), reason: key);
+        // 腳（盒子下緣往上一點）踩在坐墊頂面
+        expect(pet.bottom, greaterThan(want.dy), reason: key);
+        expect(pet.bottom - want.dy, lessThan(pet.height * 0.2), reason: key);
+      }
+    });
+  }
 }

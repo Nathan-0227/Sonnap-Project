@@ -57,7 +57,10 @@ const kTownMaxFriends = 9;
 class TownPetSprite extends StatelessWidget {
   final String? species;
   final double size;
-  const TownPetSprite({super.key, required this.species, this.size = 58});
+
+  /// 穿的衣服（他有分享才有，2026-11-22）。
+  final String? equippedItemId;
+  const TownPetSprite({super.key, required this.species, this.size = 58, this.equippedItemId});
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -67,6 +70,7 @@ class TownPetSprite extends StatelessWidget {
       mood: 'bored',
       species: speciesOf(species),
       size: size * 0.92,
+      equippedItemId: equippedItemId,
     ),
   );
 }
@@ -538,7 +542,7 @@ class TownMapState extends State<TownMap> with SingleTickerProviderStateMixin {
                     ),
                   // 首頁那隻寵物自己可以點（會有反應），會把點擊吃掉 → 小鎮裡交給外層
                   IgnorePointer(
-                    child: TownPetSprite(species: p.petSpecies, size: pet),
+                    child: TownPetSprite(species: p.petSpecies, size: pet, equippedItemId: p.equippedItemId),
                   ),
                   // 2026-11-22（Q8、Q14）：他今天送過你東西 → 右上冒一顆那種的小圖示。只是裝飾，
                   // 點下去跟點寵物一樣（外層 GestureDetector 接）

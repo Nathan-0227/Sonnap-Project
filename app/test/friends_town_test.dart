@@ -941,4 +941,23 @@ void main() {
       expect(find.byKey(const Key('town-sheet')), findsOneWidget);
     });
   });
+
+  testWidgets('地圖上的寵物穿他分享的衣服（後端沒給就沒穿）', (tester) async {
+    final stub = TownStub(
+      town: FriendsResult(FriendsStatus.ok, value: TownState.fromJson({
+        'night': '2026-09-03', 'day': '2026-09-03', 'kinds': kinds,
+        'people': [
+          person('ME0001', 'Nathan', mine: true),
+          {...person('EAR111', 'Early'), 'equipped_item_id': 'crown'},
+          person('LAT222', 'Late'),
+        ],
+      })),
+    );
+    await pump(tester, stub);
+    String? outfit(String h) => tester
+        .widget<TownPetSprite>(find.descendant(of: townie(h), matching: find.byType(TownPetSprite)))
+        .equippedItemId;
+    expect(outfit('EAR111'), 'crown');
+    expect(outfit('LAT222'), isNull);
+  });
 }

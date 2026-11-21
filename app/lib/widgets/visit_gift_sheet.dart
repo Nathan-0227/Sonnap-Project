@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,6 +18,32 @@ import 'streak_card.dart' show speciesOf;
 /// ⚠️ 不鎖格子、不扣能量、不給 XP（Q5：等級反映睡眠品質，睡不好的人能送的關心不該比較少）。
 /// ⚠️ 不推播；送出去對方下次打開 Sonnap 才看到——泡泡照實這樣說。
 /// ⚠️ 減少動態效果：圖示不飛、寵物不跳，只換字。
+
+/// 上半部的背景（2026-11-22 使用者生成：夜晚的客廳，地毯上兩個坐墊）。讀不到就是原本的藍色漸層，
+/// 寵物照樣站在同一個位置。
+const String kVisitGiftBackground = 'assets/backgrounds/visit_gift.jpg';
+
+/// 原圖大小（寬 × 高）。⚠️ 換圖就要重量這裡跟下面兩個坐墊。
+const Size kVisitGiftImageSize = Size(1086, 1448);
+
+/// 兩個坐墊頂面的中間（寵物腳踩的地方），用原圖的比例表示。左＝你、右＝朋友。2026-11-22 量的。
+const Offset kVisitSeatMine = Offset(270 / 1086, 1085 / 1448);
+const Offset kVisitSeatFriend = Offset(822 / 1086, 1090 / 1448);
+
+/// 坐墊寬約佔原圖寬的 0.33；寵物比坐墊窄一點才像坐在上面。
+const double kVisitPetWidth = 0.30;
+
+/// 圖用 BoxFit.cover、貼下緣置中畫在 [box] 裡時，原圖上比例 [f] 那一點落在哪裡（也給測試用）。
+Offset visitSeatAt(Size box, Offset f, {Size image = kVisitGiftImageSize}) {
+  final s = math.max(box.width / image.width, box.height / image.height);
+  final dx = (box.width - image.width * s) / 2;
+  final dy = box.height - image.height * s;
+  return Offset(dx + f.dx * image.width * s, dy + f.dy * image.height * s);
+}
+
+/// 同上，寵物畫多大（跟著圖縮放）。
+double visitPetSize(Size box, {Size image = kVisitGiftImageSize}) =>
+    image.width * math.max(box.width / image.width, box.height / image.height) * kVisitPetWidth;
 
 /// 圖示（使用者生成的 3×3 圖示表切的）。讀不到就退回按鈕字裡的 emoji。
 String visitIconAsset(String kind) => 'assets/visits/$kind.png';
@@ -232,69 +260,102 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
     );
   }
 
-  /// 上半部：泡泡＋兩隻寵物。高度不夠時寵物跟著縮。
+  /// 上半部：客廳背景＋泡泡＋兩隻寵物各站在一個坐墊上（位置跟著圖縮放）。
   Widget _stage() => LayoutBuilder(
     builder: (context, box) {
-      final pet = (box.maxHeight * 0.42).clamp(56.0, 120.0);
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 56, 20, 12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Flexible(child: _speech()),
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                SizedBox(
-                  key: const Key('visit-gift-my-pet'),
-                  width: pet,
-                  height: pet,
-                  child: HomePet(
-                    mood: widget.me?.petMood,
-                    species: speciesOf(widget.me?.petSpecies),
-                    size: pet * 0.95,
-                    animate: false,
-                  ),
-                ),
-                SizedBox(width: pet * 0.15),
-                AnimatedBuilder(
-                  animation: _hop,
-                  builder: (context, child) {
-                    final j = petJumpPose(_hop.isAnimating ? _hop.value : 0.0);
-                    return Transform.translate(
-                      offset: Offset(0, -pet * 0.35 * j.lift),
-                      child: Transform(
-                        alignment: Alignment.bottomCenter,
-                        transform: Matrix4.diagonal3Values(j.scaleX, j.scaleY, 1),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: SizedBox(
-                    key: _friendPetKey,
-                    width: pet * 0.85,
-                    height: pet * 0.85,
-                    // 朋友的心情只有他有分享才有；沒有 → HomePet 畫 bored（不畫 happy）
-                    child: HomePet(
-                      key: const Key('visit-gift-friend-pet'),
-                      mood: widget.friend.petMood,
-                      species: speciesOf(widget.friend.petSpecies),
-                      size: pet * 0.8,
-                      animate: false,
-                    ),
-                  ),
-                ),
-              ],
+      final size = box.biggest;
+      final pet = visitPetSize(size);
+      final mine = visitSeatAt(size, kVisitSeatMine);
+      final theirs = visitSeatAt(size, kVisitSeatFriend);
+      // 寵物圖腳下有留白：盒子的下緣往下一點，腳才踩在坐墊頂面
+      const feet = 0.12;
+      Widget at(Offset seat, Widget child) => Positioned(
+        left: seat.dx - pet / 2,
+        top: seat.dy - pet * (1 - feet),
+        width: pet,
+        height: pet,
+        child: child,
+      );
+      const bubbleTop = 56.0;
+      final bubbleRoom = math.max(60.0, math.min(mine.dy, theirs.dy) - pet * 0.95 - bubbleTop);
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              kVisitGiftBackground,
+              key: const Key('visit-gift-background'),
+              fit: BoxFit.cover,
+              alignment: Alignment.bottomCenter,
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            top: bubbleTop,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: bubbleRoom),
+              // 尾巴指向左邊你的寵物。矮的螢幕放不下時整個等比縮小，不溢出、不蓋到寵物
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: size.width - 40,
+                  child: _speech(tailX: ((mine.dx - 20) / (size.width - 40) * 2 - 1).clamp(-0.9, 0.9)),
+                ),
+              ),
+            ),
+          ),
+          at(
+            mine,
+            SizedBox(
+              key: const Key('visit-gift-my-pet'),
+              child: HomePet(
+                mood: widget.me?.petMood,
+                species: speciesOf(widget.me?.petSpecies),
+                size: pet,
+                animate: false,
+                equippedItemId: widget.me?.equippedItemId,
+              ),
+            ),
+          ),
+          at(
+            theirs,
+            AnimatedBuilder(
+              animation: _hop,
+              builder: (context, child) {
+                final j = petJumpPose(_hop.isAnimating ? _hop.value : 0.0);
+                return Transform.translate(
+                  offset: Offset(0, -pet * 0.35 * j.lift),
+                  child: Transform(
+                    alignment: Alignment.bottomCenter,
+                    transform: Matrix4.diagonal3Values(j.scaleX, j.scaleY, 1),
+                    child: child,
+                  ),
+                );
+              },
+              child: SizedBox(
+                key: _friendPetKey,
+                // 朋友的心情只有他有分享才有；沒有 → HomePet 畫 bored（不畫 happy）
+                child: HomePet(
+                  key: const Key('visit-gift-friend-pet'),
+                  mood: widget.friend.petMood,
+                  species: speciesOf(widget.friend.petSpecies),
+                  size: pet,
+                  animate: false,
+                  // 他有分享 Pet outfit 才有（後端判斷），沒有就畫沒穿
+                  equippedItemId: widget.friend.equippedItemId,
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     },
   );
 
-  Widget _speech() => Column(
+  Widget _speech({double tailX = -0.35}) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
       Container(
@@ -321,7 +382,7 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
       ),
       // 泡泡的尾巴，指向左邊你的寵物
       Align(
-        alignment: const Alignment(-0.35, 0),
+        alignment: Alignment(tailX, 0),
         child: CustomPaint(size: const Size(22, 12), painter: _TailPainter()),
       ),
     ],
