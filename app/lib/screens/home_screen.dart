@@ -156,6 +156,14 @@ const double kHomeBackgroundCrest = 0.552;
 /// 圖片最下緣的顏色，圖畫完之後頁面用它接下去。
 const Color kHomeBackgroundBottom = Color(0xFF090F4F);
 
+/// 背景圖最上緣的顏色（實測整列 #010B2E）。背景往下推時，上面空出來那段用它補。
+const Color kHomeBackgroundTop = Color(0xFF010B2E);
+
+/// 等級條（徽章＋細條＋字）比原本只有一顆徽章多出來的高度。
+/// 有等級條時背景、山頂、寵物整塊往下推這麼多，寵物照樣站在山頂上（2026-11-21 使用者定）。
+/// ⚠️ 不往下推的話等級條只能往上長，實機上壓到時鐘卡；`game_test` 量整張時鐘卡守著。
+const double kHomeLevelExtra = 30;
+
 /// 寵物的大小。
 const double kHomePetSize = 230;
 
@@ -1116,23 +1124,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // 圖片以整個螢幕寬度從最上面鋪下來，所以山頂的位置可以算出來。
     // 寵物的腳（圖框底部往上約 8%）踩在山頂稍下方一點的草地上。
-    final crestY = width / kHomeBackgroundAspect * kHomeBackgroundCrest;
+    // 有等級條時整塊（背景、山頂、寵物、底下所有內容）往下推 [kHomeLevelExtra]。
+    // ⚠️ 看「有沒有接後端」不看「拿到了沒」：/game 常常晚幾秒才到（實機剛開 App 時會逾時），
+    //    看後者的話資料一到整頁往下跳 30。
+    final lift = widget.game != null ? kHomeLevelExtra : 0.0;
+    final crestY = width / kHomeBackgroundAspect * kHomeBackgroundCrest + lift;
     // 上半部（問候＋時鐘＋倒數圓環）大約需要 [kHomeHeaderHeight]；
     // 螢幕窄到放不下時寵物往下移，寧可站在草地上也不要蓋到時鐘。
     final heroHeight = math.max(
       crestY + 14 + kHomePetSize * 0.08 - topInset,
-      kHomeHeaderHeight + kHomePetSize - 20,
+      kHomeHeaderHeight + kHomePetSize - 20 + lift,
     );
 
     return SingleChildScrollView(
       child: Stack(
         clipBehavior: Clip.hardEdge,
         children: [
+          // 背景往下推時，上面空出來那段補上圖最上緣的夜空色（看不出接縫）
+          if (lift > 0)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: lift + 1,
+              child: const ColoredBox(color: kHomeBackgroundTop),
+            ),
           // 山丘那張在上、湖面那張接在下面（兩張同寬同比例，接縫兩邊都是深色草叢）。
           // ⚠️ 用 Positioned：頁面高度由內容決定，背景只鋪到內容結束，
           //    不然兩張圖會把頁面撐長，底下多出一大段空的湖面可以捲。
           Positioned(
-            top: 0,
+            top: lift,
             left: 0,
             right: 0,
             child: Column(
