@@ -19,6 +19,7 @@ import '../services/sleep_repository.dart';
 import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/level_progress.dart';
+import '../widgets/night_sheets.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
@@ -708,6 +709,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
   /// （首頁點某一天、補填自評之後；起床流程走 [_wakeUpFlow]，中間多一個等待畫面。）
+  /// 分數卡、效率、深睡點開（2026-11-21）：跟早晨報告**同一份** [NightSheets]，
+  /// 原本首頁這三格開的是另一個長條圖頁（同一個量兩頁、兩邊說的不一樣）。
+  /// 這一晚＝首頁畫的那一晚（history 最後一晚）；有後端就問那一晚，沒有就用打包檔（同 [_openReport]）。
+  bool _openingSheet = false;
+  Future<void> _openNightSheet(
+    SleepSession session,
+    Future<void> Function(NightSheets sheets, BuildContext context) open,
+  ) async {
+    final date = session.history.lastOrNull?.date;
+    if (date == null || _openingSheet) return;
+    _openingSheet = true;
+    try {
+      final inputs = await _reportInputs(date);
+      MorningReport r;
+      try {
+        r = await _fetchReport(date, inputs);
+      } catch (_) {
+        r = _initialReport(date, inputs);
+      }
+      if (!mounted) return;
+      await open(NightSheets.fromLoader(r, _loader), context);
+    } finally {
+      _openingSheet = false;
+    }
+  }
+
   Future<void> _openReport(String date) async {
     final inputs = await _reportInputs(date);
     if (!mounted) return;
@@ -1237,17 +1264,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         widget.planCard!,
                       ],
                       const SizedBox(height: 18),
-                      // 點分數卡：最近 7 晚的分數長條圖（照抄後端每晚的 final_score）。
+                      // 點分數卡：分數頁（2026-11-21，跟報告的分數圓弧同一頁，見 night_sheets.dart）。
                       GestureDetector(
                         key: const Key('score-card'),
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => _showMetricSheet(
-                          session: session,
-                          id: 'score',
-                          title: 'Sleep Score',
-                          series: _series(session.history, (e) => e.finalScore),
-                          format: (v) => v.round().toString(),
-                        ),
+                        onTap: () => _openNightSheet(
+                            session, (s, c) => s.score(c)),
                         child: _buildScoreCard(session),
                       ),
                       const SizedBox(height: SonnapColors.gap),
@@ -1912,14 +1934,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               note: eff == null ? null : m.scoredEfficiencyLabel,
               compare: cmp(effSeries, _fmtPts),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'efficiency',
-              title: 'Sleep efficiency',
-              series: effSeries,
-              format: _fmtPts,
-              caveatComponent: 'efficiency',
-            ),
+            // 2026-11-21：跟報告的效率格同一頁（不放警語，11-19 定）
+            () => _openNightSheet(session, (s, c) => s.efficiency(c)),
           );
     final deepTile = tappable(
             InfoTile(
@@ -1931,14 +1947,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               value: deep == null ? null : _hm(deep),
               compare: cmp(deepSeries, formatMinutes),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'deep',
-              title: 'Deep sleep',
-              series: deepSeries,
-              format: formatMinutes,
-              caveatComponent: 'deep',
-            ),
+            // 2026-11-21：深睡頁（night_sheets.dart，報告也開這一頁）
+            () => _openNightSheet(session, (s, c) => s.deep(c)),
           );
     // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
     // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。

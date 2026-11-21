@@ -490,6 +490,18 @@ void main() {
       expect(textOf(tester, 'eff-span'), startsWith('Start sleep 23:40 → Out of bed'));
     });
 
+    testWidgets('點分數 → 分數頁（2026-11-21，跟首頁分數卡同一頁），數字跟報告上的一樣', (tester) async {
+      await pumpReport(
+        tester,
+        buildMorningReport(date: '2026-11-12', home: homeWithScore('2026-11-12')),
+      );
+      final shown = textOf(tester, 'report-score');
+      await tester.tap(find.byKey(const Key('report-score-open')));
+      await settle(tester);
+      expect(find.byKey(const Key('score-sheet')), findsOneWidget);
+      expect(textOf(tester, 'score-value'), shown);
+    });
+
     testWidgets('沒有給一週資料 → Time asleep 不能點', (tester) async {
       await pumpReport(
         tester,

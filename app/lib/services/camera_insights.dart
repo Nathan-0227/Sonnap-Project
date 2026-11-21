@@ -553,6 +553,10 @@ class WearableNight {
   final double? score;
   final String? quality;
 
+  /// 那一晚等級的顏色（"#9AD36A"，後端 `score_color`，2026-11-21）。分數詳細頁的一週長條照它上色；
+  /// Dart 沒有等級→顏色的表。舊版後端沒有 → null，長條退回一個顏色。
+  final String? scoreColor;
+
   /// 那一晚寵物的心情（後端 `resolve_mood`，Dart 不推）。
   final String? petMood;
   final double? sleepMinutes;
@@ -565,6 +569,7 @@ class WearableNight {
   const WearableNight({
     this.score,
     this.quality,
+    this.scoreColor,
     this.petMood,
     this.sleepMinutes,
     this.deepMinutes,
@@ -579,6 +584,7 @@ class WearableNight {
     return WearableNight(
       score: _d(j['final_score']),
       quality: j['final_quality'] as String?,
+      scoreColor: j['score_color'] as String?,
       petMood: j['pet_mood'] as String?,
       sleepMinutes: hours == null ? null : hours * 60,
       deepMinutes: _d(j['deep_minutes']),
