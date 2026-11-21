@@ -1971,6 +1971,7 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 | 對話**只存在手機上**（`sonnap/store` 的 `assistant_thread_v1`，最多 40 則），不送後端存；✎ 開新對話＝清掉；**沒有歷史頁** | 使用者定 |
 | **只存一問一答都成功的**：答不出來（503）的問題留在畫面上可以重試（`assistant-retry`），但不存、也不當前文送出 | 存了的話重開 App 會留一句沒有回答的孤兒問題，下一次還會被當成前文（2026-11-20 修，`assistant_chat_test.dart` 守著） |
 | 建議問題是固定清單（`kAssistantSuggestions`）；原本寫死的「What affected your sleep」拿掉了 | — |
+| **寵物心情與目標時間**（2026-11-21／22）：事實裡有 `pet_mood`（跟 `/home` 同一隻、同一支 `resolve_mood`），只給「這一晚由哪一類訊號決定」＋一般規則 `PET_MOOD_RULE`，不給 `mood_reason`、不給壓力；目標分成 `current_target_bedtime` 與那一晚的 `target_bedtime_that_night` | 只給這一晚的話 AI 會推成「心情完全跟睡眠無關」；只給現在的目標的話，目標改過之後 AI 會拿新目標去對舊的一晚（手機實測：那晚用 01:25 判，AI 說 04:00）。`test_chat.py`【6d】【6e】守著 |
 
 ---
 

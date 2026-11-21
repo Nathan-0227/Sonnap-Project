@@ -246,6 +246,23 @@ ok("沒有心情時不出現那一項",
 ok("anxious 那條的說法不提壓力", "stress" not in chat.PET_MOOD_DECIDED_BY["wearable_override"].lower())
 
 # ═══════════════════════════════════════════════════════════════════
+section("【6e】那一晚的目標 vs 現在的目標；心情只說這一晚＋一般規則（2026-11-22）")
+# ═══════════════════════════════════════════════════════════════════
+bob = make_user("Bob", "2026-09-03T00:10:00+08:00")       # 目標 23:30 那晚
+client.patch(f"/users/{bob}", json={"target_bedtime": "04:00"})   # 之後才改成 04:00
+fake = FakeLLM("You put the phone down at 00:10.")
+use(fake)
+client.post("/chat", json={"user_id": bob, "message": "Was I on time?"})
+p0 = fake.prompts[0] if fake.prompts else ""
+ok("那一晚的目標（23:30）跟著那一晚給", '"target_bedtime_that_night": "23:30"' in p0)
+ok("現在的目標（04:00）另外給、名字分開", '"current_target_bedtime": "04:00"' in p0)
+ok("舊的單一 target_bedtime 鍵不再出現", '"target_bedtime":' not in p0)
+ok("心情附一般規則", chat.PET_MOOD_RULE in p0)
+ok("一般規則跟 resolve_mood 一致：提到手錶也能決定", "watch" in chat.PET_MOOD_RULE and "no phone-down record" in chat.PET_MOOD_RULE)
+ok("每一種 decided_by 都只講這一晚", all(v.startswith("this night:") for v in chat.PET_MOOD_DECIDED_BY.values()))
+ok("一般規則不提壓力", "stress" not in chat.PET_MOOD_RULE.lower())
+
+# ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")
 # ═══════════════════════════════════════════════════════════════════
 import ast  # noqa: E402

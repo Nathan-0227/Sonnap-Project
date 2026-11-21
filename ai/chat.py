@@ -72,8 +72,11 @@ Rules:
 - Write 2 to 4 short sentences in plain, friendly English. No lists, no headings.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
 - If the question needs data that is not in the facts, say plainly that Sonnap does not have that data.
-- PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text; do not
-  invent other reasons and do not say whether a sleep measure is high or low.
+- PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text for that
+  night and "how_pet_mood_works" for the general rule; do not invent other reasons, do not say whether a
+  sleep measure is high or low, and do not claim the mood never or always depends on something.
+- When talking about a past night's bedtime, use that night's "target_bedtime_that_night". The user's
+  "current_target_bedtime" may have changed since then.
 - Focus on behaviour the user can change, such as when they put the phone down and keeping a steady bedtime.
 - Do not give medical advice. Do not name health conditions, medicines or treatments. If the user sounds
   worried about their health, suggest talking to a doctor or the campus health service.
@@ -90,10 +93,16 @@ class ChatUnavailable(Exception):
 # ⚠️ 不給 mood_reason：那是規則標籤（final_quality=Good），而且 anxious 那條會帶出壓力，
 #    壓力不交給 AI（同寵物 notes）。這裡只說「由哪一類訊號決定」。
 PET_MOOD_DECIDED_BY = {
-    "behavior": "when the phone was put down compared with the target bedtime",
-    "wearable": "the watch's sleep quality grade for that night",
-    "wearable_override": "the watch showed the body was less settled than usual that night",
+    "behavior": "this night: when the phone was put down compared with that night's target bedtime",
+    "wearable": "this night: the watch's sleep quality grade (no phone-down record for that night)",
+    "wearable_override": "this night: the watch showed the body was less settled than usual",
 }
+
+# 一般規則（照 main.resolve_mood 寫的一句話）。2026-11-22 加：只給「這一晚由什麼決定」的話，
+# AI 會自己推成「寵物心情完全跟睡眠無關」（手機實測），所以把真正的規則也給它。
+PET_MOOD_RULE = ("Usually decided by when the phone was put down compared with the target bedtime. "
+                 "On nights with no phone-down record, the watch's sleep quality grade decides it. "
+                 "If the watch shows the body was less settled than usual, the mood can become anxious.")
 
 
 def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
@@ -109,7 +118,9 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
     ⚠️ 分數只放整數，與 App 上顯示的一致；小數點後的數字放進去，模型就會
        講出 App 上看不到的「82.4 分」。
     """
-    facts = {"target_bedtime": user.get("target_bedtime")}
+    # ⚠️ 2026-11-22：原本只有一個 target_bedtime（＝現在的目標），AI 拿它去對那一晚的放下手機時刻；
+    #    目標改過的話數字就配錯（手機實測：那晚判準時用 01:25，AI 說 04:00）。現在兩個分開給。
+    facts = {"current_target_bedtime": user.get("target_bedtime")}
 
     if latest_behavior:
         lights_out = latest_behavior.get("lights_out_at") or ""
@@ -117,6 +128,7 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
         facts["last_night_phone"] = {
             "date": latest_behavior.get("date"),
             "phone_down_at": lights_out[11:16] or None,
+            "target_bedtime_that_night": latest_behavior.get("target_bedtime"),
             "minutes_after_target": round(minutes) if minutes is not None else None,
             "counted_as_late": (
                 bool(latest_behavior["is_late"]) if latest_behavior.get("is_late") is not None else None
@@ -137,7 +149,8 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
         }
     if pet and pet[1] and pet[2] in PET_MOOD_DECIDED_BY:
         facts["pet_mood"] = {"date": pet[0], "mood": pet[1],
-                             "decided_by": PET_MOOD_DECIDED_BY[pet[2]]}
+                             "decided_by": PET_MOOD_DECIDED_BY[pet[2]],
+                             "how_pet_mood_works": PET_MOOD_RULE}
     return facts
 
 
