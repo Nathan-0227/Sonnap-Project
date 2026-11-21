@@ -255,6 +255,18 @@ check("--live 不碰本人的即時狀態", db.get_live_sleep_status(me, db_path
 seen = {f["display_name"]: f for f in client.get("/friends", params={"user_id": me}).json()["friends"]}
 check("好友頁看得到示範帳號的即時狀態（分享全開含 live_status）",
       all(f["live_state"] is not None for f in seen.values()), True)
+
+print("【送禮】--live 今天送本人 3 則（2026-11-22）")
+gift_day = "2026-11-26"  # 23:45 加 6 小時＝隔天的起床日
+check("Mia、Leo、Yuki 各送一則", demo_accounts.send_demo_gifts(now=night, db_path=TMP),
+      {"Mia (demo)": "good_night", "Leo (demo)": "good_morning", "Yuki (demo)": "hugs"})
+check("重跑不累積、不被一天一次擋住", demo_accounts.send_demo_gifts(now=night, db_path=TMP),
+      {"Mia (demo)": "good_night", "Leo (demo)": "good_morning", "Yuki (demo)": "hugs"})
+check("今天那 3 筆，日期是起床日", sorted(v for v in visits_to_me() if v[1] == gift_day),
+      [("Leo (demo)", gift_day, "good_morning"), ("Mia (demo)", gift_day, "good_night"),
+       ("Yuki (demo)", gift_day, "hugs")])
+check("每種都是 town 認得的", all(k in demo_accounts.social_town.KINDS
+                              for k in demo_accounts.DEMO_GIFTS.values()), True)
 demo_accounts.remove_all(TMP)
 _c = db.connect(TMP)
 left = _c.execute("SELECT COUNT(*) AS n FROM live_sleep_status").fetchall()[0]["n"]

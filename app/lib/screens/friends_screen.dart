@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../services/friends_service.dart';
 import '../services/key_value_store.dart';
+import '../services/visits_seen.dart';
+import '../widgets/visit_gift_sheet.dart';
 import '../services/pet_choice.dart';
 import '../widgets/friend_live_card.dart';
 import '../widgets/friend_live_sheet.dart';
@@ -168,11 +170,42 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
+  /// 今天收到的拜訪裡看過哪幾則（愛心上的數字只算沒看過的，Q12）。
+  Set<String> _visitsSeen = const {};
+
   Future<void> _loadTown() async {
     final service = widget.service;
     if (service == null) return;
     final t = await service.fetchTown();
-    if (mounted) setState(() => _town = t);
+    if (!mounted) return;
+    setState(() => _town = t);
+    // ⚠️ 地圖先畫、看過哪幾則晚一點補上：讀手機儲存慢（或測試裡 channel 不回應）時不能拖住整個小鎮
+    final day = t.value?.day;
+    if (day == null) return;
+    final seen = await VisitsSeenStore(widget.store).seen(day);
+    if (mounted && _town?.value?.day == day) {
+      setState(() => _visitsSeen = {..._visitsSeen, ...seen});
+    }
+  }
+
+  /// 開送禮頁（2026-11-22）。回傳今天送了他什麼；沒送是 null。
+  Future<String?> _openGifts(TownPerson p) async {
+    final town = _town?.value;
+    String? sent;
+    await showVisitGiftSheet(
+      context,
+      friend: p,
+      me: town?.me,
+      kinds: town?.kinds ?? const [],
+      invites: town?.invites ?? const {},
+      clock: widget.clock,
+      onSend: (kind) async {
+        final error = await _visit(p, kind);
+        if (error == null) sent = kind;
+        return error;
+      },
+    );
+    return sent ?? p.sent;
   }
 
   /// 送出拜訪。null＝成功；否則是要顯示在小卡上的話（後端原文：409 是「今天已經來過了」）。
@@ -201,7 +234,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       context,
       person: p,
       kinds: _town?.value?.kinds ?? const [],
-      onVisit: p.mine ? null : (kind) => _visit(p, kind),
+      onOpenGifts: p.mine ? null : () => _openGifts(p),
       summary: p.mine
           ? state?.me
           : state?.friends.where((f) => f.handle == p.handle).firstOrNull,
@@ -700,16 +733,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
           child: TownRoundButton(
             key: const Key('town-visits-button'),
             tooltip: 'Who stopped by today',
-            badge: town.visits.length,
-            onTap: () => _openVisits(town.visits),
-            child: const Icon(Icons.mail_rounded, color: Color(0xFFD9CCFF), size: 24),
+            badge: unseenVisits(town, _visitsSeen),
+            onTap: () => _openVisits(town),
+            child: const Icon(Icons.favorite_rounded, color: Color(0xFFFF8FB1), size: 24),
           ),
         ),
       ],
     );
   }
 
-  void _openVisits(List<TownVisit> visits) {
+  void _openVisits(TownState town) {
+    final visits = town.visits;
+    // 打開就算看過（Q12）：先在畫面上歸零，再記到手機上
+    setState(() => _visitsSeen = {..._visitsSeen, for (final v in visits) v.seenKey(town.day)});
+    VisitsSeenStore(widget.store).markSeen(town.day, visits);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF10265A),
@@ -723,7 +760,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   child: Text('No one stopped by yet today.',
                       key: Key('town-no-visits'), style: TextStyle(color: Colors.white70, fontSize: 15)),
                 )
-              : TownVisitsCard(visits: visits),
+              : TownVisitsCard(
+                  visits: visits,
+                  alreadySent: {for (final p in town.friends) if (p.sent != null) p.handle},
+                  onSendBack: widget.service == null
+                      ? null
+                      : (v) {
+                          final friend = town.friends.where((p) => p.handle == v.handle).firstOrNull;
+                          if (friend == null) return;
+                          Navigator.of(context).pop();
+                          _openGifts(friend);
+                        },
+                ),
         ),
       ),
     );

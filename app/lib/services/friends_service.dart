@@ -477,6 +477,9 @@ class TownPerson {
   /// 我今天送過他什麼（'pet'…）；null＝還沒送。自己永遠是 null。
   final String? sent;
 
+  /// 他今天送過我什麼；null＝沒送。地圖上他頭頂冒那個小圖示（只是裝飾，2026-11-22）。
+  final String? visitedMe;
+
   /// 他昨晚的卡（只有他打開的項目）；null＝不畫「See last night」。
   final FriendNightCard? card;
 
@@ -489,6 +492,7 @@ class TownPerson {
     this.petMood,
     this.glow = false,
     this.sent,
+    this.visitedMe,
     this.card,
   });
 
@@ -507,6 +511,7 @@ class TownPerson {
       petMood: j['pet_mood'] as String?,
       glow: j['glow'] == true,
       sent: j['sent'] as String?,
+      visitedMe: j['visited_me'] as String?,
       card: c is Map
           ? FriendNightCard.fromJson({
               'handle': handle,
@@ -526,25 +531,44 @@ class TownVisit {
   final String displayName;
   final String kind;
   final String message;
-  const TownVisit(this.displayName, this.kind, this.message);
+
+  /// 送的人的邀請碼（Send back 用）；舊版後端沒給是 null → 不畫 Send back。
+  final String? handle;
+
+  /// 送的人的寵物（列表上畫他的頭）。
+  final String? petSpecies;
+
+  const TownVisit(this.displayName, this.kind, this.message, {this.handle, this.petSpecies});
+
+  /// 「看過了沒」的鍵：一個人一天只能送一次，所以 起床日＋送的人 就分得開。
+  String seenKey(String day) => '$day|${handle ?? displayName}';
 }
 
 @immutable
 class TownState {
   final String night;
 
+  /// 拜訪算哪一天（起床日，後端 social/town.visit_day）。「看過了沒」用它分天。
+  final String day;
+
   /// 我＋朋友，順序照後端（我第一個、朋友照加好友的先後）。誰放哪裡由畫面決定。
   final List<TownPerson> people;
   final List<TownVisit> visits;
 
-  /// 拜訪的四種動作：(key, 按鈕上的字)，順序與字都照抄後端。
+  /// 拜訪的動作：(key, 按鈕上的字)，順序與字都照抄後端（2026-11-22 起 9 種）。
   final List<(String, String)> kinds;
+
+  /// 送禮頁上你的寵物說的那句，{friend} 換成朋友的名字（照抄後端 social/town.KINDS）。
+  /// 舊版後端沒給 → 空的，送禮頁的泡泡退回朋友的名字。
+  final Map<String, String> invites;
 
   const TownState({
     required this.night,
     required this.people,
+    this.day = '',
     this.visits = const [],
     this.kinds = const [],
+    this.invites = const {},
   });
 
   TownPerson? get me => people.where((p) => p.mine).firstOrNull;
@@ -552,6 +576,7 @@ class TownState {
 
   factory TownState.fromJson(Map<String, dynamic> j) => TownState(
         night: (j['night'] as String?) ?? '',
+        day: (j['day'] as String?) ?? '',
         people: [
           for (final p in ((j['people'] as List?) ?? const []).whereType<Map<String, dynamic>>())
             TownPerson.fromJson(p),
@@ -559,12 +584,17 @@ class TownState {
         visits: [
           for (final v in ((j['visits'] as List?) ?? const []).whereType<Map<String, dynamic>>())
             TownVisit((v['display_name'] as String?) ?? '', (v['kind'] as String?) ?? '',
-                (v['message'] as String?) ?? ''),
+                (v['message'] as String?) ?? '',
+                handle: v['handle'] as String?, petSpecies: v['pet_species'] as String?),
         ],
         kinds: [
           for (final k in ((j['kinds'] as List?) ?? const []).whereType<Map<String, dynamic>>())
             ((k['key'] as String?) ?? '', (k['label'] as String?) ?? ''),
         ],
+        invites: {
+          for (final k in ((j['kinds'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+            if (k['key'] is String && k['invite'] is String) k['key'] as String: k['invite'] as String,
+        },
       );
 }
 

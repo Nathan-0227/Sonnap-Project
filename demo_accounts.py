@@ -7,7 +7,7 @@ demo_accounts.py —— 成果展用的示範帳號。
     python demo_accounts.py --create          # 建立（已存在就先刪掉重建）
     python demo_accounts.py --status          # 看現在有哪些示範帳號
     python demo_accounts.py --remove          # 全部刪掉（好友關係一起消失）
-    python demo_accounts.py --live            # 只重設好友頁的即時狀態（demo 前幾分鐘跑）
+    python demo_accounts.py --live            # 只重設好友頁的即時狀態＋今天送你 3 則（demo 前幾分鐘跑）
 
 要寫進 MariaDB 就先設 SONNAP_DB_URL（跟啟動後端同一個），否則寫進 SQLite。
 腳本一開始會印出它寫的是哪一個。
@@ -52,6 +52,7 @@ import db
 import db_backend
 import demo_sleep
 from social import live_status
+from social import town as social_town
 from social import sharing as social_sharing
 from behavior import adherence
 from behavior.sleep_efficiency import evaluate_efficiency
@@ -276,6 +277,40 @@ def write_day(uid, day, p, rng, db_path=None):
 # 最後一天誰拜訪手機帳號、送什麼（social/town.KINDS 的 key）。拜訪日＝最後一晚的起床日＝那張卡的日期
 DEMO_PAWS = {"Mia (demo)": "pet", "Leo (demo)": "sleep_well"}
 
+# 2026-11-22 使用者定（送禮頁）：--live 時這三個人各送手機帳號一則，**以今天（起床日）為準**——
+# 拜訪一天一次、只看今天，--create 那天寫的到成果展當天就看不到了。小鎮的愛心才會亮「3」。
+# 送的話配合各自的即時狀態：Mia 睡了（睡前道晚安）、Leo 起床了（早安）、Yuki 一個抱抱
+DEMO_GIFTS = {"Mia (demo)": "good_night", "Leo (demo)": "good_morning", "Yuki (demo)": "hugs"}
+
+
+def send_demo_gifts(now=None, db_path=None):
+    """
+    依 DEMO_GIFTS 讓示範帳號今天各送手機帳號一則。回傳 {暱稱: 種類}；找不到手機帳號回 {}。
+    ⚠️ 只動「示範帳號 → 手機帳號、今天」那幾筆：先刪掉再寫（重跑不會被一天一次擋住、也不累積）。
+    本人送出去的、別天的一律不碰。
+    """
+    me, _info = db.resolve_phone_account(db_path)
+    if not me:
+        return {}
+    now = (now or datetime.now(TZ)).replace(tzinfo=None)
+    day = social_town.visit_day(now)
+    keep_since = social_town.visit_day(now - timedelta(days=social_town.VISIT_KEEP_DAYS))
+    out = {}
+    for uid, name in demo_users(db_path):
+        kind = DEMO_GIFTS.get(name)
+        if not kind:
+            continue
+        conn = db.connect(db_path)
+        try:
+            conn.execute("DELETE FROM friend_visits WHERE sender_id = ? AND receiver_id = ? AND day = ?",
+                         (uid, me, day))
+            conn.commit()
+        finally:
+            conn.close()
+        if db.add_friend_visit(uid, me, day, kind, keep_since, db_path=db_path):
+            out[name] = kind
+    return out
+
 
 # 好友頁即時狀態的劇本（Yuki、Ken 刻意沒有：他們的狀態看時鐘，現場才看得到 Still up 的兩種）
 DEMO_LIVE = {"Mia (demo)": "asleep", "Leo (demo)": "up"}
@@ -409,8 +444,9 @@ def main():
         live = set_live_demo()
         if not live:
             print("沒有示範帳號，先跑 --create。")
+        gifts = send_demo_gifts()
         for name, state in live.items():
-            print(f"  {name:<12} {state}")
+            print(f"  {name:<12} {state}" + (f"  送你 {gifts[name]}" if name in gifts else ""))
         return
 
     if args.status:
