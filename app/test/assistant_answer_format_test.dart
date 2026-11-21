@@ -157,7 +157,7 @@ void main() {
       await tester.tap(find.byKey(const Key('assistant-link-total_sleep')));
       await tester.pump();
       expect(opened, ['2026-11-21 total_sleep']);
-      expect(find.text('See Total sleep for last night ›'), findsOneWidget);
+      expect(find.text('See Total sleep for this night ›'), findsOneWidget);
     });
 
     testWidgets('追問：兩顆、不出現已經問過的', (tester) async {
@@ -200,5 +200,41 @@ void main() {
     for (final id in kTipToPlan.values) {
       expect(kPlanShortNames[id], isNotNull, reason: id);
     }
+  });
+
+  group('哪一晚／哪一段（2026-11-22）', () {
+    test('小字：一晚同早晨報告的標題、一段寫起訖（都是起床日、照抄後端）', () {
+      expect(chatPeriodLabel(const ChatPeriod.night('2026-11-19')), 'Thursday, Nov 19');
+      expect(chatPeriodLabel(const ChatPeriod.range('2026-11-17', '2026-11-23')), 'Nov 17 – Nov 23');
+      expect(chatPeriodLabel(const ChatPeriod.range('2026-12-29', '2027-01-04')), 'Dec 29 – Jan 4');
+    });
+
+    test('解析與存回：period 跟著回答走；壞掉的不收', () async {
+      final t = replyFromJson({..._backendBody, 'period': {'kind': 'night', 'date': '2026-11-19'}});
+      expect(t.period?.date, '2026-11-19');
+      final store = InMemoryKeyValueStore();
+      await ChatThreadStore(store).save([const ChatTurn.user('q'), t]);
+      expect((await ChatThreadStore(store).load()).last.period?.date, '2026-11-19');
+      expect(ChatPeriod.fromJson({'kind': 'night', 'date': 'soon'}), isNull);
+      expect(ChatPeriod.fromJson({'kind': 'range', 'start': '2026-11-17'}), isNull);
+    });
+
+    testWidgets('小字畫在粗體那句上面；後端沒給就不畫', (tester) async {
+      final withPeriod = replyFromJson({
+        ..._backendBody,
+        'period': {'kind': 'range', 'start': '2026-11-17', 'end': '2026-11-23'},
+      });
+      await _pump(tester, _StubChat(ChatResult(ChatStatus.ok, answer: 'x', reply: withPeriod)));
+      await _ask(tester, 'How was last week?');
+      expect(find.text('Nov 17 – Nov 23'), findsOneWidget);
+      final label = tester.getTopLeft(find.byKey(const Key('assistant-period')));
+      final head = tester.getTopLeft(find.byKey(const Key('assistant-headline')));
+      expect(label.dy, lessThan(head.dy));
+
+      await tester.pumpWidget(const SizedBox());
+      await _pump(tester, _StubChat(_ok()));
+      await _ask(tester, 'hi');
+      expect(find.byKey(const Key('assistant-period')), findsNothing);
+    });
   });
 }

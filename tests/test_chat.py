@@ -308,7 +308,7 @@ r = client.post("/chat", json={"user_id": alice, "message": "Why am I tired toda
 check("200", r.status_code, 200)
 body = r.json()
 p0 = fake.prompts[0] if fake.prompts else ""
-ok("自評標籤交給 AI", '"you_noted_last_night"' in p0 and "Late caffeine" in p0)
+ok("自評標籤交給 AI", '"you_noted_that_night"' in p0 and "Late caffeine" in p0)
 ok("T3 在交給 AI 的清單裡", '"id": "T3"' in p0)
 ok("連結清單只有那一晚有資料的（Alice 沒有手錶 → 一個都沒有）",
    "LINKS:\n{}" in p0)
@@ -339,6 +339,111 @@ block = block[:block.index("};")]
 check("WHY 那張表跟 App 的 kTipToPlan 同一組 id（有按鈕的才有 Why）",
       sorted(chat.WHY), sorted(_re.findall(r"'([TP]\d+)'\s*:", block)))
 ok("WHY 每一句都不寫 because", all("because" not in v.lower() for v in chat.WHY.values()))
+
+# ═══════════════════════════════════════════════════════════════════
+section("【6g】問哪一晚、哪一週（2026-11-22）")
+# ═══════════════════════════════════════════════════════════════════
+from datetime import date as _date  # noqa: E402
+from ai import chat_period as cp  # noqa: E402
+
+WED = _date(2026, 11, 25)          # 星期三
+for q, want in (
+    ("How did I sleep on Tuesday?", {"kind": "night", "date": "2026-11-25"}),   # 星期二晚上睡＝星期三起床
+    ("tuesday night", {"kind": "night", "date": "2026-11-25"}),
+    ("last Tue", {"kind": "night", "date": "2026-11-25"}),
+    ("Wednesday", {"kind": "night", "date": "2026-11-19"}),         # 今天星期三：星期三晚上還沒睡完 → 上週
+    ("How was 11/18?", {"kind": "night", "date": "2026-11-19"}),
+    ("Nov 18", {"kind": "night", "date": "2026-11-19"}),
+    ("November 18th", {"kind": "night", "date": "2026-11-19"}),
+    ("18 Nov", {"kind": "night", "date": "2026-11-19"}),
+    ("Nov 30", {"kind": "night", "date": "2025-12-01"}),           # 未來 → 去年
+    ("this week", {"kind": "range", "start": "2026-11-23", "end": "2026-11-25"}),
+    ("last week", {"kind": "range", "start": "2026-11-16", "end": "2026-11-22"}),
+    ("past 7 days", {"kind": "range", "start": "2026-11-19", "end": "2026-11-25"}),
+    ("LAST NIGHT", {"kind": "latest"}),
+    ("Was Monday better than Sunday?", {"kind": "night", "date": "2026-11-24"}),   # 只取第一個
+    ("the sun woke me up", None),                                   # 縮寫要有 on／last／night 才算
+    ("why?", None),
+):
+    check(f"時間詞：{q}", cp.find_period(q, WED), want)
+check("跨年：1/1 晚上睡 → 1/2", cp.find_period("1/1", _date(2026, 1, 5)), {"kind": "night", "date": "2026-01-02"})
+check("跨月：星期日（今天 12/1 星期二）", cp.find_period("Sunday", _date(2026, 12, 1)),
+      {"kind": "night", "date": "2026-11-30"})
+check("這一題沒有 → 往前面自己問過的找（新的先）",
+      cp.resolve("Why?", ["How was Nov 18?", "And on Monday?"], WED), {"kind": "night", "date": "2026-11-24"})
+check("都沒有 → 最近一晚", cp.resolve("Why?", ["hi"], WED), {"kind": "latest"})
+
+main.chat_today = lambda: WED
+carol = client.post("/users", json={"display_name": "Carol", "target_bedtime": "23:30"}).json()["user_id"]
+for lo in ("2026-11-18T23:50:00+08:00", "2026-11-24T02:10:00+08:00"):
+    assert client.post("/nightly", json={"user_id": carol, "lights_out_at": lo}).status_code == 201
+db.upsert_wearable_nightly(carol, "2026-11-19", source="garmin", metrics={
+    "duration_min": 412, "deep_min": 70, "waso_min": 12, "final_score": 81.0, "final_quality": "Good"}, db_path=TMP)
+db.upsert_wearable_nightly(carol, "2026-11-24", source="garmin", metrics={
+    "duration_min": 301, "deep_min": 40, "waso_min": 30, "final_score": 63.0, "final_quality": "Poor"}, db_path=TMP)
+client.post("/rested", json={"user_id": carol, "date": "2026-11-19", "rested": 3, "tags": ["late_caffeine"]})
+
+
+def carol_asks(question, history=()):
+    fake = FakeLLM({"headline": "Here is that night."})
+    use(fake)
+    r = client.post("/chat", json={"user_id": carol, "message": question, "history": list(history)})
+    return r, (fake.prompts[0] if fake.prompts else "")
+
+
+r, p0 = carol_asks("How was Nov 18?")
+check("單晚 → 200", r.status_code, 200)
+check("period 是那一晚（起床日）", r.json().get("period"), {"kind": "night", "date": "2026-11-19"})
+ok("資料是那一晚的（23:50），不是最近一晚（02:10）", "23:50" in p0 and "02:10" not in p0)
+ok("手錶也是那一晚的（6h 52m）", "6h 52m" in p0 and "5h 1m" not in p0)
+ok("不是最近一晚 → most_recent_night 是 false", '"most_recent_night": false' in p0)
+ok("建議是那一晚的（那一晚勾了 Late caffeine → T3）", '"id": "T3"' in p0)
+ok("連結也有（那一晚有手錶）", '"total_sleep"' in p0)
+r, p0 = carol_asks("Why?", [{"role": "user", "text": "How was Nov 18?"}, {"role": "assistant", "text": "ok"}])
+check("追問沿用前面的那一晚", r.json().get("period"), {"kind": "night", "date": "2026-11-19"})
+
+r, p0 = carol_asks("How did I sleep on Tuesday?")     # 星期二晚上 → 11-25：沒有紀錄
+check("沒有紀錄的那一晚照樣標出來（不偷換成最近一晚）", r.json().get("period"), {"kind": "night", "date": "2026-11-25"})
+ok("事實寫明沒有紀錄", '"recorded": false' in p0 and "02:10" not in p0 and "23:50" not in p0)
+ok("沒紀錄 → 沒有建議、沒有連結", '"id": "T' not in p0 and "LINKS:\n{}" in p0)
+
+r, p0 = carol_asks("How was 9/1?")                     # 超過 30 天
+ok("30 天以前 → 照實說沒有紀錄、照樣標出那一晚",
+   '"recorded": false' in p0 and r.json().get("period") == {"kind": "night", "date": "2026-09-02"})
+
+fake = FakeLLM({"headline": "Here is that night."})
+use(fake)
+r = client.post("/chat", json={"user_id": alice, "message": "How was 9/2?"})   # Alice 9/3 那晚有紀錄，但超過 30 天
+p0 = fake.prompts[0] if fake.prompts else ""
+ok("30 天以前有資料也不給（照實說沒有紀錄）", '"recorded": false' in p0 and "02:39" not in p0)
+
+r, p0 = carol_asks("How did I sleep in the past 7 days?")
+check("一段時間 → period 是那一段", r.json().get("period"), {"kind": "range", "start": "2026-11-19", "end": "2026-11-25"})
+ok("每晚一列，兩晚都在", '"2026-11-19"' in p0 and '"2026-11-24"' in p0)
+ok("中位數後端算好（放下手機 23:50 與 02:10 → 01:00）", '"median_phone_down_at": "01:00"' in p0)
+ok("睡多久的中位數（412、301 分 → 5h 56m）", '"median_sleep_time": "5h 56m"' in p0)
+# 23:50 比目標晚 20 分（< 30，不算熬夜）、02:10 晚 160 分（算）→ 2 晚裡 1 晚；拿「晚了幾分 > 0」算會變 2 晚
+ok("熬夜晚數照抄每晚的 is_late（2 晚裡 1 晚）", '"late": 1,' in p0 and '"of": 2' in p0)
+ok("寫出幾晚有紀錄", '"nights_with_any_record": 2' in p0 and '"nights_in_period": 7' in p0)
+ok("一段時間不給建議、不給連結", "TIP LIST:\n[]" in p0 and "LINKS:\n{}" in p0)
+fake = FakeLLM({"headline": "Your median sleep was 6h 30m."}, {"headline": "Your median sleep was 6h 30m."})
+use(fake)
+check("AI 自己算的數字（不在事實裡）→ 擋下",
+      client.post("/chat", json={"user_id": carol, "message": "this week?"}).status_code, 503)
+
+# 2026-11-22 手機實測：問上週「Why?」，AI 自己歸納出跨夜的相關（grill 決定不學 WHOOP 的那一步）
+ok("擋：跨夜的相關說法（手機實測那句）", any("pattern across nights" in p for p in parts_problems(
+    "Here is that week.", "Nights with later phone-down times in that week tended to have lower sleep scores.")))
+ok("擋：the later ..., the lower ...", any("pattern across nights" in p for p in parts_problems(
+    "The later you put the phone down, the lower your score.")))
+check("放行：「nights with a record」不是相關", parts_problems("You had records on 3 of the 5 recorded nights."), [])
+
+r, p0 = carol_asks("How was this week?")              # 11-23～25：只有 11-24 一晚
+ok("只有 1 晚 → 不給中位數（那一晚的數字就在 nights 裡）", "median_" not in p0 and '"2026-11-24"' in p0)
+
+r, p0 = carol_asks("How did I sleep?")
+check("沒有時間詞 → 最近一晚", r.json().get("period"), {"kind": "night", "date": "2026-11-24"})
+ok("最近一晚 → most_recent_night 是 true", '"most_recent_night": true' in p0)
 
 # ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")

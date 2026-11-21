@@ -6,6 +6,7 @@ import '../services/chat_thread.dart';
 import '../services/key_value_store.dart';
 import '../services/night_sheet_link.dart';
 import '../services/sleep_plan.dart';
+import 'morning_report_screen.dart' show reportDateTitle;
 import '../widgets/home_pet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/sleep_basics_card.dart';
@@ -73,6 +74,15 @@ const List<String> kAssistantSuggestions = [
 
 /// 輸入框上方那一行（2026-11-22 使用者定）。
 const String kAssistantDisclaimer = 'Your buddy only knows your Sonnap data · not medical advice';
+
+/// 泡泡上方那行小字（2026-11-22）：一晚寫「Wednesday, Nov 19」（同早晨報告的標題），
+/// 一段寫「Nov 17 – Nov 23」。日期照抄後端（起床日）。
+String chatPeriodLabel(ChatPeriod p) {
+  String short(String iso) => reportDateTitle(DateTime.parse(iso)).split(', ').last;
+  return p.kind == 'night'
+      ? reportDateTitle(DateTime.parse(p.date!))
+      : '${short(p.start!)} – ${short(p.end!)}';
+}
 
 /// 回答底下最多幾顆追問。
 const int kFollowUpCount = 2;
@@ -289,6 +299,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 text: _turns[i].text,
                 headline: _turns[i].headline,
                 why: _turns[i].why,
+                period: _turns[i].period,
                 failed: _turns[i].failed,
                 onRetry: _turns[i].failed && widget.chat != null ? () => _retry(i) : null,
               ),
@@ -481,11 +492,20 @@ class _BuddyBubble extends StatelessWidget {
   /// 分段的回答：粗體那一句＋小一號的為什麼。沒有（舊訊息、打招呼、答不出來）就照 [text] 一段。
   final String? headline;
   final String? why;
+
+  /// 講的是哪一晚／哪一段：寫在粗體那句上面的小字。
+  final ChatPeriod? period;
   final bool failed;
   final bool typing;
   final VoidCallback? onRetry;
   const _BuddyBubble(
-      {this.text, this.headline, this.why, this.failed = false, this.typing = false, this.onRetry});
+      {this.text,
+      this.headline,
+      this.why,
+      this.period,
+      this.failed = false,
+      this.typing = false,
+      this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -516,6 +536,17 @@ class _BuddyBubble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (headline != null) ...[
+                        if (period != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(chatPeriodLabel(period!),
+                                key: const Key('assistant-period'),
+                                style: const TextStyle(
+                                    color: Color(0xFFB9A9FF),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.3)),
+                          ),
                         Text(headline!,
                             key: const Key('assistant-headline'),
                             style: const TextStyle(
