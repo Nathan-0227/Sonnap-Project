@@ -37,6 +37,42 @@ class ChatLink {
   }
 }
 
+/// 回答講的是哪一晚或哪一段（2026-11-22）。日期一律**起床那天**（同早晨報告的標題）。
+/// 照抄後端 `/chat` 的 `period`；Dart 不判斷問題問的是哪一晚。
+class ChatPeriod {
+  /// 'night' 或 'range'。
+  final String kind;
+  final String? date;
+  final String? start;
+  final String? end;
+  const ChatPeriod.night(String this.date)
+      : kind = 'night',
+        start = null,
+        end = null;
+  const ChatPeriod.range(String this.start, String this.end)
+      : kind = 'range',
+        date = null;
+
+  Map<String, dynamic> toJson() => kind == 'night'
+      ? {'kind': 'night', 'date': date}
+      : {'kind': 'range', 'start': start, 'end': end};
+
+  static ChatPeriod? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final date = raw['date'];
+    final start = raw['start'];
+    final end = raw['end'];
+    if (raw['kind'] == 'night' && date is String && DateTime.tryParse(date) != null) {
+      return ChatPeriod.night(date);
+    }
+    if (raw['kind'] == 'range' && start is String && end is String &&
+        DateTime.tryParse(start) != null && DateTime.tryParse(end) != null) {
+      return ChatPeriod.range(start, end);
+    }
+    return null;
+  }
+}
+
 /// 助理頁的一則訊息。
 ///
 /// [failed] 的那則是「答不出來」的泡泡：只在畫面上，不存、也不送回後端
@@ -52,6 +88,7 @@ class ChatTurn {
   final String? why;
   final List<ChatTip> tips;
   final ChatLink? link;
+  final ChatPeriod? period;
 
   const ChatTurn.user(this.text)
       : fromUser = true,
@@ -59,9 +96,15 @@ class ChatTurn {
         headline = null,
         why = null,
         tips = const [],
-        link = null;
+        link = null,
+        period = null;
   const ChatTurn.buddy(this.text,
-      {this.failed = false, this.headline, this.why, this.tips = const [], this.link})
+      {this.failed = false,
+      this.headline,
+      this.why,
+      this.tips = const [],
+      this.link,
+      this.period})
       : fromUser = false;
 
   /// 有沒有分段（舊的訊息、答不出來的那則沒有）。
@@ -74,6 +117,7 @@ class ChatTurn {
         if (why != null) 'why': why,
         if (tips.isNotEmpty) 'tips': [for (final t in tips) t.toJson()],
         if (link != null) 'link': link!.toJson(),
+        if (period != null) 'period': period!.toJson(),
       };
 
   static ChatTurn? fromJson(Object? raw) {
@@ -93,6 +137,7 @@ class ChatTurn {
           why: why is String && why.trim().isNotEmpty ? why : null,
           tips: tips is List ? [for (final t in tips.map(ChatTip.fromJson)) ?t] : const [],
           link: ChatLink.fromJson(raw['link']),
+          period: ChatPeriod.fromJson(raw['period']),
         );
       default:
         return null;

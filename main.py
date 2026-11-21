@@ -2487,45 +2487,84 @@ def chat(req: ChatRequest):
     """
     user = require_user(req.user_id)
     from ai import chat as chat_engine
+    from ai import chat_period
 
     if not chat_engine.key_available():
         raise HTTPException(status_code=503, detail="The AI assistant is not configured on this server.")
 
+    # 讀「最近 30 筆」：一晚最多一筆，所以一定涵蓋 chat_period.MAX_DAYS_BACK 天內的每一晚
     behavior_rows = db.get_nightly_behavior(req.user_id, days=DEFAULT_HISTORY_DAYS)
     wearable_rows = db.get_wearable_nightly(req.user_id, days=DEFAULT_HISTORY_DAYS)
-    streak, _ = challenge_engine.current_streak(behavior_rows)
-    # 寵物心情：跟 /home 同一套（同一晚、同一支 resolve_mood），首頁看到哪隻寵物就講哪隻
-    pet_date = pick_latest_date(behavior_rows, wearable_rows)
-    pet_mood, _, pet_driver = resolve_mood(_row_for(behavior_rows, pet_date), _row_for(wearable_rows, pet_date))
-    # 建議與連結都講「那一晚」（＝寵物心情那一晚）：跟寵物 notes 同一套挑法（2026-11-22）
-    b_row, w_row = _row_for(behavior_rows, pet_date), _row_for(wearable_rows, pet_date)
-    rating = db.get_morning_rating(req.user_id, pet_date) if pet_date else None
-    tags = rating["tags"] if rating else ()
-    judged = {}
-    if w_row and w_row.get("final_score") is not None:
-        from ai import night_summary as ns
-        judged = ns.judge_night(w_row, _previous(wearable_rows, pet_date, "final_score"), user)
-    tip_ids = [t["id"] for t in morning_tips.applicable_tips(
-        tags, b_row.get("adherence_minutes") if b_row else None, judged)]
-    facts = chat_engine.build_facts(
-        user,
-        behavior_rows[-1] if behavior_rows else None,
-        wearable_rows[-1] if wearable_rows else None,
-        streak,
-        adherence.late_night_ratio(behavior_rows),
-        pet=(pet_date, pet_mood, pet_driver),
-        noted=tags,
-    )
+    latest = pick_latest_date(behavior_rows, wearable_rows)
+
+    # 問的是哪一晚／哪一段（2026-11-22，ai/chat_period.py）：這一題沒有時間詞就往前面自己問過的找
+    today = chat_today()
+    period = chat_period.resolve(
+        req.message, [t.text for t in req.history if t.role == "user"], today)
+
+    tip_ids, links, night_date = [], [], None
+    if period["kind"] == "range":
+        # 一段時間：每晚一列＋後端算好的中位數；不給建議與連結（那兩個都是「一晚」的）
+        nights = [d for d in chat_period.nights_between(period["start"], period["end"])
+                  if chat_period.in_range(d, today)]
+        facts = chat_engine.build_range_facts(
+            user, period["start"], period["end"], nights,
+            {r["date"]: r for r in behavior_rows}, {r["date"]: r for r in wearable_rows})
+        period_out = {"kind": "range", "start": period["start"], "end": period["end"]}
+    else:
+        night_date = latest if period["kind"] == "latest" else period["date"]
+        # 最近一晚不管多久以前都算；指定的那一晚要在能問的範圍裡
+        asked_known = night_date is not None and (
+            period["kind"] == "latest" or chat_period.in_range(night_date, today))
+        b_row = _row_for(behavior_rows, night_date) if asked_known else None
+        w_row = _row_for(wearable_rows, night_date) if asked_known else None
+        # 寵物心情、建議、連結都講**那一晚**（跟 /home、寵物 notes 同一套挑法）
+        pet_mood, _, pet_driver = resolve_mood(b_row, w_row)
+        rating = db.get_morning_rating(req.user_id, night_date) if asked_known else None
+        tags = rating["tags"] if rating else ()
+        judged = {}
+        if w_row and w_row.get("final_score") is not None:
+            from ai import night_summary as ns
+            judged = ns.judge_night(w_row, _previous(wearable_rows, night_date, "final_score"), user)
+        tip_ids = [t["id"] for t in morning_tips.applicable_tips(
+            tags, b_row.get("adherence_minutes") if b_row else None, judged)]
+        links = chat_links(w_row)
+        if period["kind"] == "latest":
+            # 最近一晚：手機與手錶各給自己最新的那一列（手錶常晚一天到，照 2026-11-22 前的做法）
+            b_fact = behavior_rows[-1] if behavior_rows else None
+            w_fact = wearable_rows[-1] if wearable_rows else None
+        else:
+            b_fact, w_fact = b_row, w_row
+        streak, _ = challenge_engine.current_streak(behavior_rows)
+        facts = chat_engine.build_facts(
+            user, b_fact, w_fact, streak,
+            adherence.late_night_ratio(behavior_rows),
+            pet=(night_date, pet_mood, pet_driver),
+            noted=tags,
+            night=None if night_date is None else {
+                "date": night_date,
+                "most_recent_night": night_date == latest,
+                "recorded": bool(b_row or (w_row and w_row.get("final_score") is not None)),
+            },
+        )
+        period_out = {"kind": "night", "date": night_date} if night_date else None
     try:
         result = chat_engine.answer_question(
             req.message.strip(), facts, history=[(t.role, t.text) for t in req.history],
-            tips=tip_ids, links=chat_links(w_row))
+            tips=tip_ids, links=links)
     except chat_engine.ChatUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return {"answer": result["answer"], "source": "llm",
             # 分段（2026-11-22）。舊版 App 只讀 answer
             "headline": result["headline"], "why": result["why"], "tips": result["tips"],
-            "link": {"key": result["link"], "date": pet_date} if result["link"] else None}
+            "link": {"key": result["link"], "date": night_date} if result["link"] else None,
+            # 回答講的是哪一晚／哪一段（App 寫在泡泡上方，日期一律起床日）
+            "period": period_out}
+
+
+def chat_today():
+    """助理判斷「今天」用的日期（伺服器當地）。測試換成固定的一天。"""
+    return datetime.now().date()
 
 
 def chat_links(wearable_row):

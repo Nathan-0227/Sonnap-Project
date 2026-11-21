@@ -56,6 +56,7 @@ ChatTurn replyFromJson(Map decoded) {
     why: why is String && why.trim().isNotEmpty ? why : null,
     tips: tips is List ? [for (final t in tips.map(ChatTip.fromJson)) ?t] : const [],
     link: ChatLink.fromJson(decoded['link']),
+    period: ChatPeriod.fromJson(decoded['period']),
   );
 }
 

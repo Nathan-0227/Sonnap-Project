@@ -132,6 +132,15 @@ Answer in four parts:
   night stands out.
 - "link": one key from the LINKS block that matches what the headline is about, or "".
 
+Which night:
+- The NIGHT block says which night the question is about (dated by the morning the user woke up). Talk
+  about that night. Only call it "last night" when "most_recent_night" is true; otherwise use its date.
+  If "recorded" is false, say plainly that Sonnap has no record for that night.
+- When a PERIOD block is present instead, the question is about those days. Use the "summary" numbers as
+  given (medians and counts) and say how many nights had records; never work out an average or any other
+  number yourself. If no night has a record, say so plainly.
+- If the user asks to compare two nights or two periods, say you can look at one night or one week at a time.
+
 Rules:
 - Plain, friendly English. No lists, no headings.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
@@ -169,7 +178,13 @@ PET_MOOD_RULE = ("Usually decided by when the phone was put down compared with t
                  "If the watch shows the body was less settled than usual, the mood can become anxious.")
 
 
-def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, noted=()):
+def hm(minutes):
+    """分鐘數 → "6h 12m"（給 AI 照抄的字串；讓它自己換算的話，換錯了看起來也很合理）。"""
+    m = round(minutes)
+    return f"{m // 60}h {m % 60}m" if m >= 60 else f"{m}m"
+
+
+def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, noted=(), night=None):
     """
     事實區塊。**只放這個人自己的資料**。
 
@@ -177,6 +192,8 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
     pet 是 (date, mood, driver)：首頁那隻寵物的心情（2026-11-21 加，讓「寵物心情跟睡眠
     有什麼關係」答得出來）。心情由後端判好，這裡只轉述，不給 AI 任何判斷的材料。
     noted 是起床自評勾的標籤（morning_tips.TAGS 的 id，2026-11-22 加：建議的 Why 要講得出來）。
+    night 是 {"date", "most_recent_night", "recorded"}：問的是哪一晚（2026-11-22 加，見 chat_period.py）。
+    問某一晚時，latest_behavior／latest_wearable 傳的就是**那一晚**的列。
 
     ⚠️ 時刻直接切 ISO 字串的 HH:MM，不轉時區——那是記錄當下的牆鐘時間
        （與 App 端 parseWallClock() 同一個道理）。
@@ -186,11 +203,13 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
     # ⚠️ 2026-11-22：原本只有一個 target_bedtime（＝現在的目標），AI 拿它去對那一晚的放下手機時刻；
     #    目標改過的話數字就配錯（手機實測：那晚判準時用 01:25，AI 說 04:00）。現在兩個分開給。
     facts = {"current_target_bedtime": user.get("target_bedtime")}
+    if night:
+        facts["night"] = dict(night)
 
     if latest_behavior:
         lights_out = latest_behavior.get("lights_out_at") or ""
         minutes = latest_behavior.get("adherence_minutes")
-        facts["last_night_phone"] = {
+        facts["phone_that_night"] = {
             "date": latest_behavior.get("date"),
             "phone_down_at": lights_out[11:16] or None,
             "target_bedtime_that_night": latest_behavior.get("target_bedtime"),
@@ -206,11 +225,12 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
 
     if latest_wearable and latest_wearable.get("final_score") is not None:
         duration = latest_wearable.get("duration_min")
-        facts["last_night_watch"] = {
+        facts["watch_that_night"] = {
             "date": latest_wearable.get("date"),
             "sleep_score": round(latest_wearable["final_score"]),
             "quality": latest_wearable.get("final_quality"),
             "sleep_minutes": round(duration) if duration is not None else None,
+            "sleep_time": hm(duration) if duration is not None else None,
         }
     if pet and pet[1] and pet[2] in PET_MOOD_DECIDED_BY:
         facts["pet_mood"] = {"date": pet[0], "mood": pet[1],
@@ -218,8 +238,91 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
                              "how_pet_mood_works": PET_MOOD_RULE}
     labels = [mt.TAGS[t] for t in noted if t in mt.TAGS]
     if labels:
-        facts["you_noted_last_night"] = labels
+        facts["you_noted_that_night"] = labels
     return facts
+
+
+def _median(values):
+    vals = sorted(v for v in values if v is not None)
+    if not vals:
+        return None
+    mid = len(vals) // 2
+    return vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2
+
+
+def _clock_minutes(iso):
+    """放下手機的牆鐘時刻 → 從中午 12:00 起算的分鐘（跨午夜連續）。12:00–18:00 不算就寢，回 None。"""
+    if not iso or len(iso) < 16:
+        return None
+    h, m = int(iso[11:13]), int(iso[14:16])
+    if 12 <= h < 18:
+        return None
+    return (h - 12) % 24 * 60 + m
+
+
+def _clock_text(minutes_from_noon):
+    m = round(minutes_from_noon) % (24 * 60)
+    return f"{(m // 60 + 12) % 24:02d}:{m % 60:02d}"
+
+
+def build_range_facts(user, start, end, nights, behavior_by_date, wearable_by_date):
+    """
+    一段時間的事實區塊（2026-11-22）：每晚一列＋後端先算好的整段數字。
+
+    ⚠️ 整段的數字一律**中位數**（同 Insights：平均會被一兩晚拉走）；熬夜晚數照抄每晚的 is_late
+       （跨午夜只在 behavior/adherence.py 算）。只有 1 晚有值時不給中位數——那一晚的數字就在 nights 裡。
+    ⚠️ AI 不准自己算：數字檢查只放行事實裡有的數字，自己算的平均會被擋下來。
+    """
+    rows = []
+    for d in nights:
+        b, w = behavior_by_date.get(d), wearable_by_date.get(d)
+        if w and w.get("final_score") is None:
+            w = None
+        if not b and not w:
+            continue
+        row = {"date": d}
+        if b:
+            lights_out = b.get("lights_out_at") or ""
+            minutes = b.get("adherence_minutes")
+            row["phone_down_at"] = lights_out[11:16] or None
+            row["minutes_after_target"] = round(minutes) if minutes is not None else None
+            row["counted_as_late"] = bool(b["is_late"]) if b.get("is_late") is not None else None
+        if w:
+            duration = w.get("duration_min")
+            row["sleep_time"] = hm(duration) if duration is not None else None
+            row["sleep_score"] = round(w["final_score"])
+            row["quality"] = w.get("final_quality")
+        rows.append(row)
+
+    beh = [behavior_by_date[d] for d in nights if behavior_by_date.get(d)]
+    wear = [wearable_by_date[d] for d in nights
+            if wearable_by_date.get(d) and wearable_by_date[d].get("final_score") is not None]
+    summary = {"nights_with_phone_down": len(beh), "nights_with_watch": len(wear)}
+    judged = [b for b in beh if b.get("is_late") is not None]
+    if judged:
+        summary["late_nights"] = {"late": sum(1 for b in judged if b["is_late"]), "of": len(judged)}
+
+    def median_of(values, fmt):
+        vals = [v for v in values if v is not None]
+        return fmt(_median(vals)) if len(vals) >= 2 else None
+
+    for key, values, fmt in (
+        ("median_sleep_time", [w.get("duration_min") for w in wear], hm),
+        ("median_sleep_score", [w.get("final_score") for w in wear], round),
+        ("median_phone_down_at", [_clock_minutes(b.get("lights_out_at")) for b in beh], _clock_text),
+        ("median_minutes_after_target", [b.get("adherence_minutes") for b in beh], round),
+    ):
+        value = median_of(values, fmt)
+        if value is not None:
+            summary[key] = value
+
+    return {
+        "current_target_bedtime": user.get("target_bedtime"),
+        "period": {"from": start, "to": end, "nights_in_period": len(nights),
+                   "nights_with_any_record": len(rows)},
+        "nights": rows,
+        "summary": summary,
+    }
 
 
 def tip_list(tip_ids):
