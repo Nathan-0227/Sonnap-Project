@@ -900,7 +900,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {
         json = null;
       }
-      found = PetNotes.fromJson(json, date: date);
+      // allowEmpty：手錶到了但還沒內容的晚上也放一本，點了才能叫 AI 寫（11-21 使用者定）
+      found = PetNotes.fromJson(json, date: date, allowEmpty: true);
       if (found != null) break;
     }
     final notes = found;
@@ -1387,7 +1388,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // 貼在草地上（使用者定：再往下靠近草地）
                       bottom: 2,
                       child: NotesBook(
-                        unread: _notesAskedVersion == notes.version &&
+                        // 空的日記本不亮紅點、不抖：沒有新東西可讀
+                        unread: notes.hasContent &&
+                            _notesAskedVersion == notes.version &&
                             _notesReadVersion != notes.version,
                         onTap: () => unawaited(_showNotes(notes, mood)),
                       ),

@@ -39,6 +39,9 @@ Future<void> showPetNotes(
   );
 }
 
+/// 這一晚什麼都沒有（AI 沒寫出來、也沒有適用的建議）時那一行。
+const String kNotesEmptyLine = 'Nothing to add for this night.';
+
 /// AI 正在寫的那一行（固定的畫面文字）。
 const String kNotesWritingLine = 'Writing your notes…';
 
@@ -198,6 +201,14 @@ class PetNotesView extends StatelessWidget {
                       style: TextStyle(color: ReportColors.muted, fontSize: 14),
                     ),
                   ],
+                ),
+              ],
+              if (!writing && !notes.waiting && !notes.hasContent) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  kNotesEmptyLine,
+                  key: Key('pet-notes-empty'),
+                  style: TextStyle(color: ReportColors.muted, fontSize: 14),
                 ),
               ],
               if (notes.waiting) ...[

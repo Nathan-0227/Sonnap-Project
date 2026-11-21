@@ -330,7 +330,9 @@ void main() {
     testWidgets('⚠️ 只往回 1 晚：今天和前一晚都沒有 → 不出現，也不去找兩晚前的', (tester) async {
       final source = await pumpHome(tester, null, byDate: {
         _today: null,
-        '2026-11-12': notesJson(summary: null, tips: [], date: '2026-11-12'),
+        // 前一晚手錶還沒到又沒內容（手錶到了的空晚上 11-21 起會顯示，可以點了叫 AI 寫）
+        '2026-11-12': notesJson(
+            status: 'waiting', source: null, summary: null, tips: [], date: '2026-11-12'),
         '2026-11-11': notesJson(date: '2026-11-11'),
       });
       expect(source.asked, [_today, '2026-11-12']);
@@ -342,11 +344,37 @@ void main() {
       expect(kHomeNotesLookbackNights, 1);
     });
 
-    testWidgets('⚠️ 沒有內容、沒有後端 → 不出現日記本', (tester) async {
-      await pumpHome(tester, notesJson(summary: null, tips: []));
+    testWidgets('⚠️ 手錶還沒到又沒內容、或沒有後端 → 不出現日記本', (tester) async {
+      await pumpHome(tester,
+          notesJson(status: 'waiting', source: null, summary: null, tips: []));
       expect(find.byKey(const Key('home-notes')), findsNothing);
       await pumpHome(tester, null);
       expect(find.byKey(const Key('home-notes')), findsNothing);
+    });
+
+    // 11-21 使用者定：手錶到了但連一條原句都沒有的晚上，日記本也要在，點了才能叫 AI 寫
+    testWidgets('🔴 手錶到了、還沒有任何內容 → 照樣有日記本（不亮紅點）；點了叫 AI 寫', (tester) async {
+      await MorningRatingStore(kv).save(const MorningRating(date: _today, rested: 4), null);
+      final source = await pumpHome(tester,
+          notesJson(source: 'fallback', summary: null, tips: [], version: 'v-empty'),
+          written: writtenJson());
+      expect(find.byKey(const Key('home-notes')), findsOneWidget);
+      expect(find.byKey(const Key('notes-book-unread-dot')), findsNothing,
+          reason: '空的日記本沒有新東西可讀');
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester, 12);
+      expect(source.generateFlags.where((g) => g).length, 1);
+      expect(textOf(tester, 'pet-notes-summary'), written);
+    });
+
+    testWidgets('空的日記本、AI 也沒寫出來 → 寫「Nothing to add」，不是一頁空白', (tester) async {
+      await MorningRatingStore(kv).save(const MorningRating(date: _today, rested: 4), null);
+      final source = await pumpHome(tester,
+          notesJson(source: 'fallback', summary: null, tips: [], version: 'v-empty'));
+      source.written = {'date': 'wrong-date'};
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester, 12);
+      expect(find.byKey(const Key('pet-notes-empty')), findsOneWidget);
     });
 
     testWidgets('⚠️ 日記本不蓋到小狗、心情標籤、等級徽章（實機大小）', (tester) async {
