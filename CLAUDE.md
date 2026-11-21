@@ -505,6 +505,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 手機按 Start Sleep → `POST /sleep-status`（start）→ `camera_auto.py` 另外開一個獨立的 `tapo_metric_logger.py`；
 Out of bed／Cancel → 放停止旗標 `tapo_metrics/STOP`，錄影程式自己收尾。睡覺畫面在副標底下多一行 `Camera recording`
 （沒插電加 `· laptop on battery`）。設定在 `tapo_metrics/camera_auto.json`（沒有就用預設：框 34,129,288,231、影片 840 分、最多 14 小時）。
+**每晚睡前／起床照 [BEDTIME_CHECKLIST.md](docs/BEDTIME_CHECKLIST.md) 做**（插電、同一個網路、攝影機 IP、開後端、Camera recording、`--status`）。
 
 | 規則 | 不遵守的後果 |
 |---|---|
