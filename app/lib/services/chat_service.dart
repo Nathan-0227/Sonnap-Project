@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'chat_thread.dart';
 import 'user_identity.dart';
 
 /// 睡眠助理：`POST /chat`。
@@ -33,9 +34,29 @@ class ChatResult {
   /// 由後端寫，Dart 直接顯示。
   final String? message;
 
-  const ChatResult(this.status, {this.answer, this.httpStatus, this.message});
+  /// 分段的回答（2026-11-22）。舊版後端沒有分段時是只有 [answer] 那一段的訊息。
+  final ChatTurn? reply;
+
+  const ChatResult(this.status, {this.answer, this.httpStatus, this.message, this.reply});
 
   bool get isOk => status == ChatStatus.ok && answer != null;
+}
+
+/// 把 `/chat` 的回應變成一則訊息（2026-11-22 分段）。照抄後端：headline、why、
+/// tips（每條的 Why 是後端那張表的字）、link。舊版後端沒有 headline → 只有一段文字。
+ChatTurn replyFromJson(Map decoded) {
+  final answer = decoded['answer'] as String;
+  final headline = decoded['headline'];
+  if (headline is! String || headline.trim().isEmpty) return ChatTurn.buddy(answer);
+  final why = decoded['why'];
+  final tips = decoded['tips'];
+  return ChatTurn.buddy(
+    answer,
+    headline: headline,
+    why: why is String && why.trim().isNotEmpty ? why : null,
+    tips: tips is List ? [for (final t in tips.map(ChatTip.fromJson)) ?t] : const [],
+    link: ChatLink.fromJson(decoded['link']),
+  );
 }
 
 class ChatService {
@@ -82,7 +103,8 @@ class ChatService {
       if (answer is! String || answer.trim().isEmpty) {
         return ChatResult(ChatStatus.failed, httpStatus: response.statusCode);
       }
-      return ChatResult(ChatStatus.ok, answer: answer, httpStatus: response.statusCode);
+      return ChatResult(ChatStatus.ok,
+          answer: answer, httpStatus: response.statusCode, reply: replyFromJson(decoded as Map));
     } catch (error) {
       debugPrint('Chat: failed - $error');
       return const ChatResult(ChatStatus.failed);

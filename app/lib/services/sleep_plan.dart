@@ -69,6 +69,21 @@ const List<PlanSuggestion> kPlanSuggestions = [
       PlanAnchor.wake, 0, Icons.wb_sunny_rounded),
 ];
 
+/// 短名字（2026-11-22 使用者審過）：助理回答底下那一行「+ Add "caffeine earlier" to my plan」。
+/// 加進計畫的照樣是上面那一整句，這只是那一行的標籤。`plan_short_name_test` 守著每一條都有。
+const Map<String, String> kPlanShortNames = {
+  'late_caffeine': 'caffeine earlier',
+  'alcohol': 'lighter drinks',
+  'napped': 'short naps',
+  'temperature': 'cool bedroom',
+  'noise': 'quiet bedroom',
+  'exercise': 'daily activity',
+  'early_workout': 'earlier workouts',
+  'todo_list': 'to-do list',
+  'dim_screen': 'dim screen',
+  'morning_light': 'morning light',
+};
+
 PlanSuggestion? suggestionById(String id) {
   for (final s in kPlanSuggestions) {
     if (s.id == id) return s;

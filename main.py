@@ -2494,6 +2494,16 @@ def chat(req: ChatRequest):
     # 寵物心情：跟 /home 同一套（同一晚、同一支 resolve_mood），首頁看到哪隻寵物就講哪隻
     pet_date = pick_latest_date(behavior_rows, wearable_rows)
     pet_mood, _, pet_driver = resolve_mood(_row_for(behavior_rows, pet_date), _row_for(wearable_rows, pet_date))
+    # 建議與連結都講「那一晚」（＝寵物心情那一晚）：跟寵物 notes 同一套挑法（2026-11-22）
+    b_row, w_row = _row_for(behavior_rows, pet_date), _row_for(wearable_rows, pet_date)
+    rating = db.get_morning_rating(req.user_id, pet_date) if pet_date else None
+    tags = rating["tags"] if rating else ()
+    judged = {}
+    if w_row and w_row.get("final_score") is not None:
+        from ai import night_summary as ns
+        judged = ns.judge_night(w_row, _previous(wearable_rows, pet_date, "final_score"), user)
+    tip_ids = [t["id"] for t in morning_tips.applicable_tips(
+        tags, b_row.get("adherence_minutes") if b_row else None, judged)]
     facts = chat_engine.build_facts(
         user,
         behavior_rows[-1] if behavior_rows else None,
@@ -2501,13 +2511,32 @@ def chat(req: ChatRequest):
         streak,
         adherence.late_night_ratio(behavior_rows),
         pet=(pet_date, pet_mood, pet_driver),
+        noted=tags,
     )
     try:
         result = chat_engine.answer_question(
-            req.message.strip(), facts, history=[(t.role, t.text) for t in req.history])
+            req.message.strip(), facts, history=[(t.role, t.text) for t in req.history],
+            tips=tip_ids, links=chat_links(w_row))
     except chat_engine.ChatUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    return {"answer": result["answer"], "source": "llm"}
+    return {"answer": result["answer"], "source": "llm",
+            # 分段（2026-11-22）。舊版 App 只讀 answer
+            "headline": result["headline"], "why": result["why"], "tips": result["tips"],
+            "link": {"key": result["link"], "date": pet_date} if result["link"] else None}
+
+
+def chat_links(wearable_row):
+    """助理回答底下能連到哪幾頁：只給那一晚**有手錶資料**的（鍵定義在 ai/chat.LINKS）。"""
+    keys = []
+    w = wearable_row if wearable_row and wearable_row.get("final_score") is not None else None
+    if w and w.get("duration_min") is not None:
+        keys.append("total_sleep")
+    if w:
+        keys.append("efficiency")
+    for key, col in (("awake", "waso_min"), ("deep", "deep_min")):
+        if w and w.get(col) is not None:
+            keys.append(key)
+    return keys
 
 
 # ═══════════════════════════════════════════════════════════════════

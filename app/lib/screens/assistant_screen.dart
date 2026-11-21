@@ -4,6 +4,8 @@ import '../services/account_service.dart';
 import '../services/chat_service.dart';
 import '../services/chat_thread.dart';
 import '../services/key_value_store.dart';
+import '../services/night_sheet_link.dart';
+import '../services/sleep_plan.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/sleep_basics_card.dart';
@@ -27,6 +29,15 @@ import '../widgets/sleep_basics_card.dart';
 ///    不在 Dart 編一段看起來像答案的通用句子。
 /// ⚠️ 失敗的原因照抄後端的 detail（沒設定／連不上／沒過驗證），不自己改寫。
 /// ⚠️ 每問一次都會花 API 額度；追問時一起送最近 [kChatContextRounds] 輪。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// 分段回答（2026-11-22，參考 Oura／WHOOP，使用者 grill 定）
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 泡泡裡：粗體一句直接回答＋小一號的為什麼。泡泡底下：對得上睡眠計畫的建議各一行
+/// 「+ Add "caffeine earlier" to my plan」＋後端那句 Why（設計稿 A）→ 詳細頁連結 → 兩顆追問
+/// （[kAssistantSuggestions] 裡這段對話還沒問過的，不經過 AI）。輸入框上方固定 [kAssistantDisclaimer]。
+/// ⚠️ 加進計畫的是清單原句（`kPlanSuggestions`），不是 AI 寫的字；Why 也是後端固定表的字。
 class AssistantScreen extends StatefulWidget {
   final String username;
 
@@ -59,6 +70,18 @@ const List<String> kAssistantSuggestions = [
   "Give me some tips for tonight.",
   "How can I improve my sleep score?",
 ];
+
+/// 輸入框上方那一行（2026-11-22 使用者定）。
+const String kAssistantDisclaimer = 'Your buddy only knows your Sonnap data · not medical advice';
+
+/// 回答底下最多幾顆追問。
+const int kFollowUpCount = 2;
+
+/// 追問：建議問題裡這段對話還沒問過的前 [kFollowUpCount] 題。
+List<String> followUpQuestions(List<ChatTurn> turns) {
+  final asked = askedQuestions(turns);
+  return [for (final q in kAssistantSuggestions) if (!asked.contains(q)) q].take(kFollowUpCount).toList();
+}
 
 const _bg = Color(0xFF0D164D); // 房間圖最底下的顏色
 const _room = 'assets/backgrounds/assistant_room.jpg';
@@ -121,7 +144,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     setState(() {
       _loading = false;
       _turns.add(result.isOk
-          ? ChatTurn.buddy(result.answer!)
+          ? (result.reply ?? ChatTurn.buddy(result.answer!))
           : ChatTurn.buddy(
               result.message ?? "The sleep assistant cannot be reached right now.",
               failed: true));
@@ -195,6 +218,13 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   _header(),
                   Expanded(child: _messages()),
                   _suggestions(),
+                  const Padding(
+                    key: Key('assistant-disclaimer'),
+                    padding: EdgeInsets.fromLTRB(16, 2, 16, 0),
+                    child: Text(kAssistantDisclaimer,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white60, fontSize: 11.5)),
+                  ),
                   _inputBar(),
                 ]),
               ),
@@ -252,21 +282,62 @@ class _AssistantScreenState extends State<AssistantScreen> {
         text: "Hi ${widget.username}! Ask me anything about your sleep. "
             "I only use your own data.",
       ),
-      for (var i = 0; i < _turns.length; i++)
+      for (var i = 0; i < _turns.length; i++) ...[
         _turns[i].fromUser
             ? _UserBubble(text: _turns[i].text)
             : _BuddyBubble(
                 text: _turns[i].text,
+                headline: _turns[i].headline,
+                why: _turns[i].why,
                 failed: _turns[i].failed,
                 onRetry: _turns[i].failed && widget.chat != null ? () => _retry(i) : null,
               ),
+        if (!_turns[i].fromUser && !_turns[i].failed) ..._extras(_turns[i]),
+      ],
       if (_loading) const _BuddyBubble(typing: true),
+      if (!_loading && _turns.isNotEmpty && !_turns.last.fromUser && !_turns.last.failed)
+        _followUps(),
     ];
     return ListView(
       controller: _scroll,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       children: items.reversed.toList(),
+    );
+  }
+
+  /// 泡泡底下：建議那幾行、詳細頁連結（都靠左、對齊泡泡）。
+  List<Widget> _extras(ChatTurn t) {
+    final plan = PlanStore.shared;
+    final open = NightSheetLinks.shared;
+    final label = t.link == null ? null : kNightSheetLinkLabels[t.link!.key];
+    return [
+      if (plan != null)
+        for (final tip in t.tips)
+          if (kTipToPlan[tip.id] != null) _TipLine(tip: tip, planId: kTipToPlan[tip.id]!, plan: plan),
+      if (open != null && label != null)
+        Padding(
+          padding: const EdgeInsets.only(left: 38),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: Key('assistant-link-${t.link!.key}'),
+              onPressed: () => open(context, t.link!.date, t.link!.key),
+              style: TextButton.styleFrom(foregroundColor: const Color(0xFFB9A9FF)),
+              child: Text('$label ›', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Widget _followUps() {
+    final qs = followUpQuestions(_turns);
+    if (qs.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      key: const Key('assistant-follow-ups'),
+      padding: const EdgeInsets.only(left: 38, top: 4, bottom: 4),
+      child: Wrap(spacing: 8, runSpacing: 8, children: [for (final q in qs) _chip(q)]),
     );
   }
 
@@ -283,17 +354,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
         ),
       );
     }
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        children: [
-          for (final q in kAssistantSuggestions)
-            Padding(padding: const EdgeInsets.only(right: 8, bottom: 6), child: _chip(q)),
-        ],
-      ),
-    );
+    // 有對話之後，建議問題換成回答底下那兩顆追問（[_followUps]）。
+    return const SizedBox.shrink();
   }
 
   Widget _chip(String q, {bool big = false}) {
@@ -415,10 +477,15 @@ class _UserBubble extends StatelessWidget {
 
 class _BuddyBubble extends StatelessWidget {
   final String? text;
+
+  /// 分段的回答：粗體那一句＋小一號的為什麼。沒有（舊訊息、打招呼、答不出來）就照 [text] 一段。
+  final String? headline;
+  final String? why;
   final bool failed;
   final bool typing;
   final VoidCallback? onRetry;
-  const _BuddyBubble({this.text, this.failed = false, this.typing = false, this.onRetry});
+  const _BuddyBubble(
+      {this.text, this.headline, this.why, this.failed = false, this.typing = false, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -448,11 +515,28 @@ class _BuddyBubble extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(text ?? '',
-                          style: TextStyle(
-                              color: failed ? const Color(0xFFFFD9D2) : Colors.white,
-                              fontSize: 15,
-                              height: 1.35)),
+                      if (headline != null) ...[
+                        Text(headline!,
+                            key: const Key('assistant-headline'),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.35)),
+                        if (why != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(why!,
+                                key: const Key('assistant-why'),
+                                style: const TextStyle(
+                                    color: Color(0xFFD3D8F5), fontSize: 14, height: 1.35)),
+                          ),
+                      ] else
+                        Text(text ?? '',
+                            style: TextStyle(
+                                color: failed ? const Color(0xFFFFD9D2) : Colors.white,
+                                fontSize: 15,
+                                height: 1.35)),
                       if (onRetry != null)
                         TextButton.icon(
                           key: const Key('assistant-retry'),
@@ -469,6 +553,79 @@ class _BuddyBubble extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+/// 一條建議（設計稿 A）：「+ Add "caffeine earlier" to my plan」＋後端那句 Why；
+/// 已經在計畫裡就寫「✓ "caffeine earlier" is in your plan」。加進去的是清單那一整句。
+class _TipLine extends StatefulWidget {
+  final ChatTip tip;
+  final String planId;
+  final PlanStore plan;
+  const _TipLine({required this.tip, required this.planId, required this.plan});
+
+  @override
+  State<_TipLine> createState() => _TipLineState();
+}
+
+class _TipLineState extends State<_TipLine> {
+  @override
+  void initState() {
+    super.initState();
+    widget.plan.addListener(_changed);
+    if (!widget.plan.loaded) widget.plan.load();
+  }
+
+  @override
+  void dispose() {
+    widget.plan.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = suggestionById(widget.planId);
+    final name = kPlanShortNames[widget.planId];
+    if (s == null || name == null || !widget.plan.loaded) return const SizedBox.shrink();
+    final inPlan = widget.plan.contains(s.id);
+    return Padding(
+      padding: const EdgeInsets.only(left: 38, top: 2, bottom: 2),
+      child: inPlan
+          ? Row(key: Key('assistant-in-plan-${widget.planId}'), children: [
+              const Icon(Icons.check_rounded, size: 16, color: Color(0xFF7FE0B0)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text('"$name" is in your plan',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+              ),
+            ])
+          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextButton.icon(
+                key: Key('assistant-add-${widget.planId}'),
+                onPressed: () => widget.plan.add(PlanItem.fromSuggestion(s)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFB9A9FF),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text('Add "$name" to my plan',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+              if (widget.tip.why != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 22),
+                  child: Text(widget.tip.why!,
+                      key: Key('assistant-tip-why-${widget.tip.id}'),
+                      style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                ),
+            ]),
     );
   }
 }

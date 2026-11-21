@@ -20,6 +20,7 @@ import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/level_progress.dart';
 import '../widgets/night_sheets.dart';
+import '../services/night_sheet_link.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
@@ -225,6 +226,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 助理回答底下的連結開這裡的詳細頁（2026-11-22，見 night_sheet_link.dart）
+    NightSheetLinks.shared = _openLinkedSheet;
     _bedtime = widget.targetBedtime;
     _sessionFuture = widget.repository.load();
     _loadNotes();
@@ -285,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    if (NightSheetLinks.shared == _openLinkedSheet) NightSheetLinks.shared = null;
     _tick?.cancel();
     widget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
     WidgetsBinding.instance.removeObserver(this);
@@ -717,7 +721,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Future<void> Function(NightSheets sheets, BuildContext context) open,
   ) async {
     final date = session.history.lastOrNull?.date;
-    if (date == null || _openingSheet) return;
+    if (date == null) return;
+    await _openSheetFor(date, open, () => context);
+  }
+
+  /// 某一晚的詳細頁，開在 [at] 給的畫面上（首頁自己、或助理頁）。
+  Future<void> _openSheetFor(
+    String date,
+    Future<void> Function(NightSheets sheets, BuildContext context) open,
+    BuildContext Function() at,
+  ) async {
+    if (_openingSheet) return;
     _openingSheet = true;
     try {
       final inputs = await _reportInputs(date);
@@ -728,10 +742,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         r = _initialReport(date, inputs);
       }
       if (!mounted) return;
-      await open(NightSheets.fromLoader(r, _loader), context);
+      final ctx = at();
+      if (!ctx.mounted) return;
+      await open(NightSheets.fromLoader(r, _loader), ctx);
     } finally {
       _openingSheet = false;
     }
+  }
+
+  /// 助理回答底下的連結（鍵見 `kNightSheetLinkLabels`）。不認得的鍵什麼都不做。
+  Future<void> _openLinkedSheet(BuildContext at, String date, String key) {
+    final Future<void> Function(NightSheets, BuildContext)? open = switch (key) {
+      'total_sleep' => (s, c) => s.totalSleep(c),
+      'efficiency' => (s, c) => s.efficiency(c),
+      'awake' => (s, c) => s.awake(c),
+      'deep' => (s, c) => s.deep(c),
+      _ => null,
+    };
+    if (open == null) return Future.value();
+    return _openSheetFor(date, open, () => at);
   }
 
   /// Activity 卡點開：用後端 /home 那一晚帶的 yesterday（有每小時步數、每 15 分鐘的程度、醒著的心率），

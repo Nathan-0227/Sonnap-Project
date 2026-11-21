@@ -21,6 +21,18 @@ ai/chat.py —— 睡眠助理的問答（B6）。
    tests/test_chat.py 同時驗「擋得住」與「不誤傷」。
 
 ═══════════════════════════════════════════════════════════════════
+分段回答（2026-11-22，參考 Oura／WHOOP，使用者 grill 定）
+═══════════════════════════════════════════════════════════════════
+
+    headline  一句直接回答（≤ 25 字）
+    why       0–1 句為什麼（≤ 30 字，只准 might／can；不准偷塞建議）
+    tips      0–2 條，**只能從後端算好的那一晚適用清單挑**（同寵物 notes 的 triggered()）；
+              每條附後端固定表的 Why 那一行（WHY），不交給 AI 寫
+    link      0–1 個詳細頁，只能從那一晚有資料的 LINKS 挑
+
+合起來的 answer（headline＋why）留給舊版 App。
+
+═══════════════════════════════════════════════════════════════════
 ⚠️ 會花錢
 ═══════════════════════════════════════════════════════════════════
 
@@ -33,6 +45,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import llm_client  # noqa: E402
 from env_utils import load_env_file  # noqa: E402
@@ -42,6 +55,7 @@ from text_guards import (  # noqa: E402
     NUMBER_PATTERN,
     SPELLED_NUMERAL_PATTERN,
 )
+from behavior import morning_tips as mt  # noqa: E402
 
 # 讀 ai/.env 的金鑰。⚠️ 原本由 generate_advice.py 在 import 時讀（chat 間接沾光），
 # 2026-11-18 夢境程式刪掉後搬到這裡——少了這一行，助理與寵物 notes 會悄悄變成
@@ -59,17 +73,67 @@ _BANNED = [(w, re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE)) for w in
 
 ANSWER_SCHEMA = {
     "type": "object",
-    "properties": {"answer": {"type": "string"}},
-    "required": ["answer"],
+    "properties": {
+        "headline": {"type": "string"},
+        "why": {"type": "string"},
+        "tip_ids": {"type": "array", "items": {"type": "string"}},
+        "link": {"type": "string"},
+    },
+    "required": ["headline", "why", "tip_ids", "link"],
     "additionalProperties": False,
 }
+
+MAX_TIPS = 2
+MAX_HEADLINE_WORDS = 25
+MAX_WHY_WORDS = 30
+
+# 回答底下可以連到哪一頁（App 對到首頁同一份詳細頁 NightSheets）。後端只給**那一晚有資料**的。
+# ⚠️ 只列 NightSheets 開得了的四頁：放下手機、睡著心率那兩頁在早晨報告裡、首頁開不了，
+#    列進來的話 AI 挑了 App 卻沒地方開。
+LINKS = {
+    "total_sleep": "how long the watch says the user slept",
+    "efficiency": "sleep efficiency",
+    "awake": "time awake during the night",
+    "deep": "deep sleep",
+}
+
+# Why 那一行：每條建議一句，**後端照抄、不交給 AI**（2026-11-22 使用者逐句審過）。
+# 只有對得到睡眠計畫的那幾條（App 的 kTipToPlan）才有；鍵要跟那張表一樣（test_chat【6f】守著）。
+# ⚠️ 不寫 because：只陳述觸發它的事實。
+WHY = {
+    "T3": "You noted late caffeine last night.",
+    "T4": "You noted alcohol last night.",
+    "T5": "You noted a nap yesterday.",
+    "T6": "You noted the room was too hot or cold.",
+    "T12": "You noted noise last night.",
+    "T7": "You noted exercise yesterday.",
+    "T8": "You noted feeling stressed last night.",
+    "P2": "You noted exercise, and your watch showed a harder night than usual.",
+    "P3": "Your watch showed less REM than Sonnap's range, and your phone went down after your target.",
+    "P6": "You noted a nap, and your watch showed less deep sleep than Sonnap's range.",
+    "P7": "You noted alcohol, and your sleeping heart rate was higher than your usual.",
+}
+
+# why 那句可以講這兩件（準時放下手機、固定就寢：量測那幾列，沒有按鈕），不算偷塞建議（grill Q4）。
+_WHY_ALLOWED_ACTIONS = {"T1", "T2"}
 
 SYSTEM_PROMPT = """You are Sonnap's sleep assistant inside a sleep app for university students.
 
 Answer the user's question using ONLY the facts in the FACTS block. The facts describe this one user.
 
+Answer in four parts:
+- "headline": exactly ONE short sentence (at most 25 words) that answers the question directly.
+- "why": at most ONE short sentence (at most 30 words) of context or a possible reason, or "" when there
+  is nothing to add. A possible reason uses "might" or "can", never "because" or "due to". Do not give
+  advice in the headline or why, except putting the phone down on time or keeping a steady bedtime.
+- "tip_ids": 0 to 2 ids from the TIP LIST that fit the question. Never use an id that is not in the TIP LIST.
+  The app shows each tip itself, so do not repeat its advice in the headline or why. If the TIP LIST is
+  empty or nothing fits, give [] and, when the user asked for tips, say plainly that nothing from that
+  night stands out.
+- "link": one key from the LINKS block that matches what the headline is about, or "".
+
 Rules:
-- Write 2 to 4 short sentences in plain, friendly English. No lists, no headings.
+- Plain, friendly English. No lists, no headings.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
 - If the question needs data that is not in the facts, say plainly that Sonnap does not have that data.
 - PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text for that
@@ -105,13 +169,14 @@ PET_MOOD_RULE = ("Usually decided by when the phone was put down compared with t
                  "If the watch shows the body was less settled than usual, the mood can become anxious.")
 
 
-def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
+def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, noted=()):
     """
     事實區塊。**只放這個人自己的資料**。
 
     late 是 adherence.late_night_ratio() 的回傳值 (ratio, late_nights, recorded)。
     pet 是 (date, mood, driver)：首頁那隻寵物的心情（2026-11-21 加，讓「寵物心情跟睡眠
     有什麼關係」答得出來）。心情由後端判好，這裡只轉述，不給 AI 任何判斷的材料。
+    noted 是起床自評勾的標籤（morning_tips.TAGS 的 id，2026-11-22 加：建議的 Why 要講得出來）。
 
     ⚠️ 時刻直接切 ISO 字串的 HH:MM，不轉時區——那是記錄當下的牆鐘時間
        （與 App 端 parseWallClock() 同一個道理）。
@@ -151,7 +216,15 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None):
         facts["pet_mood"] = {"date": pet[0], "mood": pet[1],
                              "decided_by": PET_MOOD_DECIDED_BY[pet[2]],
                              "how_pet_mood_works": PET_MOOD_RULE}
+    labels = [mt.TAGS[t] for t in noted if t in mt.TAGS]
+    if labels:
+        facts["you_noted_last_night"] = labels
     return facts
+
+
+def tip_list(tip_ids):
+    """交給 AI 的清單：只有後端依適用條件挑到的那幾條（同寵物 notes，不讓 AI 自己判斷適不適用）。"""
+    return [{"id": tid, "sentence": mt.TIPS[tid][1], "when": mt.WHEN[tid]} for tid in tip_ids]
 
 
 def _numbers(text):
@@ -177,6 +250,68 @@ def validate_answer(answer, facts_text):
     return problems
 
 
+def _words(text):
+    return re.findall(r"[A-Za-z0-9']+", text)
+
+
+def validate_parts(parts, facts_text, allowed_tips, allowed_links):
+    """
+    分段回答的問題清單；空清單代表通過。parts = {"headline", "why", "tip_ids", "link"}。
+
+    allowed_tips／allowed_links 刻意沒有預設值——漏傳時直接報錯，不會悄悄退回「全部都可以」。
+    """
+    import night_summary as ns  # 延後 import：night_summary 也 import 這一支
+
+    headline = (parts.get("headline") or "").strip()
+    why = (parts.get("why") or "").strip()
+    tip_ids = parts.get("tip_ids") or []
+    link = (parts.get("link") or "").strip()
+    allowed_tips, allowed_links = set(allowed_tips), set(allowed_links)
+    problems = []
+
+    if not headline:
+        problems.append("empty headline")
+    if len(ns._sentences(headline)) > 1:
+        problems.append("the headline has more than one sentence")
+    if len(_words(headline)) > MAX_HEADLINE_WORDS:
+        problems.append(f"the headline is longer than {MAX_HEADLINE_WORDS} words")
+    if len(ns._sentences(why)) > 1:
+        problems.append("why has more than one sentence")
+    if len(_words(why)) > MAX_WHY_WORDS:
+        problems.append(f"why is longer than {MAX_WHY_WORDS} words")
+
+    if len(tip_ids) > MAX_TIPS:
+        problems.append(f"more than {MAX_TIPS} tips")
+    if len(set(tip_ids)) != len(tip_ids):
+        problems.append("the same tip twice")
+    for tid in tip_ids:
+        if tid not in allowed_tips:
+            problems.append(f"tip {tid!r} is not in the TIP LIST (no tips outside the list)")
+    if link and link not in allowed_links:
+        problems.append(f"link {link!r} is not in the LINKS block")
+
+    # 建議只能從 tip_ids 出來：headline／why 講到某條建議的重點字、那條卻沒選 → 偷塞
+    # （跟 notes 同一份 KEYWORDS）。只管「教你怎麼做」的那幾條；準時放手機、固定就寢可以講。
+    text = f"{headline} {why}"
+    for tid, (kind, _) in mt.TIPS.items():
+        if kind != "tip" or tid in tip_ids or tid in _WHY_ALLOWED_ACTIONS:
+            continue
+        # ⚠️ 開頭要 \b：notes 那份沒有，"nap" 會命中 "Sonnap"、"hot" 命中 "photo"
+        if re.search(r"\b(?:" + mt.KEYWORDS[tid] + ")", text, re.IGNORECASE):
+            problems.append(f"the headline or why talks about tip {tid} without choosing it "
+                            "(put it in tip_ids, or leave it out)")
+
+    if headline:
+        problems.extend(validate_answer(text, facts_text))
+    if ns.CAUSAL_PATTERN.search(text):
+        problems.append("states a cause as certain (use 'might' / 'can', never 'because' / 'due to')")
+    for sentence in ns._sentences(text):
+        for reason, pats, unless in ns._FORBIDDEN:
+            if all(p.search(sentence) for p in pats) and not (unless and unless.search(sentence)):
+                problems.append(reason)
+    return problems
+
+
 # 後端最多看幾則前文（5 輪＝10 則）；App 也只送這麼多，這裡再夾一次。
 MAX_HISTORY_MESSAGES = 10
 
@@ -191,18 +326,26 @@ def _conversation_block(history):
     return "CONVERSATION SO FAR (oldest first):\n" + "\n".join(lines) + "\n\n"
 
 
-def answer_question(question, facts, history=()):
+def answer_question(question, facts, history=(), tips=(), links=()):
     """
-    問一次。回傳 {"answer", "attempts", "model"}，答不出來丟 ChatUnavailable。
+    問一次。tips：那一晚適用的建議 id（後端算好）；links：那一晚有資料的 LINKS 鍵。
+
+    回傳 {"headline", "why", "tips": [{"id", "why"}], "link", "answer", "attempts", "model"}，
+    答不出來丟 ChatUnavailable。tips 裡的 why 是 WHY 那張表的字（沒有的是 None），不是 AI 寫的。
 
     ⚠️ 失敗訊息不帶 API 的錯誤細節——那可能包含「金鑰無效」之類的伺服器資訊，
        不該傳到手機上。細節留在後端的 log。
     """
+    tips = [t for t in tips if t in mt.TIPS]
+    links = [k for k in links if k in LINKS]
     facts_text = json.dumps(facts, ensure_ascii=False, indent=2)
+    tips_text = json.dumps(tip_list(tips), ensure_ascii=False, indent=2)
+    links_text = json.dumps({k: LINKS[k] for k in links}, ensure_ascii=False, indent=2)
     convo = _conversation_block(history)
     feedback = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        user_prompt = f"FACTS:\n{facts_text}\n\n{convo}QUESTION:\n{question}\n{feedback}"
+        user_prompt = (f"FACTS:\n{facts_text}\n\nTIP LIST:\n{tips_text}\n\nLINKS:\n{links_text}\n\n"
+                       f"{convo}QUESTION:\n{question}\n{feedback}")
         try:
             data, model = complete(SYSTEM_PROMPT, user_prompt, ANSWER_SCHEMA, max_tokens=2000)
         except llm_client.LLMRefusal:
@@ -211,10 +354,19 @@ def answer_question(question, facts, history=()):
             print(f"chat: LLM call failed - {exc}", file=sys.stderr)
             raise ChatUnavailable("The assistant could not be reached right now.")
 
-        answer = (data.get("answer") or "").strip()
-        problems = validate_answer(answer, facts_text)
+        problems = validate_parts(data, facts_text, tips, links)
         if not problems:
-            return {"answer": answer, "attempts": attempt, "model": model}
+            headline = data["headline"].strip()
+            why = (data.get("why") or "").strip()
+            return {
+                "headline": headline,
+                "why": why or None,
+                "tips": [{"id": tid, "why": WHY.get(tid)} for tid in data.get("tip_ids") or []],
+                "link": (data.get("link") or "").strip() or None,
+                "answer": f"{headline} {why}".strip(),
+                "attempts": attempt,
+                "model": model,
+            }
         feedback = (
             "\nYOUR PREVIOUS ANSWER WAS REJECTED because: " + "; ".join(problems)
             + ". Write it again following every rule."

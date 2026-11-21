@@ -1988,6 +1988,7 @@ garmin/data/*.json → build_app_payload.py → app/assets/data/app_payload.json
 | **只存一問一答都成功的**：答不出來（503）的問題留在畫面上可以重試（`assistant-retry`），但不存、也不當前文送出 | 存了的話重開 App 會留一句沒有回答的孤兒問題，下一次還會被當成前文（2026-11-20 修，`assistant_chat_test.dart` 守著） |
 | 建議問題是固定清單（`kAssistantSuggestions`）；原本寫死的「What affected your sleep」拿掉了 | — |
 | **寵物心情與目標時間**（2026-11-21／22）：事實裡有 `pet_mood`（跟 `/home` 同一隻、同一支 `resolve_mood`），只給「這一晚由哪一類訊號決定」＋一般規則 `PET_MOOD_RULE`，不給 `mood_reason`、不給壓力；目標分成 `current_target_bedtime` 與那一晚的 `target_bedtime_that_night` | 只給這一晚的話 AI 會推成「心情完全跟睡眠無關」；只給現在的目標的話，目標改過之後 AI 會拿新目標去對舊的一晚（手機實測：那晚用 01:25 判，AI 說 04:00）。`test_chat.py`【6d】【6e】守著 |
+| **分段回答**（2026-11-22 grill，參考 Oura／WHOOP）：`/chat` 回 `headline`（一句、≤25 字）、`why`（0–1 句、≤30 字、只准 might／can）、`tips`（0–2 條）、`link`（0–1 個）；合起來的 `answer` 留給舊版 App。**建議只能從那一晚適用的清單挑**（跟寵物 notes 同一支 `morning_tips.applicable_tips()`，自評標籤也交給 AI）；headline／why 講到某條建議的重點字卻沒選它就擋（準時放手機、固定就寢可以講）。每條建議的 **Why 那一行是後端固定表 `ai/chat.WHY`**（使用者審過），不是 AI 寫的；鍵＝App 的 `kTipToPlan`。App：對得上計畫的才出現「+ Add "caffeine earlier" to my plan」（短名字 `kPlanShortNames`，加進去的是清單整句）；連結只有首頁 `NightSheets` 開得了的四頁（`ai/chat.LINKS`，首頁登記 `NightSheetLinks.shared`）；回答底下兩顆追問＝`kAssistantSuggestions` 裡還沒問過的（不經過 AI）；輸入框上方固定 `kAssistantDisclaimer`。對話存 `assistant_thread_v2`，v1 照一段文字讀。⚠️ 資料仍只有最近一晚（「哪一晚／哪一週」是下一個 PR） | AI 自己挑建議會替文獻下結論（同 notes 11-17）；Why 交給 AI 寫就會編原因。`test_chat.py`【6f】、`assistant_answer_format_test.dart` 守著 |
 
 ---
 
