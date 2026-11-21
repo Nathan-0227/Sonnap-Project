@@ -164,15 +164,19 @@ void main() {
     expect(mine.equippedItemId, 'top_hat');
   });
 
-  test('【8】坐墊的位置跟著圖縮放：cover、貼下緣置中', () {
+  test('【8】坐墊的位置跟著圖縮放：cover、貼上緣置中', () {
+    const img = Size(100, 200);
     // 盒子跟原圖同比例 → 就是比例本身
-    final same = visitSeatAt(const Size(543, 724), const Offset(0.5, 0.75));
-    expect(same.dx, closeTo(271.5, 0.01));
-    expect(same.dy, closeTo(543, 0.01));
-    // 比較矮的盒子：寬度撐滿、上面被裁掉，下緣對齊 → 那一點離下緣的距離不變比例
-    final short = visitSeatAt(const Size(400, 300), const Offset(0.5, 1.0));
-    expect(short.dy, closeTo(300, 0.01));
-    expect(short.dx, closeTo(200, 0.01));
+    final same = visitSeatAt(const Size(50, 100), const Offset(0.5, 0.4), image: img);
+    expect(same.dx, closeTo(25, 0.01));
+    expect(same.dy, closeTo(40, 0.01));
+    // 比較矮的盒子：寬度撐滿、裁掉的是下面，上緣對齊（窗戶永遠在）
+    final short = visitSeatAt(const Size(100, 150), const Offset(0.5, 0.4), image: img);
+    expect(short, const Offset(50, 80));
+    // 比較高的盒子：高度撐滿、左右各裁一點
+    final tall = visitSeatAt(const Size(100, 300), const Offset(0.5, 0.4), image: img);
+    expect(tall.dx, closeTo(50, 0.01));
+    expect(tall.dy, closeTo(120, 0.01));
   });
 
   for (final view in const [Size(411, 900), Size(384, 832), Size(360, 700)]) {
