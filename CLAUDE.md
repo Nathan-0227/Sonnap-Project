@@ -1633,6 +1633,12 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
   助理 `POST /chat`；
   早晨報告 `POST /rested`（起床自評）、`GET /night-summary`（寵物 notes：AI 總結＋從清單挑的建議；`generate=false` 只讀不生成，首頁用）。
+  🔴 **端點一律寫 `def`，不寫 `async def`**（2026-11-21）：裡面是同步的資料庫查詢，寫成 async 會佔住整個事件迴圈。
+  實測 `/friends/feed`（替自己與每個朋友每晚各組一次 /home，約 3–4 秒）一跑，同時進來的 `/home`、`/game` 連 `/health`
+  都排在它後面 4 秒，App 3 秒就放棄——**這就是 App 剛打開時 /game、/home 偶爾逾時的原因**。改成 `def` 後 FastAPI 丟執行緒池，
+  `/health` 0.18 秒。**只有真的在 await 的才准 async**（現在只有 `POST /sleep-status`）；`tests/test_no_blocking.py` 開真的 uvicorn 守著
+  （⚠️ TestClient 每個執行緒各開事件迴圈，在它裡面「卡住別人」不會發生，寫在 TestClient 裡的這種測試永遠綠）。
+  因此跑在多執行緒裡：`main.py` 的記憶體快取（25 MB 原始檔、心率索引）**一次整份換掉**、重新載入加鎖，不分兩步改。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
 - `db.py` — 17 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
@@ -1810,6 +1816,7 @@ python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規�
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
 python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不讀它、刪帳號一起刪
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
+python tests/test_no_blocking.py         # 2026-11-21 新增：慢的請求不准卡住別人（開真的 uvicorn 量 /health）、只有真的在 await 的端點才准 async、快取一次整份換掉
 python tests/test_camera_auto.py         # 2026-11-21 新增：按 Start Sleep 自動開錄——只認手機帳號＋區網、在錄不開第二個、停錄只放旗標（錄影程式自己收尾，拿掉檢查會紅）、Cancel 搬檔不刪、鎖檔死了當沒在錄、攝影機移動偵測（平移 40 判移動、亮度與床上的人不算、中間值）、早上匯入移動了只擋攝影機、重新框有備份並換基準、API 出錯不讓端點失敗
 ```
 
