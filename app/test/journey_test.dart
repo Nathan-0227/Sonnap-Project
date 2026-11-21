@@ -381,6 +381,12 @@ void main() {
       await tester.tap(find.byKey(const Key('journey-setup-go')));
       await settle(tester);
       expect(find.byKey(const Key('journey-setup-error')), findsOneWidget);
+      // 寫出起點時間（06:00），看得懂要拖得比它早
+      expect(
+        find.text('Your goal needs to be earlier than 06:00. '
+            'To wake up later, just change your schedule.'),
+        findsOneWidget,
+      );
       expect(c.journey, isNull);
     });
 
