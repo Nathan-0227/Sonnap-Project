@@ -15,7 +15,6 @@ import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/awake_hr_sheet.dart';
-import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/last_night_art.dart';
 import '../widgets/move_iq_sheet.dart';
 import '../widgets/report_tiles.dart';
@@ -28,7 +27,6 @@ import '../widgets/efficiency_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 import '../widgets/steps_sheet.dart';
-import '../widgets/kcal_sheet.dart';
 import '../widgets/active_sheet.dart';
 import '../widgets/stress_sheet.dart';
 import '../services/report_loader.dart';
@@ -1361,12 +1359,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           valueKey: const Key('report-steps-value'),
         ),
         graphicHeight: 118,
-        onTap: () => showStepsSheet(
-          context,
-          day: y,
-          color: _cSteps,
-          fontFamily: kReportFont,
-        ),
+        onTap: () => DaySheets.steps(context, y),
         lines: [
           // 只寫 goal，不寫 reached（紅線 2）
           if (y.stepGoal != null)
@@ -1402,12 +1395,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-kcal-bars'),
               ),
         // 11-15 使用者定：點開是 Calories 頁（靜止＋活動的圓環、一週）
-        onTap: () => showKcalSheet(
-          context,
-          day: y,
-          color: _cKcal,
-          fontFamily: kReportFont,
-        ),
+        onTap: () => DaySheets.kcal(context, y),
         lines: const [Text('active only, not total burn')],
       );
     }
@@ -1440,8 +1428,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-active-bar'),
               ),
               graphicHeight: 18,
-              onTap: () =>
-                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              onTap: () => DaySheets.active(context, y),
               lines: [
                 Text(
                   [
@@ -1460,8 +1447,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               icon: Icons.bolt_rounded,
               color: _cActive,
               title: 'Active time',
-              onTap: () =>
-                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              onTap: () => DaySheets.active(context, y),
               art: ActivityMountain(
                 key: const Key('report-active-mountain'),
                 parts: parts,
@@ -1567,7 +1553,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         icon: Icons.favorite_rounded,
         color: kAwakeHr,
         title: 'Awake HR',
-        onTap: () => showAwakeHrSheet(context, day: y, fontFamily: kReportFont),
+        onTap: () => DaySheets.heartRate(context, y),
         art: GlowingHeart(
           key: const Key('report-awake-hr-heart'),
           bpm: awakeHr.avg,
@@ -1590,17 +1576,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           SparklinePainter(_curvePoints(dayHr), _cHr),
           key: const Key('report-day-hr-line'),
         ),
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: ReportColors.sheet,
-          builder: (_) => SafeArea(
-            child: Padding(
-              key: const Key('report-day-hr-sheet'),
-              padding: const EdgeInsets.all(20),
-              child: SizedBox(height: 180, child: DayHeartRateChart(dayHr)),
-            ),
-          ),
-        ),
+        onTap: () => DaySheets.heartRate(context, y),
         lines: [
           Text(
             [

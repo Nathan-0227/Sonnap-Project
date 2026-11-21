@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../models/yesterday_activity.dart';
 import '../services/camera_insights.dart';
 import '../services/morning_report.dart';
 import '../services/night_compare.dart';
 import '../services/report_loader.dart';
 import '../theme/report_style.dart';
+import 'active_sheet.dart';
+import 'awake_hr_sheet.dart';
 import 'awake_week_sheet.dart';
+import 'day_heart_rate_chart.dart';
 import 'deep_sheet.dart';
 import 'efficiency_sheet.dart';
+import 'kcal_sheet.dart';
 import 'movement_sheet.dart';
 import 'night_week.dart';
 import 'score_sheet.dart';
 import 'sleep_week_sheet.dart';
+import 'steps_sheet.dart';
 
 /// 「這一晚的某個詳細頁」只有這一份（2026-11-21）：早晨報告（含 Insights 的 Day）與首頁都從這裡開。
 ///
@@ -327,6 +333,49 @@ class NightSheets {
       counts: counts,
       stages: r.stages,
       series: series,
+    );
+  }
+}
+
+/// 白天那一天的詳細頁（2026-11-21）：步數、活動卡路里、活動時間、整天心率。
+/// 早晨報告的 Yesterday 格子與首頁的 Activity 卡都從這裡開，**只要那一天的資料**、跟分數無關。
+///
+/// ⚠️ 首頁的 Activity 卡原本點開是 7 天長條圖／一條整天心率線，跟報告點同一個量開的不一樣。
+/// ⚠️ 給的那一天最好是後端 `/home` 的 `yesterday`（有每小時步數、每 15 分鐘的程度、醒著的心率）；
+///    打包檔那一份沒有這幾樣，各頁會照實少那幾塊、不編。
+class DaySheets {
+  DaySheets._();
+
+  static const stepsColor = Color(0xFFFFB37A);
+  static const kcalColor = Color(0xFFFF8A6B);
+  static const hrColor = Color(0xFFFF8AB8);
+
+  static Future<void> steps(BuildContext context, YesterdayActivity day) =>
+      showStepsSheet(context, day: day, color: stepsColor, fontFamily: kReportFont);
+
+  static Future<void> kcal(BuildContext context, YesterdayActivity day) =>
+      showKcalSheet(context, day: day, color: kcalColor, fontFamily: kReportFont);
+
+  static Future<void> active(BuildContext context, YesterdayActivity day) =>
+      showActiveSheet(context, day: day, fontFamily: kReportFont);
+
+  /// 心率：有醒著的心率就開 Awake HR 頁（11-15 定），沒有才退回那天 0–24 點的一條線。
+  static Future<void> heartRate(BuildContext context, YesterdayActivity day) {
+    if (day.awakeHeartRate != null) {
+      return showAwakeHrSheet(context, day: day, fontFamily: kReportFont);
+    }
+    final dayHr = day.dayHeartRate;
+    if (dayHr == null) return Future.value();
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: ReportColors.sheet,
+      builder: (_) => SafeArea(
+        child: Padding(
+          key: const Key('report-day-hr-sheet'),
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(height: 180, child: DayHeartRateChart(dayHr)),
+        ),
+      ),
     );
   }
 }
