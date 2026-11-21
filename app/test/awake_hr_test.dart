@@ -11,6 +11,7 @@ import 'package:app/models/yesterday_activity.dart';
 import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/widgets/awake_hr_sheet.dart';
+import 'package:app/widgets/night_sheets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -275,5 +276,39 @@ void main() {
     await pumpReport(tester, yesterdayJson(awake: false));
     await scrollTo(tester, find.byKey(const Key('report-day-hr')));
     expect(find.byKey(const Key('report-awake-hr')), findsNothing);
+  });
+
+  // 2026-11-21：首頁 Activity 卡與報告 Yesterday 都經過 DaySheets.heartRate（night_sheets.dart）
+  group('DaySheets.heartRate', () {
+    Future<void> open(WidgetTester tester, bool awake) async {
+      final y = YesterdayActivity.fromJsonOrNull(yesterdayJson(awake: awake))!;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (c) => TextButton(
+              key: const Key('go'),
+              onPressed: () => DaySheets.heartRate(c, y),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const Key('go')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('有醒著的心率 → Awake HR 頁（不是整天那條線）', (tester) async {
+      await open(tester, true);
+      expect(find.byKey(const Key('awake-hr-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('report-day-hr-sheet')), findsNothing);
+    });
+
+    testWidgets('沒有醒著的心率 → 退回那一天的心率線', (tester) async {
+      await open(tester, false);
+      expect(find.byKey(const Key('report-day-hr-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('awake-hr-sheet')), findsNothing);
+    });
   });
 }

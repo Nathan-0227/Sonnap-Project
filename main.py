@@ -1574,6 +1574,11 @@ async def get_insights(
                     "mood_reason": moods[r["date"]][1],
                     "final_score": r["final_score"],
                     "final_quality": r["final_quality"],
+                    # 等級的顏色（2026-11-21，分數詳細頁的一週長條照它上色）。
+                    # 色表只在 build_app_payload.QUALITY_TO_COLOR，Dart 照抄不寫顏色；
+                    # 退回色同 display_for()。
+                    "score_color": (QUALITY_TO_COLOR.get(r["final_quality"], "#FFC83D")
+                                    if r["final_quality"] else None),
                     # ⚠️ 逐夜都帶，因為組成會隨當晚量到什麼而變（例如某幾晚
                     #    手錶測不到 REM）。只在最上層給一次會讓人以為每晚一樣。
                     "composition": score_composition(

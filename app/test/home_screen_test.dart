@@ -215,19 +215,28 @@ void main() {
       expect(find.text(sample.display.scoreMessage), findsOneWidget);
     });
 
-    testWidgets('點效率卡 → 跳出後端的警語原文（畫面上平常不放）', (tester) async {
+    // 2026-11-21：首頁三格改開跟報告同一份詳細頁（night_sheets.dart）。
+    // ⚠️ 原本這條守「點效率卡跳出警語」——11-19 起警語只留在書面報告，App 上一處都不放，所以反過來守。
+    Future<void> openTile(WidgetTester tester, String key) async {
+      await tester.tap(find.byKey(Key(key)));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('點效率卡 → 跟報告同一頁效率頁，而且沒有警語', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      final caveat = sample.scoring.composition!.caveats.firstWhere(
-        (c) => c.component == 'efficiency',
-      );
-      expect(find.text(caveat.text), findsNothing, reason: '平常不顯示');
-      await tester.tap(find.byKey(const Key('tile-efficiency')));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(
-        find.text(caveat.text),
-        findsOneWidget,
-        reason: '文字只能照抄 score_claim.py，Dart 不產生',
-      );
+      await openTile(tester, 'tile-efficiency');
+      expect(find.byKey(const Key('eff-sheet')), findsOneWidget);
+      for (final c in sample.scoring.composition!.caveats) {
+        expect(find.text(c.text), findsNothing, reason: '警語只在書面報告（11-19 定）');
+      }
+    });
+
+    testWidgets('點深睡卡 → 深睡頁', (tester) async {
+      await pumpHome(tester, () => at(12, 9));
+      await openTile(tester, 'tile-deep');
+      expect(find.byKey(const Key('deep-sheet')), findsOneWidget);
     });
 
     testWidgets('睡眠長度卡底下有「跟上一晚比」，點了開一週圖（同報告的 Time asleep）', (tester) async {
@@ -249,11 +258,20 @@ void main() {
       );
     });
 
-    testWidgets('點分數卡 → 最近 7 晚的分數長條圖', (tester) async {
+    testWidgets('點分數卡 → 分數頁，數字跟分數卡同一個；五個量只寫數字', (tester) async {
       await pumpHome(tester, () => at(12, 9));
-      await tester.tap(find.byKey(const Key('score-card')));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byKey(const Key('metric-sheet-score')), findsOneWidget);
+      await openTile(tester, 'score-card');
+      expect(find.byKey(const Key('score-sheet')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('score-value'))).data,
+        '${sample.scoring.finalScore!.round()}',
+      );
+      for (final id in ['sleep', 'efficiency', 'awake', 'deep', 'rem']) {
+        expect(find.byKey(Key('score-row-$id')), findsOneWidget, reason: id);
+      }
+      // 分數組成不上 App（11-19 定）：不能出現「幾分／幾分」這種得分
+      expect(find.textContaining(' pts'), findsNothing);
+      expect(find.textContaining('/ 30'), findsNothing);
     });
 
     testWidgets('⚠️ 歷史沒有效率資料（舊版後端）→ 不畫比較，不編數字', (tester) async {

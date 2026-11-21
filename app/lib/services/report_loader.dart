@@ -181,6 +181,10 @@ class ReportLoader {
 
   Future<List<CameraNight>?> cameraNights() async =>
       (await _okCamera())?.nights;
+
+  /// 每晚的分數、等級顏色、深睡（/insights 的 wearable.history）。分數頁、深睡頁的一週用。
+  Future<Map<String, WearableNight>?> wearableNights() async =>
+      (await _okCamera())?.wearableNights;
 }
 
 /// 每晚睡了幾分鐘（首頁 Sleep 小卡與報告 Total sleep 的一週圖共用）。沒值的晚上不放進來。

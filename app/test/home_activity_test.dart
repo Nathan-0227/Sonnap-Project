@@ -228,24 +228,35 @@ void main() {
     textIn(tester, 'tile-night-hr', 'avg while asleep · resting 53');
   });
 
-  testWidgets('點整天心率 → 那一天的心率線，只寫最低最高靜止', (tester) async {
-    await pumpHome(tester, session());
-    await scrollTo(tester, find.byKey(const Key('tile-day-hr')));
-    await tester.tap(find.byKey(const Key('tile-day-hr')));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byKey(const Key('day-hr-sheet')), findsOneWidget);
-    expect(tester.widget<Text>(find.byKey(const Key('day-hr-facts'))).data,
-        'lowest 52 · highest 112 · resting 59');
-    expect(tester.takeException(), isNull);
-  });
+  // 2026-11-21：Activity 四項點開＝早晨報告 Yesterday 同一份詳細頁（night_sheets.dart 的 DaySheets）。
+  // 原本這裡守「點步數開 7 天長條圖、點心率開整天心率線」，那兩頁已經刪了。
+  Future<void> openRow(WidgetTester tester, String key) async {
+    await scrollTo(tester, find.byKey(Key(key)));
+    await tester.tap(find.byKey(Key(key)));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
 
-  testWidgets('點步數 → 最近 7 天長條圖', (tester) async {
+  for (final (row, sheet) in [
+    ('tile-steps', 'steps-sheet'),
+    ('tile-kcal', 'kcal-sheet'),
+    ('tile-active', 'active-sheet'),
+  ]) {
+    testWidgets('點 $row → 跟報告同一頁（$sheet）', (tester) async {
+      await pumpHome(tester, session());
+      await openRow(tester, row);
+      expect(find.byKey(Key(sheet)), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('點整天心率 → 沒有醒著的心率（打包檔沒有）時退回那一天的心率線', (tester) async {
     await pumpHome(tester, session());
-    await scrollTo(tester, find.byKey(const Key('tile-steps')));
-    await tester.tap(find.byKey(const Key('tile-steps')));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byKey(const Key('activity-sheet-steps')), findsOneWidget);
-    expect(find.text('Steps · last 7 days'), findsOneWidget);
+    await openRow(tester, 'tile-day-hr');
+    expect(find.byKey(const Key('report-day-hr-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('awake-hr-sheet')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('沒有白天資料 → 整張 Activity 不畫；沒有心率曲線 → Sleep 卡不畫心率', (tester) async {

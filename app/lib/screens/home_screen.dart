@@ -19,10 +19,10 @@ import '../services/sleep_repository.dart';
 import '../services/start_sleep_requests.dart';
 import '../theme/sonnap_colors.dart';
 import '../widgets/level_progress.dart';
+import '../widgets/night_sheets.dart';
 import '../widgets/sleep_week_sheet.dart';
 import '../widgets/bedtime_urgency.dart';
 import '../widgets/countdown_border.dart';
-import '../widgets/day_heart_rate_chart.dart';
 import '../models/yesterday_activity.dart';
 import '../services/pet_notes.dart';
 import '../widgets/notes_book.dart';
@@ -708,6 +708,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// 打開某一晚的早晨報告：先畫手機上已經有的，再去問後端。
   /// （首頁點某一天、補填自評之後；起床流程走 [_wakeUpFlow]，中間多一個等待畫面。）
+  /// 分數卡、效率、深睡點開（2026-11-21）：跟早晨報告**同一份** [NightSheets]，
+  /// 原本首頁這三格開的是另一個長條圖頁（同一個量兩頁、兩邊說的不一樣）。
+  /// 這一晚＝首頁畫的那一晚（history 最後一晚）；有後端就問那一晚，沒有就用打包檔（同 [_openReport]）。
+  bool _openingSheet = false;
+  Future<void> _openNightSheet(
+    SleepSession session,
+    Future<void> Function(NightSheets sheets, BuildContext context) open,
+  ) async {
+    final date = session.history.lastOrNull?.date;
+    if (date == null || _openingSheet) return;
+    _openingSheet = true;
+    try {
+      final inputs = await _reportInputs(date);
+      MorningReport r;
+      try {
+        r = await _fetchReport(date, inputs);
+      } catch (_) {
+        r = _initialReport(date, inputs);
+      }
+      if (!mounted) return;
+      await open(NightSheets.fromLoader(r, _loader), context);
+    } finally {
+      _openingSheet = false;
+    }
+  }
+
+  /// Activity 卡點開：用後端 /home 那一晚帶的 yesterday（有每小時步數、每 15 分鐘的程度、醒著的心率），
+  /// 拿不到或不是同一天才用首頁手上那一份（打包檔）。
+  Future<void> _openDaySheet(
+    YesterdayActivity fallback,
+    Future<void> Function(BuildContext, YesterdayActivity) open,
+  ) async {
+    final session = await _sessionFuture;
+    final date = session.history.lastOrNull?.date;
+    if (date == null || _openingSheet) return;
+    _openingSheet = true;
+    YesterdayActivity day = fallback;
+    try {
+      final inputs = await _reportInputs(date);
+      final r = await _fetchReport(date, inputs);
+      final y = r.yesterday;
+      if (y != null && y.date == fallback.date) day = y;
+    } catch (_) {
+      // 用打包檔那一份
+    }
+    _openingSheet = false;
+    if (!mounted) return;
+    await open(context, day);
+  }
+
   Future<void> _openReport(String date) async {
     final inputs = await _reportInputs(date);
     if (!mounted) return;
@@ -869,164 +919,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     showPetNotes(context, notes: notes, mood: mood);
     _notesReads.markRead(notes.date, notes.version);
     setState(() => _notesReadVersion = notes.version);
-  }
-
-  /// 點卡片跳出的彈窗：最近 7 晚的長條圖（當晚那根特別亮）、跟上一晚差多少，
-  /// 效率與深睡另外附上後端的警語（2026-11-12 使用者定案：畫面上不放警語）。
-  ///
-  /// ⚠️ 警語文字只照抄 `scoring.composition.caveats`（唯一定義處是 `score_claim.py`），
-  ///    Dart 一個字都不產生。後端沒給就不放。
-  void _showMetricSheet({
-    required SleepSession session,
-    required String id,
-    required String title,
-    required List<NightValue> series,
-    required String Function(double) format,
-    String? caveatComponent,
-  }) {
-    final currentDate = session.history.lastOrNull?.date;
-    String? caveat;
-    if (caveatComponent != null) {
-      for (final c in session.scoring.composition?.caveats ?? const []) {
-        if (c.component == caveatComponent) caveat = c.text;
-      }
-    }
-    final bars = currentDate == null
-        ? const <NightValue>[]
-        : lastNights(series, currentDate);
-    final delta = currentDate == null
-        ? null
-        : compareWithPrevious(series, currentDate);
-    final maxV = bars.fold<double>(0, (m, n) => n.value > m ? n.value : m);
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1B2350),
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          key: Key('metric-sheet-$id'),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              if (delta != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  deltaText(delta, format),
-                  style: TextStyle(
-                    color: deltaColor(delta),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              if (bars.isEmpty)
-                const Text(
-                  'No nights to compare yet.',
-                  style: TextStyle(color: Colors.white54),
-                )
-              else
-                SizedBox(
-                  height: 150,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      for (final n in bars)
-                        Expanded(
-                          child: _bar(
-                            n,
-                            maxV,
-                            isCurrent: n.date == currentDate,
-                            format: format,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              if (caveat != null) ...[
-                const SizedBox(height: 18),
-                Text(
-                  caveat,
-                  key: Key('caveat-$caveatComponent'),
-                  style: const TextStyle(color: Colors.white70, height: 1.5),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 長條圖的一根：上面是數值，下面是日期。當晚那根是亮紫色，其他半透明。
-  Widget _bar(
-    NightValue n,
-    double maxV, {
-    required bool isCurrent,
-    required String Function(double) format,
-  }) {
-    final frac = maxV <= 0 ? 0.0 : (n.value / maxV).clamp(0.05, 1.0);
-    final d = DateTime.tryParse(n.date);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              format(n.value),
-              style: TextStyle(
-                color: isCurrent ? Colors.white : Colors.white54,
-                fontSize: 11,
-                fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w400,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Flexible(
-            child: FractionallySizedBox(
-              heightFactor: frac,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isCurrent
-                      ? SonnapColors.accent
-                      : Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: isCurrent
-                      ? [
-                          BoxShadow(
-                            color: SonnapColors.accent.withValues(alpha: 0.6),
-                            blurRadius: 12,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            d == null ? '' : '${d.day}',
-            style: TextStyle(
-              color: isCurrent ? Colors.white : Colors.white54,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -1237,17 +1129,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         widget.planCard!,
                       ],
                       const SizedBox(height: 18),
-                      // 點分數卡：最近 7 晚的分數長條圖（照抄後端每晚的 final_score）。
+                      // 點分數卡：分數頁（2026-11-21，跟報告的分數圓弧同一頁，見 night_sheets.dart）。
                       GestureDetector(
                         key: const Key('score-card'),
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => _showMetricSheet(
-                          session: session,
-                          id: 'score',
-                          title: 'Sleep Score',
-                          series: _series(session.history, (e) => e.finalScore),
-                          format: (v) => v.round().toString(),
-                        ),
+                        onTap: () => _openNightSheet(
+                            session, (s, c) => s.score(c)),
                         child: _buildScoreCard(session),
                       ),
                       const SizedBox(height: SonnapColors.gap),
@@ -1912,14 +1799,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               note: eff == null ? null : m.scoredEfficiencyLabel,
               compare: cmp(effSeries, _fmtPts),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'efficiency',
-              title: 'Sleep efficiency',
-              series: effSeries,
-              format: _fmtPts,
-              caveatComponent: 'efficiency',
-            ),
+            // 2026-11-21：跟報告的效率格同一頁（不放警語，11-19 定）
+            () => _openNightSheet(session, (s, c) => s.efficiency(c)),
           );
     final deepTile = tappable(
             InfoTile(
@@ -1931,14 +1812,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               value: deep == null ? null : _hm(deep),
               compare: cmp(deepSeries, formatMinutes),
             ),
-            () => _showMetricSheet(
-              session: session,
-              id: 'deep',
-              title: 'Deep sleep',
-              series: deepSeries,
-              format: formatMinutes,
-              caveatComponent: 'deep',
-            ),
+            // 2026-11-21：深睡頁（night_sheets.dart，報告也開這一頁）
+            () => _openNightSheet(session, (s, c) => s.deep(c)),
           );
     // 昨晚的心率（睡著期間的平均＋靜止），跟 Sleep Stages 疊的心率線同一份資料。
     // ⚠️ 不寫 Normal／High（夜間心率沒有文獻門檻）。
@@ -2096,18 +1971,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Activity 卡（2026-11-13 使用者定，照 Otter Life 放在右邊一欄）：一張高的卡，
   /// 步數、活動卡路里、活動時間、整天心率一列一列往下、中間細線分隔。
   /// Move IQ 不放首頁（2026-11-14 使用者定）；早晨報告的 Yesterday 格子還有。
-  /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比；點了開長條圖／整天心率線。
+  /// 規則同 [_buildActivity]：只寫事實、不寫達標、沒有跟前一天比。
+  /// 點了開**跟早晨報告 Yesterday 同一份**詳細頁（2026-11-21，night_sheets.dart 的 [DaySheets]）。
   List<Widget> _activityParts(YesterdayActivity a) {
-    List<NightValue> series(int? Function(ActivityHistoryDay) pick) => [
-      for (final h in a.history)
-        if (pick(h) != null) NightValue(h.date, pick(h)!.toDouble()),
-    ];
-    VoidCallback? bars(String id, String title, List<NightValue> s,
-            String Function(double) f) =>
-        s.isEmpty
-            ? null
-            : () => _showActivityBars(
-                id: id, title: title, series: s, format: f, day: a.date);
+    VoidCallback open(Future<void> Function(BuildContext, YesterdayActivity) f) =>
+        () => _openDaySheet(a, f);
 
     final active = a.activeMinutes;
     final hr = a.dayHeartRate;
@@ -2119,8 +1987,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Steps',
         value: a.steps == null ? null : [(_comma(a.steps!), '')],
         note: a.stepGoal == null ? null : 'goal ${_comma(a.stepGoal!)}',
-        onTap: bars('steps', 'Steps', series((h) => h.steps),
-            (v) => _comma(v.round())),
+        onTap: open(DaySheets.steps),
       ),
       _activityRow(
         key: 'tile-kcal',
@@ -2131,8 +1998,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         note: a.distanceM == null
             ? null
             : '${(a.distanceM! / 1000).toStringAsFixed(1)} km',
-        onTap: bars('kcal', 'Active energy', series((h) => h.activeKcal),
-            (v) => '${_comma(v.round())} kcal'),
+        onTap: open(DaySheets.kcal),
       ),
       _activityRow(
         key: 'tile-active',
@@ -2140,8 +2006,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         color: const Color(0xFFFFD96A),
         title: 'Active time',
         value: active == null ? null : _hm(active),
-        onTap: bars('active', 'Active time', series((h) => h.activeMinutes),
-            formatMinutes),
+        onTap: open(DaySheets.active),
       ),
       if (hr != null)
         _activityRow(
@@ -2155,7 +2020,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             'all day',
             if (a.restingHeartRate != null) 'resting ${a.restingHeartRate}',
           ].join(' · '),
-          onTap: () => _showDayHeartRate(a),
+          onTap: open(DaySheets.heartRate),
         ),
     ];
 
@@ -2313,140 +2178,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           );
   }
 
-  /// 點步數／卡路里／活動時間：最近 7 天的長條圖（只畫數字，不判斷、不畫目標線）。
-  void _showActivityBars({
-    required String id,
-    required String title,
-    required List<NightValue> series,
-    required String Function(double) format,
-    required String day,
-  }) {
-    final bars = lastNights(series, day);
-    final maxV = bars.fold<double>(0, (m, n) => n.value > m ? n.value : m);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1B2350),
-      builder: (context) => SafeArea(
-        child: Padding(
-          key: Key('activity-sheet-$id'),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$title · last 7 days',
-                style: const TextStyle(
-                  color: SonnapColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                height: 150,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    for (final b in bars)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              FittedBox(
-                                child: Text(
-                                  format(b.value),
-                                  style: const TextStyle(
-                                    color: SonnapColors.textSecondary,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                height: maxV <= 0 ? 0 : 100 * b.value / maxV,
-                                decoration: BoxDecoration(
-                                  color: b.date == day
-                                      ? SonnapColors.accent
-                                      : SonnapColors.accent
-                                          .withValues(alpha: 0.45),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                shortDate(b.date),
-                                style: const TextStyle(
-                                  color: SonnapColors.textMuted,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 點整天心率：那一天 0–24 點的心率線（每 10 分鐘一點）。只寫最低、最高、靜止；不判斷。
-  void _showDayHeartRate(YesterdayActivity a) {
-    final hr = a.dayHeartRate!;
-    final d = DateTime.tryParse(a.date);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1B2350),
-      builder: (context) => SafeArea(
-        child: Padding(
-          key: const Key('day-hr-sheet'),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                d == null
-                    ? 'Heart rate'
-                    : 'Heart rate · ${DateFormat('EEE, MMM d').format(d)}',
-                style: const TextStyle(
-                  color: SonnapColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                [
-                  'lowest ${hr.min.round()}',
-                  'highest ${hr.max.round()}',
-                  if (a.restingHeartRate != null)
-                    'resting ${a.restingHeartRate}',
-                ].join(' · '),
-                key: const Key('day-hr-facts'),
-                style: const TextStyle(
-                    color: SonnapColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 160,
-                width: double.infinity,
-                child: DayHeartRateChart(hr),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// 睡眠中的動作（攝影機）。大字是每小時幾次，下面一行照抄後端的
   /// 「跟你平常比」。⚠️ 不跟文獻常模並列（跨夜不穩，見 CLAUDE.md 紅線 2 展開）。
   Widget _buildCameraTile(SleepSession session, {bool compact = false}) {
@@ -2510,13 +2241,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final d = compareWithPrevious(series, night.date);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _showMetricSheet(
-        session: session,
-        id: 'camera',
-        title: 'Movement',
-        series: series,
-        format: _fmtRate,
-      ),
+      // 2026-11-21：跟報告的 Movement (camera) 同一頁（片段、整晚的動作線、每小時、一週）
+      onTap: () => _openNightSheet(session, (s, c) => s.movement(c)),
       child: InfoTile(
         key: key,
         compact: compact,

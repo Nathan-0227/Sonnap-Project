@@ -581,6 +581,13 @@ MorningReport buildMorningReport({
           : null,
       sleepMinutes: hours == null ? null : hours * 60,
       deepMinutes: entry.deepMinutes?.toDouble(),
+      // 效率（2026-11-21，首頁點效率格沒有後端時也要開得了）：打包檔只有最新那一晚有進分數的那一個。
+      // ⚠️ 種類留 null：判種類要後端的 behavior（basis 字串不寫死在 Dart），效率頁種類未知時不寫分母那一行
+      efficiency: sameNightAsBundle
+          ? (session!.metrics.scoredEfficiency ?? session.metrics.sleepEfficiency)
+          : null,
+      efficiencyLabel:
+          sameNightAsBundle ? session!.metrics.scoredEfficiencyLabel : null,
       remMeasured: bundleStages?.remMeasured ?? false,
       stages: bundleStages,
       source: ReportSource.bundled,

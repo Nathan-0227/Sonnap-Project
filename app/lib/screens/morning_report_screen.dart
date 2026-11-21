@@ -15,26 +15,22 @@ import '../models/night_curve.dart';
 import '../models/yesterday_activity.dart';
 import '../services/night_compare.dart' show NightValue, shortDate;
 import '../widgets/awake_hr_sheet.dart';
-import '../widgets/day_heart_rate_chart.dart';
 import '../widgets/last_night_art.dart';
 import '../widgets/move_iq_sheet.dart';
 import '../widgets/report_tiles.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../widgets/phone_week_sheet.dart';
 import '../services/camera_insights.dart'
-    show CameraNight, EfficiencyNight, SleepHeartRate;
+    show CameraNight, EfficiencyNight, SleepHeartRate, WearableNight;
 import '../widgets/heart_rate_sheet.dart';
-import '../widgets/movement_sheet.dart';
 import '../widgets/efficiency_sheet.dart';
-import '../widgets/awake_week_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
-import '../widgets/sleep_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
 import '../widgets/steps_sheet.dart';
-import '../widgets/kcal_sheet.dart';
 import '../widgets/active_sheet.dart';
 import '../widgets/stress_sheet.dart';
 import '../services/report_loader.dart';
+import '../widgets/night_sheets.dart';
 
 /// 早晨報告畫面（2026-11-12 定案；11-13 依示意圖重做：深藍夜空、分數圓環當主角、
 /// 小狗坐在圓環右下的山丘上、卡片少而短）。
@@ -108,6 +104,9 @@ class MorningReportScreen extends StatefulWidget {
   /// 每晚的攝影機資料（後端 /insights 的 camera.history）。Movement 點開的一週用；沒給或連不到就只看這一晚。
   final Future<List<CameraNight>?> Function()? loadCameraNights;
 
+  /// 每晚的分數、等級顏色、深睡（後端 /insights）。分數頁的一週用；沒給或連不到就只看這一晚。
+  final Future<Map<String, WearableNight>?> Function()? loadWearableNights;
+
   /// 嵌在 Insights 的 Day 分頁裡（2026-11-19 grill 定）：不畫頂端日期與關閉鈕
   /// （Insights 自己有「‹ 日期 ›」）、不畫經驗條（XP 是遊戲層的、屬於起床那一刻）、
   /// 不畫底部 View sleep insights／Back to home（在 Insights 裡沒有地方可去）。
@@ -139,6 +138,7 @@ class MorningReportScreen extends StatefulWidget {
     this.loadEfficiencyNights,
     this.loadSleepHeartRates,
     this.loadCameraNights,
+    this.loadWearableNights,
   });
 
   /// 用共用的 [ReportLoader] 接上各詳細頁的一週資料（首頁與 Insights 同一份）。
@@ -162,7 +162,8 @@ class MorningReportScreen extends StatefulWidget {
         loadAwakeCounts = loader.awakeCounts,
         loadEfficiencyNights = loader.efficiencyNights,
         loadSleepHeartRates = loader.sleepHeartRates,
-        loadCameraNights = loader.cameraNights;
+        loadCameraNights = loader.cameraNights,
+        loadWearableNights = loader.wearableNights;
 
   @override
   State<MorningReportScreen> createState() => _MorningReportScreenState();
@@ -530,7 +531,15 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 left: w / 2 - _arcRadius + 24,
                 width: (_arcRadius - 24) * 2,
                 top: arcTop + 18,
-                child: r.hasScore ? _scoreText(r) : _waitingText(),
+                // 點分數開分數頁（2026-11-21，同首頁分數卡那一頁）
+                child: r.hasScore
+                    ? GestureDetector(
+                        key: const Key('report-score-open'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _sheets(r).score(context),
+                        child: _scoreText(r),
+                      )
+                    : _waitingText(),
               ),
               // 小狗坐在弧底下的草坡上：腳下一片淡影子
               Positioned(
@@ -1350,12 +1359,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           valueKey: const Key('report-steps-value'),
         ),
         graphicHeight: 118,
-        onTap: () => showStepsSheet(
-          context,
-          day: y,
-          color: _cSteps,
-          fontFamily: kReportFont,
-        ),
+        onTap: () => DaySheets.steps(context, y),
         lines: [
           // 只寫 goal，不寫 reached（紅線 2）
           if (y.stepGoal != null)
@@ -1391,12 +1395,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-kcal-bars'),
               ),
         // 11-15 使用者定：點開是 Calories 頁（靜止＋活動的圓環、一週）
-        onTap: () => showKcalSheet(
-          context,
-          day: y,
-          color: _cKcal,
-          fontFamily: kReportFont,
-        ),
+        onTap: () => DaySheets.kcal(context, y),
         lines: const [Text('active only, not total burn')],
       );
     }
@@ -1429,8 +1428,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
                 key: const Key('report-active-bar'),
               ),
               graphicHeight: 18,
-              onTap: () =>
-                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              onTap: () => DaySheets.active(context, y),
               lines: [
                 Text(
                   [
@@ -1449,8 +1447,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
               icon: Icons.bolt_rounded,
               color: _cActive,
               title: 'Active time',
-              onTap: () =>
-                  showActiveSheet(context, day: y, fontFamily: kReportFont),
+              onTap: () => DaySheets.active(context, y),
               art: ActivityMountain(
                 key: const Key('report-active-mountain'),
                 parts: parts,
@@ -1556,7 +1553,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         icon: Icons.favorite_rounded,
         color: kAwakeHr,
         title: 'Awake HR',
-        onTap: () => showAwakeHrSheet(context, day: y, fontFamily: kReportFont),
+        onTap: () => DaySheets.heartRate(context, y),
         art: GlowingHeart(
           key: const Key('report-awake-hr-heart'),
           bpm: awakeHr.avg,
@@ -1579,17 +1576,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
           SparklinePainter(_curvePoints(dayHr), _cHr),
           key: const Key('report-day-hr-line'),
         ),
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: ReportColors.sheet,
-          builder: (_) => SafeArea(
-            child: Padding(
-              key: const Key('report-day-hr-sheet'),
-              padding: const EdgeInsets.all(20),
-              child: SizedBox(height: 180, child: DayHeartRateChart(dayHr)),
-            ),
-          ),
-        ),
+        onTap: () => DaySheets.heartRate(context, y),
         lines: [
           Text(
             [
@@ -1708,71 +1695,11 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  /// Efficiency 點開。這一晚的數字、種類、名字、警語都以報告上的為準（同一支 scoredEfficiency 挑的）；
-  /// 一週只有後端有，這一晚那根長條用報告上的數字蓋過去，保證跟格子一樣。
-  Future<void> _showEfficiency(MorningReport r) async {
-    Map<String, EfficiencyNight>? week;
-    try {
-      final m = await widget.loadEfficiencyNights?.call();
-      if (m != null && m.isNotEmpty) {
-        week = {
-          ...m,
-          if (r.efficiencyKind != null)
-            r.date: EfficiencyNight(
-              r.efficiency!,
-              r.efficiencyKind!,
-              r.efficiencyLabel,
-            ),
-        };
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    await showEfficiencySheet(
-      context,
-      color: _cEff,
-      fontFamily: kReportFont,
-      date: r.date,
-      value: r.efficiency!,
-      label: r.efficiencyLabel,
-      kind: r.efficiencyKind,
-      // 11-15 使用者定：點開不放警語（上面「asleep of counted」已經說明怎麼算的）。警語仍在 Insights 分數卡
-      asleepMinutes: r.sleepMinutes,
-      span: countedSpan(
-        r.efficiencyKind,
-        bedStart: r.bedStart,
-        bedEnd: r.bedEnd,
-        asleepAt: r.asleepAt,
-        wokeAt: r.wokeAt,
-      ),
-      week: week,
-    );
-  }
+  /// Efficiency 點開（2026-11-21 起在 night_sheets.dart，首頁也開同一頁）。
+  Future<void> _showEfficiency(MorningReport r) => _sheets(r).efficiency(context);
 
-  /// Movement (camera) 點開。這一晚以報告上的那一晚為準；一週只有後端有。
-  Future<void> _showMovement(MorningReport r) async {
-    List<CameraNight>? week;
-    try {
-      final m = await widget.loadCameraNights?.call();
-      if (m != null && m.isNotEmpty) {
-        week = [
-          for (final n in m)
-            if (n.date != r.date) n,
-          r.camera!,
-        ];
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    await showMovementSheet(
-      context,
-      color: _cCam,
-      fontFamily: kReportFont,
-      night: r.camera!,
-      date: r.date,
-      curve: r.cameraMotion,
-      stages: r.stages,
-      week: week,
-    );
-  }
+  /// Movement (camera) 點開（2026-11-21 起在 night_sheets.dart，首頁的 Movement 格也開這一頁）。
+  Future<void> _showMovement(MorningReport r) => _sheets(r).movement(context);
 
   /// Sleeping heart rate 點開。這一晚的曲線、平均、最低以報告上的為準；
   /// 一週只有後端有，這一晚那一欄用報告的數字蓋過去，保證跟格子一樣。
@@ -1799,43 +1726,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  /// Awake 點開：這一晚什麼時候醒、醒多久＋一週。一週只有後端有；連不到就只看這一晚。
-  /// 這一晚的總數以報告上的為準。
-  Future<void> _showAwake(MorningReport r) async {
-    List<NightValue>? series;
-    try {
-      final m = await widget.loadAwakeMinutes?.call();
-      if (m != null && m.isNotEmpty) {
-        series = [
-          for (final e in m.entries)
-            if (e.key != r.date) NightValue(e.key, e.value),
-          NightValue(r.date, r.wasoMinutes!.toDouble()),
-        ];
-      }
-    } catch (_) {}
-    Map<String, int>? counts;
-    try {
-      final c = await widget.loadAwakeCounts?.call();
-      if (c != null) {
-        counts = {...c, if (r.awakeCount != null) r.date: r.awakeCount!};
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    await showAwakeSheet(
-      context,
-      title: 'Awake',
-      icon: Icons.visibility_rounded,
-      color: _cAwake,
-      fontFamily: kReportFont,
-      date: r.date,
-      totalMinutes: r.wasoMinutes!.toDouble(),
-      // 醒了幾段：報告上的優先（/home 剛算好的），沒有才用一週那份
-      count: r.awakeCount ?? counts?[r.date],
-      counts: counts,
-      stages: r.stages,
-      series: series,
-    );
-  }
+  /// Awake 點開（2026-11-21 起在 night_sheets.dart）。
+  Future<void> _showAwake(MorningReport r) => _sheets(r).awake(context);
 
   /// Phone down 點開：這一晚往回 7 晚幾點放下手機。這一晚的時刻以報告上的為準；
   /// 晚不晚只照抄後端（history 裡那一晚的 is_late），這一晚 history 沒有就不算進「N of M」。
@@ -1870,35 +1762,19 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
     );
   }
 
-  /// Time asleep 點開：這一晚往回 7 晚＋平均。這一晚的數字以報告上的為準（後端剛算好的可能比打包檔新）。
-  Future<void> _showSleepWeek(MorningReport r) async {
-    List<NightValue> series;
-    try {
-      series = await widget.loadSleepSeries!();
-    } catch (_) {
-      series = const [];
-    }
-    final mine = r.hasScore ? r.sleepMinutes : null;
-    if (mine != null) {
-      series = [
-        for (final n in series)
-          if (n.date != r.date) n,
-        NightValue(r.date, mine.toDouble()),
-      ];
-    }
-    if (!mounted) return;
-    await showSleepWeekSheet(
-      context,
-      title: 'Total sleep',
-      // 標題跟這張格子同一個圖示、同一個顏色（使用者定）
-      icon: Icons.nightlight_round,
-      color: _cAsleep,
-      fontFamily: kReportFont,
-      series: series,
-      endDate: r.date,
-      goalMinutes: r.goalMinutes,
-    );
-  }
+  /// Total sleep 點開（2026-11-21 起在 night_sheets.dart）。
+  Future<void> _showSleepWeek(MorningReport r) => _sheets(r).totalSleep(context);
+
+  /// 這一晚的詳細頁（分數、深睡、效率、醒著、睡多久）只有一份：night_sheets.dart，首頁也用它。
+  NightSheets _sheets(MorningReport r) => NightSheets(
+        r,
+        loadSleepSeries: widget.loadSleepSeries,
+        loadAwakeMinutes: widget.loadAwakeMinutes,
+        loadAwakeCounts: widget.loadAwakeCounts,
+        loadEfficiencyNights: widget.loadEfficiencyNights,
+        loadWearableNights: widget.loadWearableNights,
+        loadCameraNights: widget.loadCameraNights,
+      );
 
   void _showNotes(PetNotes notes) {
     setState(() => _readVersion = notes.version);

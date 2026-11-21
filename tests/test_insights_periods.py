@@ -79,8 +79,14 @@ check("與 evaluate_sleep_quality 相同（兩支評分器本來就要一致）"
       [(b["min"], b["quality"]) for b in w["quality_bands"]],
       [tuple(x) for x in evaluate_sleep_quality.GRADE_THRESHOLDS])
 
-print("【2】REM／淺睡")
+print("【1b】每晚的等級顏色照抄同一張色表（分數詳細頁的一週長條用，2026-11-21）")
+import build_app_payload
 by = {h["date"]: h for h in w["history"]}
+check("Good 的顏色＝QUALITY_TO_COLOR", by[d1]["score_color"], build_app_payload.QUALITY_TO_COLOR["Good"])
+check("跟首頁那一晚的 score_color 同一個（display_for）", by[d1]["score_color"],
+      client.get("/home", params={"user_id": uid, "date": d1}).json()["display"]["score_color"])
+
+print("【2】REM／淺睡")
 check("量到 REM：rem 90", by[d1]["rem_minutes"], 90.0)
 check("量到 REM：淺睡＝總 − 深 − REM", by[d1]["light_minutes"], 270.0)
 check("沒量到 REM：rem 是 null 不是 0", by[d2]["rem_minutes"], None)
