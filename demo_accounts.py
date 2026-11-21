@@ -7,7 +7,7 @@ demo_accounts.py —— 成果展用的示範帳號。
     python demo_accounts.py --create          # 建立（已存在就先刪掉重建）
     python demo_accounts.py --status          # 看現在有哪些示範帳號
     python demo_accounts.py --remove          # 全部刪掉（好友關係一起消失）
-    python demo_accounts.py --live            # 只重設好友頁的即時狀態＋今天送你 3 則（demo 前幾分鐘跑）
+    python demo_accounts.py --live            # 只重設好友頁的即時狀態＋今天送你 3 則＋穿上衣服（demo 前幾分鐘跑）
 
 要寫進 MariaDB 就先設 SONNAP_DB_URL（跟啟動後端同一個），否則寫進 SQLite。
 腳本一開始會印出它寫的是哪一個。
@@ -283,6 +283,23 @@ DEMO_PAWS = {"Mia (demo)": "pet", "Leo (demo)": "sleep_well"}
 DEMO_GIFTS = {"Mia (demo)": "good_night", "Leo (demo)": "good_morning", "Yuki (demo)": "hugs"}
 
 
+# 2026-11-22 使用者定：示範帳號各穿一件衣服，小鎮與送禮頁上朋友的寵物才不是光著的。
+# 只挑各自等級**已經解鎖**的（固定種子產生的資料：Mia 6、Leo 4、Ken 4、Yuki 3 級），
+# tests/test_demo_accounts.py 用真的等級算法守著。分享設定全開（含 outfit），所以好友看得到。
+DEMO_OUTFITS = {"Mia (demo)": "top_hat", "Leo (demo)": "bow", "Ken (demo)": "scarf", "Yuki (demo)": "cap"}
+
+
+def dress_demo(db_path=None):
+    """依 DEMO_OUTFITS 讓示範帳號穿上衣服，回傳 {暱稱: item_id}。只動示範帳號。"""
+    out = {}
+    for uid, name in demo_users(db_path):
+        item = DEMO_OUTFITS.get(name)
+        if item:
+            db.set_equipped_item(uid, item, db_path=db_path)
+            out[name] = item
+    return out
+
+
 def send_demo_gifts(now=None, db_path=None):
     """
     依 DEMO_GIFTS 讓示範帳號今天各送手機帳號一則。回傳 {暱稱: 種類}；找不到手機帳號回 {}。
@@ -415,6 +432,7 @@ def create_all(nights=DEFAULT_NIGHTS, end=None, seed=DEFAULT_SEED,
                 db.add_friend_visit(r["uid"], friend_of, end.isoformat(), kind, keep_since, db_path=db_path)
                 r["pawed"] = kind
     live = set_live_demo(db_path=db_path)
+    dress_demo(db_path=db_path)
     for r in summary:
         r["live"] = live.get(r["name"])
         r.pop("uid")  # 不讓 user_id 流到會印出來的地方
@@ -445,6 +463,7 @@ def main():
         if not live:
             print("沒有示範帳號，先跑 --create。")
         gifts = send_demo_gifts()
+        dress_demo()  # 在這之前建的示範帳號沒穿衣服，不用為了它重建整批資料
         for name, state in live.items():
             print(f"  {name:<12} {state}" + (f"  送你 {gifts[name]}" if name in gifts else ""))
         return
