@@ -6,7 +6,7 @@
 // 【5】送出去：寵物跳、圖示飛過去；減少動態效果時都不動、只換字
 // 【6】按鈕上的字拆成 emoji＋名字；沒有 emoji 的整串照寫
 // 【7】兩隻寵物穿各自的衣服（朋友的要他有分享，後端判斷；App 照畫）
-// 【8】兩隻寵物各站在背景圖的一個坐墊上（位置跟著圖縮放，大小螢幕都對）
+// 【8】兩隻寵物各站在背景圖的一個坐墊上（位置跟著圖縮放，大小螢幕都對）；泡泡貼在寵物頭上方、不溢出
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -175,7 +175,7 @@ void main() {
     expect(short.dx, closeTo(200, 0.01));
   });
 
-  for (final view in const [Size(411, 900), Size(360, 700)]) {
+  for (final view in const [Size(411, 900), Size(384, 832), Size(360, 700)]) {
     testWidgets('【8】$view：兩隻寵物各站在一個坐墊上', (tester) async {
       tester.view.physicalSize = view;
       tester.view.devicePixelRatio = 1.0;
@@ -202,6 +202,13 @@ void main() {
         expect(pet.bottom, greaterThan(want.dy), reason: key);
         expect(pet.bottom - want.dy, lessThan(pet.height * 0.2), reason: key);
       }
+      // 泡泡貼在寵物頭上方：不蓋到寵物、也不往上跑到關閉鈕那一排（2026-11-22 使用者：泡泡被擋住）
+      final bubble = tester.getRect(find.byKey(const Key('visit-gift-bubble')));
+      final myPet = tester.getRect(find.byKey(const Key('visit-gift-my-pet')));
+      expect(bubble.bottom, lessThanOrEqualTo(myPet.top + myPet.height * 0.1));
+      expect(myPet.top - bubble.bottom, lessThan(40), reason: '貼著頭，不是飄在最上面');
+      expect(bubble.top, greaterThanOrEqualTo(bg.top + 56 - 0.5));
+      expect(tester.takeException(), isNull);
     });
   }
 }

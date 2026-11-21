@@ -30,6 +30,12 @@ const Size kVisitGiftImageSize = Size(1086, 1448);
 const Offset kVisitSeatMine = Offset(270 / 1086, 1085 / 1448);
 const Offset kVisitSeatFriend = Offset(822 / 1086, 1090 / 1448);
 
+/// 下半部面板的顏色（2026-11-22 使用者：原本的藍跟客廳接不起來）。取自圖下緣的地板色再壓暗，白字讀得到。
+const Color kVisitPanel = Color(0xFF3A2448);
+
+/// 圖往下延伸到面板底下多少，面板最上面這一段由透明漸變成 [kVisitPanel]，圖就淡進面板、沒有硬邊。
+const double kVisitFade = 56;
+
 /// 坐墊寬約佔原圖寬的 0.33；寵物比坐墊窄一點才像坐在上面。
 const double kVisitPetWidth = 0.30;
 
@@ -103,7 +109,8 @@ Future<void> showVisitGiftSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => FractionallySizedBox(
-      heightFactor: 0.92,
+      // 2026-11-22：0.92 → 0.95，上面的客廳多露一點（原本手機上窗戶被裁掉約 37%）
+      heightFactor: 0.95,
       child: VisitGiftSheet(
         friend: friend,
         me: me,
@@ -231,7 +238,7 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF3B4FB8), Color(0xFF2A3A8F)],
+            colors: [Color(0xFF5A3A6E), kVisitPanel],
           ),
         ),
         child: Stack(
@@ -239,7 +246,21 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
           children: [
             Column(
               children: [
+                // 畫的順序＝由上往下：背景圖超出上半部、伸進漸層帶底下，漸層帶再蓋在圖上
                 Expanded(child: _stage()),
+                IgnorePointer(
+                  child: Container(
+                    key: const Key('visit-gift-fade'),
+                    height: kVisitFade,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [kVisitPanel.withValues(alpha: 0), kVisitPanel],
+                      ),
+                    ),
+                  ),
+                ),
                 _panel(pad.bottom),
               ],
             ),
@@ -261,9 +282,10 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
   }
 
   /// 上半部：客廳背景＋泡泡＋兩隻寵物各站在一個坐墊上（位置跟著圖縮放）。
+  /// 圖的範圍比上半部多 [kVisitFade]（伸進漸層帶底下），坐墊位置也照這個範圍算。
   Widget _stage() => LayoutBuilder(
     builder: (context, box) {
-      final size = box.biggest;
+      final size = Size(box.maxWidth, box.maxHeight + kVisitFade);
       final pet = visitPetSize(size);
       final mine = visitSeatAt(size, kVisitSeatMine);
       final theirs = visitSeatAt(size, kVisitSeatFriend);
@@ -276,12 +298,19 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
         height: pet,
         child: child,
       );
-      const bubbleTop = 56.0;
-      final bubbleRoom = math.max(60.0, math.min(mine.dy, theirs.dy) - pet * 0.95 - bubbleTop);
+      // 泡泡貼在寵物頭上方（2026-11-22 使用者：原本貼頂、手機上被擠小又被擋住，也蓋住窗戶）。
+      // 往上最多到關閉鈕底下；放不下時整個等比縮小
+      const bubbleMinTop = 56.0;
+      final bubbleBottom = math.min(mine.dy, theirs.dy) - pet * (1 - feet) + pet * 0.06;
+      final bubbleRoom = math.max(60.0, bubbleBottom - bubbleMinTop);
       return Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: size.height,
             child: Image.asset(
               kVisitGiftBackground,
               key: const Key('visit-gift-background'),
@@ -293,13 +322,15 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
           Positioned(
             left: 20,
             right: 20,
-            top: bubbleTop,
+            // ⚠️ Stack 本身的高度不含伸進漸層帶的那段（box.maxHeight），從它的下緣量
+            bottom: box.maxHeight - bubbleBottom,
             child: ConstrainedBox(
+              key: const Key('visit-gift-bubble'),
               constraints: BoxConstraints(maxHeight: bubbleRoom),
               // 尾巴指向左邊你的寵物。矮的螢幕放不下時整個等比縮小，不溢出、不蓋到寵物
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                alignment: Alignment.topCenter,
+                alignment: Alignment.bottomCenter,
                 child: SizedBox(
                   width: size.width - 40,
                   child: _speech(tailX: ((mine.dx - 20) / (size.width - 40) * 2 - 1).clamp(-0.9, 0.9)),
@@ -392,21 +423,22 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
   Widget _panel(double bottomInset) {
     final done = _sent != null;
     return Container(
-      padding: EdgeInsets.fromLTRB(14, 16, 14, 14 + bottomInset),
-      decoration: const BoxDecoration(
-        color: Color(0xFF26338A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
+      padding: EdgeInsets.fromLTRB(14, 0, 14, 12 + bottomInset),
+      color: kVisitPanel,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GridView.count(
-            crossAxisCount: 3,
+          GridView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-            childAspectRatio: 1.15,
+            // 2026-11-22：每格固定 84 高（圓圈 52＋名字＋送出那格的金框），不跟寬度連動——
+            // 跟寬度連動的話窄螢幕的格子變矮、字被擠出去；上面的客廳也因此多露一點
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 2,
+              crossAxisSpacing: 6,
+              mainAxisExtent: 84,
+            ),
             children: [for (final (key, label) in widget.kinds) _tile(key, label)],
           ),
           const SizedBox(height: 12),
@@ -418,7 +450,7 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
               onPressed: done || _busy || _picked == null ? null : _send,
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF3B4FB8),
+                foregroundColor: kVisitPanel,
                 disabledBackgroundColor: const Color(0x33FFFFFF),
                 disabledForegroundColor: const Color(0xAAFFFFFF),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -469,8 +501,8 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
               children: [
                 Container(
                   key: tileKey,
-                  width: 58,
-                  height: 58,
+                  width: 52,
+                  height: 52,
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -509,7 +541,7 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
       final t = Curves.easeInOutCubic.transform(_fly.value);
       // 弧線往上拋一點
       final at = Offset.lerp(from, to, t)! - Offset(0, 80 * 4 * t * (1 - t));
-      final size = 58 * (1 - 0.45 * t);
+      final size = 52 * (1 - 0.45 * t);
       final emoji = splitVisitLabel(widget.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '').$1;
       return Positioned(
         left: at.dx - size / 2,
