@@ -887,8 +887,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// 今天早上那一晚的寵物 notes；**沒有內容就退回前一晚**（[homeNotesDates]）。
-  /// 🔴 一律 generate=false：首頁**絕不觸發 AI**——
-  /// AI 那段一定要在起床自評送出之後才生成（它會讀自評的標籤），那只發生在報告流程。
+  /// 🔴 載入一律 generate=false：首頁**打開時絕不觸發 AI**（打開不等於想看）。
+  /// 要寫只在**點日記本**時（[_showNotes]，2026-11-21 使用者定）。
   Future<void> _loadNotes() async {
     final source = widget.morningReport;
     if (source == null) return;
@@ -900,7 +900,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {
         json = null;
       }
-      found = PetNotes.fromJson(json, date: date);
+      // allowEmpty：手錶到了但還沒內容的晚上也放一本，點了才能叫 AI 寫（11-21 使用者定）
+      found = PetNotes.fromJson(json, date: date, allowEmpty: true);
       if (found != null) break;
     }
     final notes = found;
@@ -915,8 +916,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _showNotes(PetNotes notes, String mood) {
-    showPetNotes(context, notes: notes, mood: mood);
+  /// 點日記本（2026-11-21 使用者定：點書也要能叫 AI 寫，不必先開報告）。
+  ///
+  /// - AI 已經寫好（source = llm）、或手錶資料還沒到（waiting）→ 直接打開，不叫 AI。
+  /// - 其他（只有原句）→ 🔴 **那一晚還沒自評就先問自評**（AI 會讀自評；Skip 也照樣寫），
+  ///   再用 generate=true 要一次；頁面先開、寫好再換上去。每晚只寫一次由後端守（同報告流程）。
+  Future<void> _showNotes(PetNotes notes, String mood) async {
+    final source = widget.morningReport;
+    Future<PetNotes?>? writing;
+    if (source != null && !notes.waiting && notes.source != 'llm') {
+      if (await _ratings.read(notes.date) == null) {
+        await _askRested(notes.date, null);
+        if (!mounted) return;
+      }
+      writing = source
+          .fetchSummary(notes.date, generate: true)
+          .then((json) => PetNotes.fromJson(json, date: notes.date))
+          .catchError((Object _) => null);
+    }
+    if (!mounted) return;
+    unawaited(showPetNotes(
+      context,
+      notes: notes,
+      mood: mood,
+      writing: writing,
+      onWritten: (written) {
+        // 寫好的那份就是看過的那份：換掉首頁這本、記成看過，紅點不再亮
+        _notesReads.markRead(written.date, written.version);
+        if (!mounted) return;
+        setState(() {
+          _notes = written;
+          _notesAskedVersion = written.version;
+          _notesReadVersion = written.version;
+        });
+      },
+    ));
     _notesReads.markRead(notes.date, notes.version);
     setState(() => _notesReadVersion = notes.version);
   }
@@ -1354,9 +1388,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // 貼在草地上（使用者定：再往下靠近草地）
                       bottom: 2,
                       child: NotesBook(
-                        unread: _notesAskedVersion == notes.version &&
+                        // 空的日記本不亮紅點、不抖：沒有新東西可讀
+                        unread: notes.hasContent &&
+                            _notesAskedVersion == notes.version &&
                             _notesReadVersion != notes.version,
-                        onTap: () => _showNotes(notes, mood),
+                        onTap: () => unawaited(_showNotes(notes, mood)),
                       ),
                     ),
                   ],

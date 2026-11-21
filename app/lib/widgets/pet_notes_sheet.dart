@@ -14,17 +14,79 @@ import 'report_sheet.dart';
 /// - 只有 AI 真的寫了（source = llm）才放「AI 寫的」那行小字。
 ///
 /// [mood]：那一晚的寵物心情，畫成小頭像（不認得的一律 bored，同 [HomePet]）。
+///
+/// [writing]：首頁點日記本時叫 AI 寫的那一份（2026-11-21 使用者定）。頁面先照現在的內容開，
+/// 底下一行「正在寫」；寫好就換成新的那份（並呼叫 [onWritten]），沒寫出來就留著原本的、拿掉那一行。
 Future<void> showPetNotes(
   BuildContext context, {
   required PetNotes notes,
   String? mood,
+  Future<PetNotes?>? writing,
+  ValueChanged<PetNotes>? onWritten,
 }) {
   return showReportSheet<void>(
     context: context,
     builder: (context) => ReportFont(
-      child: PetNotesView(notes: notes, mood: mood, plan: PlanStore.shared),
+      child: writing == null
+          ? PetNotesView(notes: notes, mood: mood, plan: PlanStore.shared)
+          : _WritingNotes(
+              notes: notes,
+              mood: mood,
+              writing: writing,
+              onWritten: onWritten,
+            ),
     ),
   );
+}
+
+/// 這一晚什麼都沒有（AI 沒寫出來、也沒有適用的建議）時那一行。
+const String kNotesEmptyLine = 'Nothing to add for this night.';
+
+/// AI 正在寫的那一行（固定的畫面文字）。
+const String kNotesWritingLine = 'Writing your notes…';
+
+class _WritingNotes extends StatefulWidget {
+  final PetNotes notes;
+  final String? mood;
+  final Future<PetNotes?> writing;
+  final ValueChanged<PetNotes>? onWritten;
+  const _WritingNotes({
+    required this.notes,
+    required this.mood,
+    required this.writing,
+    this.onWritten,
+  });
+
+  @override
+  State<_WritingNotes> createState() => _WritingNotesState();
+}
+
+class _WritingNotesState extends State<_WritingNotes> {
+  late PetNotes _notes = widget.notes;
+  bool _busy = true;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.writing.then((n) {
+      if (n != null) widget.onWritten?.call(n);
+      if (!mounted) return;
+      setState(() {
+        if (n != null) _notes = n;
+        _busy = false;
+      });
+    }, onError: (Object _) {
+      if (mounted) setState(() => _busy = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => PetNotesView(
+        notes: _notes,
+        mood: widget.mood,
+        plan: PlanStore.shared,
+        writing: _busy,
+      );
 }
 
 /// 手錶還沒到時那一句（固定的畫面文字，不是建議）。
@@ -41,7 +103,16 @@ class PetNotesView extends StatelessWidget {
 
   /// 睡眠計畫。有的話，對得上計畫清單的建議旁邊放「Add to my plan」（2026-11-19）。
   final PlanStore? plan;
-  const PetNotesView({super.key, required this.notes, this.mood, this.plan});
+
+  /// AI 正在寫：多一行 [kNotesWritingLine]。
+  final bool writing;
+  const PetNotesView({
+    super.key,
+    required this.notes,
+    this.mood,
+    this.plan,
+    this.writing = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +180,35 @@ class PetNotesView extends StatelessWidget {
                     fontSize: 16,
                     height: 1.55,
                   ),
+                ),
+              ],
+              if (writing) ...[
+                const SizedBox(height: 16),
+                const Row(
+                  key: Key('pet-notes-writing'),
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: ReportColors.muted,
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      kNotesWritingLine,
+                      style: TextStyle(color: ReportColors.muted, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ],
+              if (!writing && !notes.waiting && !notes.hasContent) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  kNotesEmptyLine,
+                  key: Key('pet-notes-empty'),
+                  style: TextStyle(color: ReportColors.muted, fontSize: 14),
                 ),
               ],
               if (notes.waiting) ...[

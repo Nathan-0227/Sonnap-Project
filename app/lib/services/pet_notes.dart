@@ -61,11 +61,21 @@ class PetNotes {
 
   bool get waiting => status == 'waiting';
 
+  /// 有沒有東西可讀（總結或建議）。首頁的空日記本（[allowEmpty]）是 false：不亮紅點、不抖。
+  bool get hasContent => summary != null || tips.isNotEmpty;
+
   /// 解析 `/night-summary`。日期對不上、格式不對、沒有任何內容都回 null。
   ///
   /// ⚠️ 舊版後端（PR #129 之前）沒有 `tips`／`version`：回 null（日記本不出現），
   ///    不拿舊的 `text` 冒充——那時的 text 退回時是 `/home` 的句子，不是寫給 notes 的。
-  static PetNotes? fromJson(Map<String, dynamic>? json, {required String date}) {
+  ///
+  /// [allowEmpty]：首頁用（2026-11-21 使用者定）。手錶資料到了（status ok）但還沒有任何內容時，
+  /// 照樣回一本空的——日記本要在，點了才能叫 AI 寫。waiting 沒內容仍是 null（沒有東西可寫）。
+  static PetNotes? fromJson(
+    Map<String, dynamic>? json, {
+    required String date,
+    bool allowEmpty = false,
+  }) {
     if (json == null || json['date'] != date) return null;
     final status = json['status'];
     if (status != 'ok' && status != 'waiting') return null;
@@ -89,7 +99,9 @@ class PetNotes {
     }
     final raw = json['summary'];
     final summary = raw is String && raw.trim().isNotEmpty ? raw.trim() : null;
-    if (summary == null && tips.isEmpty) return null;
+    if (summary == null && tips.isEmpty && !(allowEmpty && status == 'ok')) {
+      return null;
+    }
     return PetNotes(
       date: date,
       status: status as String,
