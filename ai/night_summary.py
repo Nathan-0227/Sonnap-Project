@@ -402,7 +402,7 @@ def validate_notes(notes, facts_text, allowed):
             problems.append(f"tip {tid} is empty")
         if len(_sentences(text)) > MAX_TIP_SENTENCES:
             problems.append(f"tip {tid} has more than {MAX_TIP_SENTENCES} sentences")
-        if not re.search(mt.KEYWORDS[tid], text, re.IGNORECASE):
+        if not mt.mentions(tid, text):
             problems.append(f"tip {tid} lost its key point (expected a word like: {mt.KEYWORDS[tid]})")
 
     texts = [summary] + [(t.get("text") or "") for t in tips]
