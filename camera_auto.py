@@ -25,6 +25,9 @@ camera_auto.py — 手機按 Start Sleep 就自動開攝影機錄影，Out of be
 ⚠️ 最多錄 14 小時（Q4），由錄影程式自己的 --max-hours 守，不靠後端計時
    （後端半夜重開的話計時就沒了）。
 ⚠️ 這裡任何錯誤都**不能**讓 /sleep-status 失敗：好友狀態照記，攝影機只是附加的。
+
+查現在有沒有在錄（錄影程式在背景跑、沒有視窗）：
+  python camera_auto.py --status
 """
 import ipaddress
 import json
@@ -61,6 +64,11 @@ DEFAULT_CONFIG = {
 CONNECT_WAIT_SECONDS = 8.0
 # Cancel 時等錄影程式收尾最多幾秒（它卡在重連時可能要等一陣子）
 CANCEL_WAIT_SECONDS = 180.0
+# --status：錄影檔超過這麼久沒變大，就提醒可能斷線（CSV 約 20 秒 flush 一次，影片一直在寫）
+STALE_WRITE_SECONDS = 60
+# --status 列出最近一次錄影時，只看這些副檔名
+RECORDING_SUFFIXES = (".csv", ".mp4")
+
 # 鎖檔超過這麼久還在，一定是錄影程式被硬砍沒清掉（它自己最多錄 14 小時）
 STALE_LOCK_HOURS = 15.0
 
@@ -348,3 +356,86 @@ def handle(event, user_id, client_ip, *, phone_account=None, metrics_dir=METRICS
             finish_cancel(csv_path, metrics_dir, lock_reader=lock_reader)
         return {"state": "cancelling"}
     return None
+
+
+# ─── 查狀態（python camera_auto.py --status）─────────────────────────
+
+def _fmt_minutes(minutes):
+    minutes = max(0, int(minutes))
+    return f"{minutes // 60} 小時 {minutes % 60} 分" if minutes >= 60 else f"{minutes} 分"
+
+
+def _fmt_size(n):
+    return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{n / 1024:.0f} KB"
+
+
+def _last_recording(metrics_dir):
+    """tapo_metrics 底下最新的一份錄影（不看 cancelled/、reference/）。"""
+    csvs = sorted(Path(metrics_dir).glob("2*.csv"))
+    return csvs[-1] if csvs else None
+
+
+def status_lines(metrics_dir=METRICS_DIR, *, lock_reader=read_lock, battery=on_battery, now=None):
+    """
+    現在有沒有在錄，給人讀的幾行字。⚠️ 不碰攝影機、不印帳密（鎖檔與檔名裡都沒有）。
+    """
+    metrics_dir = Path(metrics_dir)
+    now = now or datetime.now()
+    lock = lock_reader(metrics_dir)
+    lines = []
+    if lock is None:
+        lines.append("○ 沒在錄")
+        last = _last_recording(metrics_dir)
+        if last:
+            mtime = datetime.fromtimestamp(last.stat().st_mtime)
+            video = last.with_suffix(".mp4")
+            size = f"，影片 {_fmt_size(video.stat().st_size)}" if video.exists() else ""
+            lines.append(f"  最近一次：{last.stem}（最後寫入 {mtime:%m-%d %H:%M}{size}）")
+        return lines
+
+    started = None
+    try:
+        started = datetime.fromisoformat(lock.get("started") or "")
+    except ValueError:
+        pass
+    since = f"從 {started:%H:%M} 開始，已經 {_fmt_minutes((now - started).total_seconds() / 60)}" if started else "開始時間不明"
+    if (metrics_dir / STOP_NAME).exists():
+        lines.append(f"◐ 收尾中（{since}）——已經收到停止，正在存熱區圖與影片檔尾")
+    elif lock.get("phase") == "connecting":
+        lines.append(f"◐ 正在連攝影機（{since}）")
+    else:
+        lines.append(f"● 錄影中（{since}）")
+
+    csv_path = Path(lock["csv"]) if lock.get("csv") else None
+    if csv_path:
+        files = [csv_path.with_suffix(sfx) for sfx in RECORDING_SUFFIXES]
+        files = [f for f in files if f.exists()]
+        video = csv_path.with_suffix(".mp4")
+        if video.exists():
+            lines.append(f"  檔案：{csv_path.stem}（影片 {_fmt_size(video.stat().st_size)}）")
+        if files:
+            idle = (now - datetime.fromtimestamp(max(f.stat().st_mtime for f in files))).total_seconds()
+            if idle > STALE_WRITE_SECONDS and lock.get("phase") == "recording":
+                lines.append(f"  ⚠ 已經 {int(idle)} 秒沒寫入——可能斷線了（錄影程式會自己重連），"
+                             f"看 tapo_metrics/{AUTO_LOG_NAME}")
+    if battery():
+        lines.append("  ⚠ 筆電沒插電：可能會待機，錄影跟後端一起停")
+    return lines
+
+
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description="按 Start Sleep 自動開錄的工具")
+    ap.add_argument("--status", action="store_true", help="現在有沒有在錄")
+    args = ap.parse_args(argv)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if args.status:
+        print("\n".join(status_lines()))
+        return 0
+    ap.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

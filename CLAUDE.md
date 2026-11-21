@@ -520,6 +520,8 @@ Out of bed／Cancel → 放停止旗標 `tapo_metrics/STOP`，錄影程式自己
 | 早上匯入偵測到移動：**手錶照常、那一晚攝影機不匯入**；`--camera-ok` 硬匯；沒有畫面或沒有基準不擋 | 框歪了那晚的動作數字全錯，但跟手錶無關 |
 | 抓不到「床移動、攝影機沒動」——那種情況靠 `_snapshot.png` 給人看 | — |
 | 基準在 `tapo_metrics/reference/`（frame.png＋roi.json），第一次：`python camera_alignment.py --make-reference tapo_metrics/20260903_020631.mp4 --roi 34,129,288,231`（當初推出框的第 3 晚，第 30 分鐘那格） | — |
+| **錄影程式在背景跑、沒有視窗**（`CREATE_NO_WINDOW`，⚠️ 不要加回 `DETACHED_PROCESS`）；要看有沒有在錄：`python camera_auto.py --status`（錄影中／連線中／收尾中、從幾點、影片多大；超過 60 秒沒寫入、沒插電會提醒） | 11-21 實機：舊旗標讓錄影程式自己開一個黑色終端機視窗，關掉就斷錄；拿掉之後使用者看不到在錄、以為沒錄就按了 Cancel |
+| 攝影機與筆電都連手機熱點時，**熱點會換攝影機的 IP**；`tapo 2.0/.env` 的 IP 對不上就連不上（`auto_logger.log` 寫「連不上」）→ 去 Tapo App 看 IP，只改 IP 那段 | 11-21 實機第一次就是這樣 |
 | 重新框：`python camera_reframe.py`——熱區推一個框畫在照片上，**人按 Enter 才存**（或 D 自己拖）；存時**同時換基準**，舊的框與基準備份到 `reference/backup-<時間>/`；**下一晚**開始用；0.75% 門檻沒在新框底下重新驗證 | 自動推框有室友那晚選錯過；基準不換的話之後每晚都判移動 |
 
 ### ✅ 睡眠計畫（2026-11-19，`feature/sleep-plan`）
