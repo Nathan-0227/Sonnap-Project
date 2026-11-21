@@ -19,31 +19,42 @@ import 'streak_card.dart' show speciesOf;
 /// ⚠️ 不推播；送出去對方下次打開 Sonnap 才看到——泡泡照實這樣說。
 /// ⚠️ 減少動態效果：圖示不飛、寵物不跳，只換字。
 
-/// 上半部的背景（2026-11-22 使用者生成：夜晚的客廳，地毯上兩個坐墊）。讀不到就是原本的藍色漸層，
-/// 寵物照樣站在同一個位置。
+/// 整頁的背景（2026-11-22 使用者照這一頁生成第二版：1:2 的夜晚客廳，上面窗戶、中間地毯上兩個坐墊、
+/// 下面地板一路延伸到底，面板半透明蓋在上面）。讀不到就是梅紫漸層，寵物照樣站在同一個位置。
 const String kVisitGiftBackground = 'assets/backgrounds/visit_gift.jpg';
 
 /// 原圖大小（寬 × 高）。⚠️ 換圖就要重量這裡跟下面兩個坐墊。
-const Size kVisitGiftImageSize = Size(1086, 1448);
+const Size kVisitGiftImageSize = Size(887, 1774);
 
 /// 兩個坐墊頂面的中間（寵物腳踩的地方），用原圖的比例表示。左＝你、右＝朋友。2026-11-22 量的。
-const Offset kVisitSeatMine = Offset(270 / 1086, 1085 / 1448);
-const Offset kVisitSeatFriend = Offset(822 / 1086, 1090 / 1448);
+const Offset kVisitSeatMine = Offset(180 / 887, 695 / 1774);
+const Offset kVisitSeatFriend = Offset(698 / 887, 692 / 1774);
+
+/// 下半部面板的顏色（2026-11-22 使用者：原本的藍跟客廳接不起來）。取自圖的地板色再壓暗。
+const Color kVisitPanel = Color(0xFF3A2448);
+
+/// 面板多不透明：地板與玩具隱約透出來，格子的圖示與白字仍讀得清楚。
+const double kVisitPanelAlpha = 0.72;
+
+/// 面板最上面這一段由透明漸變成面板，沒有硬邊。
+const double kVisitFade = 56;
 
 /// 坐墊寬約佔原圖寬的 0.33；寵物比坐墊窄一點才像坐在上面。
 const double kVisitPetWidth = 0.30;
 
-/// 圖用 BoxFit.cover、貼下緣置中畫在 [box] 裡時，原圖上比例 [f] 那一點落在哪裡（也給測試用）。
+/// 圖用 BoxFit.cover、貼上緣置中鋪滿整頁 [box] 時，原圖上比例 [f] 那一點落在哪裡（也給測試用）。
+/// 貼上緣：窗戶永遠在；矮的手機裁掉的是最下面的地板（反正被面板蓋著）。
 Offset visitSeatAt(Size box, Offset f, {Size image = kVisitGiftImageSize}) {
   final s = math.max(box.width / image.width, box.height / image.height);
   final dx = (box.width - image.width * s) / 2;
-  final dy = box.height - image.height * s;
-  return Offset(dx + f.dx * image.width * s, dy + f.dy * image.height * s);
+  return Offset(dx + f.dx * image.width * s, f.dy * image.height * s);
 }
 
 /// 同上，寵物畫多大（跟著圖縮放）。
 double visitPetSize(Size box, {Size image = kVisitGiftImageSize}) =>
-    image.width * math.max(box.width / image.width, box.height / image.height) * kVisitPetWidth;
+    image.width *
+    math.max(box.width / image.width, box.height / image.height) *
+    kVisitPetWidth;
 
 /// 圖示（使用者生成的 3×3 圖示表切的）。讀不到就退回按鈕字裡的 emoji。
 String visitIconAsset(String kind) => 'assets/visits/$kind.png';
@@ -85,8 +96,9 @@ String? defaultVisitKind(DateTime now, List<String> keys) {
 }
 
 /// 泡泡那句：後端的 {friend} 換成名字；舊版後端沒給 → 一句中性的。
-String visitInvite(String? template, String friend) =>
-    template == null ? "Let's send $friend something nice!" : template.replaceAll('{friend}', friend);
+String visitInvite(String? template, String friend) => template == null
+    ? "Let's send $friend something nice!"
+    : template.replaceAll('{friend}', friend);
 
 /// [onSend] 回傳 null＝送出成功；否則是要顯示的那句話（後端原文，409 是今天已經來過了）。
 Future<void> showVisitGiftSheet(
@@ -103,7 +115,8 @@ Future<void> showVisitGiftSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => FractionallySizedBox(
-      heightFactor: 0.92,
+      // 2026-11-22：0.92 → 0.95，上面的客廳多露一點（原本手機上窗戶被裁掉約 37%）
+      heightFactor: 0.95,
       child: VisitGiftSheet(
         friend: friend,
         me: me,
@@ -138,13 +151,15 @@ class VisitGiftSheet extends StatefulWidget {
   State<VisitGiftSheet> createState() => _VisitGiftSheetState();
 }
 
-class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStateMixin {
+class _VisitGiftSheetState extends State<VisitGiftSheet>
+    with TickerProviderStateMixin {
   late String? _sent = widget.friend.sent;
 
   /// 打開時就已經送過了（跟剛剛送出去的分開：泡泡的字不一樣）。
   late final bool _sentBefore = widget.friend.sent != null;
   late String? _picked =
-      widget.friend.sent ?? defaultVisitKind(widget.clock(), [for (final k in widget.kinds) k.$1]);
+      widget.friend.sent ??
+      defaultVisitKind(widget.clock(), [for (final k in widget.kinds) k.$1]);
   bool _busy = false;
   String? _error;
 
@@ -213,12 +228,15 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
     if (_sent != null && !_sentBefore) {
       return 'Sent! $_name will see it next time they open Sonnap.';
     }
-    if (_sentBefore) return 'We already stopped by $_name today. Come back tomorrow!';
+    if (_sentBefore) {
+      return 'We already stopped by $_name today. Come back tomorrow!';
+    }
     return visitInvite(widget.invites[_picked], _name);
   }
 
-  String _labelOf(String? kind) =>
-      splitVisitLabel(widget.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '').$2;
+  String _labelOf(String? kind) => splitVisitLabel(
+    widget.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '',
+  ).$2;
 
   @override
   Widget build(BuildContext context) {
@@ -231,129 +249,158 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF3B4FB8), Color(0xFF2A3A8F)],
+            colors: [Color(0xFF5A3A6E), kVisitPanel],
           ),
         ),
-        child: Stack(
-          key: _stackKey,
-          children: [
-            Column(
-              children: [
-                Expanded(child: _stage()),
-                _panel(pad.bottom),
-              ],
-            ),
-            Positioned(
-              left: 12,
-              top: 12,
-              child: IconButton(
-                key: const Key('visit-gift-close'),
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
+        child: LayoutBuilder(
+          builder: (context, box) => Stack(
+            key: _stackKey,
+            children: [
+              // 整頁都是客廳；面板半透明蓋在下半部，地板與玩具隱約透出來
+              Positioned.fill(
+                child: Image.asset(
+                  kVisitGiftBackground,
+                  key: const Key('visit-gift-background'),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (context, error, stack) =>
+                      const SizedBox.shrink(),
+                ),
               ),
-            ),
-            _flyingIcon(),
-          ],
+              Column(
+                children: [
+                  const Spacer(),
+                  IgnorePointer(
+                    child: Container(
+                      key: const Key('visit-gift-fade'),
+                      height: kVisitFade,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            kVisitPanel.withValues(alpha: 0),
+                            kVisitPanel.withValues(alpha: kVisitPanelAlpha),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  _panel(pad.bottom),
+                ],
+              ),
+              ..._stage(box.biggest),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: IconButton(
+                  key: const Key('visit-gift-close'),
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+              _flyingIcon(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// 上半部：客廳背景＋泡泡＋兩隻寵物各站在一個坐墊上（位置跟著圖縮放）。
-  Widget _stage() => LayoutBuilder(
-    builder: (context, box) {
-      final size = box.biggest;
-      final pet = visitPetSize(size);
-      final mine = visitSeatAt(size, kVisitSeatMine);
-      final theirs = visitSeatAt(size, kVisitSeatFriend);
-      // 寵物圖腳下有留白：盒子的下緣往下一點，腳才踩在坐墊頂面
-      const feet = 0.12;
-      Widget at(Offset seat, Widget child) => Positioned(
-        left: seat.dx - pet / 2,
-        top: seat.dy - pet * (1 - feet),
-        width: pet,
-        height: pet,
-        child: child,
-      );
-      const bubbleTop = 56.0;
-      final bubbleRoom = math.max(60.0, math.min(mine.dy, theirs.dy) - pet * 0.95 - bubbleTop);
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              kVisitGiftBackground,
-              key: const Key('visit-gift-background'),
-              fit: BoxFit.cover,
-              alignment: Alignment.bottomCenter,
-              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: bubbleTop,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: bubbleRoom),
-              // 尾巴指向左邊你的寵物。矮的螢幕放不下時整個等比縮小，不溢出、不蓋到寵物
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: size.width - 40,
-                  child: _speech(tailX: ((mine.dx - 20) / (size.width - 40) * 2 - 1).clamp(-0.9, 0.9)),
+  /// 泡泡＋兩隻寵物各站在一個坐墊上。座標＝整頁（背景也鋪滿整頁），位置跟著圖縮放。
+  List<Widget> _stage(Size size) {
+    final pet = visitPetSize(size);
+    final mine = visitSeatAt(size, kVisitSeatMine);
+    final theirs = visitSeatAt(size, kVisitSeatFriend);
+    // 寵物圖腳下有留白：盒子的下緣往下一點，腳才踩在坐墊頂面
+    const feet = 0.12;
+    Widget at(Offset seat, Widget child) => Positioned(
+      left: seat.dx - pet / 2,
+      top: seat.dy - pet * (1 - feet),
+      width: pet,
+      height: pet,
+      child: child,
+    );
+    // 泡泡貼在寵物頭上方（2026-11-22 使用者：原本貼頂、手機上被擠小又被擋住，也蓋住窗戶）。
+    // 往上最多到關閉鈕底下；放不下時整個等比縮小
+    const bubbleMinTop = 56.0;
+    final bubbleBottom =
+        math.min(mine.dy, theirs.dy) - pet * (1 - feet) + pet * 0.06;
+    final bubbleRoom = math.max(60.0, bubbleBottom - bubbleMinTop);
+    return [
+      Positioned(
+        left: 20,
+        right: 20,
+        bottom: size.height - bubbleBottom,
+        child: ConstrainedBox(
+          key: const Key('visit-gift-bubble'),
+          constraints: BoxConstraints(maxHeight: bubbleRoom),
+          // 尾巴指向左邊你的寵物。矮的螢幕放不下時整個等比縮小，不溢出、不蓋到寵物
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: size.width - 40,
+              child: _speech(
+                tailX: ((mine.dx - 20) / (size.width - 40) * 2 - 1).clamp(
+                  -0.9,
+                  0.9,
                 ),
               ),
             ),
           ),
-          at(
-            mine,
-            SizedBox(
-              key: const Key('visit-gift-my-pet'),
-              child: HomePet(
-                mood: widget.me?.petMood,
-                species: speciesOf(widget.me?.petSpecies),
-                size: pet,
-                animate: false,
-                equippedItemId: widget.me?.equippedItemId,
+        ),
+      ),
+      at(
+        mine,
+        SizedBox(
+          key: const Key('visit-gift-my-pet'),
+          child: HomePet(
+            mood: widget.me?.petMood,
+            species: speciesOf(widget.me?.petSpecies),
+            size: pet,
+            animate: false,
+            equippedItemId: widget.me?.equippedItemId,
+          ),
+        ),
+      ),
+      at(
+        theirs,
+        AnimatedBuilder(
+          animation: _hop,
+          builder: (context, child) {
+            final j = petJumpPose(_hop.isAnimating ? _hop.value : 0.0);
+            return Transform.translate(
+              offset: Offset(0, -pet * 0.35 * j.lift),
+              child: Transform(
+                alignment: Alignment.bottomCenter,
+                transform: Matrix4.diagonal3Values(j.scaleX, j.scaleY, 1),
+                child: child,
               ),
+            );
+          },
+          child: SizedBox(
+            key: _friendPetKey,
+            // 朋友的心情只有他有分享才有；沒有 → HomePet 畫 bored（不畫 happy）
+            child: HomePet(
+              key: const Key('visit-gift-friend-pet'),
+              mood: widget.friend.petMood,
+              species: speciesOf(widget.friend.petSpecies),
+              size: pet,
+              animate: false,
+              // 他有分享 Pet outfit 才有（後端判斷），沒有就畫沒穿
+              equippedItemId: widget.friend.equippedItemId,
             ),
           ),
-          at(
-            theirs,
-            AnimatedBuilder(
-              animation: _hop,
-              builder: (context, child) {
-                final j = petJumpPose(_hop.isAnimating ? _hop.value : 0.0);
-                return Transform.translate(
-                  offset: Offset(0, -pet * 0.35 * j.lift),
-                  child: Transform(
-                    alignment: Alignment.bottomCenter,
-                    transform: Matrix4.diagonal3Values(j.scaleX, j.scaleY, 1),
-                    child: child,
-                  ),
-                );
-              },
-              child: SizedBox(
-                key: _friendPetKey,
-                // 朋友的心情只有他有分享才有；沒有 → HomePet 畫 bored（不畫 happy）
-                child: HomePet(
-                  key: const Key('visit-gift-friend-pet'),
-                  mood: widget.friend.petMood,
-                  species: speciesOf(widget.friend.petSpecies),
-                  size: pet,
-                  animate: false,
-                  // 他有分享 Pet outfit 才有（後端判斷），沒有就畫沒穿
-                  equippedItemId: widget.friend.equippedItemId,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
+        ),
+      ),
+    ];
+  }
 
   Widget _speech({double tailX = -0.35}) => Column(
     mainAxisSize: MainAxisSize.min,
@@ -363,7 +410,13 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))],
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
@@ -372,7 +425,9 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
             key: ValueKey(_bubble),
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _error != null ? const Color(0xFFB3261E) : const Color(0xFF1E2550),
+              color: _error != null
+                  ? const Color(0xFFB3261E)
+                  : const Color(0xFF1E2550),
               fontSize: 17,
               fontWeight: FontWeight.w700,
               height: 1.3,
@@ -392,22 +447,25 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
   Widget _panel(double bottomInset) {
     final done = _sent != null;
     return Container(
-      padding: EdgeInsets.fromLTRB(14, 16, 14, 14 + bottomInset),
-      decoration: const BoxDecoration(
-        color: Color(0xFF26338A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
+      padding: EdgeInsets.fromLTRB(14, 0, 14, 12 + bottomInset),
+      color: kVisitPanel.withValues(alpha: kVisitPanelAlpha),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GridView.count(
-            crossAxisCount: 3,
+          GridView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-            childAspectRatio: 1.15,
-            children: [for (final (key, label) in widget.kinds) _tile(key, label)],
+            // 2026-11-22：每格固定 84 高（圓圈 52＋名字＋送出那格的金框），不跟寬度連動——
+            // 跟寬度連動的話窄螢幕的格子變矮、字被擠出去；上面的客廳也因此多露一點
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 2,
+              crossAxisSpacing: 6,
+              mainAxisExtent: 84,
+            ),
+            children: [
+              for (final (key, label) in widget.kinds) _tile(key, label),
+            ],
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -418,10 +476,12 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
               onPressed: done || _busy || _picked == null ? null : _send,
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF3B4FB8),
+                foregroundColor: kVisitPanel,
                 disabledBackgroundColor: const Color(0x33FFFFFF),
                 disabledForegroundColor: const Color(0xAAFFFFFF),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
               ),
               child: Text(
                 done
@@ -429,7 +489,10 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
                     : _busy
                     ? 'Sending…'
                     : 'Send ${_labelOf(_picked)}',
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
@@ -453,24 +516,28 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
         child: GestureDetector(
           key: Key('visit-kind-$key'),
           behavior: HitTestBehavior.opaque,
-          onTap: _sent != null || _busy ? null : () => setState(() {
-            _picked = key;
-            _error = null;
-          }),
+          onTap: _sent != null || _busy
+              ? null
+              : () => setState(() {
+                  _picked = key;
+                  _error = null;
+                }),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
               color: picked ? const Color(0x33FFFFFF) : Colors.transparent,
               borderRadius: BorderRadius.circular(18),
-              border: sentThis ? Border.all(color: const Color(0xFFFFD27A), width: 2) : null,
+              border: sentThis
+                  ? Border.all(color: const Color(0xFFFFD27A), width: 2)
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   key: tileKey,
-                  width: 58,
-                  height: 58,
+                  width: 52,
+                  height: 52,
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -509,8 +576,10 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
       final t = Curves.easeInOutCubic.transform(_fly.value);
       // 弧線往上拋一點
       final at = Offset.lerp(from, to, t)! - Offset(0, 80 * 4 * t * (1 - t));
-      final size = 58 * (1 - 0.45 * t);
-      final emoji = splitVisitLabel(widget.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '').$1;
+      final size = 52 * (1 - 0.45 * t);
+      final emoji = splitVisitLabel(
+        widget.kinds.where((k) => k.$1 == kind).firstOrNull?.$2 ?? '',
+      ).$1;
       return Positioned(
         left: at.dx - size / 2,
         top: at.dy - size / 2,
@@ -538,7 +607,11 @@ class VisitIcon extends StatelessWidget {
     visitIconAsset(kind),
     fit: BoxFit.contain,
     errorBuilder: (context, error, stack) => FittedBox(
-      child: Text(emoji, key: Key('visit-emoji-$kind'), style: const TextStyle(fontSize: 28)),
+      child: Text(
+        emoji,
+        key: Key('visit-emoji-$kind'),
+        style: const TextStyle(fontSize: 28),
+      ),
     ),
   );
 }

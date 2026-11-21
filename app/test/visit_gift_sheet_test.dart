@@ -6,7 +6,7 @@
 // 【5】送出去：寵物跳、圖示飛過去；減少動態效果時都不動、只換字
 // 【6】按鈕上的字拆成 emoji＋名字；沒有 emoji 的整串照寫
 // 【7】兩隻寵物穿各自的衣服（朋友的要他有分享，後端判斷；App 照畫）
-// 【8】兩隻寵物各站在背景圖的一個坐墊上（位置跟著圖縮放，大小螢幕都對）
+// 【8】兩隻寵物各站在背景圖的一個坐墊上（位置跟著圖縮放，大小螢幕都對）；泡泡貼在寵物頭上方、不溢出
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -164,18 +164,22 @@ void main() {
     expect(mine.equippedItemId, 'top_hat');
   });
 
-  test('【8】坐墊的位置跟著圖縮放：cover、貼下緣置中', () {
+  test('【8】坐墊的位置跟著圖縮放：cover、貼上緣置中', () {
+    const img = Size(100, 200);
     // 盒子跟原圖同比例 → 就是比例本身
-    final same = visitSeatAt(const Size(543, 724), const Offset(0.5, 0.75));
-    expect(same.dx, closeTo(271.5, 0.01));
-    expect(same.dy, closeTo(543, 0.01));
-    // 比較矮的盒子：寬度撐滿、上面被裁掉，下緣對齊 → 那一點離下緣的距離不變比例
-    final short = visitSeatAt(const Size(400, 300), const Offset(0.5, 1.0));
-    expect(short.dy, closeTo(300, 0.01));
-    expect(short.dx, closeTo(200, 0.01));
+    final same = visitSeatAt(const Size(50, 100), const Offset(0.5, 0.4), image: img);
+    expect(same.dx, closeTo(25, 0.01));
+    expect(same.dy, closeTo(40, 0.01));
+    // 比較矮的盒子：寬度撐滿、裁掉的是下面，上緣對齊（窗戶永遠在）
+    final short = visitSeatAt(const Size(100, 150), const Offset(0.5, 0.4), image: img);
+    expect(short, const Offset(50, 80));
+    // 比較高的盒子：高度撐滿、左右各裁一點
+    final tall = visitSeatAt(const Size(100, 300), const Offset(0.5, 0.4), image: img);
+    expect(tall.dx, closeTo(50, 0.01));
+    expect(tall.dy, closeTo(120, 0.01));
   });
 
-  for (final view in const [Size(411, 900), Size(360, 700)]) {
+  for (final view in const [Size(411, 900), Size(384, 832), Size(360, 700)]) {
     testWidgets('【8】$view：兩隻寵物各站在一個坐墊上', (tester) async {
       tester.view.physicalSize = view;
       tester.view.devicePixelRatio = 1.0;
@@ -202,6 +206,13 @@ void main() {
         expect(pet.bottom, greaterThan(want.dy), reason: key);
         expect(pet.bottom - want.dy, lessThan(pet.height * 0.2), reason: key);
       }
+      // 泡泡貼在寵物頭上方：不蓋到寵物、也不往上跑到關閉鈕那一排（2026-11-22 使用者：泡泡被擋住）
+      final bubble = tester.getRect(find.byKey(const Key('visit-gift-bubble')));
+      final myPet = tester.getRect(find.byKey(const Key('visit-gift-my-pet')));
+      expect(bubble.bottom, lessThanOrEqualTo(myPet.top + myPet.height * 0.1));
+      expect(myPet.top - bubble.bottom, lessThan(40), reason: '貼著頭，不是飄在最上面');
+      expect(bubble.top, greaterThanOrEqualTo(bg.top + 56 - 0.5));
+      expect(tester.takeException(), isNull);
     });
   }
 }
