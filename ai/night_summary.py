@@ -332,6 +332,28 @@ def tip_list(suggested_ids=()):
             for tid in suggested_ids]
 
 
+def changed_fact_keys(old, new, _prefix=""):
+    """
+    兩份事實區塊差在哪幾項，只回**項目名稱**（巢狀的寫成 phone_down.at），不回數值。
+
+    2026-11-21：11-21 那晚的 notes 寫好 12 分鐘就因為事實變了而重寫，但舊的事實沒存，
+    查不出是哪一項在變。現在每份 notes 連同當時的事實一起存，重寫前印出變了哪幾項，
+    下次就抓得到。只印名稱：數值是睡眠資料，不進後端的紀錄。
+    """
+    old, new = old or {}, new or {}
+    keys = []
+    for k in sorted(set(old) | set(new)):
+        a, b = old.get(k), new.get(k)
+        if a == b:
+            continue
+        path = f"{_prefix}{k}"
+        if isinstance(a, dict) and isinstance(b, dict):
+            keys.extend(changed_fact_keys(a, b, path + "."))
+        else:
+            keys.append(path)
+    return keys
+
+
 def facts_hash(facts, tips):
     payload = PROMPT_VERSION + json.dumps([facts, tips], sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
