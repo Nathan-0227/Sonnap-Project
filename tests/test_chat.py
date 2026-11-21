@@ -82,7 +82,10 @@ class FakeLLM:
 
     def __call__(self, system_prompt, user_prompt, schema, **kwargs):
         self.prompts.append(user_prompt)
-        return {"answer": self.answers.pop(0)}, "fake-model"
+        a = self.answers.pop(0)
+        # 字串＝只有 headline（2026-11-22 分段之前的測試照樣用）；dict＝自己給四格
+        parts = {"headline": a, "why": "", "tip_ids": [], "link": ""} if isinstance(a, str) else             {"headline": "", "why": "", "tip_ids": [], "link": ""} | a
+        return parts, "fake-model"
 
 
 def use(fake, key=True):
@@ -230,7 +233,7 @@ check("後端只取最後 10 則",
 # ═══════════════════════════════════════════════════════════════════
 section("【6d】寵物心情：跟首頁同一隻，只說由哪一類訊號決定（2026-11-21）")
 # ═══════════════════════════════════════════════════════════════════
-fake = FakeLLM("Your buddy is happy because you put the phone down on time.")
+fake = FakeLLM("Your buddy is happy: you put the phone down on time.")
 use(fake)
 r = client.post("/chat", json={"user_id": alice, "message": "How is my pet's mood related to my sleep?"})
 check("問寵物心情 → 200", r.status_code, 200)
@@ -261,6 +264,81 @@ ok("心情附一般規則", chat.PET_MOOD_RULE in p0)
 ok("一般規則跟 resolve_mood 一致：提到手錶也能決定", "watch" in chat.PET_MOOD_RULE and "no phone-down record" in chat.PET_MOOD_RULE)
 ok("每一種 decided_by 都只講這一晚", all(v.startswith("this night:") for v in chat.PET_MOOD_DECIDED_BY.values()))
 ok("一般規則不提壓力", "stress" not in chat.PET_MOOD_RULE.lower())
+
+# ═══════════════════════════════════════════════════════════════════
+section("【6f】分段回答：建議與連結只能從後端的清單挑、why 不准偷塞建議（2026-11-22）")
+# ═══════════════════════════════════════════════════════════════════
+
+
+def parts_problems(headline, why="", tip_ids=(), link="", tips=("T3",), links=("total_sleep",)):
+    try:
+        return chat.validate_parts({"headline": headline, "why": why, "tip_ids": list(tip_ids), "link": link},
+                                   FACTS_TEXT, tips, links)
+    except Exception as exc:  # noqa: BLE001
+        return [f"validate_parts crashed: {type(exc).__name__}: {exc}"]
+
+
+check("放行：一句＋一句＋清單裡的建議與連結",
+      parts_problems("You put the phone down at 02:39.", "Late caffeine might make it harder to fall asleep.",
+                     ["T3"], "total_sleep"), [])
+check("放行：Sonnap 不會被當成 nap（重點字要從字首比）",
+      parts_problems("Sonnap does not have that data."), [])
+check("放行：why 可以講準時放下手機（量測那幾列）",
+      parts_problems("You were late on 3 of the 5 recorded nights.", "Putting the phone down on time can help."), [])
+ok("擋：清單外的建議", any("not in the TIP LIST" in p for p in parts_problems("Hi there.", tip_ids=["T4"])))
+ok("擋：清單外的連結", any("not in the LINKS" in p for p in parts_problems("Hi there.", link="deep")))
+ok("擋：why 偷塞建議（講咖啡卻沒選 T3）",
+   any("without choosing it" in p for p in parts_problems("Hi there.", "Try to keep caffeine earlier.")))
+ok("擋：headline 兩句", any("more than one sentence" in p for p in parts_problems("One. Two.")))
+ok("擋：headline 超過 25 字", any("longer than" in p for p in parts_problems(" ".join(["word"] * 26) + ".")))
+ok("擋：because", any("cause as certain" in p for p in parts_problems("You were late because of work.")))
+ok("擋：超過 2 條", any("more than 2" in p for p in parts_problems("Hi.", tip_ids=["T3", "T4", "T5"],
+                                                                   tips=("T3", "T4", "T5"))))
+ok("擋：數字不在事實裡（分段也照舊）", any("not in the facts" in p for p in parts_problems("You slept 7 hours.")))
+
+# 端點：Alice 勾了「晚喝咖啡因」→ 標籤交給 AI、T3 在清單、Why 那行是後端的字
+alice_date = client.get(f"/insights?user_id={alice}").json()["behavior"]["history"][-1]["date"]
+r = client.post("/rested", json={"user_id": alice, "date": alice_date, "rested": 2, "tags": ["late_caffeine"]})
+check("自評送出", r.status_code, 200)
+fake = FakeLLM({"headline": "You put the phone down at 02:39.",
+                "why": "Late caffeine might make it harder to fall asleep.",
+                "tip_ids": ["T3"], "link": ""})
+use(fake)
+r = client.post("/chat", json={"user_id": alice, "message": "Why am I tired today?"})
+check("200", r.status_code, 200)
+body = r.json()
+p0 = fake.prompts[0] if fake.prompts else ""
+ok("自評標籤交給 AI", '"you_noted_last_night"' in p0 and "Late caffeine" in p0)
+ok("T3 在交給 AI 的清單裡", '"id": "T3"' in p0)
+ok("連結清單只有那一晚有資料的（Alice 沒有手錶 → 一個都沒有）",
+   "LINKS:\n{}" in p0)
+check("headline", body.get("headline"), "You put the phone down at 02:39.")
+check("why", body.get("why"), "Late caffeine might make it harder to fall asleep.")
+check("tips 帶後端那句 Why（不是 AI 寫的）", body.get("tips"), [{"id": "T3", "why": chat.WHY["T3"]}])
+check("沒挑連結 → null", body.get("link"), None)
+check("有手錶的晚上才有連結（total_sleep、效率、醒著、深睡）",
+      main.chat_links({"final_score": 80, "duration_min": 400, "waso_min": 10, "deep_min": 60}),
+      ["total_sleep", "efficiency", "awake", "deep"])
+check("沒手錶 → 沒有連結", main.chat_links(None), [])
+check("舊版 App 的 answer＝兩句合起來", body.get("answer"),
+      "You put the phone down at 02:39. Late caffeine might make it harder to fall asleep.")
+
+fake = FakeLLM({"headline": "Hi.", "tip_ids": ["T5"]}, {"headline": "Hi.", "tip_ids": ["T5"]})
+use(fake)
+check("AI 兩次都挑清單外的建議 → 503",
+      client.post("/chat", json={"user_id": alice, "message": "tips?"}).status_code, 503)
+fake = FakeLLM({"headline": "Nothing from last night stands out."})
+use(fake)
+body = client.post("/chat", json={"user_id": alice, "message": "tips?"}).json()
+check("沒挑建議 → tips 是空的", body.get("tips"), [])
+
+import re as _re  # noqa: E402
+dart = (ROOT / "app" / "lib" / "services" / "sleep_plan.dart").read_text(encoding="utf-8")
+block = dart[dart.index("kTipToPlan = {"):]
+block = block[:block.index("};")]
+check("WHY 那張表跟 App 的 kTipToPlan 同一組 id（有按鈕的才有 Why）",
+      sorted(chat.WHY), sorted(_re.findall(r"'([TP]\d+)'\s*:", block)))
+ok("WHY 每一句都不寫 because", all("because" not in v.lower() for v in chat.WHY.values()))
 
 # ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")
