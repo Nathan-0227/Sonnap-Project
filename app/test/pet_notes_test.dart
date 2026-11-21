@@ -2,7 +2,8 @@
 // 草地上那本日記點開是 AI 的總結＋從清單挑的建議，全部照抄 `/night-summary`。
 //
 // 守的東西（壞掉時都不會報錯）：
-//   - 🔴 首頁**只用 generate=false**：AI 那段一定在起床自評之後才生成（它會讀自評的標籤）
+//   - 🔴 首頁**打開時只用 generate=false**；**點日記本**才叫 AI 寫（11-21 使用者定），
+//     而且那一晚還沒自評就先問自評（AI 會讀自評的標籤；Skip 也照樣寫）
 //   - 紅點跟著 **version** 走：內容換了（早上只有原句、下午多了總結）要再亮一次
 //   - 畫面上的字全部照抄後端（哨兵字串），Dart 不產生任何建議
 //   - 沒有內容、舊版後端、日期對不上 → 日記本不出現（不拿舊的 text 冒充）
@@ -16,6 +17,7 @@ import 'package:app/screens/morning_report_screen.dart';
 import 'package:app/services/alarm.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/morning_rating.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/services/pet_notes.dart';
 import 'package:app/services/sleep_repository.dart';
@@ -53,7 +55,10 @@ class _Source implements MorningReportSource {
   Map<String, Map<String, dynamic>?>? byDate;
   final generateFlags = <bool>[];
   final asked = <String>[];
-  _Source(this.notes, {this.byDate});
+
+  /// generate=true 時回的那一份（AI 寫好的）；沒給就跟 generate=false 一樣。
+  Map<String, dynamic>? written;
+  _Source(this.notes, {this.byDate, this.written});
 
   @override
   Future<Map<String, dynamic>?> fetchNight(String date) async => null;
@@ -63,6 +68,7 @@ class _Source implements MorningReportSource {
       {bool generate = true}) async {
     generateFlags.add(generate);
     asked.add(date);
+    if (generate && written != null) return written;
     final b = byDate;
     return b != null ? b[date] : notes;
   }
@@ -165,11 +171,12 @@ void main() {
         {Size size = const Size(1200, 4200),
         double dpr = 3.0,
         Map<String, Map<String, dynamic>?>? byDate,
+        Map<String, dynamic>? written,
         DateTime? now}) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = dpr;
       addTearDown(tester.view.reset);
-      final source = _Source(notes, byDate: byDate);
+      final source = _Source(notes, byDate: byDate, written: written);
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: HomeScreen(
@@ -185,7 +192,7 @@ void main() {
       return source;
     }
 
-    testWidgets('有 notes → 草地上一本日記；🔴 首頁只用 generate=false（絕不觸發 AI）', (tester) async {
+    testWidgets('有 notes → 草地上一本日記；🔴 首頁打開只用 generate=false（不觸發 AI）', (tester) async {
       final source = await pumpHome(tester, notesJson());
       expect(find.byKey(const Key('home-notes')), findsOneWidget);
       expect(find.byType(NotesBook), findsOneWidget);
@@ -210,6 +217,71 @@ void main() {
       await frames(tester);
       expect(find.byKey(const Key('notes-book-unread-dot')), findsNothing);
       expect(await NotesReadStore(kv).isRead(_today, 'v1'), isTrue);
+    });
+
+    // ── 點日記本叫 AI 寫（2026-11-21 使用者定）────────────────────────
+    const written = 'SENTINEL-written after tapping the book.';
+    Map<String, dynamic> fallbackJson() =>
+        notesJson(source: 'fallback', summary: null, version: 'v-fallback');
+    Map<String, dynamic> writtenJson() =>
+        notesJson(summary: written, version: 'v-written');
+
+    testWidgets('🔴 只有原句、還沒自評 → 點書先問自評（還沒叫 AI）；Skip 之後才寫，寫好換上去', (tester) async {
+      final source = await pumpHome(tester, fallbackJson(), written: writtenJson());
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester);
+      expect(find.byKey(const Key('rested-sheet')), findsOneWidget);
+      expect(source.generateFlags.contains(true), isFalse,
+          reason: 'AI 會讀自評，要等自評之後才寫');
+      await tester.tap(find.byKey(const Key('rested-skip')));
+      await frames(tester, 12);
+      expect(source.generateFlags.where((g) => g).length, 1, reason: 'Skip 也照樣寫、只要一次');
+      expect(textOf(tester, 'pet-notes-summary'), written);
+      expect(find.byKey(const Key('pet-notes-writing')), findsNothing);
+      Navigator.of(tester.element(find.byKey(const Key('pet-notes')))).pop();
+      await frames(tester);
+      expect(find.byKey(const Key('notes-book-unread-dot')), findsNothing,
+          reason: '寫好的那份就是看過的那份');
+      expect(await NotesReadStore(kv).isRead(_today, 'v-written'), isTrue);
+    });
+
+    testWidgets('只有原句、已經自評過 → 點書不再問，直接寫', (tester) async {
+      await MorningRatingStore(kv).save(const MorningRating(date: _today, rested: 4), null);
+      final source = await pumpHome(tester, fallbackJson(), written: writtenJson());
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester, 12);
+      expect(find.byKey(const Key('rested-sheet')), findsNothing);
+      expect(source.generateFlags.where((g) => g).length, 1);
+      expect(textOf(tester, 'pet-notes-summary'), written);
+    });
+
+    testWidgets('AI 已經寫好、或手錶還沒到 → 點書直接開，不叫 AI', (tester) async {
+      var source = await pumpHome(tester, notesJson(), written: writtenJson());
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester);
+      expect(source.generateFlags.contains(true), isFalse);
+      expect(textOf(tester, 'pet-notes-summary'), _summary);
+      Navigator.of(tester.element(find.byKey(const Key('pet-notes')))).pop();
+      await frames(tester);
+
+      source = await pumpHome(tester,
+          notesJson(status: 'waiting', source: null, summary: null, version: 'v-wait'),
+          written: writtenJson());
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester);
+      expect(find.byKey(const Key('rested-sheet')), findsNothing);
+      expect(source.generateFlags.contains(true), isFalse);
+    });
+
+    testWidgets('寫不出來（後端回 null）→ 留著原句、拿掉「正在寫」', (tester) async {
+      await MorningRatingStore(kv).save(const MorningRating(date: _today, rested: 4), null);
+      final source = await pumpHome(tester, fallbackJson());
+      source.written = {'date': 'wrong-date'};
+      await tester.tap(find.byKey(const Key('home-notes')));
+      await frames(tester, 12);
+      expect(find.text(_tipText), findsOneWidget);
+      expect(find.byKey(const Key('pet-notes-summary')), findsNothing);
+      expect(find.byKey(const Key('pet-notes-writing')), findsNothing);
     });
 
     testWidgets('這個 version 已經看過 → 一打開就沒有紅點', (tester) async {
