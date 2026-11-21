@@ -502,7 +502,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 ### ✅ 小鎮送禮（2026-11-22 grill Q1–Q15，`feature/friend-gifts`，照 Finch 的送禮頁）
 
-點小鎮裡的朋友 → 資料卡最下面 **Send something** → 送禮頁（`widgets/visit_gift_sheet.dart`）：你的寵物＋朋友的寵物、泡泡一句、**3×3 九種**，**先選再按 Send**。
+點小鎮裡的朋友 → 資料卡最下面 **Send something** → 送禮頁（`widgets/visit_gift_sheet.dart`）：你的寵物＋朋友的寵物、泡泡一句、**3×3 九種**，**先選再按 Send**。兩隻寵物（與地圖上的寵物）穿各自的衣服：朋友的要他有分享 Pet outfit，後端給 `equipped_item_id` 才畫。背景 `assets/backgrounds/visit_gift.jpg`（使用者生成），讀不到退回漸層。
 收的一方：小鎮右下**愛心＋還沒看過的數量**（`services/visits_seen.dart`，打開就算看過、只存手機）→ Stopped by today（寵物頭＋那句＋**Send back**）；地圖上今天送過你的朋友頭頂冒那一種的小圖示（只是裝飾）。
 
 | 規則 | 不遵守的後果 |

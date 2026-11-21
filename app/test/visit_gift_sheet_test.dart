@@ -5,10 +5,12 @@
 // 【4】圖示讀不到 → 退回按鈕字裡的 emoji（不會空一格）
 // 【5】送出去：寵物跳、圖示飛過去；減少動態效果時都不動、只換字
 // 【6】按鈕上的字拆成 emoji＋名字；沒有 emoji 的整串照寫
+// 【7】兩隻寵物穿各自的衣服（朋友的要他有分享，後端判斷；App 照畫）
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/services/friends_service.dart';
+import 'package:app/widgets/home_pet.dart';
 import 'package:app/widgets/visit_gift_sheet.dart';
 
 const nine = [
@@ -45,8 +47,8 @@ Future<List<String>> pumpSheet(
         data: MediaQueryData(size: const Size(411, 900), disableAnimations: reduceMotion),
         child: Scaffold(
           body: VisitGiftSheet(
-            friend: const TownPerson(handle: 'MIA111', displayName: 'Mia (demo)', petSpecies: 'cat'),
-            me: const TownPerson(handle: 'ME0001', displayName: 'Me', mine: true, petMood: 'happy'),
+            friend: const TownPerson(handle: 'MIA111', displayName: 'Mia (demo)', petSpecies: 'cat', equippedItemId: 'crown'),
+            me: const TownPerson(handle: 'ME0001', displayName: 'Me', mine: true, petMood: 'happy', equippedItemId: 'top_hat'),
             kinds: kinds,
             invites: invites,
             clock: () => now ?? DateTime(2026, 11, 22, 14),
@@ -149,5 +151,15 @@ void main() {
     expect(splitVisitLabel('Good morning ☀️'), ('☀️', 'Good morning'));
     expect(splitVisitLabel('PROUD-FROM-BACKEND'), ('P', 'PROUD-FROM-BACKEND'));
     expect(visitInvite('Hi {friend}!', 'Mia'), 'Hi Mia!');
+  });
+
+  testWidgets('【7】兩隻寵物穿各自的衣服', (tester) async {
+    await pumpSheet(tester);
+    final friend = tester.widget<HomePet>(find.byKey(const Key('visit-gift-friend-pet')));
+    expect(friend.equippedItemId, 'crown');
+    final mine = tester.widget<HomePet>(
+      find.descendant(of: find.byKey(const Key('visit-gift-my-pet')), matching: find.byType(HomePet)),
+    );
+    expect(mine.equippedItemId, 'top_hat');
   });
 }

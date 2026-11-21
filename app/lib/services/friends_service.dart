@@ -480,6 +480,9 @@ class TownPerson {
   /// 他今天送過我什麼；null＝沒送。地圖上他頭頂冒那個小圖示（只是裝飾，2026-11-22）。
   final String? visitedMe;
 
+  /// 他穿的衣服（衣櫃的 item_id）。他有分享 Pet outfit 才有，自己的照給；null＝畫沒穿。
+  final String? equippedItemId;
+
   /// 他昨晚的卡（只有他打開的項目）；null＝不畫「See last night」。
   final FriendNightCard? card;
 
@@ -493,6 +496,7 @@ class TownPerson {
     this.glow = false,
     this.sent,
     this.visitedMe,
+    this.equippedItemId,
     this.card,
   });
 
@@ -512,6 +516,7 @@ class TownPerson {
       glow: j['glow'] == true,
       sent: j['sent'] as String?,
       visitedMe: j['visited_me'] as String?,
+      equippedItemId: j['equipped_item_id'] as String?,
       card: c is Map
           ? FriendNightCard.fromJson({
               'handle': handle,

@@ -17,6 +17,9 @@ import 'streak_card.dart' show speciesOf;
 /// ⚠️ 不推播；送出去對方下次打開 Sonnap 才看到——泡泡照實這樣說。
 /// ⚠️ 減少動態效果：圖示不飛、寵物不跳，只換字。
 
+/// 上半部的背景（使用者生成）。讀不到就是原本的藍色漸層。下緣是草地，兩隻寵物站在上面。
+const String kVisitGiftBackground = 'assets/backgrounds/visit_gift.jpg';
+
 /// 圖示（使用者生成的 3×3 圖示表切的）。讀不到就退回按鈕字裡的 emoji。
 String visitIconAsset(String kind) => 'assets/visits/$kind.png';
 
@@ -211,7 +214,22 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
           children: [
             Column(
               children: [
-                Expanded(child: _stage()),
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // 背景鋪滿上半部、貼著下緣（草地在下面），讀不到就留原本的漸層
+                      Image.asset(
+                        kVisitGiftBackground,
+                        key: const Key('visit-gift-background'),
+                        fit: BoxFit.cover,
+                        alignment: Alignment.bottomCenter,
+                        errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+                      ),
+                      _stage(),
+                    ],
+                  ),
+                ),
                 _panel(pad.bottom),
               ],
             ),
@@ -256,6 +274,7 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
                     species: speciesOf(widget.me?.petSpecies),
                     size: pet * 0.95,
                     animate: false,
+                    equippedItemId: widget.me?.equippedItemId,
                   ),
                 ),
                 SizedBox(width: pet * 0.15),
@@ -283,6 +302,8 @@ class _VisitGiftSheetState extends State<VisitGiftSheet> with TickerProviderStat
                       species: speciesOf(widget.friend.petSpecies),
                       size: pet * 0.8,
                       animate: false,
+                      // 他有分享 Pet outfit 才有（後端判斷），沒有就畫沒穿
+                      equippedItemId: widget.friend.equippedItemId,
                     ),
                   ),
                 ),

@@ -2388,6 +2388,9 @@ def get_friends_town(user_id: str = Query(...)):
             "glow": social_town.glows(db.get_nightly_behavior(uid, days=3), night,
                                       mine or bool(settings["items"].get("on_time"))),
             "sent": None if mine else sent.get(uid),
+            # 2026-11-22：穿的衣服——他有分享 Pet outfit 才給（同動態卡那一項；自己的照給）
+            "equipped_item_id": ((db.get_game_state(uid) or {}).get("equipped_item_id")
+                                 if (mine or settings["items"].get("outfit")) else None),
             # 2026-11-22：他今天送過我什麼 → 地圖上他頭頂冒那個小圖示（只是裝飾）
             "visited_me": None if mine else visited_me.get(uid),
             "card": card,

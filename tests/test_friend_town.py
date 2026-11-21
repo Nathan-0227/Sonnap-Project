@@ -110,7 +110,7 @@ def same_shape(p):
 check("【2】晚了／沒資料／沒分享：三個人的回應一模一樣（除了名字）",
       same_shape(by["Late"]) == same_shape(by["Blank"]) == same_shape(by["Shy"]), True)
 check("【2】小鎮畫面只用這幾個欄位（多了新欄位要回來看會不會洩漏原因）",
-      sorted(same_shape(by["Late"])), ["demo", "glow", "mine", "pet_species", "sent", "visited_me"])
+      sorted(same_shape(by["Late"])), ["demo", "equipped_item_id", "glow", "mine", "pet_species", "sent", "visited_me"])
 check("【2】而且都是 glow: false", [by[n]["glow"] for n in ("Late", "Blank", "Shy")], [False] * 3)
 check("【2】反向對照：亮的那個跟他們不一樣", same_shape(by["Early"]) == same_shape(by["Shy"]), False)
 check("按鈕九種，照順序", [k["key"] for k in j["kinds"]], list(town.KIND_ORDER))
@@ -153,6 +153,18 @@ check("【9】反過來：Early 那邊，我頭頂是我送他的 pet",
       {p["display_name"]: p["visited_me"] for p in client.get("/friends/town", params={"user_id": early}).json()["people"]}.get("Me"),
       "pet")
 check("【9】新的種類送得出去", visit(h["Blank"], "hugs").status_code, 201)
+
+print("\n【10】穿的衣服（2026-11-22）：有分享 Pet outfit 才給；自己的照給")
+for u in (me, early, late):
+    db.set_equipped_item(u, "top_hat")
+db.set_friend_sharing(early, items={"outfit": True})
+db.set_friend_sharing(late, items={"outfit": False})
+db.set_friend_sharing(me, items={"outfit": False})
+jw = {p["display_name"]: p for p in client.get("/friends/town", params={"user_id": me}).json()["people"]}
+check("【10】有分享 → 給", jw["Early"]["equipped_item_id"], "top_hat")
+check("【10】沒分享 → None（跟沒穿一樣）", jw["Late"]["equipped_item_id"], None)
+check("【10】自己沒分享也看得到自己的", jw["Me"]["equipped_item_id"], "top_hat")
+check("【10】沒穿 → None", jw["Blank"]["equipped_item_id"], None)
 
 print("\n【5】不給 XP、不影響分數")
 before = client.get("/game", params={"user_id": shy}).json()
