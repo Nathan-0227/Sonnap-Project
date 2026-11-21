@@ -3,6 +3,7 @@ import 'package:app/models/sleep_stages.dart';
 import 'package:app/services/camera_insights.dart';
 import 'package:app/services/morning_report.dart';
 import 'package:app/widgets/deep_sheet.dart';
+import 'package:app/widgets/movement_sheet.dart' show movementWeekValue;
 import 'package:app/widgets/night_sheets.dart';
 import 'package:app/widgets/night_week.dart';
 import 'package:app/widgets/score_sheet.dart';
@@ -262,6 +263,50 @@ void main() {
       expect(find.byKey(const Key('score-sheet')), findsNothing);
       expect(find.byKey(const Key('deep-sheet')), findsNothing);
       expect(find.byKey(const Key('eff-sheet')), findsNothing);
+    });
+
+    testWidgets('⚠️ 攝影機頁跟分數無關：手錶還沒到、那晚有錄影也照樣開', (tester) async {
+      const r = MorningReport(
+        date: _night,
+        camera: CameraNight(date: _night, usualLabel: 'About the same as usual', eventsPerHour: 18),
+      );
+      await _pump(tester, _opener('go', (c) => NightSheets(r).movement(c)));
+      await _open(tester, 'go');
+      expect(find.byKey(const Key('mv-sheet')), findsOneWidget);
+    });
+  });
+
+  group('Movement（攝影機）', () {
+    testWidgets('那一晚沒錄影 → 不開（不退回別的晚上）', (tester) async {
+      await _pump(tester, _opener('go', (c) => NightSheets(_report()).movement(c)));
+      await _open(tester, 'go');
+      expect(find.byKey(const Key('mv-sheet')), findsNothing);
+    });
+
+    testWidgets('一週：這一晚用報告上的那一筆，後端一週裡同一天的舊資料被蓋掉', (tester) async {
+      // ⚠️ 用一週那一欄的「跟平常差幾 %」來分辨：每晚那句話一週圖上不顯示，拿它來驗會假性通過（實測過）
+      const mine = CameraNight(
+          date: _night, usualLabel: 'MINE', eventsPerHour: 18, usualSupported: true, usualDeltaPct: 10);
+      const stale = CameraNight(
+          date: _night, usualLabel: 'STALE', eventsPerHour: 99, usualSupported: true, usualDeltaPct: -40);
+      Future<List<CameraNight>?> week() async => const [
+            CameraNight(date: '2026-11-20', usualLabel: 'OLD-20', eventsPerHour: 12),
+            stale,
+          ];
+      await _pump(
+        tester,
+        _opener('go', (c) => NightSheets(
+              const MorningReport(date: _night, camera: mine),
+              loadCameraNights: week,
+            ).movement(c)),
+      );
+      await _open(tester, 'go');
+      expect(find.byKey(const Key('mv-sheet')), findsOneWidget);
+      expect(movementWeekValue(mine), isNot(movementWeekValue(stale)), reason: '兩筆要分得出來');
+      expect(
+        tester.widget<Text>(find.byKey(const Key('mv-week-value-$_night'))).data,
+        movementWeekValue(mine),
+      );
     });
   });
 }

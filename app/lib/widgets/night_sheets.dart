@@ -8,6 +8,7 @@ import '../theme/report_style.dart';
 import 'awake_week_sheet.dart';
 import 'deep_sheet.dart';
 import 'efficiency_sheet.dart';
+import 'movement_sheet.dart';
 import 'night_week.dart';
 import 'score_sheet.dart';
 import 'sleep_week_sheet.dart';
@@ -25,6 +26,7 @@ class NightSheets {
   final Future<Map<String, int>?> Function()? loadAwakeCounts;
   final Future<Map<String, EfficiencyNight>?> Function()? loadEfficiencyNights;
   final Future<Map<String, WearableNight>?> Function()? loadWearableNights;
+  final Future<List<CameraNight>?> Function()? loadCameraNights;
 
   const NightSheets(
     this.r, {
@@ -33,6 +35,7 @@ class NightSheets {
     this.loadAwakeCounts,
     this.loadEfficiencyNights,
     this.loadWearableNights,
+    this.loadCameraNights,
   });
 
   NightSheets.fromLoader(this.r, ReportLoader loader)
@@ -40,19 +43,24 @@ class NightSheets {
         loadAwakeMinutes = loader.awakeMinutes,
         loadAwakeCounts = loader.awakeCounts,
         loadEfficiencyNights = loader.efficiencyNights,
-        loadWearableNights = loader.wearableNights;
+        loadWearableNights = loader.wearableNights,
+        loadCameraNights = loader.cameraNights;
 
   // 標題的顏色跟報告格子同一個（使用者定：點開的頁跟外面那張卡同圖示同顏色）
   static const asleepColor = Color(0xFFB9A6FF);
   static const effColor = Color(0xFF7EC8FF);
   static const awakeColor = Color(0xFFFFC27A);
   static const remColor = Color(0xFFC9A7FF);
+  static const cameraColor = Color(0xFFFFD96A);
 
   bool get canTotalSleep => r.hasScore && r.sleepMinutes != null && loadSleepSeries != null;
   bool get canEfficiency => r.hasScore && r.efficiency != null;
   bool get canAwake => r.hasScore && r.wasoMinutes != null;
   bool get canDeep => r.hasScore && r.deepMinutes != null;
   bool get canScore => r.hasScore;
+
+  /// 攝影機那一晚有錄影才開（跟分數無關：手錶還沒到也照樣看得到錄影）。
+  bool get canMovement => r.camera != null;
 
   /// 「Sat, Nov 21」。自己組，不跟手機語言走（同 reportDateTitle）。
   static String shortDate(String date) {
@@ -252,6 +260,34 @@ class NightSheets {
         asleepAt: r.asleepAt,
         wokeAt: r.wokeAt,
       ),
+      week: week,
+    );
+  }
+
+  /// Movement (camera) 點開（2026-11-21 起首頁的 Movement 格也開這一頁）。
+  /// 這一晚以報告上的那一晚為準；一週只有後端有。
+  Future<void> movement(BuildContext context) async {
+    if (!canMovement) return;
+    List<CameraNight>? week;
+    try {
+      final m = await loadCameraNights?.call();
+      if (m != null && m.isNotEmpty) {
+        week = [
+          for (final n in m)
+            if (n.date != r.date) n,
+          r.camera!,
+        ];
+      }
+    } catch (_) {}
+    if (!context.mounted) return;
+    await showMovementSheet(
+      context,
+      color: cameraColor,
+      fontFamily: kReportFont,
+      night: r.camera!,
+      date: r.date,
+      curve: r.cameraMotion,
+      stages: r.stages,
       week: week,
     );
   }

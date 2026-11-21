@@ -24,7 +24,6 @@ import '../widgets/phone_week_sheet.dart';
 import '../services/camera_insights.dart'
     show CameraNight, EfficiencyNight, SleepHeartRate, WearableNight;
 import '../widgets/heart_rate_sheet.dart';
-import '../widgets/movement_sheet.dart';
 import '../widgets/efficiency_sheet.dart';
 import '../widgets/bed_week_sheet.dart';
 import '../widgets/sleepy_pet.dart';
@@ -1723,31 +1722,8 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
   /// Efficiency 點開（2026-11-21 起在 night_sheets.dart，首頁也開同一頁）。
   Future<void> _showEfficiency(MorningReport r) => _sheets(r).efficiency(context);
 
-  /// Movement (camera) 點開。這一晚以報告上的那一晚為準；一週只有後端有。
-  Future<void> _showMovement(MorningReport r) async {
-    List<CameraNight>? week;
-    try {
-      final m = await widget.loadCameraNights?.call();
-      if (m != null && m.isNotEmpty) {
-        week = [
-          for (final n in m)
-            if (n.date != r.date) n,
-          r.camera!,
-        ];
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    await showMovementSheet(
-      context,
-      color: _cCam,
-      fontFamily: kReportFont,
-      night: r.camera!,
-      date: r.date,
-      curve: r.cameraMotion,
-      stages: r.stages,
-      week: week,
-    );
-  }
+  /// Movement (camera) 點開（2026-11-21 起在 night_sheets.dart，首頁的 Movement 格也開這一頁）。
+  Future<void> _showMovement(MorningReport r) => _sheets(r).movement(context);
 
   /// Sleeping heart rate 點開。這一晚的曲線、平均、最低以報告上的為準；
   /// 一週只有後端有，這一晚那一欄用報告的數字蓋過去，保證跟格子一樣。
@@ -1821,6 +1797,7 @@ class _MorningReportScreenState extends State<MorningReportScreen> {
         loadAwakeCounts: widget.loadAwakeCounts,
         loadEfficiencyNights: widget.loadEfficiencyNights,
         loadWearableNights: widget.loadWearableNights,
+        loadCameraNights: widget.loadCameraNights,
       );
 
   void _showNotes(PetNotes notes) {
