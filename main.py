@@ -41,6 +41,7 @@ main.py — Sonnap 後端 API
 import bisect
 import hashlib
 import json
+import threading
 from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -123,7 +124,7 @@ SCHEMA_VERSION = 2   # 1 = build_app_payload 的 asset 格式；2 = 多使用者
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/get-sleep-data")
-async def get_sleep_data():
+def get_sleep_data():
     """
     回傳最新一晚的完整睡眠資料（研究者本人，來自打包的 asset 檔）。
 
@@ -155,7 +156,7 @@ async def get_sleep_data():
 
 
 @app.get("/health")
-async def health():
+def health():
     """讓前端/隊友快速確認伺服器活著、以及資料檔在不在。"""
     backend, available = database_health()
     return {
@@ -360,7 +361,10 @@ def display_for(mood, driver, w_row):
 
 # ── 每一晚的睡眠階段時間軸（2026-11-12，早晨報告用）──────────────────
 # 原始檔 garmin_standard_data.json 約 25 MB：讀一次留在記憶體，檔案更新（mtime 變了）才重讀。
-_STANDARD_CACHE = {"mtime": None, "records": None}
+# ⚠️ 2026-11-21 起端點跑在執行緒池裡（見 _blocking_endpoints 那段）：快取一律**整份一次換掉**
+#    （一個 tuple），不分兩步改；分兩步的話另一個請求會讀到新的 mtime 配舊的 records。
+_STANDARD_CACHE = {"snap": (None, None)}          # (mtime, records)
+_CACHE_LOCK = threading.Lock()
 
 
 def _owns_garmin_file(user_id):
@@ -381,18 +385,24 @@ def _garmin_records():
         mtime = path.stat().st_mtime
     except OSError:
         return None
-    if _STANDARD_CACHE["mtime"] != mtime:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None
-        _STANDARD_CACHE.update(mtime=mtime, records=data.get("records", []))
-    return _STANDARD_CACHE["records"]
+    cached_mtime, records = _STANDARD_CACHE["snap"]
+    if cached_mtime == mtime:
+        return records
+    with _CACHE_LOCK:                      # 同時進來的請求只讀一次 25 MB
+        cached_mtime, records = _STANDARD_CACHE["snap"]
+        if cached_mtime != mtime:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return None
+            records = data.get("records", [])
+            _STANDARD_CACHE["snap"] = (mtime, records)
+    return records
 
 
 # 心率讀數依時刻排好的索引（2026-11-15）：/insights 每晚都要算一次睡著心率，
 # 每晚掃一次整份原始檔讓 /insights 從 1 秒內變成 3 秒，剛好撞上 App 的 3 秒逾時（一週那段時有時無）。
-_HR_INDEX = {"key": None, "times": [], "recs": []}
+_HR_INDEX = {"snap": (None, [], [])}            # (key, times, recs)，理由同 _STANDARD_CACHE
 
 
 def _hr_records_near(start, wake):
@@ -405,22 +415,28 @@ def _hr_records_near(start, wake):
     if not records:
         return None
     key = (id(records), len(records))
-    if _HR_INDEX["key"] != key:
-        pairs = []
-        for r in records:
-            if r.get("metric") != "heart_rate":
-                continue
-            t = sleep_heart_rate._parse(r.get("timestamp"))
-            if t is not None and t.tzinfo is not None:
-                pairs.append((t, r))
-        pairs.sort(key=lambda p: p[0])
-        _HR_INDEX.update(key=key, times=[p[0] for p in pairs], recs=[p[1] for p in pairs])
+    snap = _HR_INDEX["snap"]
+    if snap[0] != key:
+        with _CACHE_LOCK:
+            snap = _HR_INDEX["snap"]
+            if snap[0] != key:
+                pairs = []
+                for r in records:
+                    if r.get("metric") != "heart_rate":
+                        continue
+                    t = sleep_heart_rate._parse(r.get("timestamp"))
+                    if t is not None and t.tzinfo is not None:
+                        pairs.append((t, r))
+                pairs.sort(key=lambda p: p[0])
+                snap = (key, [p[0] for p in pairs], [p[1] for p in pairs])
+                _HR_INDEX["snap"] = snap
+    _, times, recs = snap               # 同一份 snap 裡的 times 與 recs，不會一新一舊
     s, w = sleep_heart_rate._parse(start), sleep_heart_rate._parse(wake)
     if s is None or w is None or s.tzinfo is None or w.tzinfo is None:
         return records
-    lo = bisect.bisect_left(_HR_INDEX["times"], s)
-    hi = bisect.bisect_right(_HR_INDEX["times"], w)
-    return _HR_INDEX["recs"][lo:hi]
+    lo = bisect.bisect_left(times, s)
+    hi = bisect.bisect_right(times, w)
+    return recs[lo:hi]
 
 
 # VO2 max 不是每天都有（只有 GPS 走路、跑步的日子會更新），報告顯示最近一次；
@@ -841,7 +857,7 @@ def _check_hhmm(name, value):
 
 
 @app.post("/users", status_code=201)
-async def create_user(req: CreateUserRequest):
+def create_user(req: CreateUserRequest):
     """
     建立使用者（暱稱制免註冊）。回傳 user_id。
 
@@ -872,13 +888,13 @@ async def create_user(req: CreateUserRequest):
 
 
 @app.get("/users/{user_id}")
-async def get_user(user_id: str):
+def get_user(user_id: str):
     """取使用者設定。"""
     return require_user(user_id)
 
 
 @app.patch("/users/{user_id}")
-async def update_user(user_id: str, req: UpdateUserRequest):
+def update_user(user_id: str, req: UpdateUserRequest):
     """
     更新使用者設定（主要是改目標就寢時間）。
 
@@ -912,7 +928,7 @@ async def update_user(user_id: str, req: UpdateUserRequest):
 
 
 @app.delete("/users/{user_id}")
-async def delete_user(user_id: str):
+def delete_user(user_id: str):
     """
     刪除使用者及其**所有**資料。
 
@@ -934,7 +950,7 @@ async def delete_user(user_id: str):
 # ═══════════════════════════════════════════════════════════════════
 
 @app.post("/nightly", status_code=201)
-async def post_nightly(req: NightlyRequest):
+def post_nightly(req: NightlyRequest):
     """
     App 上傳一晚的 Tier A 行為資料。
 
@@ -1124,7 +1140,7 @@ def _sync_journey(user_id):
 
 
 @app.get("/journey")
-async def get_journey(user_id: str = Query(...)):
+def get_journey(user_id: str = Query(...)):
     """
     Journey 的狀態（重算、需要就換站）＋開始新的 Journey 要用的建議起點。
 
@@ -1142,7 +1158,7 @@ async def get_journey(user_id: str = Query(...)):
 
 
 @app.post("/journey", status_code=201)
-async def post_journey(req: JourneyStartRequest):
+def post_journey(req: JourneyStartRequest):
     """開始一段 Journey。終點不比起點早 → 422（App 寫 You're already there）。"""
     require_user(req.user_id)
     _check_hhmm("start_wake", req.start_wake)
@@ -1158,7 +1174,7 @@ async def post_journey(req: JourneyStartRequest):
 
 
 @app.post("/journey/stop")
-async def stop_journey(req: JourneyStopRequest):
+def stop_journey(req: JourneyStopRequest):
     """Stop journey：停在這一站，目標留在這一站（不還原成開始前的時間）。"""
     require_user(req.user_id)
     j, _, _ = _sync_journey(req.user_id)   # 先把最新的進度算進來，停在真正的那一站
@@ -1185,7 +1201,7 @@ def _same_instant(a, b):
 
 
 @app.post("/wearable", status_code=201)
-async def post_wearable(req: WearableRequest):
+def post_wearable(req: WearableRequest):
     """
     App 上傳一筆 Health Connect 睡眠 session。
 
@@ -1250,7 +1266,7 @@ async def post_wearable(req: WearableRequest):
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/home")
-async def get_home(
+def get_home(
     user_id: str = Query(..., description="User ID"),
     date: Optional[str] = Query(None, description="A specific night; defaults to the latest."),
 ):
@@ -1448,7 +1464,7 @@ async def get_home(
 
 
 @app.get("/insights")
-async def get_insights(
+def get_insights(
     user_id: str = Query(...),
     days: int = Query(DEFAULT_HISTORY_DAYS, ge=1, le=365),
 ):
@@ -1723,7 +1739,7 @@ def _camera_clips_for(night):
 
 
 @app.get("/camera/clips/{name}")
-async def get_camera_clip(name: str):
+def get_camera_clip(name: str):
     """
     一段動作片段的 GIF。
 
@@ -1754,7 +1770,7 @@ def _behavior_rows_with_wake(user_id, days):
 
 
 @app.get("/challenges")
-async def get_challenges(
+def get_challenges(
     user_id: str = Query(...),
     as_of: Optional[str] = Query(None, description="Reference day; defaults to the latest recorded day."),
 ):
@@ -1843,7 +1859,7 @@ def _game_inputs(user_id):
 
 
 @app.get("/game")
-async def get_game(user_id: str = Query(...)):
+def get_game(user_id: str = Query(...)):
     """
     XP、等級、寵物成長階段、可以領的挑戰獎勵、徽章。
 
@@ -1872,7 +1888,7 @@ async def get_game(user_id: str = Query(...)):
 
 
 @app.post("/game/claim", status_code=201)
-async def claim_reward(req: ClaimRequest):
+def claim_reward(req: ClaimRequest):
     """
     領一個已完成挑戰的獎勵。每個挑戰每個窗格一次（見 game/rewards.py）。
 
@@ -1918,7 +1934,7 @@ def _closet_level(user_id):
 
 
 @app.get("/closet")
-async def get_closet(user_id: str = Query(...)):
+def get_closet(user_id: str = Query(...)):
     """衣櫃：每一件衣服、幾級解鎖、解鎖了沒、現在穿哪一件。"""
     require_user(user_id)
     level = _closet_level(user_id)
@@ -1933,7 +1949,7 @@ async def get_closet(user_id: str = Query(...)):
 
 
 @app.post("/closet/equip")
-async def equip_item(req: EquipRequest):
+def equip_item(req: EquipRequest):
     """
     換衣服。item_id=None 代表脫掉。
 
@@ -2017,9 +2033,9 @@ def _friend_summary(friend_id, masked=True):
     return social_friends.apply_sharing(summary, settings) if masked else summary
 
 
-async def _night_card(user_id, date, settings, game=None, closet=None, challenges=None):
+def _night_card(user_id, date, settings, game=None, closet=None, challenges=None):
     """那一晚好友看得到的卡（只有打開的項目）。數字跟本人的 /home 同一份。"""
-    home = await get_home(user_id=user_id, date=date)
+    home = get_home(user_id=user_id, date=date)
     latest = (home.get("behavior") or {})
     mood, _ = social_friends.pet_state.mood_for_adherence(latest.get("adherence_minutes"))
     # 「跟他自己平常比」要看這一晚之前的夜晚 → 整串一起標（同 /insights）
@@ -2049,14 +2065,14 @@ def _recent_dates(user_id, days=FEED_DAYS):
     return sorted(have & window, reverse=True)
 
 
-async def _cards_for(user_id, days=FEED_DAYS):
+def _cards_for(user_id, days=FEED_DAYS):
     settings = _sharing(user_id)
     behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
     game = game_state.build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated)
     closet = db.get_game_state(user_id) or {}
     return [
         {"date": d, "scene": settings["scene"],
-         "items": await _night_card(user_id, d, settings, game, closet, evaluated)}
+         "items": _night_card(user_id, d, settings, game, closet, evaluated)}
         for d in _recent_dates(user_id, days)
     ]
 
@@ -2129,13 +2145,13 @@ async def post_sleep_status(req: SleepStatusRequest, request: Request):
 
 
 @app.get("/sharing")
-async def get_sharing(user_id: str = Query(...)):
+def get_sharing(user_id: str = Query(...)):
     """我讓好友看到什麼：分組的開關、時刻要不要準確、永遠不給的三項（只是說明）。"""
     return social_sharing.view(_require_sharing_user(user_id))
 
 
 @app.patch("/sharing")
-async def patch_sharing(req: SharingPatch):
+def patch_sharing(req: SharingPatch):
     """改分享設定。不認得的項目（含永遠不給的那三個）→ 422，一個都不改。"""
     require_user(req.user_id)
     try:
@@ -2147,10 +2163,10 @@ async def patch_sharing(req: SharingPatch):
 
 
 @app.get("/sharing/preview")
-async def sharing_preview(user_id: str = Query(...)):
+def sharing_preview(user_id: str = Query(...)):
     """朋友看到的我：摘要（遮過）＋最近一晚的卡。設定頁的預覽用。"""
     require_user(user_id)
-    cards = await _cards_for(user_id, days=FEED_DAYS)
+    cards = _cards_for(user_id, days=FEED_DAYS)
     return {"friend": _friend_summary(user_id), "card": cards[0] if cards else None}
 
 
@@ -2163,7 +2179,7 @@ def _friend_by_handle(user_id, handle):
 
 
 @app.get("/friends")
-async def get_friends(user_id: str = Query(...)):
+def get_friends(user_id: str = Query(...)):
     """
     我的邀請碼、我的朋友們（行為摘要）、依連續達成的排行。
 
@@ -2191,7 +2207,7 @@ async def get_friends(user_id: str = Query(...)):
 
 
 @app.post("/friends", status_code=201)
-async def add_friend(req: AddFriendRequest):
+def add_friend(req: AddFriendRequest):
     """
     用邀請碼加好友（雙向）。
 
@@ -2209,7 +2225,7 @@ async def add_friend(req: AddFriendRequest):
 
 
 @app.get("/friends/feed")
-async def get_friends_feed(user_id: str = Query(...)):
+def get_friends_feed(user_id: str = Query(...)):
     """
     朋友們與我自己最近 7 天每一晚的卡（新的在前），每張只有那個人打開的項目。
     我自己的卡（mine: true，2026-11-16 使用者定）一樣照我的分享設定——
@@ -2233,7 +2249,7 @@ async def get_friends_feed(user_id: str = Query(...)):
         s = _friend_summary(fid)
         names[fid] = s["display_name"]
         mine = fid == user_id
-        for c in await _cards_for(fid):
+        for c in _cards_for(fid):
             got = paws.get((fid, c["date"]), [])
             card = {"handle": s["handle"], "display_name": s["display_name"],
                     "pet_species": s["pet_species"], "mine": mine, **c, "paws": len(got)}
@@ -2264,7 +2280,7 @@ def _daily_stress_avgs(uid):
 
 
 @app.get("/friends/leaderboard")
-async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query("on_time"),
+def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query("on_time"),
                                   period: Optional[str] = Query(None)):
     """
     好友排行榜（七個標籤之一 × 時段）。名次、門檻、並列、跟上個時段比的變化都在這裡算，App 照抄。
@@ -2337,7 +2353,7 @@ async def get_friends_leaderboard(user_id: str = Query(...), metric: str = Query
 
 
 @app.get("/friends/town")
-async def get_friends_town(user_id: str = Query(...)):
+def get_friends_town(user_id: str = Query(...)):
     """
     好友小鎮：我＋朋友（照加好友的先後，App 把我放中間）、誰昨晚發光、今天誰來看過我。
     發光＝昨晚準時放下手機且有分享 On time（我自己照亮）。沒發光**不給原因**。
@@ -2355,7 +2371,7 @@ async def get_friends_town(user_id: str = Query(...)):
         summary = _friend_summary(uid, masked=False)
         user = db.get_user(uid) or {}
         mine = uid == user_id
-        cards = await _cards_for(uid, days=1)
+        cards = _cards_for(uid, days=1)
         card = next((c for c in cards if c["date"] == night and c["items"]), None)
         names[uid] = summary["display_name"]
         people.append({
@@ -2388,7 +2404,7 @@ async def get_friends_town(user_id: str = Query(...)):
 
 
 @app.post("/friends/{handle}/visit", status_code=201)
-async def visit_friend(handle: str, req: VisitRequest):
+def visit_friend(handle: str, req: VisitRequest):
     """
     拜訪朋友：摸摸或一句預設的話。同一個朋友一天（起床日）一次 → 第二次 409。
     不給 XP、不影響分數、不推播。不認得的動作 422；不是朋友 404。
@@ -2407,15 +2423,15 @@ async def visit_friend(handle: str, req: VisitRequest):
 
 
 @app.get("/friends/{handle}")
-async def get_friend(handle: str, user_id: str = Query(...)):
+def get_friend(handle: str, user_id: str = Query(...)):
     require_user(user_id)
     fid = _friend_by_handle(user_id, handle)
-    cards = await _cards_for(fid)
+    cards = _cards_for(fid)
     return {"friend": _friend_summary(fid), "card": cards[0] if cards else None}
 
 
 @app.delete("/friends/{handle}")
-async def remove_friend(handle: str, user_id: str = Query(...)):
+def remove_friend(handle: str, user_id: str = Query(...)):
     """解除好友，兩邊一起消失。"""
     require_user(user_id)
     friend_id = _friend_by_handle(user_id, handle)
