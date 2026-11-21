@@ -750,6 +750,12 @@ class _RoadPainter extends CustomPainter {
 
 /// 回傳 true＝開始了。起點預設是後端的建議（最近 7 晚中間值），沒有就用轉盤上的起床。
 /// 終點由使用者自己選（文獻不給時刻，Q10）。睡眠長度預設轉盤上的，最少 7 小時。
+/// 目標不比起點早（後端回 already_there）時的那句話。
+/// 「比起點早」由後端判，這裡只把起點時間寫出來。
+String journeyAlreadyThereText(TimeOfDay start) =>
+    'Your goal needs to be earlier than ${journeyHhmm(start)}. '
+    'To wake up later, just change your schedule.';
+
 Future<bool> showJourneySetupSheet(
   BuildContext context, {
   required JourneyController controller,
@@ -848,9 +854,8 @@ class _JourneySetupState extends State<_JourneySetup> {
       case JourneyStartOutcome.started:
         Navigator.of(context).pop(true);
       case JourneyStartOutcome.alreadyThere:
-        setState(
-          () => _error = "You're already there — just change your schedule.",
-        );
+        // 寫出起點時間、說清楚要拖得比它早（使用者 11-21：原本那句看不懂）
+        setState(() => _error = journeyAlreadyThereText(_start));
       case JourneyStartOutcome.failed:
         setState(() => _error = "Couldn't reach the backend. Try again later.");
     }
