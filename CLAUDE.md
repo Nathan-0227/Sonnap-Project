@@ -512,7 +512,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 Friends 分頁＝「加朋友＋看朋友現在的狀態」：**You 卡**（好友看到的你；沒分享寫「Friends can't see your live status」＋Share）
 → **All · Asleep · Still up**（人數寫在膠囊上）→ 依狀態排好的卡片（睡著的在前、睡最久的先 → 過了就寢 → 醒著 → 起床了 → 沒分享）。
 卡片＝頭像（睡著畫 tired）＋大字（睡著寫睡了多久、其他寫昨晚放下手機）＋狀態一行＋7 晚放下手機小長條（越晚越高、一個顏色）。
-邀請碼在標題右邊的**圓的「人＋」**面板裡（我的碼＋Copy、輸入朋友的碼）；小鎮的 ＋ Invite 也開這個面板。
+邀請碼在標題右邊的**圓的「人＋」**面板裡（我的碼＋Copy、輸入朋友的碼）；小鎮的 ＋ Invite 也開這個面板。**2026-11-22 起是小鎮明信片**（`widgets/invite_postcard_sheet.dart`，使用者從三案選 C）：郵票是 Journey 那張側面走路的頭、**不是心情臉**；面板底部要加 `padding.bottom`（`showReportSheet` 的 useSafeArea 只避開上面，原本 Add 被系統導覽列蓋掉下半截，`friends_test` 守著）。
 Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放獎盃、火焰（那些屬於 Ranks）。
 點卡片＝`widgets/friend_live_sheet.dart`：現在的狀態 → 7 晚放下手機（星期＋時刻，沒資料寫「—」）→ 最近那張動態卡 → Remove friend。
 沒有朋友：睡覺的小狗＋「Add a friend to see who's asleep」＋大的 Add friend。
