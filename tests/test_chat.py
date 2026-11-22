@@ -446,6 +446,37 @@ check("沒有時間詞 → 最近一晚", r.json().get("period"), {"kind": "nigh
 ok("最近一晚 → most_recent_night 是 true", '"most_recent_night": true' in p0)
 
 # ═══════════════════════════════════════════════════════════════════
+section("【6h】寵物口吻：不說自己的情緒、不自己下強烈評價（2026-11-22 grill，乙）")
+# ═══════════════════════════════════════════════════════════════════
+# 說話的是寵物（I／you／we、可以溫暖），但：
+#   - 不准說自己的情緒或對你的情緒——會讓人有罪惡感，也可能跟標題列寵物的臉對不上
+#   - 好壞只照抄後端的等級；great／terrible 這類強烈的字是 AI 自己下的評價
+#   - 乙：rough、tough 這類溫和的字放行
+for bad in ["I'm worried about your sleep.", "I am so sad you slept late.", "I'm really upset about last night.",
+            "I'm a bit disappointed in that night.", "I'm scared you are not resting.", "I feel lonely without you.",
+            "I'm proud of you for putting the phone down at 02:39.", "I miss you at night.",
+            "I was worried when you put your phone down at 02:39."]:
+    ok(f"擋情緒：{bad}", any("feelings" in p for p in parts_problems(bad)), parts_problems(bad))
+for bad in ["That was a great night.", "Your phone-down time was amazing.", "An excellent night of rest.",
+            "A perfect bedtime.", "A fantastic night.", "That was a terrible night.", "An awful night.",
+            "A horrible night for you."]:
+    ok(f"擋評價：{bad}", any("evaluation" in p for p in parts_problems(bad)), parts_problems(bad))
+ok("評價字在 why 也擋", any("evaluation" in p for p in parts_problems("You put the phone down at 02:39.", why="Great job.")))
+for fine in ["I'm happy to help you look at last night.", "Your night was marked as Good.",
+             "That was a rough one, so let's look together.", "Last night was a tough one for us.",
+             "I can see you put your phone down at 02:39.", "We can look at it together.",
+             "You sounded worried, so let's look at the numbers.", "You were late on 3 of the 5 recorded nights."]:
+    check(f"放行：{fine}", parts_problems(fine), [])
+
+fake = FakeLLM({"headline": "I'm proud of you for a great night.", "why": "", "tip_ids": [], "link": ""},
+                    {"headline": "I can see your night was marked as Good.", "why": "", "tip_ids": [], "link": ""})
+use(fake)
+got = chat.answer_question("How was last night?", FACTS, tips=(), links=())
+check("第一次說情緒＋評價 → 退回重寫，第二次才交出去", got["headline"], "I can see your night was marked as Good.")
+ok("退回時有告訴 AI 原因", "feelings" in fake.prompts[-1] and "evaluation" in fake.prompts[-1])
+ok("prompt 要寵物用第一人稱說話", "Speak as the user's sleep buddy" in chat.SYSTEM_PROMPT)
+
+# ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")
 # ═══════════════════════════════════════════════════════════════════
 import ast  # noqa: E402
