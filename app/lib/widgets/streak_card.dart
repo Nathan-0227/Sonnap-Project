@@ -56,6 +56,9 @@ class StreakCard extends StatelessWidget {
   /// 場景底部要淡進去的顏色＝頁面底色。
   final Color pageColor;
 
+  /// 不畫自己的框與底下的間距（放在已經有底色的面板裡，2026-11-22 小鎮的「這一週」）。
+  final bool bare;
+
   const StreakCard({
     super.key,
     required this.summary,
@@ -64,6 +67,7 @@ class StreakCard extends StatelessWidget {
     this.scene,
     this.header,
     this.pageColor = const Color(0xFF081326),
+    this.bare = false,
   });
 
   Widget _petWithFlames(int? streak, double size) => PetWithFlames(
@@ -135,11 +139,11 @@ class StreakCard extends StatelessWidget {
     return Container(
       key: const Key('streak-card'),
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: framed
+      margin: bare ? EdgeInsets.zero : const EdgeInsets.only(bottom: 20),
+      padding: framed && !bare
           ? const EdgeInsets.fromLTRB(16, 18, 16, 18)
           : EdgeInsets.zero,
-      decoration: framed
+      decoration: framed && !bare
           ? BoxDecoration(
               borderRadius: BorderRadius.circular(28),
               gradient: const LinearGradient(
@@ -308,9 +312,10 @@ class _Day extends StatelessWidget {
             color: color,
             border: isToday ? Border.all(color: Colors.white, width: 2) : null,
           ),
+          // 2026-11-22：打勾換成月亮（準時放下手機的那一晚）
           child: const Icon(
-            Icons.check_rounded,
-            size: 16,
+            Icons.nightlight_round,
+            size: 14,
             color: Colors.white,
             semanticLabel: 'on time',
           ),
@@ -339,6 +344,70 @@ class _Day extends StatelessWidget {
         return Text(
           d == null ? '' : '${d.day}',
           style: const TextStyle(color: Color(0x55FFFFFF), fontSize: 11),
+        );
+    }
+  }
+}
+
+/// 小鎮左下連續晚數膠囊裡的這一週（2026-11-22 使用者選 B）：7 個小點，週一 → 週日。
+/// 準時＝亮的金點、晚了＝空心圈（不打叉、不用紅色）、沒資料＝短線、還沒到＝很淡的小點。
+/// 狀態照抄後端 streak_week，跟大卡那一排同一份。
+class StreakWeekDots extends StatelessWidget {
+  final List<StreakDay> week;
+  const StreakWeekDots({super.key, required this.week});
+
+  static const gold = Color(0xFFF5C96A);
+
+  @override
+  Widget build(BuildContext context) {
+    final on = week.where((d) => d.status == 'on_time').length;
+    return Semantics(
+      label: '$on of ${week.length} nights on time this week',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < week.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              SizedBox(width: 10, height: 10, child: _dot(week[i].status, i)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dot(String status, int i) {
+    switch (status) {
+      case 'on_time':
+        return Container(
+          key: Key('streak-dot-$i-on_time'),
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: gold,
+            boxShadow: [BoxShadow(color: Color(0x99F5C96A), blurRadius: 5)],
+          ),
+        );
+      case 'late':
+        return Container(
+          key: Key('streak-dot-$i-late'),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xAAB9A4FF), width: 1.5),
+          ),
+        );
+      case 'none':
+        return Center(
+          child: Container(key: Key('streak-dot-$i-none'), width: 8, height: 1.5, color: const Color(0x66FFFFFF)),
+        );
+      default: // future
+        return Center(
+          child: Container(
+            key: Key('streak-dot-$i-future'),
+            width: 4,
+            height: 4,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x33FFFFFF)),
+          ),
         );
     }
   }

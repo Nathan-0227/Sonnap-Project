@@ -277,14 +277,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   void _openMyWeek(FriendSummary me) {
-    showModalBottomSheet<void>(
+    // 2026-11-22：只留一層（原本面板裡又包一張有框的卡），底部留系統導覽列的高度
+    showReportSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF10265A),
-      builder: (context) => SingleChildScrollView(
-        key: const Key('my-week-sheet'),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-        child: StreakCard(summary: me),
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2A2F6E), Color(0xFF1A1F4A)],
+          ),
+        ),
+        child: SingleChildScrollView(
+          key: const Key('my-week-sheet'),
+          padding: EdgeInsets.fromLTRB(20, 22, 20, 12 + MediaQuery.paddingOf(context).bottom),
+          child: StreakCard(summary: me, bare: true),
+        ),
       ),
     );
   }
@@ -604,7 +613,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     ];
   }
 
-  /// 整個畫面的小鎮：地圖鋪滿，上面浮標題與分頁，左下連續晚數＋✨ 說明，右下誰來看過你。
+  /// 整個畫面的小鎮：地圖鋪滿，上面浮標題與分頁（底下浮一下誰昨晚準時），左下連續晚數＋這週 7 點，右下誰來看過你。
   Widget _townFull(FriendsState state, TownState town) {
     final pad = MediaQuery.paddingOf(context);
     const headerH = 120.0;
@@ -650,22 +659,25 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ),
         Positioned(
           left: 16,
+          right: 16,
+          top: pad.top + headerH + 8,
+          child: Center(
+            child: TownGlowNote(
+              key: ValueKey('town-glow-note-${town.night}'),
+              names: [for (final p in town.friends) if (p.glow) p.displayName],
+              fade: widget.animateScenes,
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
           bottom: pad.bottom + 16,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TownRoundButton(
-                key: const Key('town-legend-button'),
-                tooltip: 'What the stars mean',
-                onTap: () => ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(const SnackBar(
-                    content: Text('✨ = put the phone down on time last night', key: Key('town-legend')),
-                  )),
-                child: const Text('✨', style: TextStyle(fontSize: 20)),
-              ),
+              // 2026-11-22 使用者選：✨ 說明鈕拿掉（它壓到 ＋ Invite）；說明改成進小鎮時浮出的那一行（TownGlowNote）。
+              // 連續晚數膠囊旁邊直接畫這週 7 個點（選 B），點了照舊開這一週。
               if (me?.currentStreak != null) ...[
-                const SizedBox(height: 10),
                 TownRoundButton(
                   key: const Key('town-streak'),
                   tooltip: '${me!.currentStreak} nights in a row. Open this week',
@@ -677,6 +689,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       const SizedBox(width: 4),
                       Text('${me.currentStreak}',
                           style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                      if (me.streakWeek != null && me.streakWeek!.length == 7) ...[
+                        const SizedBox(width: 10),
+                        StreakWeekDots(key: const Key('town-streak-week'), week: me.streakWeek!),
+                      ],
                     ],
                   ),
                 ),
@@ -716,13 +732,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
       );
       if (seeAll != true || !mounted) return;
     }
-    showModalBottomSheet<void>(
+    showReportSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF10265A),
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF141A45),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        // 底部留系統導覽列的高度（同加朋友面板）
+        padding: EdgeInsets.fromLTRB(18, 26, 18, 20 + MediaQuery.paddingOf(context).bottom),
+        child: SingleChildScrollView(
           child: visits.isEmpty
               ? const Padding(
                   padding: EdgeInsets.all(8),
@@ -731,6 +750,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 )
               : TownVisitsCard(
                   visits: visits,
+                  kinds: town.kinds,
                   alreadySent: {for (final p in town.friends) if (p.sent != null) p.handle},
                   onSendBack: widget.service == null
                       ? null
