@@ -232,7 +232,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     final g = widget.game;
     if (g == null) return;
     await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => RewardsScreen(service: g)));
+        .push(MaterialPageRoute(builder: (_) => RewardsScreen(service: g, mood: _mood)));
     if (mounted) await _loadGame();
   }
 

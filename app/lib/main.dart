@@ -194,7 +194,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// （Android SharedPreferences），**不裝 shared_preferences**。
   /// 睡眠計畫（2026-11-19）：自己勾的習慣，只存在手機上。
   late final PlanStore _plan = PlanStore.shared =
-      PlanStore(widget.store ?? const PlatformKeyValueStore());
+      PlanStore(widget.store ?? const PlatformKeyValueStore())
+        // Habits 徽章：那一天勾了幾條／總共幾條送後端（只有數字）。沒有後端就不送。
+        ..onDaySummary = (day, checked, total) {
+          _game?.postHabitDay(day, checked, total);
+        };
   final PlanReminderScheduler _planReminders = const PlatformPlanReminderScheduler();
 
   Future<TimeOfDay> _wakeNow() =>

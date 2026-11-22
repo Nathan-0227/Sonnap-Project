@@ -27,6 +27,7 @@ import 'package:app/screens/rewards_screen.dart';
 import 'package:app/services/bed_marks.dart';
 import 'package:app/services/game_service.dart';
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/sleep_plan.dart';
 import 'package:app/services/sleep_repository.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/game_level_card.dart';
@@ -111,6 +112,22 @@ class _StubGame implements GameService {
   Future<GameResult<ClaimOutcome>> claim(String challengeId) async {
     claimCalls.add(challengeId);
     return claimResult;
+  }
+
+  final List<String> badgeClaimCalls = [];
+
+  @override
+  Future<GameResult<ClaimOutcome>> claimBadge(String achievementId) async {
+    badgeClaimCalls.add(achievementId);
+    return claimResult;
+  }
+
+  final List<(String, int, int)> habitCalls = [];
+
+  @override
+  Future<GameResult<Map<String, dynamic>>> postHabitDay(String date, int checked, int total) async {
+    habitCalls.add((date, checked, total));
+    return const GameResult(GameStatus.ok, value: {});
   }
 
   @override
@@ -392,17 +409,67 @@ void main() {
     });
   });
 
-  group('獎勵', () {
-    testWidgets('按領取 → 呼叫後端、顯示拿到幾 XP', (tester) async {
-      final stub = _StubGame(game: GameResult(GameStatus.ok, value: state(gameJson(claimable: [
-        {'challenge_id': 'streak_nights', 'title': 'Three nights in a row', 'xp': 40},
-      ]))));
-      await pumpScreen(tester, RewardsScreen(service: stub));
-      await tester.tap(find.byKey(const Key('claim-streak_nights')));
+  group('獎勵（獎盃架，2026-11-22）', () {
+    Map<String, dynamic> series(String id, String group, {int level = 0, int value = 0,
+        List<int> thresholds = const [1, 5, 15, 30, 60], List<bool>? claimed,
+        String? earnedOn = '2026-11-20'}) {
+      final tiers = [
+        for (var i = 0; i < 5; i++)
+          {
+            'tier': i + 1,
+            'threshold': thresholds[i],
+            'earned': i < level,
+            'earned_on': i < level ? earnedOn : null,
+            'xp': [10, 20, 30, 40, 50][i],
+            'claimed': claimed != null && i < claimed.length && claimed[i],
+          },
+      ];
+      return {
+        'series_id': id,
+        'group': group,
+        'title': 'T-$id',
+        'how': 'How to earn $id.',
+        'unit': 'nights',
+        'level': level,
+        'max_level': 5,
+        'value': value,
+        'next': level >= 5 ? null : {'tier': level + 1, 'threshold': thresholds[level], 'value': value},
+        'tiers': tiers,
+      };
+    }
+
+    Map<String, dynamic> withBadges(Map<String, dynamic> base,
+            {List<Map<String, dynamic>> badges = const [], List<Map<String, dynamic>> claimableBadges = const []}) =>
+        {
+          ...base,
+          'badge_groups': const [
+            {'group': 'sleep', 'label': 'Sleep'},
+            {'group': 'friends', 'label': 'Friends'},
+          ],
+          'badge_series': badges,
+          'claimable_badges': claimableBadges,
+        };
+
+    testWidgets('Claim all：挑戰與徽章都送後端、拿到的 XP 加起來', (tester) async {
+      final stub = _StubGame(
+        game: GameResult(GameStatus.ok, value: state(withBadges(gameJson(claimable: [
+          {'challenge_id': 'streak_nights', 'title': 'Three nights in a row', 'xp': 40},
+        ]), badges: [series('lights_out', 'sleep', level: 1, value: 3)], claimableBadges: [
+          {'achievement_id': 'badge:lights_out:1', 'title': 'Lights out · level 1', 'xp': 10},
+        ]))),
+        claimResult: const GameResult(GameStatus.ok,
+            value: ClaimOutcome(xpAwarded: 25, level: 3, leveledUp: true)),
+      );
+      await pumpScreen(tester, RewardsScreen(service: stub, store: InMemoryKeyValueStore()));
+      expect(find.text('2 rewards ready'), findsOneWidget);
+      expect(find.text('Claim +50'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('claim-all')));
+      await tester.pump();
       await tester.pump();
       expect(stub.claimCalls, ['streak_nights']);
-      // 按鈕上本來就寫著「Claim +40 XP」，所以驗升級提示那一句，不驗「+40 XP」。
-      expect(find.textContaining('level up! You are now level 3'), findsOneWidget);
+      expect(stub.badgeClaimCalls, ['badge:lights_out:1']);
+      // 兩次各回 25 → 照抄後端回的數字加起來，不是按鈕上寫的 50
+      expect(find.textContaining('+50 XP — level up! You are now level 3'), findsOneWidget);
     });
 
     testWidgets('被拒時照抄後端的話（409 領過了 ≠ 422 還沒完成）', (tester) async {
@@ -413,25 +480,121 @@ void main() {
         claimResult: const GameResult(GameStatus.failed,
             httpStatus: 409, message: 'Already claimed for this window. Come back in the next one.'),
       );
-      await pumpScreen(tester, RewardsScreen(service: stub));
-      await tester.tap(find.byKey(const Key('claim-streak_nights')));
+      await pumpScreen(tester, RewardsScreen(service: stub, store: InMemoryKeyValueStore()));
+      await tester.tap(find.byKey(const Key('claim-all')));
+      await tester.pump();
       await tester.pump();
       expect(find.text('Already claimed for this window. Come back in the next one.'), findsOneWidget);
     });
 
     testWidgets('沒有東西可以領時，講清楚怎樣才會有', (tester) async {
-      await pumpScreen(tester, RewardsScreen(service: _StubGame()));
+      await pumpScreen(tester, RewardsScreen(service: _StubGame(), store: InMemoryKeyValueStore()));
       expect(find.byKey(const Key('rewards-empty')), findsOneWidget);
+      expect(find.byKey(const Key('claim-all')), findsNothing);
     });
 
-    testWidgets('徽章拿到的與沒拿到的看得出差別', (tester) async {
-      await pumpScreen(tester, RewardsScreen(service: _StubGame()));
-      final earned = find.descendant(
-          of: find.byKey(const Key('badge-first_on_time')), matching: find.byIcon(Icons.verified_rounded));
-      final locked = find.descendant(
-          of: find.byKey(const Key('badge-good_sleep')), matching: find.byIcon(Icons.lock_outline_rounded));
-      expect(earned, findsOneWidget);
-      expect(locked, findsOneWidget);
+    testWidgets('舊版後端沒有徽章 → 照實說，不畫空架子', (tester) async {
+      await pumpScreen(tester, RewardsScreen(service: _StubGame(), store: InMemoryKeyValueStore()));
+      expect(find.byKey(const Key('badges-need-backend')), findsOneWidget);
+    });
+
+    testWidgets('徽章：級數與進度照抄後端；拿到的與沒拿到的看得出差別；分區照後端順序', (tester) async {
+      final stub = _StubGame(game: GameResult(GameStatus.ok, value: state(withBadges(gameJson(), badges: [
+        series('lights_out', 'sleep', level: 2, value: 7),
+        series('good_night', 'sleep', level: 0, value: 0),
+        series('good_friend', 'friends', level: 1, value: 4, thresholds: const [1, 10, 30, 60, 100]),
+      ]))));
+      await pumpScreen(tester, RewardsScreen(service: stub, store: InMemoryKeyValueStore()));
+      expect(find.byKey(const Key('medal-lights_out-2')), findsOneWidget);
+      expect(find.byKey(const Key('medal-good_night-0')), findsOneWidget);
+      expect(find.text('7 / 15'), findsOneWidget);
+      expect(find.text('4 / 10'), findsOneWidget);
+      final sleepY = tester.getTopLeft(find.text('Sleep')).dy;
+      final friendsY = tester.getTopLeft(find.text('Friends')).dy;
+      expect(sleepY, lessThan(friendsY));
+    });
+
+    testWidgets('點一格 → 5 級、哪一晚拿到、XP 領了沒', (tester) async {
+      final stub = _StubGame(game: GameResult(GameStatus.ok, value: state(withBadges(gameJson(), badges: [
+        series('lights_out', 'sleep', level: 2, value: 7, claimed: const [true, false]),
+      ]))));
+      await pumpScreen(tester, RewardsScreen(service: stub, store: InMemoryKeyValueStore()));
+      await tester.tap(find.byKey(const Key('badge-tile-lights_out')));
+      // 房間裡的寵物一直在動，pumpAndSettle 不會停；推幾格讓頁面滑上來就好
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byKey(const Key('badge-sheet')), findsOneWidget);
+      expect(find.text('7 / 15 nights to level 3'), findsOneWidget);
+      for (var t = 1; t <= 5; t++) {
+        expect(find.byKey(Key('badge-tier-$t')), findsOneWidget);
+      }
+      expect(find.text('+10 XP claimed'), findsOneWidget);
+      expect(find.text('+20 XP to claim'), findsOneWidget);
+      expect(find.text('Locked'), findsNWidgets(3));
+      expect(find.text('Earned Nov 20'), findsNWidgets(2));
+    });
+
+    testWidgets('紅點：新拿到的那一級亮一次，下次進來就不亮', (tester) async {
+      final store = InMemoryKeyValueStore();
+      GameResult<GameState> g(int level) => GameResult(GameStatus.ok,
+          value: state(withBadges(gameJson(), badges: [series('lights_out', 'sleep', level: level, value: 5)])));
+      await pumpScreen(tester, RewardsScreen(service: _StubGame(game: g(1)), store: store));
+      expect(find.byKey(const Key('badge-new-lights_out')), findsOneWidget);
+
+      await pumpScreen(tester, RewardsScreen(key: UniqueKey(), service: _StubGame(game: g(1)), store: store));
+      expect(find.byKey(const Key('badge-new-lights_out')), findsNothing);
+
+      // 升一級 → 又亮
+      await pumpScreen(tester, RewardsScreen(key: UniqueKey(), service: _StubGame(game: g(2)), store: store));
+      expect(find.byKey(const Key('badge-new-lights_out')), findsOneWidget);
+    });
+
+    test('單位跟著數字變單複數（1 night、1 night in a row）', () {
+      expect(badgeUnit(1, 'nights'), 'night');
+      expect(badgeUnit(1, 'nights in a row'), 'night in a row');
+      expect(badgeUnit(5, 'nights'), 'nights');
+      expect(badgeUnit(1, 'times'), 'time');
+    });
+
+    testWidgets('最近 7 晚：+0 照實寫', (tester) async {
+      final base = gameJson();
+      final stub = _StubGame(game: GameResult(GameStatus.ok, value: state({
+        ...base,
+        'recent_nights': const [
+          {'date': '2026-11-20', 'behaviour_xp': 30, 'quality_xp': 20, 'total': 50},
+          {'date': '2026-11-21', 'behaviour_xp': 0, 'quality_xp': 0, 'total': 0},
+        ],
+      })));
+      await pumpScreen(tester, RewardsScreen(service: stub, store: InMemoryKeyValueStore()));
+      expect(find.descendant(of: find.byKey(const Key('night-xp-2026-11-21')), matching: find.text('+0')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('night-xp-2026-11-20')), matching: find.text('+50')),
+          findsOneWidget);
+    });
+
+    testWidgets('房間裡的寵物用傳進來的心情、穿著衣櫃那一件', (tester) async {
+      final stub = _StubGame(closetResult: GameResult(GameStatus.ok, value: closet(closetJson(equipped: 'scarf'))));
+      await pumpScreen(tester, RewardsScreen(service: stub, mood: 'tired', store: InMemoryKeyValueStore()));
+      final pet = tester.widget<HomePet>(find.descendant(
+          of: find.byKey(const Key('rewards-pet')), matching: find.byType(HomePet)));
+      expect(pet.mood, 'tired');
+      expect(pet.equippedItemId, 'scarf');
+    });
+  });
+
+  group('習慣送後端（Habits 徽章）', () {
+    test('勾一條 → 送那一天勾了幾條／今天要做幾條；只有數字', () async {
+      final plan = PlanStore(InMemoryKeyValueStore());
+      await plan.load();
+      final calls = <(String, int, int)>[];
+      plan.onDaySummary = (d, c, t) => calls.add((d, c, t));
+      await plan.add(const PlanItem(id: 'a', text: 'A', anchor: PlanAnchor.bedtime, offsetMinutes: -60));
+      await plan.add(const PlanItem(id: 'b', text: 'B', anchor: PlanAnchor.bedtime, offsetMinutes: -30));
+      final day = DateTime(2026, 11, 20);
+      await plan.setChecked('a', day, true);
+      await plan.setChecked('b', day, true);
+      await plan.setChecked('b', day, false);
+      expect(calls, [('2026-11-20', 1, 2), ('2026-11-20', 2, 2), ('2026-11-20', 1, 2)]);
     });
   });
 

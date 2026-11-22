@@ -262,6 +262,17 @@ class PlanStore extends ChangeNotifier {
   final KeyValueStore store;
   PlanStore(this.store);
 
+  /// 勾或取消勾之後，那一天「勾了幾條／今天要做幾條」（2026-11-22，Habits 徽章）。
+  /// MainPage 接到 `POST /habits/day`。⚠️ **只給數字**，不給是哪幾條、不給文字。
+  /// 送不出去就算了（不補送）：徽章晚一天到沒關係，擋住打勾不行。
+  void Function(String day, int checked, int total)? onDaySummary;
+
+  /// [planDay] 那一天要做的裡面勾了幾條。不用做的那幾條勾了也不算。
+  ({int checked, int total}) daySummary(DateTime planDay) {
+    final due = dueOn(planDay);
+    return (checked: due.where((i) => isChecked(i.id, planDay)).length, total: due.length);
+  }
+
   List<PlanItem> _items = const [];
   Map<String, Set<String>> _checks = {};
   bool _loaded = false;
@@ -350,6 +361,8 @@ class PlanStore extends ChangeNotifier {
     _prune(planDay);
     notifyListeners();
     await _save();
+    final s = daySummary(planDay);
+    if (s.total > 0) onDaySummary?.call(key, s.checked, s.total);
   }
 
   void _prune(DateTime today) {

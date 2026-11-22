@@ -879,9 +879,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _openRewards() async {
     final service = widget.game;
     if (service == null) return _showNeedsBackend("Rewards");
+    // 房間裡那隻用首頁同一份心情（後端 pet_mood）；拿不到就讓 HomePet 畫 bored
+    String? mood;
+    try {
+      mood = (await _sessionFuture).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => RewardsScreen(service: service)));
+    ).push(MaterialPageRoute(builder: (_) => RewardsScreen(service: service, mood: mood)));
     if (mounted) await _loadGame();
   }
 

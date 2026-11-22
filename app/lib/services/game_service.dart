@@ -60,16 +60,21 @@ class XpSources {
   final int sleepQuality;
   final int challengeRewards;
 
+  /// 領徽章拿到的（2026-11-22）。舊版後端沒有這一欄 → 0。
+  final int badgeRewards;
+
   const XpSources({
     required this.behaviour,
     required this.sleepQuality,
     required this.challengeRewards,
+    this.badgeRewards = 0,
   });
 
   factory XpSources.fromJson(Map<String, dynamic>? json) => XpSources(
         behaviour: (json?['behaviour'] as num?)?.toInt() ?? 0,
         sleepQuality: (json?['sleep_quality'] as num?)?.toInt() ?? 0,
         challengeRewards: (json?['challenge_rewards'] as num?)?.toInt() ?? 0,
+        badgeRewards: (json?['badge_rewards'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -109,6 +114,134 @@ class ClaimableReward {
 
   factory ClaimableReward.fromJson(Map<String, dynamic> json) => ClaimableReward(
         challengeId: (json['challenge_id'] as String?) ?? '',
+        title: (json['title'] as String?) ?? '',
+        xp: (json['xp'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// 徽章的一級（後端 `badge_series[].tiers[]`，`game/badges.py`）。
+///
+/// ⚠️ 拿到沒、哪一晚拿到、領過沒，全部照抄後端——拿到的不收回是後端記的，
+///    Dart 從 value 與 threshold 自己判的話，資料改正之後會把它收回。
+@immutable
+class BadgeTier {
+  final int tier;
+  final int threshold;
+  final bool earned;
+
+  /// 跨過門檻的那一晚（YYYY-MM-DD）；沒拿到是 null。
+  final String? earnedOn;
+  final int xp;
+  final bool claimed;
+
+  const BadgeTier({
+    required this.tier,
+    required this.threshold,
+    required this.earned,
+    required this.earnedOn,
+    required this.xp,
+    required this.claimed,
+  });
+
+  factory BadgeTier.fromJson(Map<String, dynamic> json) => BadgeTier(
+        tier: (json['tier'] as num?)?.toInt() ?? 0,
+        threshold: (json['threshold'] as num?)?.toInt() ?? 0,
+        earned: (json['earned'] as bool?) ?? false,
+        earnedOn: json['earned_on'] as String?,
+        xp: (json['xp'] as num?)?.toInt() ?? 0,
+        claimed: (json['claimed'] as bool?) ?? false,
+      );
+}
+
+/// 下一級：第幾級、門檻、現在幾（後端照實給，Dart 不夾）。
+@immutable
+class BadgeNext {
+  final int tier;
+  final int threshold;
+  final int value;
+  const BadgeNext({required this.tier, required this.threshold, required this.value});
+}
+
+/// 一個徽章系列（後端 `badge_series[]`）。
+@immutable
+class BadgeSeries {
+  final String seriesId;
+  final String group;
+  final String title;
+
+  /// 怎麼拿（英文，後端寫的）。
+  final String how;
+
+  /// 數的是什麼（"nights"、"visits"…），寫進度用。
+  final String unit;
+
+  /// 拿到第幾級（0＝一級都還沒有）。
+  final int level;
+  final int maxLevel;
+
+  /// 現在的次數（On a roll 是最長連續幾晚）。
+  final int value;
+
+  /// 全部拿到是 null。
+  final BadgeNext? next;
+  final List<BadgeTier> tiers;
+
+  const BadgeSeries({
+    required this.seriesId,
+    required this.group,
+    required this.title,
+    required this.how,
+    required this.unit,
+    required this.level,
+    required this.maxLevel,
+    required this.value,
+    required this.next,
+    required this.tiers,
+  });
+
+  factory BadgeSeries.fromJson(Map<String, dynamic> json) {
+    final n = json['next'];
+    return BadgeSeries(
+      seriesId: (json['series_id'] as String?) ?? '',
+      group: (json['group'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      how: (json['how'] as String?) ?? '',
+      unit: (json['unit'] as String?) ?? '',
+      level: (json['level'] as num?)?.toInt() ?? 0,
+      maxLevel: (json['max_level'] as num?)?.toInt() ?? 5,
+      value: (json['value'] as num?)?.toInt() ?? 0,
+      next: n is Map<String, dynamic>
+          ? BadgeNext(
+              tier: (n['tier'] as num?)?.toInt() ?? 0,
+              threshold: (n['threshold'] as num?)?.toInt() ?? 0,
+              value: (n['value'] as num?)?.toInt() ?? 0,
+            )
+          : null,
+      tiers: ((json['tiers'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BadgeTier.fromJson)
+          .toList(),
+    );
+  }
+
+  /// 拿到的那幾級的鍵（"lights_out:2"），紅點用。
+  Iterable<String> get earnedKeys => [
+        for (final t in tiers)
+          if (t.earned) '$seriesId:${t.tier}',
+      ];
+}
+
+/// 拿到了、還沒領 XP 的徽章那一級（後端 `claimable_badges[]`）。
+@immutable
+class ClaimableBadge {
+  final String achievementId;
+  final String title;
+  final int xp;
+
+  const ClaimableBadge({required this.achievementId, required this.title, required this.xp});
+
+  factory ClaimableBadge.fromJson(Map<String, dynamic> json) => ClaimableBadge(
+        achievementId: (json['achievement_id'] as String?) ?? '',
         title: (json['title'] as String?) ?? '',
         xp: (json['xp'] as num?)?.toInt() ?? 0,
       );
@@ -171,6 +304,13 @@ class GameState {
   /// 最近 7 晚各拿了幾 XP（由舊到新）。早晨報告的「+N XP」從這裡照抄。
   final List<NightXp> recentNights;
 
+  /// 徽章（2026-11-22）。舊版後端沒有 → 空清單（獎勵頁照實說要更新後端）。
+  final List<BadgeSeries> badgeSeries;
+
+  /// 分區：(group, 顯示名)，順序就是架子上的順序。
+  final List<(String, String)> badgeGroups;
+  final List<ClaimableBadge> claimableBadges;
+
   const GameState({
     required this.level,
     required this.xpTotal,
@@ -184,6 +324,9 @@ class GameState {
     required this.badges,
     required this.notes,
     this.recentNights = const [],
+    this.badgeSeries = const [],
+    this.badgeGroups = const [],
+    this.claimableBadges = const [],
   });
 
   factory GameState.fromJson(Map<String, dynamic> json) => GameState(
@@ -210,6 +353,18 @@ class GameState {
         recentNights: ((json['recent_nights'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(NightXp.fromJson)
+            .toList(),
+        badgeSeries: ((json['badge_series'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(BadgeSeries.fromJson)
+            .toList(),
+        badgeGroups: [
+          for (final g in ((json['badge_groups'] as List?) ?? const []).whereType<Map>())
+            ('${g['group']}', '${g['label']}'),
+        ],
+        claimableBadges: ((json['claimable_badges'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ClaimableBadge.fromJson)
             .toList(),
       );
 }
@@ -324,6 +479,27 @@ class GameService {
       ),
     );
   }
+
+  /// 領一個徽章那一級的 XP（`badge:<系列>:<級>`）。回應形狀同 [claim]。
+  Future<GameResult<ClaimOutcome>> claimBadge(String achievementId) async {
+    final r = await _request('POST', '/game/claim', body: {'badge': achievementId});
+    if (!r.isOk) return GameResult(r.status, httpStatus: r.httpStatus, message: r.message);
+    final json = r.value!;
+    final claimed = (json['claimed'] as Map<String, dynamic>?) ?? const {};
+    return GameResult(
+      GameStatus.ok,
+      value: ClaimOutcome(
+        xpAwarded: (claimed['xp'] as num?)?.toInt() ?? 0,
+        level: (json['level'] as num?)?.toInt() ?? 1,
+        leveledUp: (json['leveled_up'] as bool?) ?? false,
+      ),
+    );
+  }
+
+  /// 睡眠計畫那一天勾了幾條、總共幾條（Habits 徽章）。
+  /// ⚠️ **只送數字**——是哪幾條、習慣的文字都只在手機上。
+  Future<GameResult<Map<String, dynamic>>> postHabitDay(String date, int checked, int total) =>
+      _request('POST', '/habits/day', body: {'date': date, 'checked': checked, 'total': total});
 
   /// 換衣服。itemId=null 代表脫掉。成功時 value 是現在穿著的 item_id。
   Future<GameResult<String?>> equip(String? itemId) async {

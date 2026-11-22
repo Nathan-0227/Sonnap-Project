@@ -42,6 +42,11 @@ class _StubGame implements GameService {
   @override
   Future<GameResult<ClaimOutcome>> claim(String challengeId) async => const GameResult(GameStatus.failed);
   @override
+  Future<GameResult<ClaimOutcome>> claimBadge(String achievementId) async => const GameResult(GameStatus.failed);
+  @override
+  Future<GameResult<Map<String, dynamic>>> postHabitDay(String date, int checked, int total) async =>
+      const GameResult(GameStatus.failed);
+  @override
   Future<GameResult<String?>> equip(String? itemId) async => const GameResult(GameStatus.failed);
   @override
   String get baseUrl => 'stub';
