@@ -126,6 +126,36 @@ GRADE_Q = dict(NIGHT_Q, expect=["grade"])
 check("問好不好卻沒照抄等級", bad_rules(GRADE_Q, good(headline="I saw you slept 3h 17m.", why="")), [ev.R_GRADE])
 
 # ═══════════════════════════════════════════════════════════════════
+section("【2b】第一次真的跑（2026-11-22）人工讀出來、自動沒抓到的四種錯")
+# ═══════════════════════════════════════════════════════════════════
+check("那一晚有紀錄卻說沒有（Q10 原句）",
+      bad_rules(NIGHT_Q, good(headline="Sonnap doesn't have a record under that date for me to check.", why="",
+                              tips=[], link=None)), [ev.R_HAS_RECORD])
+check("沒紀錄的晚上說沒有 → 不算錯", bad_rules(
+    NIGHT_Q, good(headline="I don't have a record for that night.", why="", tips=[], link=None),
+    ctx=dict(CTX, night_date="2026-11-21")), [])
+PHONE_CTX = dict(CTX, facts=dict(CTX["facts"], phone_that_night={"date": "2026-11-21", "phone_down_at": "20:21"}))
+check("問昨晚卻講別晚的手機時刻（Q5 原句）", bad_rules(
+    NIGHT_Q, good(headline="I saw you put your phone down at 20:21 that night, so that was on time.", why=""),
+    ctx=PHONE_CTX, allowed=ALLOWED | {20.0, 21.0}), [ev.R_PERIOD])
+check("同一晚的手機時刻 → 不算錯", bad_rules(
+    NIGHT_Q, good(headline="I saw you put your phone down at 20:21 that night.", why=""),
+    ctx=dict(PHONE_CTX, facts=dict(CTX["facts"], phone_that_night={"date": "2026-11-22", "phone_down_at": "20:21"})),
+    allowed=ALLOWED | {20.0, 21.0}), [])
+LAST_WEEK_Q = dict(RANGE_Q, period_word="last week")
+week_ok = dict(ctx=RANGE_CTX, allowed=ev.numbers_in(json.dumps(RANGE_CTX["facts"])) | {5.0})
+check("問上週卻寫 this week（Q14 原句）", bad_rules(
+    LAST_WEEK_Q, good(headline="We had 5 nights with records this week.", why="", tips=[], link=None, period=RANGE),
+    **week_ok), [ev.R_PERIOD])
+check("問上週、寫 last week → 不算錯", bad_rules(
+    LAST_WEEK_Q, good(headline="We had 5 nights with records last week.", why="", tips=[], link=None, period=RANGE),
+    **week_ok), [])
+DEEP_Q = dict(NIGHT_Q, expect=["deep_number"])
+check("問深睡卻說不知道（Q7 原句；那晚 31 分）", bad_rules(
+    DEEP_Q, good(headline="I don't have a deep sleep number for last night, sorry.", why="")), [ev.R_NUMBERS])
+check("問深睡、答出 31m → 不算錯", bad_rules(DEEP_Q, good(headline="I saw you got 31m of deep sleep.", why="")), [])
+
+# ═══════════════════════════════════════════════════════════════════
 section("【3】那一晚的數字怎麼算")
 # ═══════════════════════════════════════════════════════════════════
 ok("分鐘換成幾小時幾分（197 → 3h 17m）", {3.0, 17.0} <= ALLOWED)

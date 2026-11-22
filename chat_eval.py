@@ -44,6 +44,12 @@ NUMBER = re.compile(r"\d+(?:\.\d+)?")
 R_PERIOD, R_NUMBERS, R_TIPS, R_LINK = "哪一晚", "數字", "建議", "連結"
 R_MOOD, R_VOICE, R_UNKNOWN, R_CORR, R_ANSWERED = "寵物心情", "口吻", "不知道就說不知道", "跨夜關聯", "有答出來"
 R_GRADE = "等級照抄"
+R_HAS_RECORD = "有紀錄就答"
+
+# 「沒有紀錄」的說法（那一晚明明有紀錄時不准說）
+NO_RECORD = re.compile(
+    r"\bno record\b|\b(?:don't|doesn't|do not|does not|didn't|did not) have (?:a |any )?record"
+    r"|\bnothing (?:recorded|logged)\b|\bisn't recorded\b|\bwasn't recorded\b", re.IGNORECASE)
 
 # 「沒有這份資料／沒有紀錄」的說法
 NO_DATA = re.compile(
@@ -200,6 +206,36 @@ def grade(q, status, resp, ctx, allowed_numbers, home_by_date):
             ok = bool(pattern.search(text))
             checks.append((R_MOOD, ok, "" if ok else f"後端說是 {driver} 決定的，回答沒提到"))
 
+    # 那一晚有紀錄卻說沒有（2026-11-22 第一次跑：問 11/13，AI 看到資料記成起床日 11-14 就說沒紀錄）
+    night_home = home_by_date.get(ctx.get("night_date")) or {}
+    has_record = ((night_home.get("scoring") or {}).get("final_score") is not None
+                  or bool((night_home.get("behavior") or {}).get("lights_out_at")))
+    if not is_range and has_record and NO_RECORD.search(text):
+        checks.append((R_HAS_RECORD, False, f"{ctx['night_date']} 那一晚有紀錄，回答卻說沒有"))
+
+    # 問「最近一晚」卻講了別晚的手機時刻（第一次跑：昨晚沒有手機紀錄，AI 講了另一晚的 20:21）
+    phone = (ctx.get("facts") or {}).get("phone_that_night") or {}
+    if (not is_range and phone.get("date") and phone.get("date") != ctx.get("night_date")
+            and phone.get("phone_down_at") and phone["phone_down_at"] in text):
+        checks.append((R_PERIOD, False, f"把 {phone['date']} 的放下手機時刻 {phone['phone_down_at']} "
+                                        f"講成 {ctx['night_date']} 那一晚的"))
+
+    # 一段時間要照問的說法講（第一次跑：問上週，回答寫 this week）
+    word = q.get("period_word")
+    if word:
+        wrong = {"this week": "last week", "last week": "this week"}.get(word)
+        ok = not (wrong and re.search(rf"\b{wrong}\b", text, re.IGNORECASE))
+        checks.append((R_PERIOD, ok, "" if ok else f"問的是 {word}，回答寫成 {wrong}"))
+
+    # 問深睡要答得出那一晚的深睡（第一次跑：那晚 31 分，AI 說不知道——事實裡根本沒給）
+    if "deep_number" in expect:
+        deep = (night_home.get("metrics") or {}).get("deep_minutes")
+        if deep is not None:
+            d = round(deep)
+            forms = {str(d), f"{d // 60}h {d % 60}m"}
+            ok = any(f in text for f in forms)
+            checks.append((R_NUMBERS, ok, "" if ok else f"那一晚深睡 {d} 分，回答沒答出來"))
+
     # 等級照抄（問好不好時）
     if "grade" in expect:
         home = home_by_date.get(ctx["night_date"]) or {}
@@ -249,7 +285,7 @@ def build_questions(today, latest, recorded, watch_nights):
         {"id": "Q6", "text": "Was last night a good night?", "rules": [R_VOICE, R_GRADE], "expect": ["grade"],
          "expect_period": last},
         {"id": "Q7", "text": "How much deep sleep did I get last night?", "rules": [R_NUMBERS],
-         "expect_period": last},
+         "expect": ["deep_number"], "expect_period": last},
     ]
     wd = pick(2, 6, lambda d: d in watch_nights) or pick(2, 6, lambda d: d in recorded)
     if wd:
@@ -262,8 +298,8 @@ def build_questions(today, latest, recorded, watch_nights):
     md = pick(7, 14, lambda d: d in recorded)
     if md:
         bed = md - timedelta(days=1)
-        qs.append({"id": "Q10", "text": f"How was my sleep on {bed.month}/{bed.day}?", "rules": [R_PERIOD, R_NUMBERS],
-                   "expect_period": night(md)})
+        qs.append({"id": "Q10", "text": f"How was my sleep on {bed.month}/{bed.day}?",
+                   "rules": [R_PERIOD, R_NUMBERS, R_HAS_RECORD], "expect_period": night(md)})
     empty = pick(1, 29, lambda d: d not in recorded)
     if empty:
         bed = empty - timedelta(days=1)
@@ -278,8 +314,10 @@ def build_questions(today, latest, recorded, watch_nights):
     last_week = {"kind": "range", "start": (monday - timedelta(days=7)).isoformat(),
                  "end": (monday - timedelta(days=1)).isoformat()}
     qs += [
-        {"id": "Q13", "text": "How was this week?", "rules": [R_PERIOD, R_TIPS, R_LINK], "expect_period": this_week},
-        {"id": "Q14", "text": "How was last week?", "rules": [R_PERIOD, R_NUMBERS], "expect_period": last_week},
+        {"id": "Q13", "text": "How was this week?", "rules": [R_PERIOD, R_TIPS, R_LINK], "expect_period": this_week,
+         "period_word": "this week"},
+        {"id": "Q14", "text": "How was last week?", "rules": [R_PERIOD, R_NUMBERS], "expect_period": last_week,
+         "period_word": "last week"},
         {"id": "Q15", "text": "What should I change this week?", "rules": [R_TIPS, R_LINK],
          "expect_period": this_week},
         {"id": "Q16", "text": "Did my later nights last week give me lower scores?", "rules": [R_CORR],
