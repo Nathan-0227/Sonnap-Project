@@ -883,6 +883,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// 新的值才傳得下去。TabSwitcher 每一頁有固定的 key、保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
   /// 助理頁在第幾個分頁（Home · Friends · Insights · Assistant · Settings）。
+  static const int _friendsIndex = 1;
   static const int _assistantIndex = 3;
 
   List<Widget> _buildPages(AccountStatus account) {
@@ -907,7 +908,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         onBedtimeChanged: _setBedtime,
         onReminderChanged: _setReminder,
       ),
-      FriendsScreen(service: _friends, animateScenes: widget.entryAnimation),
+      FriendsScreen(
+        service: _friends,
+        animateScenes: widget.entryAnimation,
+        // 上次沒拿到資料的話，切過來時再試一次（2026-11-22）
+        visible: currentIndex == _friendsIndex,
+      ),
       // Insights（2026-11-19 改版：頂端 Day／Week／Month／Year）。
       InsightsScreen(
         nightly: _nightly,

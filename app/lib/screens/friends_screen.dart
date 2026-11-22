@@ -63,8 +63,13 @@ class FriendsScreen extends StatefulWidget {
   /// 送禮推門、收禮場景（2026-11-22）。只有正式的 App 打開，測試預設關（同進場動畫）。
   final bool animateScenes;
 
+  /// 現在是不是看得到這一頁（分頁都疊在 TabSwitcher 裡、一直留著）。
+  /// 上次沒拿到資料的話，切過來時再試一次。
+  final bool visible;
+
   const FriendsScreen({
     this.animateScenes = false,
+    this.visible = true,
     super.key,
     this.service,
     this.clock = DateTime.now,
@@ -75,7 +80,7 @@ class FriendsScreen extends StatefulWidget {
   State<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends State<FriendsScreen> with WidgetsBindingObserver {
   /// 2026-11-17 使用者定：Town · Feed · Friends，打開預設在 Town。
   _Tab _tab = _Tab.town;
   FriendsResult<FriendsState>? _result;
@@ -97,16 +102,59 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void initState() {
     super.initState();
     PetChoice.current.addListener(_onPetChanged);
+    WidgetsBinding.instance.addObserver(this);
     _load();
   }
 
   @override
   void dispose() {
     PetChoice.current.removeListener(_onPetChanged);
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
+  // ── 連不到之後再試（2026-11-22）：原本只在打開 App 時讀一次，沒拿到就一直卡在
+  // 「cannot be reached」、要重開 App。現在三個時機會再試：切到這一頁、回到 App、按 Try again。
+
+  bool _loading = false;
+
+  /// 上次沒拿到（名單或小鎮）。沒有後端、沒有帳號那兩種不是連線問題，不重試。
+  bool get _needsRetry {
+    bool failed(FriendsResult<Object?>? r) => r != null && r.status == FriendsStatus.failed;
+    return !_loading && (failed(_result) || failed(_town));
+  }
+
+  @override
+  void didUpdateWidget(FriendsScreen old) {
+    super.didUpdateWidget(old);
+    if (!old.visible && widget.visible && _needsRetry) _retry();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.visible && _needsRetry) _retry();
+  }
+
+  /// 清掉失敗的結果（畫面換回轉圈），整份重讀。
+  void _retry() {
+    setState(() {
+      if (_result?.isOk != true) _result = null;
+      if (_town?.isOk != true) _town = null;
+    });
+    _load();
+  }
+
   Future<void> _load() async {
+    if (_loading) return;
+    _loading = true;
+    try {
+      await _loadOnce();
+    } finally {
+      _loading = false;
+    }
+  }
+
+  Future<void> _loadOnce() async {
     final service = widget.service;
     if (service == null) return;
     final r = await service.fetch();
@@ -449,9 +497,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final state = r.value;
     if (!r.isOk || state == null) {
       return [
-        _card(const Text(
+        _card(_unreachable(
           "Friends live on the backend, and it cannot be reached right now.",
-          style: TextStyle(color: Colors.white70),
+          const Key('friends-retry'),
+          canRetry: r.status == FriendsStatus.failed,
         )),
       ];
     }
@@ -606,10 +655,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
       return const [Center(child: CircularProgressIndicator())];
     }
     return [
-      _card(const Text(
+      _card(_unreachable(
         "The town lives on the backend, and it cannot be reached right now.",
-        key: Key('town-unreachable'),
-        style: TextStyle(color: Colors.white70),
+        const Key('town-retry'),
+        textKey: const Key('town-unreachable'),
+        canRetry: _town?.status == FriendsStatus.failed,
       )),
     ];
   }
@@ -948,6 +998,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
     );
   }
+
+  /// 連不到的那張卡：照實說＋一顆 Try again。
+  /// [canRetry]：只有連線失敗才畫按鈕（沒有後端、沒有帳號再按也一樣）。
+  Widget _unreachable(String text, Key buttonKey, {Key? textKey, bool canRetry = true}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(text, key: textKey, style: const TextStyle(color: Colors.white70)),
+          if (canRetry) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: buttonKey,
+              onPressed: _loading ? null : _retry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ],
+        ],
+      );
 
   Widget _card(Widget child) => Container(
         width: double.infinity,

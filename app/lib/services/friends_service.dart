@@ -614,8 +614,13 @@ class FriendsService {
     this.timeout = const Duration(seconds: 3),
   });
 
+  /// 好友名單（好友頁一打開就要的那一份）。
+  /// ⚠️ 不能用 3 秒：App 剛打開時首頁、遊戲、動態牆、小鎮同時打後端，2026-11-22 實機好幾次超過 3 秒，
+  /// 好友頁整頁卡在「cannot be reached」（後端其實好好的，單獨問只要 0.13 秒）。
+  static const listTimeout = Duration(seconds: 10);
+
   Future<FriendsResult<FriendsState>> fetch() async {
-    final r = await _request('GET', '/friends');
+    final r = await _request('GET', '/friends', wait: listTimeout);
     if (!r.isOk) return FriendsResult(r.status, httpStatus: r.httpStatus, message: r.message);
     return FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(r.value!));
   }
