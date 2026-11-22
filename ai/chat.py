@@ -33,6 +33,15 @@ ai/chat.py —— 睡眠助理的問答（B6）。
 合起來的 answer（headline＋why）留給舊版 App。
 
 ═══════════════════════════════════════════════════════════════════
+寵物口吻（2026-11-22 grill，乙）
+═══════════════════════════════════════════════════════════════════
+
+說話的是寵物：I／you／we、可以溫暖。headline＋why 另外擋兩種：
+    EMOTION_PATTERN             說自己的情緒或對你的情緒（I'm worried／proud of you…）
+    STRONG_EVALUATION_PATTERN   自己下強烈評價（great／terrible…）；好壞只照抄等級
+⚠️ 只擋清單裡的字：「I'm happy to help」、rough、tough 要放行（tests/test_chat.py【6h】）。
+
+═══════════════════════════════════════════════════════════════════
 ⚠️ 會花錢
 ═══════════════════════════════════════════════════════════════════
 
@@ -125,15 +134,47 @@ CORRELATION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# 寵物口吻（2026-11-22 grill，乙）：說話的是寵物，可以溫暖，但
+#   - 不說自己的情緒、對你的情緒：會讓人有罪惡感，也可能跟標題列寵物的臉（後端心情）對不上
+#   - 不自己下強烈評價：好壞只照抄後端的等級（Good／Bad）
+# 「I'm happy to help」這種客套話放行（只擋清單裡的字）；rough、tough 這類溫和的字放行（使用者選乙）。
+EMOTION_PATTERN = re.compile(
+    r"\bI(?:'m| am| was| feel| felt| get| got)\s+(?:(?:so|really|very|a little|a bit|kind of|quite)\s+)*"
+    r"(?:worried|sad|upset|disappointed|scared|lonely)\b"
+    r"|\bproud of you\b|\bI miss(?:ed)? you\b",
+    re.IGNORECASE,
+)
+# headline 一定要是寵物對你說的話（2026-11-22 手機實測：光寫在 prompt 裡，AI 三題有兩題照舊寫成
+# 「Last night came back marked as Poor」這種旁白）。有 I／my／we／let's／you 其中一個就算。
+VOICE_PATTERN = re.compile(r"\b(?:I|I'm|I've|I'd|I'll|me|my|we|we're|let's|us|our|you|you're|you've|your)\b",
+                           re.IGNORECASE)
+STRONG_EVALUATION_PATTERN = re.compile(
+    r"\b(?:great|amazing|excellent|perfect|fantastic|terrible|awful|horrible)\b", re.IGNORECASE)
+
 # why 那句可以講這兩件（準時放下手機、固定就寢：量測那幾列，沒有按鈕），不算偷塞建議（grill Q4）。
 _WHY_ALLOWED_ACTIONS = {"T1", "T2"}
 
-SYSTEM_PROMPT = """You are Sonnap's sleep assistant inside a sleep app for university students.
+SYSTEM_PROMPT = """You are the user's sleep buddy, the pet that lives in Sonnap, a sleep app for university students.
 
 Answer the user's question using ONLY the facts in the FACTS block. The facts describe this one user.
 
+Voice:
+- Speak as the user's sleep buddy: "I" for yourself, "you" for the user, "we" when looking at something
+  together. Keep it warm and short. Talk to the user, not about the data, for example:
+    not "Your phone went down at 02:39."  ->  "I saw you put your phone down at 02:39."
+    not "The tired mood came from last night's grade."  ->  "My sleepy mood today comes from last night's sleep grade."
+    not "Here are two tips based on last night."  ->  "Let's try two things tonight, based on last night."
+  The numbers in these examples are only examples; use the numbers in FACTS.
+- Never talk about your own feelings or feelings about the user (no "I'm worried", "I'm sad", "I'm upset",
+  "I'm disappointed", "I'm scared", "I'm lonely", "proud of you", "I miss you").
+- Never judge a night or a number yourself with strong words (no great, amazing, excellent, perfect,
+  fantastic, terrible, awful, horrible). Repeat a grade only as the facts give it (for example "marked as
+  Good"). Gentle words such as "rough" or "tough" are fine.
+
 Answer in four parts:
-- "headline": exactly ONE short sentence (at most 25 words) that answers the question directly.
+- "headline": exactly ONE short sentence (at most 25 words) that answers the question directly, said BY the
+  buddy TO the user: it must use "I", "we", "let's" or "you" (see Voice). Never a report line such as
+  "Last night's sleep was marked as Poor."; write "I saw your night was marked as Poor." instead.
 - "why": at most ONE short sentence (at most 30 words) of context or a possible reason, or "" when there
   is nothing to add. A possible reason uses "might" or "can", never "because" or "due to". Do not give
   advice in the headline or why, except putting the phone down on time or keeping a steady bedtime.
@@ -156,6 +197,8 @@ Which night:
 
 Rules:
 - Plain, friendly English. No lists, no headings.
+- Never mention the names of the blocks or fields you were given (FACTS, TIP LIST, "how_pet_mood_works",
+  "decided_by" and so on); say what they mean in everyday words.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
 - If the question needs data that is not in the facts, say plainly that Sonnap does not have that data.
 - PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text for that
@@ -419,6 +462,13 @@ def validate_parts(parts, facts_text, allowed_tips, allowed_links):
 
     if headline:
         problems.extend(validate_answer(text, facts_text))
+    if headline and not VOICE_PATTERN.search(headline):
+        problems.append("the headline reads like a report; say it as the buddy talking to the user "
+                        "(use I, we, let's or you)")
+    if EMOTION_PATTERN.search(text):
+        problems.append("talks about your own feelings or feelings about the user (no worried, sad, proud of you…)")
+    if STRONG_EVALUATION_PATTERN.search(text):
+        problems.append("judges the night with a strong evaluation word (no great, terrible…; repeat the grade as given)")
     if CORRELATION_PATTERN.search(text):
         problems.append("describes a pattern across nights (report the numbers as given, no links between measures)")
     if ns.CAUSAL_PATTERN.search(text):
