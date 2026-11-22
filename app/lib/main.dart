@@ -12,6 +12,7 @@ import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
 import 'widgets/entry_intro.dart';
 import 'widgets/moon_nav_bar.dart';
+import 'widgets/tab_switcher.dart';
 import 'screens/welcome_flow.dart';
 import 'services/plan_goals.dart';
 import 'widgets/plan_goal_picker.dart' show addGoalHabits;
@@ -193,6 +194,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   }
 
   int currentIndex = 0;
+
+  /// 下一次換分頁要不要滑（Replay welcome 降落時要立刻停在首頁，不滑）。
+  bool _tabAnimate = true;
 
   /// 目標就寢時間與提醒開關的**唯一擁有者**。
   ///
@@ -719,7 +723,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           // 長版：跟第一次登入一樣降落到首頁（流程頁淡出、寵物從完成頁的位置飄下來）
           if (widget.entryAnimation) {
             final from = _rectOf(petKey);
-            setState(() => currentIndex = 0);
+            // 直接停在首頁不滑：降落要量寵物在首頁的位置，滑到一半量到的是錯的
+            setState(() {
+              currentIndex = 0;
+              _tabAnimate = false;
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) => _tabAnimate = true);
             _intro.play(long: true, petFrom: from);
           }
           Navigator.of(context).pop();
@@ -832,12 +841,12 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   final _startSleepRequests = StartSleepRequests();
 
   /// 設定頁的分頁位置（2026-11-13 起不在導覽列，從首頁右上角的人像切過來）。
-  /// ⚠️ 刻意留在 IndexedStack 裡、不另開一頁：首頁與設定頁共用同一個就寢時間，
+  /// ⚠️ 刻意留在 TabSwitcher 裡、不另開一頁：首頁與設定頁共用同一個就寢時間，
   ///    在一頁改了另一頁要立刻跟著變（bedtime_sync_test 守著）。
   static const _settingsIndex = 4;
 
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
-  /// 新的值才傳得下去。IndexedStack 依「型別 ＋ 位置」保留 State，
+  /// 新的值才傳得下去。TabSwitcher 每一頁有固定的 key、保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
   /// 助理頁在第幾個分頁（Home · Friends · Insights · Assistant · Settings）。
   static const int _assistantIndex = 3;
@@ -886,7 +895,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         moodChanges: _latest,
         // 打招呼那一則：今天起床的那一晚（照抄 /home 的數字，App 不呼叫 AI）
         greetingNight: _morningReport == null ? null : (date) => _morningReport!.fetchNight(date),
-        // 分頁疊在 IndexedStack 裡：不在畫面上時背景動畫要停，不然在背後一直跑
+        // 分頁疊在 TabSwitcher 裡：不在畫面上時背景動畫要停，不然在背後一直跑
         visible: currentIndex == _assistantIndex,
       ),
       SettingsScreen(
@@ -965,8 +974,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
                       ? 0
                       : (navHeight - MoonNavBar.moonRise).clamp(0.0, double.infinity),
                 ),
-                child: IndexedStack(
+                // 換分頁左右滑＋視差（2026-11-22，tab_switcher.dart）；跟 TabSwitcher 一樣所有分頁一直留著
+                child: TabSwitcher(
                   index: currentIndex,
+                  animate: widget.entryAnimation && _tabAnimate,
                   children: _buildPages(account),
                 ),
               ),

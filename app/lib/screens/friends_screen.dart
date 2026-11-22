@@ -133,7 +133,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     return r.isOk;
   }
 
-  /// 在設定頁換了寵物（好友頁一直開在 IndexedStack 裡）：送給後端，再重讀小鎮與動態牆。
+  /// 在設定頁換了寵物（好友頁一直開在 TabSwitcher 裡）：送給後端，再重讀小鎮與動態牆。
   Future<void> _onPetChanged() async {
     if (!await _syncPetSpecies() || !mounted) return;
     await _loadTown();
@@ -553,7 +553,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   /// 第一次進 Friends 分頁時問一次要不要分享即時狀態（2026-11-19 使用者定 Q3：預設關、問一次）。
-  /// ⚠️ 不在 initState 問：好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來。
+  /// ⚠️ 不在 initState 問：好友頁在 TabSwitcher 裡，App 一打開就建好了，會在首頁上跳出來。
   /// ⚠️ 連不到後端、舊版後端沒有這一項、按旁邊關掉 → **不記成問過**，下次再問
   ///    （同建帳號那條：暫時的失敗不能記成永久的決定）。
   Future<void> _maybeAskLiveSharing() async {
