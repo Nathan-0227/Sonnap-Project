@@ -47,8 +47,10 @@ R_GRADE = "等級照抄"
 R_HAS_RECORD = "有紀錄就答"
 
 # 「沒有紀錄」的說法（那一晚明明有紀錄時不准說）
+# ⚠️「no record of your blood oxygen」講的是沒有那一項資料，不是那一晚沒紀錄 → record 後面接 of 不算
+#    （2026-11-22 第二次跑誤判過）
 NO_RECORD = re.compile(
-    r"\bno record\b|\b(?:don't|doesn't|do not|does not|didn't|did not) have (?:a |any )?record"
+    r"\bno record\b(?! of)|\b(?:don't|doesn't|do not|does not|didn't|did not) have (?:a |any )?record\b(?! of)"
     r"|\bnothing (?:recorded|logged)\b|\bisn't recorded\b|\bwasn't recorded\b", re.IGNORECASE)
 
 # 「沒有這份資料／沒有紀錄」的說法
@@ -384,6 +386,7 @@ def main():
     ap.add_argument("--base", default="http://127.0.0.1:8000")
     ap.add_argument("--dry-run", action="store_true", help="只列題目與預期，不打 AI")
     ap.add_argument("--yes", action="store_true", help="不問 y/N 直接跑")
+    ap.add_argument("--only", help="只跑這幾題，例如 Q4,Q18（追問會連它接的那一題一起跑）")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -404,6 +407,10 @@ def main():
     recorded = _recorded(behavior, wearable)
     watch = {r["date"] for r in wearable if r.get("final_score") is not None}
     questions = build_questions(today, latest, recorded, watch)
+    if args.only:
+        want = {x.strip().upper() for x in args.only.split(",")}
+        want |= {q["after"] for q in questions if q["id"] in want and q.get("after")}
+        questions = [q for q in questions if q["id"] in want]
 
     status, health = _http(args.base, "/health", timeout=5)
     if status != 200:
@@ -454,7 +461,7 @@ def main():
         print(f"  {q['id']:>4} {'✓' if not bad else '✗'} {q['text']}")
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    path = REPORT_DIR / f"{datetime.now():%Y%m%d-%H%M}.md"
+    path = REPORT_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.md"
     path.write_text(_report(rows, homes, today, latest_s), encoding="utf-8")
 
     failed = [(q, [c for c in checks if c[1] is False]) for q, _, _, _, checks in rows]
