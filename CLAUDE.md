@@ -482,6 +482,16 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 門檻與 XP 是**設計決策、沒有文獻**（不進分數，不受紅線 2 約束） | — |
 | ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `badges_earned`、`game_activity`、`habit_days`） | 後端啟動不建表 |
 
+**App（`feature/rewards-shelf`，`screens/rewards_screen.dart`）**：房間（`assets/backgrounds/rewards_room.jpg`，使用者生成；寵物站在地毯 `kRewardsRugY`＝0.80，換圖要重量）→ 金色「N rewards ready」＋ **Claim all**（挑戰與徽章依序各送一次，XP 照抄後端回的加總；失敗照抄後端那句）→ 徽章架（一格一個系列，點開 `showBadgeSheet` 看 5 級）→ 最近 7 晚（+0 照寫）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 級數、進度、拿到的日期、領過沒**照抄 `badge_series`**，Dart 不從 value 與門檻自己判 | 拿到的會被收回（後端記的不收回） |
+| 圖 `assets/badges/<系列>.png`（使用者生成的兩張圖表切的，一個系列一張）；外框顏色＝級數：銅→銀→金→紫→彩虹；沒拿到是灰階變淡＋鎖；缺圖退回獎盃圖示 | — |
+| 紅點：那一級**第一次在獎勵頁出現**時亮（`BadgeSeenStore`，只在手機上），進來就記成看過、下次不亮，不跳彈窗 | 一次十幾個彈窗太吵 |
+| 寵物用首頁同一份心情（入口傳 `mood`）、穿衣櫃那一件 | 紅線 5：心情只來自後端 |
+| 習慣：`PlanStore.onDaySummary` 在每次勾／取消勾之後給「那一天要做的裡面勾了幾條／要做幾條」，MainPage 送 `POST /habits/day`，送不出去不補送 | — |
+
 ### ✅ 衣櫃改版（2026-11-19，PR #148，`feature/closet-redesign`）
 
 照使用者給的遊戲換裝參考圖（`screens/closet_screen.dart`）：上半是使用者生成的更衣室 `assets/backgrounds/closet_room.jpg`，寵物站在地毯上；最上面大字是**暱稱**（寵物沒有名字）＋「Lv. N」；左上 ‹＝**不存離開**、右上 ✓＝存起來（取代底部 Confirm 長鈕，有改才亮）；分類是一排菱形鈕（All · 頭 · 臉 · 脖子）；格子選中金框＋勾、身上那件底下小點、沒解鎖變暗＋鎖＋Lv。**一次只穿一件**（後端只存一件）。
