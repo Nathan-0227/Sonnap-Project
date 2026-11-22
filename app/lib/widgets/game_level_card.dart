@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/game_service.dart';
+import '../theme/app_accent.dart';
 
 /// 首頁的等級卡：等級、成長階段、這一級的進度、XP 從哪來。
 ///
@@ -84,7 +85,7 @@ class GameLevelCard extends StatelessWidget {
               value: state.progress,
               minHeight: 8,
               backgroundColor: Colors.white12,
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF8B6DFF)),
+              valueColor: AlwaysStoppedAnimation(accentOf(context)),
             ),
           ),
           const SizedBox(height: 8),

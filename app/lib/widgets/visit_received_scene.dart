@@ -15,6 +15,7 @@ import '../services/friends_service.dart';
 import 'home_pet.dart';
 import 'streak_card.dart' show speciesOf;
 import 'visit_gift_sheet.dart';
+import '../theme/app_accent.dart';
 
 /// 播完：true＝按了 See all（接著開清單），false／null＝直接關掉。
 Future<bool?> showVisitReceivedScene(
@@ -259,7 +260,7 @@ class _VisitReceivedSceneState extends State<VisitReceivedScene> with SingleTick
                               key: const Key('visit-received-next'),
                               onPressed: _next,
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF7657FF),
+                                backgroundColor: accentOf(context),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                               ),
                               child: Text(

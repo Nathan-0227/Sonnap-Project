@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
 import '../services/friends_service.dart';
 import '../services/key_value_store.dart';
 import '../services/visits_seen.dart';
@@ -443,7 +444,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
     final r = _result;
     if (r == null) {
-      return const [Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))];
+      return const [Center(child: CircularProgressIndicator())];
     }
     final state = r.value;
     if (!r.isOk || state == null) {
@@ -568,7 +569,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   width: 22,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF7657FF) : Colors.transparent,
+                    color: selected ? accentOf(context) : Colors.transparent,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -602,7 +603,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   /// 小鎮還沒好的時候（載入中、連不到後端）。好了之後整頁換成 [_townFull]。
   List<Widget> _townTab(FriendsState state) {
     if (_town == null) {
-      return const [Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))];
+      return const [Center(child: CircularProgressIndicator())];
     }
     return [
       _card(const Text(

@@ -478,6 +478,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | ⚠️ `showReportSheet` 的外框是透明的，**面板的底色要內容自己畫**（`kSettingsSheetColor`）；`settings_screen_test` 守著 | 11-22 實機：Language 點開整片透明 |
 | Data 收成一列，右邊照實寫 **Live／Bundled**（退回打包檔不能省），點開是原本那一整塊 `DataStatusSection` | 使用者以為看到的是即時資料 |
 | 等級、邀請碼照抄後端；連不到就不畫那兩顆；Edit name 走 `AccountService.rename`（同 Replay welcome），沒有後端照實說 | — |
+| **主題色＋Reduce motion**（`theme/app_accent.dart`，Q5 A＋C）：紫／藍／粉／綠，只存在手機上、預設紫。App 的 `ThemeData` 由它產生（**底子維持 Flutter 預設的亮色**，只換 seed 與 primary——換成暗色的話對話框、輸入框會悄悄變樣）；介面的強調色一律 `accentOf(context)`／`accentSoftOf(context)`，**不要再寫死 `0xFF7657FF`**。🔴 **圖表裡有意思的顏色不跟著換**：睡著的淡紫（`NightSheets.asleepColor`）、睡眠階段、報告配色、心情顏色。Reduce motion 包在 `MaterialApp.builder`（`applyReduceMotion`），跟系統設定任一個開就把 `MediaQuery.disableAnimations` 設成 true——全 App 的動畫本來就看它。`app_accent_test` 守著 | 寫死的紫色換了主題也不會變；圖表換色後同一個顏色不再代表同一件事 |
 
 ### ✅ 徽章（2026-11-22 grill，`feature/badges-backend`；獎勵頁「獎盃架」的後端）
 
