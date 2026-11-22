@@ -62,6 +62,10 @@ Future<void> _pump(WidgetTester tester, ChatService chat, {KeyValueStore? store}
   await tester.pump();
 }
 
+/// 日期膠囊（key 是 assistant-period-<第幾則>）。
+final _periodChip = find.byWidgetPredicate(
+    (w) => w.key is ValueKey<String> && (w.key as ValueKey<String>).value.startsWith('assistant-period-'));
+
 Future<void> _ask(WidgetTester tester, String q) async {
   await tester.enterText(find.byType(TextField).first, q);
   await tester.tap(find.byIcon(Icons.send_rounded).first);
@@ -227,14 +231,39 @@ void main() {
       await _pump(tester, _StubChat(ChatResult(ChatStatus.ok, answer: 'x', reply: withPeriod)));
       await _ask(tester, 'How was last week?');
       expect(find.text('Nov 17 – Nov 23'), findsOneWidget);
-      final label = tester.getTopLeft(find.byKey(const Key('assistant-period')));
+      final label = tester.getTopLeft(_periodChip);
       final head = tester.getTopLeft(find.byKey(const Key('assistant-headline')));
       expect(label.dy, lessThan(head.dy));
 
       await tester.pumpWidget(const SizedBox());
       await _pump(tester, _StubChat(_ok()));
       await _ask(tester, 'hi');
-      expect(find.byKey(const Key('assistant-period')), findsNothing);
+      expect(_periodChip, findsNothing);
+    });
+
+    // 11-22 實機：問了幾個不同的晚上之後整片對話變紅畫面
+    // （'_elements.contains(element)' is not true）。原因：每顆日期膠囊都用同一個 key，
+    // 列表重建時用 key 找新位置，兩顆被對到同一格、其中一個元素被弄丟。
+    testWidgets('問好幾個不同的晚上、上下捲動：日期膠囊不會讓對話壞掉', (tester) async {
+      ChatResult night(String date) => ChatResult(ChatStatus.ok,
+          answer: 'x', reply: replyFromJson({..._backendBody, 'period': {'kind': 'night', 'date': date}}));
+      final chat = _StubChat(night('2026-11-19'));
+      await _pump(tester, chat);
+      tester.view.physicalSize = const Size(412, 900); // 手機大小：上面幾則捲出畫面外
+      await tester.pump();
+      final list = find.byWidgetPredicate((w) => w is ListView && w.scrollDirection == Axis.vertical);
+      final dates = ['2026-11-19', '2026-11-18', '2026-11-19', '2026-11-17', '2026-11-18', '2026-11-16'];
+      for (final d in dates) {
+        chat.result = night(d);
+        await _ask(tester, 'How was $d?');
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.drag(list, const Offset(0, 600));
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.drag(list, const Offset(0, -1200));
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(tester.takeException(), isNull, reason: d);
+      }
+      expect(find.text('Monday, Nov 16'), findsOneWidget);
     });
   });
 }
