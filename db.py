@@ -566,6 +566,26 @@ CREATE TABLE IF NOT EXISTS invite_codes (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- ── email＋密碼登入（2026-11-22，auth.py）──────────────────────────
+-- 只用來「換手機、重裝 App 時拿回原本的 user_id」。可有可無：沒設的人照舊只靠 user_id。
+-- ⚠️ 刻意**不放進 users 表**：GET /users/{id} 回的是 SELECT * FROM users，
+--    放進去雜湊就會跟著回到手機上。
+-- 🔴 password_hash 是 scrypt 雜湊，原文不存在任何地方；忘了就重設（reset_password.py）。
+-- 🔴 export_teammate.py 不複製這張表（EXCLUDED_TABLES），測試守著。
+CREATE TABLE IF NOT EXISTS user_logins (
+    user_id         TEXT NOT NULL,
+    email           TEXT NOT NULL,         -- auth.normalize_email 過的（小寫、去空白）
+    password_hash   TEXT NOT NULL,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until    TEXT,                  -- NULL＝沒鎖
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_logins_email ON user_logins(email);
+
 -- 好友關係是雙向的，一段關係存兩列（A→B、B→A）。查「我的朋友」只要一個
 -- WHERE，不必 OR 兩個方向。⚠️ 兩個欄位都掛 CASCADE：任何一方退出，
 -- 這段關係兩邊都要消失（知情同意書承諾「退出即刪除」）。
@@ -926,7 +946,7 @@ def init_db(db_path=None, verbose=False):
             #    理由見 db_backend 的檔頭：SCHEMA 裡大半是註解，抄兩份
             #    就有兩個定義處，而漂移沒有錯誤訊息。
             for stmt in db_backend.mysql_ddl(SCHEMA):
-                if stmt.lstrip().upper().startswith("CREATE INDEX"):
+                if stmt.lstrip().upper().startswith(("CREATE INDEX", "CREATE UNIQUE INDEX")):
                     conn.ensure_index(stmt)   # MySQL 沒有 IF NOT EXISTS
                 else:
                     conn.execute(stmt)
@@ -2469,6 +2489,81 @@ def get_habit_days(user_id, db_path=None):
 
 # 不含 0/O/1/I：朋友是用唸的、用抄的在傳這個碼，長得像的字元會抄錯。
 _INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# ═══════════════════════════════════════════════════════════════════
+# email＋密碼登入（規則在 auth.py；這裡只存取）
+# ═══════════════════════════════════════════════════════════════════
+
+def get_login(user_id, db_path=None):
+    """這個帳號的登入資料；沒設過回 None。⚠️ 含 password_hash，不要原封不動回給 API。"""
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT * FROM user_logins WHERE user_id = ?", (user_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_login_by_email(email, db_path=None):
+    conn = connect(db_path)
+    try:
+        row = conn.execute("SELECT * FROM user_logins WHERE email = ?", (email,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_login(user_id, email, password_hash, db_path=None):
+    """
+    設定登入。回傳 "ok" | "already_set" | "email_taken"。
+    兩個人同時搶同一個 email 時由唯一索引擋下（第二個寫入會失敗 → email_taken）。
+    """
+    conn = connect(db_path)
+    try:
+        if conn.execute("SELECT 1 FROM user_logins WHERE user_id = ?", (user_id,)).fetchone():
+            return "already_set"
+        if conn.execute("SELECT 1 FROM user_logins WHERE email = ?", (email,)).fetchone():
+            return "email_taken"
+        now = now_iso()
+        try:
+            conn.execute(
+                """INSERT INTO user_logins
+                   (user_id, email, password_hash, failed_attempts, locked_until, created_at, updated_at)
+                   VALUES (?, ?, ?, 0, NULL, ?, ?)""",
+                (user_id, email, password_hash, now, now))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            return "email_taken"
+        return "ok"
+    finally:
+        conn.close()
+
+
+def set_login_password(user_id, password_hash, db_path=None):
+    """換密碼，並把錯誤次數與鎖清掉。回傳有沒有這一列。"""
+    conn = connect(db_path)
+    try:
+        cur = conn.execute(
+            """UPDATE user_logins SET password_hash = ?, failed_attempts = 0,
+                   locked_until = NULL, updated_at = ? WHERE user_id = ?""",
+            (password_hash, now_iso(), user_id))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def set_login_failures(user_id, failed_attempts, locked_until, db_path=None):
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            "UPDATE user_logins SET failed_attempts = ?, locked_until = ? WHERE user_id = ?",
+            (failed_attempts, locked_until, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 INVITE_CODE_LENGTH = 6
 
 

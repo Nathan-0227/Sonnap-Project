@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_accent.dart';
 import '../services/key_value_store.dart';
+import '../services/login_service.dart';
 import '../services/pet_choice.dart';
 import '../widgets/entry_intro.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/login_forms.dart';
 import '../widgets/plan_goal_picker.dart';
 import '../widgets/sleep_dial.dart';
 
 /// 第一次登入的流程（2026-11-22 grill Q9–Q14，取代原本只有一頁暱稱的 OnboardingScreen）。
 ///
-/// 歡迎 → 暱稱 → 寵物 → 作息 → 想改善什麼 → 權限 → 完成。每一頁一件事、上面一排進度點，**每一頁都能跳過**。
+/// 歡迎 → 暱稱 →（設登入，可跳過）→ 寵物 → 作息 → 想改善什麼 → 權限 → 完成。
+/// 設登入那一步只有連得到後端、不是 Replay 時才有（[WelcomeFlow.offerLogin]）；跳過暱稱就沒有它（沒有帳號可以設）。
+/// 歡迎頁另有 **I already have an account**（[WelcomeFlow.onHaveAccount]）：email＋密碼拿回原本的帳號。每一頁一件事、上面一排進度點，**每一頁都能跳過**。
 /// 「想改善什麼」照 `睡眠計畫.md`「目標 → 建議」（11-22 使用者審過），元件跟計畫頁的 Help me pick 共用。
 ///
 /// ═══════════════════════════════════════════════════════════════════
@@ -23,7 +27,7 @@ import '../widgets/sleep_dial.dart';
 /// ⚠️ 權限說明要跟實際做的事一致（2026-11-22 查過原生端）：讀的是螢幕亮暗、解鎖的時間與每個 App 開了多久；
 ///    送出手機的只有時間與手機型號，App 名字只在手機上顯示。改原生端就要回來改這段話。
 
-enum WelcomeStep { welcome, name, pet, schedule, goals, permissions, done }
+enum WelcomeStep { welcome, name, login, pet, schedule, goals, permissions, done }
 
 /// 走完流程要存的東西。[name] 是 null＝跳過暱稱（不建帳號）。
 /// [goals] 是空的＝跳過「想改善什麼」；[habits] 是推薦頁勾著的那幾條（建議清單的 id）。
@@ -34,8 +38,14 @@ class WelcomeResult {
   final TimeOfDay wake;
   final List<String> goals;
   final List<String> habits;
+
+  /// 設登入那一步填的；null＝跳過（或這一步不存在）。建好帳號之後才送（同暱稱，Q12）。
+  final String? email;
+  final String? password;
   const WelcomeResult({
     required this.name,
+    this.email,
+    this.password,
     required this.bedtime,
     required this.wake,
     this.goals = const [],
@@ -87,7 +97,15 @@ class WelcomeFlow extends StatefulWidget {
   /// 歡迎頁的開場動畫（星星亮起、寵物浮上來、字依序進來；`WelcomeOpening`）。只有正式的 App 打開，測試預設關。
   final bool animateOpening;
 
+  /// 暱稱之後多一步「設登入」（可跳過）。沒有後端的 build 沒有這一步。Replay 一律沒有（設定頁有 Set up login）。
+  final bool offerLogin;
+
+  /// 歡迎頁的 I already have an account；null＝不畫（沒有後端、或 Replay）。
+  final VoidCallback? onHaveAccount;
+
   const WelcomeFlow({
+    this.offerLogin = false,
+    this.onHaveAccount,
     this.donePetKey,
     this.animateOpening = false,
     super.key,
@@ -124,6 +142,11 @@ class _WelcomeFlowState extends State<WelcomeFlow>
   bool _notifyAsked = false;
   bool _finishing = false;
   String? _finishProblem;
+  final _email = TextEditingController();
+  final _pw = TextEditingController();
+  final _pw2 = TextEditingController();
+  String? _loginError;
+  bool _loginSkipped = true;
 
   /// 開場動畫（null＝不播）。
   AnimationController? _opening;
@@ -164,6 +187,9 @@ class _WelcomeFlowState extends State<WelcomeFlow>
     WidgetsBinding.instance.removeObserver(this);
     _opening?.dispose();
     _name.dispose();
+    _email.dispose();
+    _pw.dispose();
+    _pw2.dispose();
     super.dispose();
   }
 
@@ -178,15 +204,36 @@ class _WelcomeFlowState extends State<WelcomeFlow>
     if (mounted && on != _usageOn) setState(() => _usageOn = on);
   }
 
-  static const _order = WelcomeStep.values;
+  List<WelcomeStep> get _order => [
+        for (final s in WelcomeStep.values)
+          if (s != WelcomeStep.login || (widget.offerLogin && !widget.replay)) s,
+      ];
+
+  /// 這一頁要不要跳過：沒有暱稱＝不建帳號，就沒有登入可以設。
+  bool _passOver(WelcomeStep s) => s == WelcomeStep.login && _nameSkipped;
 
   void _go(WelcomeStep step) {
     setState(() => _step = step);
     if (step == WelcomeStep.done) _finish();
   }
 
-  void _next() => _go(_order[_step.index + 1]);
-  void _back() => _go(_order[_step.index - 1]);
+  void _next() {
+    final o = _order;
+    var i = o.indexOf(_step) + 1;
+    while (_passOver(o[i])) {
+      i++;
+    }
+    _go(o[i]);
+  }
+
+  void _back() {
+    final o = _order;
+    var i = o.indexOf(_step) - 1;
+    while (_passOver(o[i])) {
+      i--;
+    }
+    _go(o[i]);
+  }
 
   Future<void> _finish() async {
     setState(() {
@@ -194,8 +241,12 @@ class _WelcomeFlowState extends State<WelcomeFlow>
       _finishProblem = null;
     });
     final name = _nameSkipped ? null : _name.text.trim();
+    final hasName = name != null && name.isNotEmpty;
+    final withLogin = hasName && !_loginSkipped && _order.contains(WelcomeStep.login);
     final problem = await widget.onFinish(WelcomeResult(
-      name: (name == null || name.isEmpty) ? null : name,
+      name: hasName ? name : null,
+      email: withLogin ? _email.text.trim() : null,
+      password: withLogin ? _pw.text : null,
       bedtime: _bed,
       wake: _wake,
       goals: _goals,
@@ -303,6 +354,9 @@ class _WelcomeFlowState extends State<WelcomeFlow>
       case WelcomeStep.name:
         _nameSkipped = true;
         _nameError = null;
+      case WelcomeStep.login:
+        _loginSkipped = true;
+        _loginError = null;
       case WelcomeStep.schedule:
         _bed = widget.initialBedtime;
         _wake = widget.initialWake;
@@ -318,6 +372,7 @@ class _WelcomeFlowState extends State<WelcomeFlow>
   Widget _page() => switch (_step) {
     WelcomeStep.welcome => _welcome(),
     WelcomeStep.name => _namePage(),
+    WelcomeStep.login => _loginPage(),
     WelcomeStep.pet => _petPage(),
     WelcomeStep.schedule => _schedulePage(),
     WelcomeStep.goals => _goalsPage(),
@@ -403,7 +458,21 @@ class _WelcomeFlowState extends State<WelcomeFlow>
         ])),
       ],
     ),
-    bottom: _primary('Get started', _next, key: const Key('welcome-start')),
+    bottom: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _primary('Get started', _next, key: const Key('welcome-start')),
+        if (widget.onHaveAccount case final have?) ...[
+          const SizedBox(height: 8),
+          TextButton(
+            key: const Key('welcome-have-account'),
+            onPressed: have,
+            child: const Text('I already have an account',
+                style: TextStyle(color: Color(0xFFC9B8FF), fontSize: 15, fontWeight: FontWeight.w700, fontFamily: _font)),
+          ),
+        ],
+      ],
+    ),
   );
 
   Widget _point(IconData icon, String text) => Padding(
@@ -426,7 +495,9 @@ class _WelcomeFlowState extends State<WelcomeFlow>
 
   Widget _namePage() => _layout(
     title: 'What should we call you?',
-    subtitle: 'A nickname is enough. No email, no password.',
+    subtitle: widget.offerLogin && !widget.replay
+        ? 'A nickname is enough.'
+        : 'A nickname is enough. No email, no password.',
     body: TextField(
       key: const Key('welcome-name'),
       controller: _name,
@@ -456,6 +527,57 @@ class _WelcomeFlowState extends State<WelcomeFlow>
     }
     _nameSkipped = false;
     _nameError = null;
+    _next();
+  }
+
+  // ── 2b 設登入（可跳過）──────────────────────────────────────
+
+  Widget _loginPage() => _layout(
+    title: 'Want to log in on another phone?',
+    subtitle: "Set an email and password to get your account back later. "
+        "Your email is only your login name — we don't send emails. You can skip this.",
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LoginField(
+          key: const Key('welcome-login-email'),
+          controller: _email,
+          hint: 'Email',
+          keyboard: TextInputType.emailAddress,
+          autofill: const [AutofillHints.email],
+        ),
+        const SizedBox(height: 10),
+        LoginField(
+          key: const Key('welcome-login-password'),
+          controller: _pw,
+          hint: 'Password (at least $kMinPasswordLength characters)',
+          obscure: true,
+          autofill: const [AutofillHints.newPassword],
+        ),
+        const SizedBox(height: 10),
+        LoginField(
+          key: const Key('welcome-login-password-again'),
+          controller: _pw2,
+          hint: 'Password again',
+          obscure: true,
+          action: TextInputAction.done,
+          onSubmitted: (_) => _submitLogin(),
+        ),
+        if (_loginError case final p?) LoginProblem(p),
+      ],
+    ),
+    bottom: _primary('Next', _submitLogin),
+  );
+
+  void _submitLogin() {
+    final email = _email.text.trim();
+    final problem = email.isEmpty ? 'Enter your email, or tap Skip.' : newPasswordProblem(_pw.text, _pw2.text);
+    if (problem != null) {
+      setState(() => _loginError = problem);
+      return;
+    }
+    _loginSkipped = false;
+    _loginError = null;
     _next();
   }
 

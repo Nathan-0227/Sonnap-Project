@@ -5,8 +5,10 @@ import '../services/account_service.dart';
 import '../services/alarm.dart';
 import '../services/game_service.dart';
 import '../services/key_value_store.dart';
+import '../services/login_service.dart';
 import '../services/pet_choice.dart';
 import '../theme/app_accent.dart';
+import '../widgets/login_forms.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/settings_list.dart';
 import '../widgets/sleep_schedule_sheet.dart';
@@ -16,6 +18,8 @@ import '../widgets/week_mood_strip.dart' show MoodFace;
 ///
 /// - 最上面是**寵物名片**：寵物頭（照首頁那一份心情，沒有就是 bored）、暱稱、
 ///   三顆膠囊（Lv → 獎勵頁、Dog/Cat、邀請碼點了複製）、Edit name、Change pet。
+/// - 名片底下 **Account**（2026-11-22）：還沒設登入＝一列 Set up login；設好＝Email、Change password、Log out。
+///   建置參數那支 APK 不能登出（照實寫原因）。API 照舊用 user_id 認人，密碼只是用來拿回 id。
 /// - 底下分組：Sleep（作息轉盤、提醒開關、守門）／Friends／Data & devices／App。
 /// - 🔴 **不放按了沒反應的東西**：原本的 Appearance、Language、Log Out、名片上的 email
 ///   都只會跳「以後才有」。Appearance（主題色、減少動態效果）與登入（Log out、Set up login）
@@ -71,6 +75,18 @@ class SettingsScreen extends StatefulWidget {
   /// 左上角的返回（回首頁）。null＝不畫。
   final VoidCallback? onBack;
 
+  /// 登入（2026-11-22）：這個帳號設了 email＋密碼沒有。null＝這支 build 沒有後端或沒有帳號，
+  /// 整組 Account 不畫；拿不到（回 null）也不畫——不畫一列按了才說連不上的。
+  final Future<LoginInfo?> Function()? loadLogin;
+
+  /// 設定登入／改密碼：回 null＝成功，否則是照實寫的那句（後端的 message）。
+  final LoginSubmit? onSetUpLogin;
+  final Future<String?> Function(String oldPassword, String newPassword)? onChangePassword;
+
+  /// 登出。null＝這支 build 不能登出，原因寫在 [logOutBlockedReason]。
+  final Future<void> Function()? onLogOut;
+  final String? logOutBlockedReason;
+
   /// 這一頁現在在不在畫面上（IndexedStack）：一出現就重讀等級與邀請碼。
   final bool visible;
 
@@ -100,6 +116,11 @@ class SettingsScreen extends StatefulWidget {
     this.dataSection,
     this.dataLive,
     this.onBack,
+    this.loadLogin,
+    this.onSetUpLogin,
+    this.onChangePassword,
+    this.onLogOut,
+    this.logOutBlockedReason,
     this.visible = true,
     this.store = const PlatformKeyValueStore(),
     this.alarmScheduler = const PlatformAlarmScheduler(),
@@ -118,6 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _mood;
   GameState? _game;
   String? _invite;
+  LoginInfo? _login;
 
   @override
   void initState() {
@@ -169,6 +191,159 @@ class _SettingsScreenState extends State<SettingsScreen> {
     widget.loadInviteCode?.call().then((c) {
       if (mounted && c != null && c.isNotEmpty) setState(() => _invite = c);
     }, onError: (_) {});
+    widget.loadLogin?.call().then((l) {
+      if (mounted && l != null) setState(() => _login = l);
+    }, onError: (_) {});
+  }
+
+  // ── 登入（2026-11-22）──────────────────────────────────────────
+
+  /// 面板：標題＋說明＋表單（底色自己畫，同 [_openSheet]）。
+  Future<void> _formSheet(Key key, String title, String note, Widget form) => showReportSheet<void>(
+        context: context,
+        builder: (context) => Container(
+          key: key,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: kSettingsSheetColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          // 鍵盤跳出來時表單跟著往上推
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Text(note, style: const TextStyle(color: _sub, fontSize: 14, height: 1.4)),
+                  const SizedBox(height: 18),
+                  form,
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+  void _setUpLogin() {
+    final submit = widget.onSetUpLogin;
+    if (submit == null) return;
+    _formSheet(
+      const Key('setup-login-sheet'),
+      'Set up login',
+      "Use it to get this account back on another phone. Your email is only your login name — we don't send emails.",
+      SetUpLoginForm(onSubmit: (email, pw) async {
+        final problem = await submit(email, pw);
+        if (problem == null && mounted) {
+          Navigator.of(context).pop();
+          setState(() => _login = LoginInfo(hasLogin: true, email: email.trim().toLowerCase()));
+          _say('Login saved.');
+        }
+        return problem;
+      }),
+    );
+  }
+
+  void _changePassword() {
+    final submit = widget.onChangePassword;
+    if (submit == null) return;
+    _formSheet(
+      const Key('change-password-sheet'),
+      'Change password',
+      'Enter your current password, then the new one twice.',
+      ChangePasswordForm(onSubmit: (old, pw) async {
+        final problem = await submit(old, pw);
+        if (problem == null && mounted) {
+          Navigator.of(context).pop();
+          _say('Password changed.');
+        }
+        return problem;
+      }),
+    );
+  }
+
+  Future<void> _logOut() async {
+    final logOut = widget.onLogOut;
+    if (logOut == null) return;
+    final email = _login?.email ?? 'your email';
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('log-out-dialog'),
+        backgroundColor: const Color(0xFF10265A),
+        title: const Text('Log out?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        content: Text(
+          'Your nights stay on Sonnap. Log in with $email to get them back. '
+          'Your chat with your buddy is cleared from this phone.',
+          style: const TextStyle(color: _sub, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: _sub)),
+          ),
+          TextButton(
+            key: const Key('log-out-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log out', style: TextStyle(color: Color(0xFFFF9C9C), fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) await logOut();
+  }
+
+  /// 名片底下：還沒設＝一列 Set up login；設好＝Email／Change password／Log out。
+  /// 拿不到登入狀態（連不到、舊版後端）就整組不畫。
+  Widget _accountGroup() {
+    final login = _login;
+    if (widget.loadLogin == null || login == null) return const SizedBox.shrink();
+    if (!login.hasLogin) {
+      return SettingsGroup(title: 'ACCOUNT', rows: [
+        SettingsRow(
+          key: const Key('settings-setup-login'),
+          icon: Icons.key_rounded,
+          color: const Color(0xFF2E9B6F),
+          title: 'Set up login',
+          subtitle: 'Email and password, to get this account back on another phone',
+          onTap: _setUpLogin,
+        ),
+      ]);
+    }
+    final blocked = widget.onLogOut == null;
+    return SettingsGroup(title: 'ACCOUNT', rows: [
+      SettingsRow(
+        key: const Key('settings-email'),
+        icon: Icons.alternate_email_rounded,
+        color: const Color(0xFF2E9B6F),
+        title: 'Email',
+        value: login.email ?? '—',
+      ),
+      SettingsRow(
+        key: const Key('settings-change-password'),
+        icon: Icons.key_rounded,
+        color: const Color(0xFF5B6B9A),
+        title: 'Change password',
+        onTap: _changePassword,
+      ),
+      Opacity(
+        opacity: blocked ? 0.5 : 1,
+        child: SettingsRow(
+          key: const Key('settings-log-out'),
+          icon: Icons.logout_rounded,
+          color: const Color(0xFFD2557A),
+          title: 'Log out',
+          subtitle: blocked ? widget.logOutBlockedReason : null,
+          trailing: blocked ? const SizedBox.shrink() : null,
+          onTap: blocked ? null : _logOut,
+        ),
+      ),
+    ]);
   }
 
   Future<void> _loadWake() async {
@@ -331,6 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 16),
                 _profileCard(),
                 const SizedBox(height: 20),
+                _accountGroup(),
                 SettingsGroup(title: 'SLEEP', rows: [
                   SettingsRow(
                     key: const Key('settings-sleep-schedule'),

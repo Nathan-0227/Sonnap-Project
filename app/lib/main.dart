@@ -16,6 +16,8 @@ import 'widgets/entry_intro.dart';
 import 'widgets/moon_nav_bar.dart';
 import 'widgets/tab_switcher.dart';
 import 'screens/welcome_flow.dart';
+import 'screens/log_in_screen.dart';
+import 'services/login_service.dart';
 import 'services/plan_goals.dart';
 import 'widgets/plan_goal_picker.dart' show addGoalHabits;
 import 'services/usage_stats.dart';
@@ -90,8 +92,12 @@ class SonnapApp extends StatelessWidget {
   /// 測試預設關，不然每一條都要多等兩秒、而且播的時候點不到東西。
   final bool entryAnimation;
 
+  /// email＋密碼登入（2026-11-22）。測試注入假的；null＝照建置參數（有後端就打真的）。
+  final LoginApi? loginApi;
+
   const SonnapApp({
     super.key,
+    this.loginApi,
     this.store,
     this.accounts,
     this.reminders,
@@ -120,6 +126,7 @@ class SonnapApp extends StatelessWidget {
         nightly: nightly,
         welcomePermissions: welcomePermissions,
         entryAnimation: entryAnimation,
+        loginApi: loginApi,
       ),
     ),
     );
@@ -140,8 +147,12 @@ class MainPage extends StatefulWidget {
   /// 進場動畫（見 [SonnapApp.entryAnimation]）。
   final bool entryAnimation;
 
+  /// 見 [SonnapApp.loginApi]。
+  final LoginApi? loginApi;
+
   const MainPage({
     super.key,
+    this.loginApi,
     this.store,
     this.accounts,
     this.reminders,
@@ -305,6 +316,15 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         baseUrl: ApiSleepRepository.configuredBaseUrl,
         store: widget.store ?? const PlatformKeyValueStore(),
       );
+
+  /// email＋密碼登入（2026-11-22）。null＝這支 build 沒有後端。
+  /// ⚠️ API 照舊用 user_id 認人：登入只是用 email＋密碼換回原本的 id。
+  late final LoginApi? _loginApi = widget.loginApi ??
+      (ApiSleepRepository.configuredBaseUrl.trim().isEmpty
+          ? null
+          : HttpLoginApi(baseUrl: ApiSleepRepository.configuredBaseUrl));
+
+  AccountStorage get _accountStorage => AccountStorage(widget.store ?? const PlatformKeyValueStore());
 
   /// 把偵測到的就寢時刻送去後端。
   ///
@@ -679,9 +699,77 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final name = r.name;
     if (name == null) return null;
     _pendingAccount = await _createAccount(name);
-    if (_pendingAccount != null) return null;
-    return "We couldn't reach Sonnap's server, so your nickname wasn't saved. "
-        "You can still use Sonnap, and we'll ask again next time.";
+    final pending = _pendingAccount;
+    if (pending == null) {
+      return "We couldn't reach Sonnap's server, so your nickname wasn't saved. "
+          "You can still use Sonnap, and we'll ask again next time.";
+    }
+    // 設登入那一步填了：帳號建好才送（同暱稱，Q12）。送不出去不影響帳號，設定頁還能再設。
+    final email = r.email, password = r.password, api = _loginApi;
+    if (email != null && password != null && api != null && pending.userId != null) {
+      final out = await api.setUp(pending.userId!, email, password);
+      if (!out.isOk) {
+        return "Your account is ready, but your login wasn't saved: ${out.problem} "
+            'You can set it up later in Settings.';
+      }
+    }
+    return null;
+  }
+
+  /// 歡迎頁的 I already have an account：email＋密碼 → 原本的帳號，直接進 App（不走後面幾頁）。
+  Future<void> _openLogIn() async {
+    final api = _loginApi;
+    if (api == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<bool>(
+      builder: (_) => LogInScreen(onLogIn: (email, password) async {
+        final out = await api.logIn(email, password);
+        if (!out.isOk) return out.problem;
+        await _adoptLogin(out.value!);
+        return null;
+      }),
+    ));
+  }
+
+  /// 登入成功：存成這台手機的帳號，**採用後端存的目標就寢／起床**並記成已同步——
+  /// 新手機上的是預設值，不採用的話 [_syncBedtime]／[_syncWake] 會把預設值 PATCH 回去蓋掉。
+  Future<void> _adoptLogin(LoggedIn r) async {
+    final status = await _accountStorage.adopt(r);
+    final store = widget.store ?? const PlatformKeyValueStore();
+    final bed = parseBedtime(r.targetBedtime);
+    if (bed != null) {
+      final hhmm = formatBedtime(bed.hour, bed.minute);
+      await _settings.saveBedtime(hhmm);
+      await _settings.markSynced(hhmm);
+    }
+    final wake = parseBedtime(r.targetWake);
+    if (wake != null) {
+      final alarm = AlarmSettingsStore(store);
+      await alarm.save(wake: TimeOfDay(hour: wake.hour, minute: wake.minute), enabled: await alarm.enabled());
+      await _settings.markWakeSynced(formatBedtime(wake.hour, wake.minute));
+    }
+    if (!mounted) return;
+    setState(() {
+      if (bed != null) targetBedtime = TimeOfDay(hour: bed.hour, minute: bed.minute);
+      _account = status;
+      currentIndex = 0;
+    });
+    _syncReminder();
+    _syncGuard();
+    if (widget.entryAnimation && !_introPlayed) {
+      _introPlayed = true;
+      _intro.play();
+    }
+  }
+
+  /// 設定頁的 Log out：清掉手機上的帳號 → 回歡迎頁。睡眠資料在後端，再登入就回來。
+  Future<void> _logOut() async {
+    await _accountStorage.forget();
+    if (!mounted) return;
+    setState(() {
+      _pendingAccount = null;
+      _account = const AccountStatus(AccountState.needsOnboarding);
+      currentIndex = 0;
+    });
   }
 
   /// 完成頁的 Let's go。沒有帳號＝跟原本的「跳過」一樣（不寫進儲存，下次再問）。
@@ -832,6 +920,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         permissions: _welcomePermissions,
         donePetKey: _welcomePetKey,
         animateOpening: widget.entryAnimation,
+        offerLogin: _loginApi != null,
+        onHaveAccount: _loginApi == null ? null : _openLogIn,
         onFinish: _finishWelcome,
         onDone: _enterApp,
       );
@@ -970,6 +1060,17 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
             ),
           ),
         ),
+        // 登入（2026-11-22）：建置參數那支 APK 認的是寫死的 id，登出了下次打開還是它 → 不給登出、照實說
+        loadLogin: (_loginApi == null || account.userId == null) ? null : () => _loginApi.fetch(account.userId!),
+        onSetUpLogin: (_loginApi == null || account.userId == null)
+            ? null
+            : (email, password) async => (await _loginApi.setUp(account.userId!, email, password)).problem,
+        onChangePassword: (_loginApi == null || account.userId == null)
+            ? null
+            : (old, password) async =>
+                (await _loginApi.changePassword(account.userId!, old, password)).problem,
+        onLogOut: account.state == AccountState.stored ? _logOut : null,
+        logOutBlockedReason: "This test build is tied to one account, so it can't log out.",
         onFriendSharingTap: _friends == null
             ? null
             : () => Navigator.of(context).push(MaterialPageRoute<void>(

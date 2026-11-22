@@ -9,6 +9,7 @@ tests/test_export_teammate.py —— 給隊友的資料庫副本：真的 id 不
   【6】片段只帶手機帳號的
   【7】輸出是單一檔案（沒有 -wal），外鍵全部對得上
   【8】後端讀副本，回應跟讀來源時一樣（只差 user_id）
+  【9】email＋密碼雜湊不帶（user_logins 整張排除；含反向對照：來源有）
 
 ⚠️ 全程使用暫存資料庫。執行：python tests/test_export_teammate.py
 """
@@ -89,6 +90,10 @@ for cid, uid in (("a" * 32, me), ("b" * 32, stranger)):
 conn.commit()
 conn.close()
 
+import auth
+LOGIN_HASH = auth.hash_password("correct horse 1")
+db.create_login(me, "me-login@example.com", LOGIN_HASH, SRC)
+
 before = {t: count(SRC, t) for t in ("users", "nightly_behavior", "friendships", "camera_clips")}
 OUT = WORK / "out1"
 r = export_teammate.export(OUT, source_db=SRC, clips_dir=CLIPS)
@@ -140,6 +145,12 @@ print("【6】片段")
 check("只帶本人那段", sorted(p.name for p in (OUT / "camera_clips").iterdir()), ["a" * 32 + ".gif"])
 check("片段的那一列也只有本人的", count(DST, "camera_clips"), 1)
 check("沒有找不到的", r["clips_missing"], 0)
+
+print("【9】登入資料不帶")
+check("反向對照：來源有那一列", count(SRC, "user_logins"), 1)
+check("副本的 user_logins 是空的", count(DST, "user_logins"), 0)
+check("副本裡找不到 email", b"me-login@example.com" in raw, False)
+check("副本裡找不到雜湊", LOGIN_HASH.encode() in raw, False)
 
 print("【7】單一檔案、外鍵對得上")
 check("沒有 -wal 檔", list(OUT.glob("sonnap.db-*")), [])
