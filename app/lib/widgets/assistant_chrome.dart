@@ -27,7 +27,7 @@ const double kDoodleTile = 160;
 /// 背景。[thinking]＝寵物在想答案：星星閃快一點、亮一點。
 ///
 /// ⚠️ 系統開「減少動態效果」時全部靜止；不在畫面上的分頁由外層的 TickerMode 停掉
-///    （App 的分頁疊在 IndexedStack 裡，看不到的頁也還在，不停會在背後一直跑）。
+///    （App 的分頁疊在 TabSwitcher 裡，看不到的頁也還在，不停會在背後一直跑）。
 class ChatBackdrop extends StatefulWidget {
   final bool thinking;
   const ChatBackdrop({super.key, this.thinking = false});
