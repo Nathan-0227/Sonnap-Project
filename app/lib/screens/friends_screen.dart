@@ -84,10 +84,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
   /// 我的 live_status 有沒有分享（You 卡用）；null＝還不知道（沒問到後端）。
   bool? _liveShared;
 
+  /// 後端記的我是哪一隻（null＝還不知道）。小鎮與動態卡上「你」的寵物照後端畫。
+  String? _serverSpecies;
+
   @override
   void initState() {
     super.initState();
+    PetChoice.current.addListener(_onPetChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    PetChoice.current.removeListener(_onPetChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -96,17 +106,33 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final r = await service.fetch();
     if (!mounted) return;
     setState(() => _result = r);
+    // 寵物原本只存在手機上：跟後端不一樣就送一次，朋友才畫得出你選的那一隻。
+    // ⚠️ 要在讀小鎮**之前**送（2026-11-22 實機：先讀小鎮的話，這一次打開看到的還是舊的那一隻）
+    _serverSpecies = r.isOk ? r.value?.me?.petSpecies : null;
+    await _syncPetSpecies();
+    if (!mounted) return;
     await _loadTown();
     if (!mounted) return;
-    // 寵物原本只存在手機上：跟後端不一樣就送一次，朋友才畫得出你選的那一隻
-    final mine = PetChoice.current.value.name;
-    final server = r.value?.me?.petSpecies;
-    if (r.isOk && server != null && server != mine) {
-      await service.patchSharing(petSpecies: mine);
-    }
     final feed = await service.fetchFeed();
     if (!mounted) return;
     if (feed.isOk) setState(() => _feed = feed.value!);
+  }
+
+  /// 手機上選的跟後端記的不一樣 → 送一次。送成功回 true。
+  Future<bool> _syncPetSpecies() async {
+    final service = widget.service;
+    final mine = PetChoice.current.value.name;
+    if (service == null || _serverSpecies == null || _serverSpecies == mine) return false;
+    final r = await service.patchSharing(petSpecies: mine);
+    if (r.isOk) _serverSpecies = mine;
+    return r.isOk;
+  }
+
+  /// 在設定頁換了寵物（好友頁一直開在 IndexedStack 裡）：送給後端，再重讀小鎮與動態牆。
+  Future<void> _onPetChanged() async {
+    if (!await _syncPetSpecies() || !mounted) return;
+    await _loadTown();
+    await _loadFeed();
   }
 
   Future<void> _loadFeed() async {

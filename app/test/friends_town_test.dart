@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
 import 'package:app/services/key_value_store.dart';
+import 'package:app/services/pet_choice.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/friend_night_card.dart' show friendCheckIn;
 import 'package:app/services/morning_rating.dart' show restedFaceAsset;
@@ -113,6 +114,9 @@ class TownStub implements FriendsService {
   final List<(String, String)> visitCalls = [];
   int townCalls = 0;
 
+  /// 依序記下：'town'（讀小鎮）、`patch:種類`（送寵物種類）
+  final List<String> calls = [];
+
   TownStub({FriendsResult<TownState>? town, Map<String, dynamic>? state})
     : town = town ?? FriendsResult(FriendsStatus.ok, value: defaultTown),
       state = FriendsResult(
@@ -123,6 +127,7 @@ class TownStub implements FriendsService {
   @override
   Future<FriendsResult<TownState>> fetchTown() async {
     townCalls++;
+    calls.add('town');
     return town;
   }
 
@@ -160,7 +165,10 @@ class TownStub implements FriendsService {
     String? timePrecision,
     String? petSpecies,
     String? scene,
-  }) async => const FriendsResult(FriendsStatus.failed);
+  }) async {
+    if (petSpecies != null) calls.add('patch:$petSpecies');
+    return FriendsResult(FriendsStatus.ok, value: SharingSettings.fromJson(const {}));
+  }
 
   @override
   Future<FriendsResult<(FriendSummary, FriendNightCard?)>>
@@ -232,6 +240,43 @@ Future<void> tapTownie(WidgetTester tester, String handle) async {
 }
 
 void main() {
+  group('小鎮裡「你」的寵物跟著設定頁選的換（2026-11-22 實機：換成貓，小鎮還是狗）', () {
+    Map<String, dynamic> serverSays(String species) {
+      final j = stateJson();
+      (j['me'] as Map<String, dynamic>)['pet_species'] = species;
+      return j;
+    }
+
+    tearDown(() => PetChoice.current.value = PetSpecies.dog);
+
+    testWidgets('打開時手機選貓、後端記狗：先送 cat 再讀小鎮', (tester) async {
+      PetChoice.current.value = PetSpecies.cat;
+      final stub = TownStub(state: serverSays('dog'));
+      await pump(tester, stub);
+      expect(stub.calls.first, 'patch:cat', reason: '先讀小鎮的話這一次看到的還是狗');
+      expect(stub.calls, contains('town'));
+    });
+
+    testWidgets('好友頁開著時在設定頁換成貓：馬上送給後端，再重讀小鎮', (tester) async {
+      final stub = TownStub(state: serverSays('dog'));
+      await pump(tester, stub);
+      expect(stub.calls.where((c) => c.startsWith('patch')), isEmpty, reason: '一樣就不送');
+      stub.calls.clear();
+      PetChoice.current.value = PetSpecies.cat;
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(stub.calls, ['patch:cat', 'town']);
+    });
+
+    testWidgets('後端不知道我是哪一隻（舊版後端）就不送', (tester) async {
+      PetChoice.current.value = PetSpecies.cat;
+      final stub = TownStub();
+      await pump(tester, stub);
+      expect(stub.calls.where((c) => c.startsWith('patch')), isEmpty);
+    });
+  });
+
   testWidgets('【1】預設在 Town、整個畫面是地圖；一打開你家在看得到的那塊正中間，朋友住離你家近的房子', (tester) async {
     await pump(tester, TownStub());
     expect(find.byKey(const Key('town-map')), findsOneWidget);
