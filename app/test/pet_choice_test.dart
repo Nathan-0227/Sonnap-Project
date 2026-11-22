@@ -107,7 +107,7 @@ void main() {
     expect(paths.where((p) => p.contains('dog01')), isEmpty);
   });
 
-  testWidgets('設定頁：Pet 那一列寫目前的寵物；選 Cat 會存進手機', (tester) async {
+  testWidgets('設定頁：名片寫目前的寵物；Change pet 選 Cat 會存進手機', (tester) async {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
@@ -118,11 +118,11 @@ void main() {
       ),
     );
     await settle(tester, 3);
-    final dog = find.text('Dog');
-    await tester.ensureVisible(dog);
-    expect(dog, findsOneWidget);
+    expect(find.text('Dog'), findsOneWidget);
     expect(find.text('Golden Retriever'), findsNothing, reason: '不再寫死');
-    await tester.tap(dog);
+    final change = find.byKey(const Key('settings-change-pet'));
+    await tester.ensureVisible(change);
+    await tester.tap(change);
     await settle(tester, 5);
     await tester.tap(find.byKey(const Key('pet-choice-cat')));
     await settle(tester, 5);
