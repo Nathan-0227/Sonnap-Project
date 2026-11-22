@@ -559,6 +559,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 卡片**不放手錶睡眠時長**（參考圖的 8h 12m 不照做） | 生理資料不在好友白名單 |
 | 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在分頁裡（TabSwitcher，所有分頁一直留著），App 一打開就建好了，會在首頁上跳出來 |
 | 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
+| **連不到要能自己恢復**（2026-11-22）：名單等 10 秒（`FriendsService.listTimeout`，原本 3 秒）；沒拿到（`failed`）的話**切到好友分頁**（`FriendsScreen(visible:)`）、**回到 App**、按 **Try again** 都會重讀；拿到了就不重讀；沒有後端／沒有帳號不畫 Try again | 剛開 App 時首頁、遊戲、動態牆同時打後端，實機多次超過 3 秒，整頁卡在 cannot be reached 要重開 App（後端單獨問只要 0.13 秒）。`friends_test` 守著，拿掉任一處重試會紅 |
 
 ### ✅ 第一次登入的流程（2026-11-22 grill Q9–Q14，`feature/onboarding`，取代原本只有一頁暱稱的 OnboardingScreen）
 

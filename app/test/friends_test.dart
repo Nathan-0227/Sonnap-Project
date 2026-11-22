@@ -157,8 +157,13 @@ class _StubFriends implements FriendsService {
              value: FriendSummary.fromJson(friendJson('DAV890', 'Dave')),
            );
 
+  int fetchCalls = 0;
+
   @override
-  Future<FriendsResult<FriendsState>> fetch() async => result;
+  Future<FriendsResult<FriendsState>> fetch() async {
+    fetchCalls++;
+    return result;
+  }
 
   @override
   Future<FriendsResult<FriendSummary>> add(String inviteCode) async {
@@ -214,6 +219,7 @@ class _FakeBackend {
   int addStatus = 201;
   Map<String, dynamic> addBody = {'friend': friendJson('BOB234', 'Bob')};
   Duration feedDelay = Duration.zero;
+  Duration listDelay = Duration.zero;
 
   Future<String> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -226,6 +232,9 @@ class _FakeBackend {
         'body': body.isEmpty ? null : jsonDecode(body),
       });
       request.response.headers.contentType = ContentType.json;
+      if (request.method == 'GET' && request.uri.path == '/friends') {
+        await Future<void>.delayed(listDelay);
+      }
       if (request.method == 'GET' && request.uri.path == '/friends/feed') {
         await Future<void>.delayed(feedDelay);
         request.response.write(
@@ -327,6 +336,18 @@ void main() {
       );
     });
 
+    test('好友名單比一般逾時慢也等得到（2026-11-22 實機：剛開 App 時超過 3 秒，整頁卡在 cannot be reached）', () async {
+      backend.listDelay = const Duration(milliseconds: 1500);
+      final quick = FriendsService(
+        baseUrl: baseUrl,
+        identity: const BuildTimeUserIdentity(overrideId: testUserId),
+        timeout: const Duration(seconds: 1),
+      );
+      final r = await quick.fetch();
+      expect(r.isOk, isTrue, reason: '名單要用自己的等待時間，不是一般的 timeout');
+      expect(FriendsService.listTimeout, greaterThanOrEqualTo(const Duration(seconds: 10)));
+    });
+
     test('加好友：body 帶 user_id 與去掉空白的邀請碼', () async {
       await service().add('  bob234  ');
       expect(backend.received.single['body'], {
@@ -350,6 +371,89 @@ void main() {
       expect(call['method'], 'DELETE');
       expect(call['path'], '/friends/BOB234');
       expect(call['query'], {'user_id': testUserId});
+    });
+  });
+
+  group('連不到之後再試（2026-11-22：原本只在打開 App 時讀一次，沒拿到要重開 App）', () {
+    const down = FriendsResult<FriendsState>(FriendsStatus.failed);
+    FriendsResult<FriendsState> up() =>
+        FriendsResult(FriendsStatus.ok, value: FriendsState.fromJson(stateJson()));
+
+    /// 用一個開關控制「看得到這一頁」，模擬切分頁。
+    Future<ValueNotifier<bool>> pumpTab(WidgetTester tester, _StubFriends stub, {bool visible = true}) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final shown = ValueNotifier(visible);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: shown,
+            builder: (_, v, _) => FriendsScreen(service: stub, visible: v),
+          ),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+      return shown;
+    }
+
+    testWidgets('連不到：照實說＋Try again；按了重讀、拿到就換成好友頁', (tester) async {
+      final stub = _StubFriends(result: down);
+      await pumpTab(tester, stub);
+      expect(find.byKey(const Key('friends-retry')), findsOneWidget);
+      stub.result = up();
+      await tester.tap(find.byKey(const Key('friends-retry')));
+      await tester.pump();
+      await tester.pump();
+      expect(stub.fetchCalls, 2);
+      expect(find.byKey(const Key('friends-retry')), findsNothing);
+      expect(find.byKey(const Key('tab-friends')), findsOneWidget);
+    });
+
+    testWidgets('切到好友分頁時，上次沒拿到就自己再試一次', (tester) async {
+      final stub = _StubFriends(result: down);
+      final shown = await pumpTab(tester, stub, visible: false);
+      expect(stub.fetchCalls, 1);
+      stub.result = up();
+      shown.value = true;
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(stub.fetchCalls, 2, reason: '切過來要重讀');
+      expect(find.byKey(const Key('friends-retry')), findsNothing);
+    });
+
+    testWidgets('回到 App 時，上次沒拿到就自己再試一次', (tester) async {
+      final stub = _StubFriends(result: down);
+      await pumpTab(tester, stub);
+      stub.result = up();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(stub.fetchCalls, 2);
+      expect(find.byKey(const Key('friends-retry')), findsNothing);
+    });
+
+    testWidgets('上次拿到了：切分頁、回到 App 都不重讀（不多打後端）', (tester) async {
+      // 小鎮也要是「不是連線失敗」：假服務預設的小鎮是 failed，那本來就該重試
+      final stub = _StubFriends()..town = const FriendsResult(FriendsStatus.noBackend);
+      final shown = await pumpTab(tester, stub);
+      shown.value = false;
+      await tester.pump();
+      shown.value = true;
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(stub.fetchCalls, 1);
+    });
+
+    testWidgets('這支 build 沒有後端：不出現 Try again', (tester) async {
+      await pumpTab(tester, _StubFriends(result: const FriendsResult(FriendsStatus.noBackend)));
+      expect(find.byKey(const Key('friends-retry')), findsNothing);
     });
   });
 
