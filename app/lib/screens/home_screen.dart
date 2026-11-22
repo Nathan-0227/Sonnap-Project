@@ -1611,29 +1611,11 @@ class _HomeScreenState extends State<HomeScreen>
     ];
   }
 
-  /// 寵物：短版先睡（睡姿）再醒；長版從登入流程完成頁的位置飄下來。落地都蹲一下、跳一下。
+  /// 寵物：一直是首頁那一份心情（11-22 使用者定：不先畫睡姿）。短版落地跳一下；長版從登入流程完成頁的位置飄下來。
   Widget _introPet(Widget awakePet, GameState? game) {
     final f = _introFrame;
     if (f == null) return awakePet;
     var art = awakePet;
-    if (f.awake < 1) {
-      // 睡姿用 tired 的姿勢（趴著、閉眼）。醒來才換成首頁那一份心情——不先露一張可能是錯的臉。
-      art = Stack(
-        alignment: Alignment.center,
-        children: [
-          Opacity(
-            opacity: 1 - f.awake,
-            child: HomePet(
-              mood: 'tired',
-              size: kHomePetSize,
-              equippedItemId: _closet?.value?.equippedItemId,
-              growthStage: game?.growthStage,
-            ),
-          ),
-          Opacity(opacity: f.awake, child: awakePet),
-        ],
-      );
-    }
     art = Transform(
       alignment: Alignment.bottomCenter,
       transform: Matrix4.diagonal3Values(f.squashX, f.squashY, 1),

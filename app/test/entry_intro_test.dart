@@ -46,12 +46,11 @@ List<double> _times(double total) => [for (var t = 0.0; t <= total + .2; t += 0.
 
 void main() {
   group('時間軸（EntryFrame）', () {
-    test('【1】短版：鏡頭停下之前寵物一直睡著、介面一直看不到', () {
+    test('【1】短版：鏡頭停下之前介面一直看不到', () {
       final land = EntryFrame.landAt(long: false);
       for (final t in _times(land)) {
         if (t >= land) break;
         final f = EntryFrame.at(t, long: false);
-        expect(f.awake, 0, reason: 't=$t 還在降落就醒了：會先露出心情的臉');
         for (final p in f.ui) {
           expect(p, 0, reason: 't=$t 鏡頭還在動，介面就出現了');
         }
@@ -59,12 +58,6 @@ void main() {
       final start = EntryFrame.at(0, long: false);
       expect(start.camera, 0);
       expect(EntryFrame.at(EntryFrame.shortSeconds, long: false).done, isTrue);
-    });
-
-    test('【2】長版：寵物一直醒著', () {
-      for (final t in _times(EntryFrame.longSeconds)) {
-        expect(EntryFrame.at(t, long: true).awake, 1, reason: 't=$t');
-      }
     });
 
     test('【3】鏡頭只往下、不回頭；播完是首頁原本的樣子', () {
@@ -79,7 +72,6 @@ void main() {
         expect(end.camera, 1);
         expect(end.ui, everyElement(1.0));
         expect(end.hop, 0);
-        expect(end.awake, 1);
       }
     });
 
@@ -121,14 +113,17 @@ void main() {
     Finder sleepingPet() => find.byWidgetPredicate((w) => w is HomePet && w.mood == 'tired');
     bool moodIsTired(SleepSession s) => s.status.petMood == 'tired';
 
-    testWidgets('【5】冷啟動：先在天空、寵物睡著，播完回到首頁原樣', (tester) async {
+    testWidgets('【5】冷啟動：先在天空，寵物從頭到尾都是那一晚的心情，播完回到首頁原樣', (tester) async {
       final intro = await pumpHome(tester);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
       expect(find.byKey(const Key('entry-intro-skip')), findsOneWidget);
       expect(intro.ui.value, 0, reason: '導覽列要等最後才出來');
       await tester.pump(const Duration(milliseconds: 600));
-      expect(sleepingPet(), findsWidgets, reason: '鏡頭還沒停，寵物要是睡姿');
+      // 11-22 使用者定：不先畫睡姿，降落途中就是那一晚的心情
+      expect(find.byWidgetPredicate((w) => w is HomePet && w.mood == sample.status.petMood),
+          findsWidgets, reason: '降落途中要畫那一晚的心情');
+      if (!moodIsTired(sample)) expect(sleepingPet(), findsNothing, reason: '降落途中不准出現睡姿');
 
       for (var i = 0; i < 25; i++) {
         await tester.pump(const Duration(milliseconds: 100));

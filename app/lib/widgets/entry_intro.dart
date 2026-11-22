@@ -1,8 +1,8 @@
 // 進場動畫（2026-11-22 使用者定，原型見 claude.ai 上的「Sonnap 進場動畫」）。
 //
 // 鏡頭從夜空往下降到首頁的山頂：
-// - 短版（冷啟動）：寵物先睡在山頂，鏡頭停下才醒來、換成首頁那一份心情（B 案）。
-//   醒之前畫睡姿，所以不會先露一張可能是錯的臉。
+// - 短版（冷啟動）：寵物一開始就是首頁那一份心情（那一晚的心情），鏡頭停下時跳一下。
+//   2026-11-22 使用者改：原本先畫睡姿再醒來，使用者要「就是那天的心情、不用變成睡眠」。
 // - 長版（第一次登入流程、設定頁的 Replay welcome）：流程停在天空裡，按 Let's go 才降落；
 //   寵物從完成頁那個位置飄下來，落地蹲一下、跳一下（第一次開還沒有任何一晚，所以醒著）。
 //
@@ -44,9 +44,6 @@ class EntryFrame {
   /// 進場那一層星星的不透明度（首頁自己有星星，鏡頭快到時淡掉）。
   final double stars;
 
-  /// 0＝睡姿、1＝醒來（只有短版會小於 1）。
-  final double awake;
-
   /// 寵物往上跳多高（邏輯像素）。
   final double hop;
 
@@ -69,7 +66,6 @@ class EntryFrame {
   const EntryFrame({
     required this.camera,
     required this.stars,
-    required this.awake,
     required this.hop,
     required this.squashX,
     required this.squashY,
@@ -81,7 +77,7 @@ class EntryFrame {
 
   /// 停在首頁原本的樣子（沒有在播、或播完）。
   static const EntryFrame rest = EntryFrame(
-    camera: 1, stars: 0, awake: 1, hop: 0, squashX: 1, squashY: 1,
+    camera: 1, stars: 0, hop: 0, squashX: 1, squashY: 1,
     ui: [1, 1, 1, 1], done: true,
   );
 
@@ -108,10 +104,9 @@ class EntryFrame {
     final stars = starsIn * (1 - _prog(camera, .6, 1));
 
     // 寵物
-    double awake = 1, hop = 0, sx = 1, sy = 1;
+    double hop = 0, sx = 1, sy = 1;
     final since = t - land;
     if (!long) {
-      awake = _prog(since, .1, .35);
       if (since > .15) {
         final h = _prog(since, .15, .6);
         hop = math.sin(h * math.pi) * 22;
@@ -140,7 +135,6 @@ class EntryFrame {
     return EntryFrame(
       camera: camera,
       stars: stars,
-      awake: awake,
       hop: hop,
       squashX: sx,
       squashY: sy,
