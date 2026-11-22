@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/sleep_session.dart';
+import '../services/pet_choice.dart';
 import '../theme/sonnap_colors.dart';
 
 /// 首頁上方的一週日期列：最近 7 天，每天一個心情小圖示。
@@ -176,29 +177,35 @@ class MoodDot extends StatelessWidget {
 // ── 純呈現的對映：後端給的心情字串 → 圖示與顏色 ─────────────────
 // 這裡不做判斷，只是查表。首頁的心情標籤與日期列共用這一份。
 
-/// 心情 → 狗頭表情圖。不認得的一律 bored（同 HomePet：絕不退回 happy）。
-String moodFaceAsset(String mood) => switch (mood) {
-      'happy' => 'assets/moods/dog_happy.png',
-      'tired' => 'assets/moods/dog_tired.png',
-      'anxious' => 'assets/moods/dog_anxious.png',
-      _ => 'assets/moods/dog_bored.png',
-    };
+/// 心情 → 寵物頭的表情圖（小狗 `dog_*`、貓 `cat_*`，2026-11-22 補上貓頭，使用者生成）。
+/// 不認得的一律 bored（同 HomePet：絕不退回 happy）。
+String moodFaceAsset(String mood, [PetSpecies species = PetSpecies.dog]) {
+  final face = switch (mood) {
+    'happy' || 'tired' || 'anxious' => mood,
+    _ => 'bored',
+  };
+  return 'assets/moods/${species.name}_$face.png';
+}
 
-/// 寵物心情的狗頭表情。圖讀不到時退回 [moodIcon]（不會報錯、也不會空白）。
+/// 寵物心情的頭像表情，跟著設定頁選的寵物（[PetChoice]）換。
+/// 圖讀不到時退回 [moodIcon]（不會報錯、也不會空白）。
 class MoodFace extends StatelessWidget {
   final String mood;
   final double size;
   const MoodFace({super.key, required this.mood, this.size = 24});
 
   @override
-  Widget build(BuildContext context) => Image.asset(
-        moodFaceAsset(mood),
-        key: Key('mood-face-$mood'),
-        width: size,
-        height: size,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, _, _) =>
-            Icon(moodIcon(mood), color: moodColor(mood), size: size * 0.8),
+  Widget build(BuildContext context) => ValueListenableBuilder<PetSpecies>(
+        valueListenable: PetChoice.current,
+        builder: (_, species, _) => Image.asset(
+          moodFaceAsset(mood, species),
+          key: Key('mood-face-$mood'),
+          width: size,
+          height: size,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, _, _) =>
+              Icon(moodIcon(mood), color: moodColor(mood), size: size * 0.8),
+        ),
       );
 }
 

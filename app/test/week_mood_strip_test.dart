@@ -2,7 +2,9 @@
 import 'dart:io';
 
 import 'package:app/models/sleep_session.dart';
+import 'package:app/services/pet_choice.dart';
 import 'package:app/widgets/week_mood_strip.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 HistoryEntry night(String date, String? mood) =>
@@ -23,6 +25,31 @@ void main() {
     }
     expect(moodFaceAsset('???'), moodFaceAsset('bored'));
     expect(moodFaceAsset(''), isNot(moodFaceAsset('happy')));
+  });
+
+  test('貓也有四張（2026-11-22），檔案真的在；不認得的退回貓的 bored，絕不退回 happy', () {
+    const moods = ['happy', 'bored', 'tired', 'anxious'];
+    final cat = [for (final m in moods) moodFaceAsset(m, PetSpecies.cat)];
+    expect(cat.toSet().length, 4);
+    for (final a in cat) {
+      expect(a, contains('/cat_'));
+      expect(File(a).existsSync(), isTrue, reason: a);
+    }
+    expect(moodFaceAsset('???', PetSpecies.cat), moodFaceAsset('bored', PetSpecies.cat));
+    expect(moodFaceAsset('', PetSpecies.cat), isNot(moodFaceAsset('happy', PetSpecies.cat)));
+  });
+
+  testWidgets('MoodFace 跟著設定頁選的寵物換：選貓畫貓頭、換回小狗畫狗頭', (tester) async {
+    addTearDown(() => PetChoice.current.value = PetSpecies.dog);
+    String drawn() => ((tester.widget<Image>(find.byKey(const Key('mood-face-tired'))).image)
+            as AssetImage)
+        .assetName;
+    PetChoice.current.value = PetSpecies.cat;
+    await tester.pumpWidget(const MaterialApp(home: MoodFace(mood: 'tired')));
+    expect(drawn(), 'assets/moods/cat_tired.png');
+    PetChoice.current.value = PetSpecies.dog;
+    await tester.pump();
+    expect(drawn(), 'assets/moods/dog_tired.png', reason: '換寵物要即時跟著換');
   });
 
   test('⚠️ 寵物心情的臉與起床自評的圓臉是兩套圖（意思不同，不能共用）', () {
