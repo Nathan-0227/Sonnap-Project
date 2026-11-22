@@ -134,6 +134,9 @@ check("那一晚有紀錄卻說沒有（Q10 原句）",
 check("沒紀錄的晚上說沒有 → 不算錯", bad_rules(
     NIGHT_Q, good(headline="I don't have a record for that night.", why="", tips=[], link=None),
     ctx=dict(CTX, night_date="2026-11-21")), [])
+check("「no record of 某一項資料」不是那一晚沒紀錄（第二次跑的 Q18 原句）", bad_rules(
+    NIGHT_Q, good(headline="I don't have a record of your blood oxygen for last night.", why="", tips=[], link=None)),
+    [])
 PHONE_CTX = dict(CTX, facts=dict(CTX["facts"], phone_that_night={"date": "2026-11-21", "phone_down_at": "20:21"}))
 check("問昨晚卻講別晚的手機時刻（Q5 原句）", bad_rules(
     NIGHT_Q, good(headline="I saw you put your phone down at 20:21 that night, so that was on time.", why=""),

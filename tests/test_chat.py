@@ -357,9 +357,9 @@ for q, want in (
     ("November 18th", {"kind": "night", "date": "2026-11-19"}),
     ("18 Nov", {"kind": "night", "date": "2026-11-19"}),
     ("Nov 30", {"kind": "night", "date": "2025-12-01"}),           # 未來 → 去年
-    ("this week", {"kind": "range", "start": "2026-11-23", "end": "2026-11-25"}),
-    ("last week", {"kind": "range", "start": "2026-11-16", "end": "2026-11-22"}),
-    ("past 7 days", {"kind": "range", "start": "2026-11-19", "end": "2026-11-25"}),
+    ("this week", {"kind": "range", "start": "2026-11-23", "end": "2026-11-25", "label": "this week"}),
+    ("last week", {"kind": "range", "start": "2026-11-16", "end": "2026-11-22", "label": "last week"}),
+    ("past 7 days", {"kind": "range", "start": "2026-11-19", "end": "2026-11-25", "label": "the past 7 days"}),
     ("LAST NIGHT", {"kind": "latest"}),
     ("Was Monday better than Sunday?", {"kind": "night", "date": "2026-11-24"}),   # 只取第一個
     ("the sun woke me up", None),                                   # 縮寫要有 on／last／night 才算
@@ -483,6 +483,74 @@ ok("只看 headline：why 是旁白不擋", not any("reads like a report" in p f
     "I saw your night was marked as Good.", "Late caffeine might make it harder to fall asleep.")))
 ok("Sonnap 的 nap、your 的 you 這種字中字不算（要完整單詞）", any("reads like a report" in p for p in parts_problems(
     "Sonnap shows a younger night.")))
+
+# ═══════════════════════════════════════════════════════════════════
+section("【6i】第一次用 chat_eval.py 真的跑（2026-11-22）找到的邏輯錯")
+# ═══════════════════════════════════════════════════════════════════
+import io  # noqa: E402
+from behavior import sleep_efficiency as se  # noqa: E402
+
+# Q1：深睡、REM、醒著、效率要給——回答底下的連結點得開那幾頁，AI 卻說「我沒有深睡的數字」
+W = {"date": "2026-11-24", "final_score": 63.0, "final_quality": "Poor", "duration_min": 301, "deep_min": 70,
+     "waso_min": 12, "rem_min": 0, "rem_measured": 0, "efficiency": 95.0, "wake_time": "2026-11-24T09:00:00+08:00"}
+wn = chat.build_facts({"target_bedtime": "23:30"}, None, W, 0, (0, 0, 0))["watch_that_night"]
+check("深睡", wn.get("deep_time"), "1h 10m")
+check("醒著", wn.get("awake_time"), "12m")
+check("REM 沒量到照實寫（不寫 0）", wn.get("rem_time"), "not measured")
+check("REM 有量到給時間", chat.build_facts({}, None, dict(W, rem_min=45, rem_measured=1), 0, (0, 0, 0))
+      ["watch_that_night"].get("rem_time"), "45m")
+check("效率＝算進分數的那一個：沒按按鈕＝手錶版", (wn.get("efficiency_percent"), wn.get("efficiency_kind")),
+      (95, "Watch only"))
+B = {"date": "2026-11-24", "lights_out_at": "2026-11-24T01:00:00+08:00", "bed_start_at": "2026-11-24T00:30:00",
+     "bed_end_at": "2026-11-24T09:10:00", "time_in_bed_minutes": 520}
+wb = chat.build_facts({}, B, W, 0, (0, 0, 0))["watch_that_night"]
+want = se.scoring_efficiency(301, 95.0, W["wake_time"], B["bed_start_at"], B["bed_end_at"], 520)["value"]
+check("按了按鈕 → 按鈕那一種，數字跟評分器同一支算", (wb.get("efficiency_percent"), wb.get("efficiency_kind")),
+      (round(want), "Sleep button"))
+check("別晚的按鈕不拿來算這一晚", chat.build_facts({}, dict(B, date="2026-11-23"), W, 0, (0, 0, 0))
+      ["watch_that_night"].get("efficiency_kind"), "Watch only")
+
+# Q2：使用者用「哪天晚上睡」稱呼一晚，資料記的是起床日——問 11/13，AI 看到 11-14 就說沒紀錄
+f = chat.build_facts({}, None, W, 0, (0, 0, 0), night={"date": "2026-11-24", "most_recent_night": False,
+                                                        "recorded": True})
+check("那一晚多寫「哪天晚上睡的」", f["night"].get("went_to_bed_evening"), "2026-11-23")
+ok("prompt 說明兩個日期、不准因為對不上就說沒紀錄", "went_to_bed_evening" in chat.SYSTEM_PROMPT)
+
+# Q3：問最近一晚時，手機與手錶各拿自己最新的一列 → 把前一晚的放下手機時刻講成昨晚的
+dave = client.post("/users", json={"display_name": "Dave", "target_bedtime": "23:30"}).json()["user_id"]
+assert client.post("/nightly", json={"user_id": dave, "lights_out_at": "2026-11-23T01:07:00+08:00"}).status_code == 201
+db.upsert_wearable_nightly(dave, "2026-11-24", source="garmin", metrics={
+    "duration_min": 300, "deep_min": 40, "waso_min": 20, "final_score": 70.0, "final_quality": "Normal"}, db_path=TMP)
+fake = FakeLLM({"headline": "Let's look at last night."})
+use(fake)
+r = client.post("/chat", json={"user_id": dave, "message": "How was last night?"})
+check("最近一晚＝11-24", r.json().get("period"), {"kind": "night", "date": "2026-11-24"})
+ok("不給 11-23 的放下手機時刻", "01:07" not in fake.prompts[0] and "phone_that_night" not in fake.prompts[0])
+ok("手錶那一晚照給", '"sleep_score": 70' in fake.prompts[0])
+
+# Q4：問上週，回答寫 this week → 事實寫明使用者怎麼稱呼這一段
+r, p0 = carol_asks("How was last week?")
+ok("上週：asked_as 是 last week", '"asked_as": "last week"' in p0)
+r, p0 = carol_asks("And the past 7 days?")
+ok("過去 7 天：asked_as 是 the past 7 days", '"asked_as": "the past 7 days"' in p0)
+ok("prompt 要照使用者的說法稱呼那一段", "asked_as" in chat.SYSTEM_PROMPT)
+check("回給 App 的 period 不多帶 label（App 照舊）", r.json().get("period"),
+      {"kind": "range", "start": "2026-11-19", "end": "2026-11-25"})
+
+# Q5：被退回時在後端印原因（第一次跑有一題 503，事後查不出是哪一條擋的）；追問要接著上一題
+fake = FakeLLM("You slept 7 hours.", "You put the phone down at 02:39.")
+use(fake)
+err, old_err = io.StringIO(), sys.stderr
+sys.stderr = err
+try:
+    chat.answer_question("How long did I sleep?", FACTS)
+finally:
+    sys.stderr = old_err
+ok("退回原因印在後端", "rejected" in err.getvalue() and "the number 7 is not in the facts" in err.getvalue(),
+   err.getvalue().strip())
+ok("prompt：解釋寵物心情不用 because（第二次跑 Q4 兩次都被「把原因說成確定」擋下）",
+   'without "because" or "due to"' in chat.SYSTEM_PROMPT)
+ok("prompt：追問 why 要接著上一題講的那件事", "do not switch to a different topic" in chat.SYSTEM_PROMPT)
 
 # ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")

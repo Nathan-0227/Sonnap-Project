@@ -77,14 +77,17 @@ def _from_month_day(month, day, today):
 def _match(kind, m, today):
     if kind == "latest":
         return {"kind": "latest"}
+    # label：使用者怎麼稱呼這一段（2026-11-22 chat_eval 抓到：問上週，回答寫 this week）
     if kind == "this_week":
         start = today - timedelta(days=today.weekday())
-        return {"kind": "range", "start": start.isoformat(), "end": today.isoformat()}
+        return {"kind": "range", "start": start.isoformat(), "end": today.isoformat(), "label": "this week"}
     if kind == "last_week":
         start = today - timedelta(days=today.weekday() + 7)
-        return {"kind": "range", "start": start.isoformat(), "end": (start + timedelta(days=6)).isoformat()}
+        return {"kind": "range", "start": start.isoformat(), "end": (start + timedelta(days=6)).isoformat(),
+                "label": "last week"}
     if kind == "last7":
-        return {"kind": "range", "start": (today - timedelta(days=6)).isoformat(), "end": today.isoformat()}
+        return {"kind": "range", "start": (today - timedelta(days=6)).isoformat(), "end": today.isoformat(),
+                "label": "the past 7 days"}
     if kind == "weekday":
         wd = _WEEKDAYS[m.group(1).lower()]
         # 最近一個「睡完了」的：起床日（＝那天＋1）不能晚於今天
