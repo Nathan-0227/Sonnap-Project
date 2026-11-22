@@ -176,7 +176,8 @@ g_nowatch = client.get(f"/game?user_id={nowatch}").json()
 check("熬夜又睡不好的三晚：0 XP", g_bad["xp_total"], 0)
 check("準時又睡得好的三晚：150 XP", g_good["xp_total"], 150)
 check("沒戴錶但準時的三晚：90 XP", g_nowatch["xp_total"], 90)
-ok("XP 來源拆得開", g_good["xp_sources"] == {"behaviour": 90, "sleep_quality": 60, "challenge_rewards": 0},
+ok("XP 來源拆得開", g_good["xp_sources"] == {"behaviour": 90, "sleep_quality": 60, "challenge_rewards": 0,
+                                           "badge_rewards": 0},
    f"{g_good['xp_sources']}")
 check("150 XP = 第 2 級", g_good["level"], 2)
 check("熬夜的人沒有徽章", [b["badge_id"] for b in g_bad["badges"] if b["earned"]], [])

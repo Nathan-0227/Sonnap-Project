@@ -674,6 +674,51 @@ CREATE TABLE IF NOT EXISTS garmin_daily (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- ── 徽章（2026-11-22，game/badges.py）────────────────────────────
+-- 第一次達成某系列某一級時記下來，**之後永遠留著**（使用者定：收集到的不該消失）。
+-- earned_on 是**跨過門檻的那一晚**（從每晚資料推出來的），不是寫入那天。
+-- ⚠️ 這張表只決定「拿到了沒、哪一晚拿到的」；XP 照舊在 achievements 領（badge:<系列>:<級>）。
+CREATE TABLE IF NOT EXISTS badges_earned (
+    user_id     TEXT NOT NULL,
+    series_id   TEXT NOT NULL,
+    tier        INTEGER NOT NULL,             -- 1..5
+    earned_on   TEXT NOT NULL,                -- YYYY-MM-DD
+    recorded_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, series_id, tier),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 徽章要數、但別處沒有長期留下來的次數（2026-11-22）：
+--   visit     拜訪朋友（friend_visits 只留 14 天，數不了累積）——count＝那天拜訪幾次
+--   assistant 助理有答出來——count＝那天答了幾題（徽章數的是天數）
+--   journey   每段 Journey 走到第幾站——date＝那段的 started_at，count＝走過幾站（只增不減）
+--   podium    那個週日的 7 天榜有沒有進前三——date＝週日，count＝0/1（每週只算一次）
+-- ⚠️ 不存任何內容（問了什麼、送了什麼），只存次數。
+CREATE TABLE IF NOT EXISTS game_activity (
+    user_id TEXT NOT NULL,
+    kind    TEXT NOT NULL,
+    date    TEXT NOT NULL,
+    count   INTEGER NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (user_id, kind, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 睡眠計畫的習慣：每天勾了幾條、總共幾條（2026-11-22，習慣徽章用）。
+-- ⚠️ **只有數字**，不存是哪幾條、不存習慣的文字（那是使用者自己寫的，只在手機上）。
+-- 🔴 自己勾、沒有證據；使用者知情（徽章最多 5 級，灌得到的有上限）。
+CREATE TABLE IF NOT EXISTS habit_days (
+    user_id    TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    checked    INTEGER NOT NULL,
+    total      INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- 查詢模式幾乎都是「某個使用者的最近 N 天」，所以索引建在 (user_id, date)。
 -- 主鍵已經涵蓋 nightly_behavior 與 wearable_nightly，只有 block_events 要補。
 CREATE INDEX IF NOT EXISTS idx_block_events_user_date
@@ -2282,6 +2327,136 @@ def add_achievement(user_id, achievement_id, xp_awarded, db_path=None):
         )
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+# ── 徽章（2026-11-22）──────────────────────────────────────────────
+# ⚠️ 同 add_achievement：先查再寫，不用 upsert 語法也不接 IntegrityError（兩種資料庫丟的不一樣）。
+
+def get_badges_earned(user_id, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT series_id, tier, earned_on FROM badges_earned WHERE user_id = ? "
+            "ORDER BY series_id, tier",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def add_badges_earned(user_id, rows, db_path=None):
+    """rows：[{series_id, tier, earned_on}]。已經有的那一級不動（第一次記下的日期永遠留著）。回傳新寫入幾列。"""
+    if not rows:
+        return 0
+    conn = connect(db_path)
+    try:
+        have = {(r["series_id"], int(r["tier"])) for r in conn.execute(
+            "SELECT series_id, tier FROM badges_earned WHERE user_id = ?", (user_id,)).fetchall()}
+        added = 0
+        for r in rows:
+            key = (r["series_id"], int(r["tier"]))
+            if key in have:
+                continue
+            conn.execute(
+                "INSERT INTO badges_earned (user_id, series_id, tier, earned_on, recorded_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, key[0], key[1], r["earned_on"], now_iso()),
+            )
+            have.add(key)
+            added += 1
+        conn.commit()
+        return added
+    finally:
+        conn.close()
+
+
+def get_game_activity(user_id, kind, db_path=None):
+    """某一種活動的每天次數，由舊到新：[{date, count}]。"""
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT date, count FROM game_activity WHERE user_id = ? AND kind = ? ORDER BY date",
+            (user_id, kind),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def _game_activity_write(user_id, kind, date, count_fn, db_path=None):
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT count FROM game_activity WHERE user_id = ? AND kind = ? AND date = ?",
+            (user_id, kind, date),
+        ).fetchall()
+        old = int(row[0]["count"]) if row else None
+        new = count_fn(old)
+        if old is None:
+            conn.execute(
+                "INSERT INTO game_activity (user_id, kind, date, count) VALUES (?, ?, ?, ?)",
+                (user_id, kind, date, int(new)),
+            )
+        elif new != old:
+            conn.execute(
+                "UPDATE game_activity SET count = ? WHERE user_id = ? AND kind = ? AND date = ?",
+                (int(new), user_id, kind, date),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def bump_game_activity(user_id, kind, date, db_path=None):
+    """那一天的次數 +1（拜訪一次、助理答出一題）。"""
+    _game_activity_write(user_id, kind, date, lambda old: (old or 0) + 1, db_path)
+
+
+def raise_game_activity(user_id, kind, date, count, db_path=None):
+    """那一列的次數只增不減（Journey 走過幾站：資料改正時不倒退）。"""
+    _game_activity_write(user_id, kind, date, lambda old: max(old or 0, int(count)), db_path)
+
+
+def set_game_activity(user_id, kind, date, count, db_path=None):
+    """直接寫（每週一次的前三名：算過就不再算）。"""
+    _game_activity_write(user_id, kind, date, lambda old: int(count), db_path)
+
+
+def upsert_habit_day(user_id, date, checked, total, db_path=None):
+    """那一天勾了幾條、總共幾條。同一天重送就覆寫（取消勾選也要算得回去）。"""
+    conn = connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT date FROM habit_days WHERE user_id = ? AND date = ?", (user_id, date),
+        ).fetchall()
+        if row:
+            conn.execute(
+                "UPDATE habit_days SET checked = ?, total = ?, updated_at = ? "
+                "WHERE user_id = ? AND date = ?",
+                (int(checked), int(total), now_iso(), user_id, date),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO habit_days (user_id, date, checked, total, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, date, int(checked), int(total), now_iso()),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_habit_days(user_id, db_path=None):
+    conn = connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT date, checked, total FROM habit_days WHERE user_id = ? ORDER BY date",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

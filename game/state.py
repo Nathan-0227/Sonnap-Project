@@ -5,17 +5,20 @@ game/state.py —— 把一個使用者的資料組成 `GET /game` 的回應。�
 「Bad 夜晚拿到的比 Good 少」這種紅線——端點只負責從資料庫撈資料、
 把結果交給這裡。
 """
-from . import levels, rewards, xp
+from . import badges, levels, rewards, xp
 
 # 畫面上列最近幾晚的 XP 拆解。
 RECENT_NIGHTS = 7
 
 
-def build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated_challenges):
+def build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated_challenges,
+                     badge_computed=None, badge_stored=None):
     """
     behavior_rows / wearable_rows：db 取回的每晚資料（由舊到新）
-    achievement_rows：db.get_achievements() 的輸出（已領過的挑戰獎勵）
+    achievement_rows：db.get_achievements() 的輸出（已領過的挑戰獎勵與徽章 XP）
     evaluated_challenges：challenge_engine.evaluate_all() 的輸出
+    badge_computed：badges.compute() 的輸出；badge_stored：db.get_badges_earned()。
+      沒給的話只用這兩層資料算睡眠那幾個系列（測試用；API 一律經 main._game_inputs 給齊）。
 
     ⚠️ 總 XP 是**每次即時算**的（每晚的 XP + 已領的獎勵），不存一個累加值。
        理由同挑戰進度：事實來源是 nightly_behavior，受測者事後補填某一晚時
@@ -24,13 +27,20 @@ def build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated_c
     nights = xp.nights_xp(behavior_rows, wearable_rows)
     behaviour_total = sum(n["behaviour_xp"] for n in nights)
     quality_total = sum(n["quality_xp"] for n in nights)
-    claims_total = sum(int(a.get("xp_awarded") or 0) for a in achievement_rows or [])
-    total = behaviour_total + quality_total + claims_total
+    claim_rows = achievement_rows or []
+    badge_total = sum(int(a.get("xp_awarded") or 0) for a in claim_rows
+                      if str(a.get("achievement_id", "")).startswith("badge:"))
+    claims_total = sum(int(a.get("xp_awarded") or 0) for a in claim_rows) - badge_total
+    total = behaviour_total + quality_total + claims_total + badge_total
 
     lvl = levels.level_for(total)
     dates = [r["date"] for r in behavior_rows or [] if r.get("date")]
     as_of = max(dates) if dates else None
-    claimed_ids = [a["achievement_id"] for a in achievement_rows or []]
+    claimed_ids = [a["achievement_id"] for a in claim_rows]
+
+    if badge_computed is None:
+        badge_computed = badges.compute({"behavior": behavior_rows, "wearable": wearable_rows})
+    series = badges.view(badge_computed, badge_stored, claimed_ids)
 
     return {
         **lvl,
@@ -39,9 +49,14 @@ def build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated_c
             "behaviour": behaviour_total,
             "sleep_quality": quality_total,
             "challenge_rewards": claims_total,
+            "badge_rewards": badge_total,
         },
         "recent_nights": nights[-RECENT_NIGHTS:],
         "claimable": rewards.claimable(evaluated_challenges, as_of, claimed_ids),
-        "badges": rewards.badges(nights),
+        # 新版 App 讀這兩個；舊版 App 讀 claimable 與 badges，不受影響。
+        "claimable_badges": badges.claimable(series),
+        "badge_groups": [{"group": g, "label": label} for g, label in badges.GROUPS],
+        "badge_series": series,
+        "badges": badges.legacy_badges(series),
         "as_of": as_of,
     }

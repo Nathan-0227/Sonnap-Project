@@ -206,7 +206,12 @@ ok("GET 帶建議起點與兩個常數", "suggested_start" in res and res["recom
 
 print("【10】不給 XP、刪帳號一起刪")
 game_src = "".join(p.read_text(encoding="utf-8") for p in (ROOT / "game").glob("*.py"))
-ok("game/ 不讀 Journey", "journey" not in game_src.lower())
+# 2026-11-22 起 Traveller 徽章數 Journey 走過幾站（使用者定，徽章那一級給 XP）；
+# **每一站本身**仍不給 XP。game/ 只讀 main 記在 game_activity 的站數，不碰 journeys 表、
+# 不 import behavior.journey（進度的判定只在那裡）。
+ok("game/ 不直接讀 Journey（只讀記下來的站數）",
+   "behavior.journey" not in game_src and "from behavior import journey" not in game_src
+   and "get_journey" not in game_src and "journeys" not in game_src.lower())
 client.delete(f"/users/{uid}")
 ok("刪帳號 → Journey 一起刪", db.get_journey(uid) is None)
 
