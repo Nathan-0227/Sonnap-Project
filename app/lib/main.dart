@@ -40,6 +40,7 @@ import 'services/phone_model.dart';
 import 'services/plan_reminders.dart';
 import 'services/sleep_plan.dart';
 import 'services/journey_service.dart';
+import 'services/latest_night.dart';
 import 'services/sleep_repository.dart';
 import 'screens/plan_screen.dart';
 import 'widgets/today_plan_card.dart';
@@ -149,6 +150,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     // 從系統設定開完使用權限回來、或隔天早上打開，都要重跑一次
     // 起床目標先送：POST /nightly 存的是當晚的目標快照，後端要先知道新的目標。
     if (state == AppLifecycleState.resumed && _account != null) {
+      _latest.refresh();
       unawaited(() async {
         await _syncJourney();
         await _syncWake();
@@ -160,6 +162,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _latest.dispose();
     // 注入的那一份由測試自己管
     if (widget.nightly == null) _nightly.dispose();
     super.dispose();
@@ -225,7 +228,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           onBedtimeChanged: _setBedtime,
           onWakeChanged: () => unawaited(_syncWake()),
           game: _game,
-          petMood: () async => (await _repository.load()).status.petMood,
+          petMood: () async => (await _latest.load()).status.petMood,
           loadChallenges: _challenges?.fetch,
           journey: _journey,
         ),
@@ -246,6 +249,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// 沒給 `--dart-define=SONNAP_API_BASE` 時這裡回的就是 AssetSleepRepository，
   /// 行為與加這一層之前完全相同。
   final SleepRepository _repository = buildSleepRepository();
+
+  /// 首頁、助理頁、計畫頁的「最近一晚」：打包檔＋`/home` 最新那一晚（2026-11-22，latest_night.dart）。
+  /// 三頁共用這一個；回到前景、關掉早晨報告之後重讀。設定頁「Data」照舊看 [_repository]。
+  late final LatestNightRepository _latest = LatestNightRepository(
+    base: _repository,
+    fetchNight: (date) async => await _morningReport?.fetchNight(date),
+  );
 
   /// 這台裝置代表誰。App 啟動時解析一次。
   ///
@@ -659,7 +669,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     return <Widget>[
       HomeScreen(
         displayName: account.displayName ?? kFallbackDisplayName,
-        repository: _repository,
+        repository: _latest,
         game: _game,
         cameraInsights: _cameraInsights,
         morningReport: _morningReport,
@@ -694,7 +704,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         chat: _chat,
         username: account.displayName ?? kFallbackDisplayName,
         store: widget.store,
-        petMood: () async => (await _repository.load()).status.petMood,
+        petMood: () async => (await _latest.load()).status.petMood,
+        moodChanges: _latest,
         // 打招呼那一則：今天起床的那一晚（照抄 /home 的數字，App 不呼叫 AI）
         greetingNight: _morningReport == null ? null : (date) => _morningReport!.fetchNight(date),
         // 分頁疊在 IndexedStack 裡：不在畫面上時背景動畫要停，不然在背後一直跑
