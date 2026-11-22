@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
+import '../widgets/entry_intro.dart';
 import '../widgets/home_pet.dart';
 import '../widgets/plan_goal_picker.dart';
 import '../widgets/sleep_dial.dart';
@@ -79,7 +80,11 @@ class WelcomeFlow extends StatefulWidget {
   /// 按完成頁的按鈕：進 App。
   final VoidCallback onDone;
 
+  /// 完成頁那隻寵物。按 Let's go 之後首頁從天空降下來，寵物從這個位置飄到山頂（進場動畫長版）。
+  final GlobalKey? donePetKey;
+
   const WelcomeFlow({
+    this.donePetKey,
     super.key,
     this.replay = false,
     this.initialName,
@@ -97,8 +102,6 @@ class WelcomeFlow extends StatefulWidget {
   State<WelcomeFlow> createState() => _WelcomeFlowState();
 }
 
-const _bgTop = Color(0xFF081326);
-const _bgBottom = Color(0xFF1B2350);
 const _accent = Color(0xFF7657FF);
 const _dim = Color(0xFF9AA8C7);
 const _font = 'Nunito';
@@ -176,16 +179,12 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       key: const Key('welcome-flow'),
-      backgroundColor: _bgTop,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [_bgTop, _bgBottom],
-          ),
-        ),
-        child: SafeArea(
+      backgroundColor: kEntrySkyTop,
+      // 背景是首頁山頂上方那一片天空（進場動畫長版）：按 Let's go 之後鏡頭從這裡往下降到首頁。
+      body: Stack(
+        children: [
+        const Positioned.fill(child: EntrySky()),
+        SafeArea(
           child: DefaultTextStyle.merge(
             style: const TextStyle(fontFamily: _font, color: Colors.white),
             child: Column(
@@ -208,6 +207,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
             ),
           ),
         ),
+        ],
       ),
     );
   }
@@ -642,7 +642,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
     subtitle: 'Tap the moon when you go to bed. It\'s okay if you forget.',
     body: Column(
       children: [
-        Center(child: _pet(150, mood: 'happy')),
+        Center(child: KeyedSubtree(key: widget.donePetKey, child: _pet(150, mood: 'happy'))),
         if (_finishProblem case final p?) ...[
           const SizedBox(height: 16),
           Text(p,

@@ -10,6 +10,7 @@ import 'screens/health_connect_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
+import 'widgets/entry_intro.dart';
 import 'widgets/moon_nav_bar.dart';
 import 'screens/welcome_flow.dart';
 import 'services/plan_goals.dart';
@@ -50,7 +51,7 @@ import 'widgets/today_plan_card.dart';
 import 'services/user_settings.dart';
 
 void main() {
-  runApp(const SonnapApp());
+  runApp(const SonnapApp(entryAnimation: true));
 }
 
 class SonnapApp extends StatelessWidget {
@@ -82,6 +83,10 @@ class SonnapApp extends StatelessWidget {
   /// 測試用注入點。null = 真的手機使用權限與通知權限。
   final WelcomePermissions? welcomePermissions;
 
+  /// 進場動畫（2026-11-22，`widgets/entry_intro.dart`）。只有 `main()` 打開；
+  /// 測試預設關，不然每一條都要多等兩秒、而且播的時候點不到東西。
+  final bool entryAnimation;
+
   const SonnapApp({
     super.key,
     this.store,
@@ -91,6 +96,7 @@ class SonnapApp extends StatelessWidget {
     this.health,
     this.nightly,
     this.welcomePermissions,
+    this.entryAnimation = false,
   });
 
   @override
@@ -105,6 +111,7 @@ class SonnapApp extends StatelessWidget {
         health: health,
         nightly: nightly,
         welcomePermissions: welcomePermissions,
+        entryAnimation: entryAnimation,
       ),
     );
   }
@@ -121,6 +128,9 @@ class MainPage extends StatefulWidget {
   /// 第一次登入流程的權限那一頁（測試注入假的）。
   final WelcomePermissions? welcomePermissions;
 
+  /// 進場動畫（見 [SonnapApp.entryAnimation]）。
+  final bool entryAnimation;
+
   const MainPage({
     super.key,
     this.store,
@@ -130,6 +140,7 @@ class MainPage extends StatefulWidget {
     this.health,
     this.nightly,
     this.welcomePermissions,
+    this.entryAnimation = false,
   });
 
   @override
@@ -174,6 +185,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _intro.dispose();
     _latest.dispose();
     // 注入的那一份由測試自己管
     if (widget.nightly == null) _nightly.dispose();
@@ -598,6 +610,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final status = await _accounts.resolve();
     if (!mounted) return;
     setState(() => _account = status);
+    // 冷啟動的短版進場動畫（第一次登入的人改走長版，在按 Let's go 的時候）。只播一次。
+    if (widget.entryAnimation && !_introPlayed && status.state != AccountState.needsOnboarding) {
+      _introPlayed = true;
+      _intro.play();
+    }
     // 建置參數只帶 id，暱稱要另外向後端拿（不擋啟動）
     if (status.state == AccountState.buildTime) {
       final named = await _accounts.refreshBuildTimeName(status);
@@ -656,6 +673,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
   /// 完成頁的 Let's go。沒有帳號＝跟原本的「跳過」一樣（不寫進儲存，下次再問）。
   void _enterApp() {
+    if (widget.entryAnimation) _beginDescent();
     final pending = _pendingAccount;
     if (pending == null) {
       _skipOnboarding();
@@ -672,9 +690,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     final locked = await journeyLocksSchedule(store);
     if (!mounted) return;
     final account = _account;
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (context) => WelcomeFlow(
+    final petKey = GlobalKey();
+    Widget builder(BuildContext context) => WelcomeFlow(
         replay: true,
+        donePetKey: petKey,
         initialName: account?.displayName,
         initialBedtime: targetBedtime,
         initialWake: wake,
@@ -695,9 +714,25 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           if (mounted) setState(() => _account = renamed);
           return null;
         },
-        onDone: () => Navigator.of(context).pop(),
-      ),
-    ));
+        onDone: () {
+          // 長版：跟第一次登入一樣降落到首頁（流程頁淡出、寵物從完成頁的位置飄下來）
+          if (widget.entryAnimation) {
+            final from = _rectOf(petKey);
+            setState(() => currentIndex = 0);
+            _intro.play(long: true, petFrom: from);
+          }
+          Navigator.of(context).pop();
+        },
+      );
+    await Navigator.of(context).push(widget.entryAnimation
+        ? PageRouteBuilder<void>(
+            transitionDuration: const Duration(milliseconds: 300),
+            reverseTransitionDuration: const Duration(milliseconds: 350),
+            pageBuilder: (context, _, _) => builder(context),
+            transitionsBuilder: (context, animation, _, child) =>
+                FadeTransition(opacity: animation, child: child),
+          )
+        : MaterialPageRoute<void>(builder: builder));
   }
 
   /// 跳過註冊。**不寫進儲存**——下次開 App 會再問一次。
@@ -705,6 +740,57 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// 刻意這樣：跳過的最常見原因是「現在連不到後端」，那是暫時的。
   /// 記成永久決定的話，使用者之後在 WiFi 底下也永遠不會被問第二次，
   /// 而且畫面上沒有任何地方看得出來他錯過了什麼。
+  // ── 進場動畫（2026-11-22）──────────────────────────────────────────
+
+  late final EntryIntro _intro = EntryIntro()..ui.addListener(_onIntroUi);
+  bool _introPlayed = false;
+
+  /// 導覽列那一組到位了沒（還沒的時候頁面延伸到導覽列後面）。
+  bool _introUiDone = true;
+
+  void _onIntroUi() {
+    final done = _intro.ui.value >= 1;
+    if (done != _introUiDone && mounted) setState(() => _introUiDone = done);
+  }
+
+  /// 第一次登入流程：完成頁那隻寵物（降落時從這裡飄下來）、流程本身（淡出時要留著同一份）。
+  final GlobalKey _welcomePetKey = GlobalKey();
+  final GlobalKey _welcomeFlowKey = GlobalKey();
+
+  /// 按了 Let's go：流程還蓋在首頁上、正在淡出。
+  bool _welcomeLeaving = false;
+  bool _welcomeFading = false;
+
+  Rect? _rectOf(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  /// 長版：首頁從天空降下來，第一次登入流程在上面淡出。
+  void _beginDescent() {
+    _introPlayed = true;
+    _intro.play(long: true, petFrom: _rectOf(_welcomePetKey));
+    setState(() {
+      _welcomeLeaving = true;
+      _welcomeFading = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _welcomeFading = true);
+    });
+  }
+
+  Widget _buildWelcome() => WelcomeFlow(
+        key: _welcomeFlowKey,
+        initialBedtime: targetBedtime,
+        initialWake: defaultWakeTime(targetBedtime),
+        store: widget.store ?? const PlatformKeyValueStore(),
+        permissions: _welcomePermissions,
+        donePetKey: _welcomePetKey,
+        onFinish: _finishWelcome,
+        onDone: _enterApp,
+      );
+
   void _skipOnboarding() {
     setState(() => _account = const AccountStatus(AccountState.noBackend));
   }
@@ -767,6 +853,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         onOpenInsights: () => setState(() => currentIndex = 2),
         // 導覽列中間的月亮 → 首頁照原本的流程開始睡覺；首頁右上角的人像 → 設定
         startSleepRequests: _startSleepRequests,
+        intro: widget.entryAnimation ? _intro : null,
         onOpenSettings: () => setState(() => currentIndex = _settingsIndex),
         sleepStatus: _friends?.sendSleepStatus,
         planCard: TodayPlanCard(plan: _plan, wake: _wakeNow, onOpen: _openPlan, journey: _journey),
@@ -835,6 +922,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     // 還在解析。⚠️ 這一格不能省——少了它，第一幀會閃過一次問暱稱的畫面
     // 然後又消失，看起來像 App 在抽搐。
     if (account == null) {
+      // 進場動畫：系統啟動畫面之後直接是那片天空（不轉圈），接著降落到首頁
+      if (widget.entryAnimation) {
+        return const Scaffold(backgroundColor: kEntrySkyTop, body: EntrySky());
+      }
       return const Scaffold(
         backgroundColor: Color(0xFF081326),
         body: Center(
@@ -843,18 +934,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       );
     }
 
-    if (account.state == AccountState.needsOnboarding) {
-      return WelcomeFlow(
-        initialBedtime: targetBedtime,
-        initialWake: defaultWakeTime(targetBedtime),
-        store: widget.store ?? const PlatformKeyValueStore(),
-        permissions: _welcomePermissions,
-        onFinish: _finishWelcome,
-        onDone: _enterApp,
-      );
-    }
+    if (account.state == AccountState.needsOnboarding) return _buildWelcome();
 
-    return PopScope(
+    final app = PopScope(
       // 在設定頁按返回 → 回首頁（設定頁不在導覽列上，沒有別的路回去）
       canPop: currentIndex != _settingsIndex,
       onPopInvokedWithResult: (didPop, _) {
@@ -874,8 +956,11 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
               context: context,
               removeBottom: true,
               child: Padding(
+                // 進場時頁面延伸到導覽列後面（導覽列還沒出來，不然底下會露一條底色）
                 padding: EdgeInsets.only(
-                  bottom: (navHeight - MoonNavBar.moonRise).clamp(0.0, double.infinity),
+                  bottom: !_introUiDone
+                      ? 0
+                      : (navHeight - MoonNavBar.moonRise).clamp(0.0, double.infinity),
                 ),
                 child: IndexedStack(
                   index: currentIndex,
@@ -888,17 +973,47 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
 
         // 月亮凸出導覽列上緣，頁面要延伸到導覽列後面，凸出那一塊才不會是一條底色
         extendBody: true,
-        bottomNavigationBar: MoonNavBar(
-          currentIndex: currentIndex,
-          bedtime: targetBedtime, // 快到就寢時中間那顆發亮（同守門那一窗）
-          onTab: (index) => setState(() => currentIndex = index),
-          onMoon: () {
-            // 在別的分頁按也一樣：先回首頁，起床後的報告流程從首頁接下去
-            setState(() => currentIndex = 0);
-            _startSleepRequests.request();
-          },
+        // 進場時導覽列最後從下面滑上來（沒在播時 ui＝1，原樣）
+        bottomNavigationBar: ValueListenableBuilder<double>(
+          valueListenable: _intro.ui,
+          builder: (context, p, child) => IgnorePointer(
+            ignoring: p < 1,
+            child: Opacity(
+              opacity: p,
+              child: Transform.translate(offset: Offset(0, (1 - p) * 40), child: child),
+            ),
+          ),
+          child: MoonNavBar(
+            currentIndex: currentIndex,
+            bedtime: targetBedtime, // 快到就寢時中間那顆發亮（同守門那一窗）
+            onTab: (index) => setState(() => currentIndex = index),
+            onMoon: () {
+              // 在別的分頁按也一樣：先回首頁，起床後的報告流程從首頁接下去
+              setState(() => currentIndex = 0);
+              _startSleepRequests.request();
+            },
+          ),
         ),
       ),
+    );
+
+    if (!_welcomeLeaving) return app;
+    // 第一次登入流程按了 Let's go：流程留在上面淡出（同一份，靠 GlobalKey 保住狀態）
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return Stack(
+      children: [
+        app,
+        IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: _welcomeFading ? 0 : 1,
+            duration: reduce ? Duration.zero : const Duration(milliseconds: 350),
+            onEnd: () {
+              if (mounted) setState(() => _welcomeLeaving = false);
+            },
+            child: _buildWelcome(),
+          ),
+        ),
+      ],
     );
   }
 }

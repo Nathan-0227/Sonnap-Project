@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 啟動畫面的底色＝App 裡那片天空（lib/widgets/entry_intro.dart 的 kEntrySkyBottom）。
+         從系統畫面接到進場動畫時不會閃白。改這裡要一起改那邊。 -->
+    <color name="sonnap_sky">#010B2E</color>
+</resources>
