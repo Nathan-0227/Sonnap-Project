@@ -11,7 +11,8 @@ import 'screens/home_screen.dart';
 import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
 import 'widgets/moon_nav_bar.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/welcome_flow.dart';
+import 'services/usage_stats.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
 import 'services/bedtime_guard.dart';
@@ -76,6 +77,9 @@ class SonnapApp extends StatelessWidget {
   /// 漏接了不會報錯——只是昨晚沒上傳（`nightly_trigger_test.dart` 守著）。
   final NightlySync? nightly;
 
+  /// 測試用注入點。null = 真的手機使用權限與通知權限。
+  final WelcomePermissions? welcomePermissions;
+
   const SonnapApp({
     super.key,
     this.store,
@@ -84,6 +88,7 @@ class SonnapApp extends StatelessWidget {
     this.guard,
     this.health,
     this.nightly,
+    this.welcomePermissions,
   });
 
   @override
@@ -97,6 +102,7 @@ class SonnapApp extends StatelessWidget {
         guard: guard,
         health: health,
         nightly: nightly,
+        welcomePermissions: welcomePermissions,
       ),
     );
   }
@@ -110,6 +116,9 @@ class MainPage extends StatefulWidget {
   final HealthPlatform? health;
   final NightlySync? nightly;
 
+  /// 第一次登入流程的權限那一頁（測試注入假的）。
+  final WelcomePermissions? welcomePermissions;
+
   const MainPage({
     super.key,
     this.store,
@@ -118,6 +127,7 @@ class MainPage extends StatefulWidget {
     this.guard,
     this.health,
     this.nightly,
+    this.welcomePermissions,
   });
 
   @override
@@ -594,21 +604,88 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> _createAccount(String displayName) async {
+  /// 建帳號（帶目前的目標就寢時間）。成功回新的狀態，**不切畫面**：第一次登入流程要先停在完成頁，
+  /// 按了 Let's go 才換成這個帳號（[_enterApp]）。
+  Future<AccountStatus?> _createAccount(String displayName) async {
     final hh = targetBedtime.hour.toString().padLeft(2, '0');
     final mm = targetBedtime.minute.toString().padLeft(2, '0');
     final status = await _accounts.createAccount(
       displayName: displayName,
       targetBedtime: '$hh:$mm',
     );
-    if (status == null) return false;
+    if (status == null) return null;
     // ⚠️ POST /users 已經把這個目標帶過去了，所以直接記成「已同步」。
     //    少了這一行，下次開 App 會白白再 PATCH 一次同樣的值。
     await _settings.markSynced('$hh:$mm');
-    if (!mounted) return true;
-    setState(() => _account = status);
+    return status;
+  }
+
+  /// 第一次登入流程走完時建好的帳號；null＝沒建（跳過暱稱或連不到後端）。
+  AccountStatus? _pendingAccount;
+
+  late final WelcomePermissions _welcomePermissions =
+      widget.welcomePermissions ?? _AppWelcomePermissions(const UsageStatsService(), _reminder.scheduler);
+
+  /// 存作息（就寢走 [_setBedtime]：存手機、送後端、重排提醒；起床存手機，有帳號就 PATCH）。
+  Future<void> _saveSchedule(TimeOfDay bed, TimeOfDay wake) async {
+    await _setBedtime(bed);
+    final alarm = AlarmSettingsStore(widget.store ?? const PlatformKeyValueStore());
+    await alarm.save(wake: wake, enabled: await alarm.enabled());
+  }
+
+  /// 第一次登入流程（Q12）：作息先存，最後才一次建帳號。送不出去時回那句話給完成頁照實說。
+  Future<String?> _finishWelcome(WelcomeResult r) async {
+    await _saveSchedule(r.bedtime, r.wake);
+    final name = r.name;
+    if (name == null) return null;
+    _pendingAccount = await _createAccount(name);
+    if (_pendingAccount != null) return null;
+    return "We couldn't reach Sonnap's server, so your nickname wasn't saved. "
+        "You can still use Sonnap, and we'll ask again next time.";
+  }
+
+  /// 完成頁的 Let's go。沒有帳號＝跟原本的「跳過」一樣（不寫進儲存，下次再問）。
+  void _enterApp() {
+    final pending = _pendingAccount;
+    if (pending == null) {
+      _skipOnboarding();
+      return;
+    }
+    setState(() => _account = pending);
     unawaited(_syncWake());
-    return true;
+  }
+
+  /// 設定頁的 Replay welcome（Q11）：從頭走一次，不建帳號、不覆蓋資料；暱稱改了走 PATCH。
+  Future<void> _replayWelcome() async {
+    final store = widget.store ?? const PlatformKeyValueStore();
+    final wake = await AlarmSettingsStore(store).wakeTime(targetBedtime);
+    final locked = await journeyLocksSchedule(store);
+    if (!mounted) return;
+    final account = _account;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (context) => WelcomeFlow(
+        replay: true,
+        initialName: account?.displayName,
+        initialBedtime: targetBedtime,
+        initialWake: wake,
+        scheduleLocked: locked,
+        store: store,
+        permissions: _welcomePermissions,
+        onFinish: (r) async {
+          if (!locked) {
+            await _saveSchedule(r.bedtime, r.wake);
+            unawaited(_syncWake());
+          }
+          final name = r.name;
+          if (name == null || account == null || name == account.displayName) return null;
+          final renamed = await _accounts.rename(account, name);
+          if (renamed == null) return "We couldn't reach Sonnap's server, so your nickname didn't change.";
+          if (mounted) setState(() => _account = renamed);
+          return null;
+        },
+        onDone: () => Navigator.of(context).pop(),
+      ),
+    ));
   }
 
   /// 跳過註冊。**不寫進儲存**——下次開 App 會再問一次。
@@ -719,6 +796,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         onReminderChanged: _setReminder,
         onBedtimeGuardTap: _openGuard,
         onHealthConnectTap: _openHealth,
+        onReplayWelcome: _replayWelcome,
         dataSection: FutureBuilder<SleepSession>(
           future: _sessionForData,
           builder: (context, snap) => ListenableBuilder(
@@ -754,9 +832,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     }
 
     if (account.state == AccountState.needsOnboarding) {
-      return OnboardingScreen(
-        onCreate: _createAccount,
-        onSkip: _skipOnboarding,
+      return WelcomeFlow(
+        initialBedtime: targetBedtime,
+        initialWake: defaultWakeTime(targetBedtime),
+        store: widget.store ?? const PlatformKeyValueStore(),
+        permissions: _welcomePermissions,
+        onFinish: _finishWelcome,
+        onDone: _enterApp,
       );
     }
 
@@ -806,4 +888,20 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// 權限那一頁接到真的平台（手機使用權限＋通知）。
+class _AppWelcomePermissions implements WelcomePermissions {
+  final UsageStatsService usage;
+  final ReminderScheduler reminders;
+  const _AppWelcomePermissions(this.usage, this.reminders);
+
+  @override
+  Future<bool> hasUsageAccess() => usage.hasAccess();
+
+  @override
+  Future<void> openUsageSettings() => usage.openSettings();
+
+  @override
+  Future<void> requestNotifications() => reminders.requestPermission();
 }

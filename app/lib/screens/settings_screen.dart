@@ -29,6 +29,9 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback? onPetTap;
   final VoidCallback? onLanguageTap;
   final VoidCallback? onAboutTap;
+
+  /// 從頭再走一次第一次登入的流程（2026-11-22 Q11）。null＝不畫那一列。
+  final VoidCallback? onReplayWelcome;
   final VoidCallback? onLogout;
 
   /// 打開就寢守門的設定頁（B4）。
@@ -61,6 +64,7 @@ class SettingsScreen extends StatefulWidget {
     this.onPetTap,
     this.onLanguageTap,
     this.onAboutTap,
+    this.onReplayWelcome,
     this.onLogout,
     this.onBedtimeGuardTap,
     this.onHealthConnectTap,
@@ -376,6 +380,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 12),
 
+                if (widget.onReplayWelcome case final replay?) ...[
+                  KeyedSubtree(
+                    key: const Key('settings-replay-welcome'),
+                    child: _buildSettingTile(
+                      icon: Icons.replay_rounded,
+                      title: "Replay welcome",
+                      subtitle: "Walk through the first-time setup again",
+                      onTap: replay,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _buildSettingTile(
                   icon: Icons.info_outline_rounded,
                   title: "About Sonnap",
