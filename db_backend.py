@@ -211,7 +211,8 @@ def mysql_ddl(schema_sql):
     for table, spec in info.items():
         for idx in spec["indexes"]:
             cols = ", ".join(f"`{c}`" for c in idx["cols"])
-            out.append(f'CREATE INDEX `{idx["name"]}` ON `{table}` ({cols})')
+            kind = "CREATE UNIQUE INDEX" if idx["unique"] else "CREATE INDEX"
+            out.append(f'{kind} `{idx["name"]}` ON `{table}` ({cols})')
     return out
 
 

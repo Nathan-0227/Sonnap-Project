@@ -53,6 +53,10 @@ import db  # noqa: E402
 # 那一欄會原封不動帶著你真正的 id 出去——tests/test_export_teammate.py 掃整個檔案守著。
 ID_COLUMNS = ("user_id", "friend_id")
 
+# 整張不帶的表。🔴 user_logins 有 email 與密碼雜湊：副本是給隊友用的，
+# 帶過去等於把你的登入名稱與雜湊交出去（雜湊也能拿去離線猜）。測試【6】守著。
+EXCLUDED_TABLES = ("user_logins",)
+
 
 def export(out_dir, *, source_db=None, clips_dir=None, new_user_id=None):
     """
@@ -84,6 +88,9 @@ def export(out_dir, *, source_db=None, clips_dir=None, new_user_id=None):
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         counts = {}
         for t in tables:
+            if t in EXCLUDED_TABLES:
+                counts[t] = 0
+                continue
             cols = [r[1] for r in dst.execute(f"PRAGMA table_info({t})")]
             try:
                 rows = src.execute(f"SELECT * FROM {t}").fetchall()

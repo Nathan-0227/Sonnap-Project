@@ -52,6 +52,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, StrictBool
 
+import auth  # email＋密碼登入（只用標準庫）
 import camera_auto  # 按 Start Sleep 自動開錄（只用標準庫，不載入 OpenCV）
 import camera_clips
 import camera_usual
@@ -219,6 +220,21 @@ class CreateUserRequest(BaseModel):
     study_cohort: str = Field("L0", description="L0 phone only / L1 wearable / L2 researcher")
     wearable_brand: Optional[str] = Field(
         None, description="Cross-brand physiological metrics are not comparable, so the source must always be recorded.")
+
+
+class LoginSetupRequest(BaseModel):
+    email: str = Field(..., max_length=400)
+    password: str = Field(..., max_length=400)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., max_length=400)
+    password: str = Field(..., max_length=400)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., max_length=400)
+    new_password: str = Field(..., max_length=400)
 
 
 class UpdateUserRequest(BaseModel):
@@ -943,6 +959,113 @@ def delete_user(user_id: str):
     camera_clips.delete_user_clips(user_id)
     db.delete_user(user_id)
     return {"deleted": True, "user_id": user_id}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# email＋密碼登入（規則在 auth.py）
+# ═══════════════════════════════════════════════════════════════════
+# 🔴 API 照舊用 user_id 認人、沒有 token：登入只是「用 email＋密碼換回 user_id」。
+#    錯誤一律回 {"code", "message"}，message 給人讀、App 照抄。
+
+def _auth_error(status, code, message, **extra):
+    raise HTTPException(status_code=status, detail={"code": code, "message": message, **extra})
+
+
+def _login_view(login):
+    """回給 App 的只有這兩個欄位；password_hash、錯誤次數不出後端。"""
+    return {"has_login": login is not None, "email": login["email"] if login else None}
+
+
+def _locked_error(minutes):
+    _auth_error(423, "locked",
+                f"Too many wrong passwords. Try again in {minutes} minute"
+                f"{'' if minutes == 1 else 's'}.", minutes=minutes)
+
+
+def _check_password(login, password):
+    """
+    驗密碼，連錯照 auth.after_failure 記；鎖著的不驗（連對的也不放行）。
+    對了把錯誤次數清掉。
+    """
+    now = datetime.now(db.TZ_TAIPEI)
+    left = auth.locked_minutes_left(login, now)
+    if left:
+        _locked_error(left)
+    if auth.verify_password(password, login["password_hash"]):
+        if login.get("failed_attempts") or login.get("locked_until"):
+            db.set_login_failures(login["user_id"], 0, None)
+        return True
+    count, until = auth.after_failure(login, now)
+    db.set_login_failures(login["user_id"], count, until)
+    if until:
+        _locked_error(auth.LOCK_MINUTES)
+    return False
+
+
+@app.get("/users/{user_id}/login")
+def get_login(user_id: str):
+    """這個帳號設了登入沒有；有的話是哪個 email。"""
+    require_user(user_id)
+    return _login_view(db.get_login(user_id))
+
+
+@app.post("/users/{user_id}/login", status_code=201)
+def setup_login(user_id: str, req: LoginSetupRequest):
+    """幫既有的帳號設 email＋密碼（只能設一次；之後改密碼走 /password）。"""
+    require_user(user_id)
+    email = auth.normalize_email(req.email)
+    problem = auth.email_problem(email)
+    if problem:
+        _auth_error(422, "bad_email", problem)
+    problem = auth.password_problem(req.password)
+    if problem:
+        _auth_error(422, "bad_password", problem)
+    result = db.create_login(user_id, email, auth.hash_password(req.password))
+    if result == "already_set":
+        _auth_error(409, "already_set", "This account already has a login.")
+    if result == "email_taken":
+        _auth_error(409, "email_taken", "That email is already used by another account.")
+    return _login_view(db.get_login(user_id))
+
+
+@app.post("/login")
+def login(req: LoginRequest):
+    """
+    email＋密碼 → 原本的 user_id。
+
+    沒有這個 email 跟密碼錯回**同一句**（不讓人試出哪些 email 有帳號），
+    也花一樣久（auth.burn_time）。
+    """
+    email = auth.normalize_email(req.email)
+    found = db.get_login_by_email(email) if email else None
+    if found is None:
+        auth.burn_time(req.password)
+        _auth_error(401, "wrong", "Email or password is wrong.")
+    if not _check_password(found, req.password):
+        _auth_error(401, "wrong", "Email or password is wrong.")
+    user = db.get_user(found["user_id"]) or {}
+    # 目標一起帶回去：新手機上的是預設值，App 不採用後端這份的話會把預設值 PATCH 回來蓋掉
+    return {"user_id": found["user_id"],
+            "display_name": user.get("display_name"),
+            "target_bedtime": user.get("target_bedtime"),
+            "target_wake": user.get("target_wake"),
+            "email": found["email"]}
+
+
+@app.post("/users/{user_id}/password")
+def change_password(user_id: str, req: ChangePasswordRequest):
+    """改密碼：要舊密碼。舊密碼錯也算進連錯次數。"""
+    require_user(user_id)
+    found = db.get_login(user_id)
+    if found is None:
+        _auth_error(404, "no_login", "This account has no login yet.")
+    problem = auth.password_problem(req.new_password)
+    if problem:
+        _auth_error(422, "bad_password", problem)
+    if not _check_password(found, req.old_password):
+        _auth_error(401, "wrong", "Current password is wrong.")
+    db.set_login_password(user_id, auth.hash_password(req.new_password))
+    return _login_view(db.get_login(user_id))
 
 
 # ═══════════════════════════════════════════════════════════════════

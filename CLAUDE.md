@@ -131,7 +131,7 @@ NightlyUpload: ok date=2026-09-02 adherence=189m late=true
 
 測試用的 id 由 `migrate_garmin_to_db.py` 的 `RESEARCHER_USER_ID` 產生。
 
-⚠️ **`user_id` 本身就是憑證**（免註冊、無密碼）。不要印進 logcat（裝了 adb
+⚠️ **`user_id` 本身就是憑證**（免註冊；2026-11-22 起可以另設 email＋密碼，但那只用來**拿回 id**，API 仍然只認 id、沒有 token，見下方「email＋密碼登入」）。不要印進 logcat（裝了 adb
 就讀得到）、不要放進會外流的檔案。註冊畫面**不得出現「安全」「加密」字眼**
 （有測試守著）——那會讓畫面與同意書自相矛盾。上架前要補認證。
 
@@ -473,12 +473,32 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 
 | 規則 | 不遵守的後果 |
 |---|---|
-| 🔴 **不放按了沒反應的東西**：Appearance、Log Out、名片上的 email（原本寫死 `jeremy@email.com`）都拿掉了。主題色＋減少動態效果、email＋密碼登入各有自己的 PR（記憶 `settings-redesign-and-login`）；Language 照實寫 English，點了說之後會有中文 | 點了只跳「以後才有」 |
+| 🔴 **不放按了沒反應的東西**：Appearance、Log Out、名片上的 email（原本寫死 `jeremy@email.com`）都拿掉了。主題色＋減少動態效果、email＋密碼登入後來都補上了（主題色見這張表的最後一列，登入見「email＋密碼登入」那一節）；Language 照實寫 English，點了說之後會有中文 | 點了只跳「以後才有」 |
 | 樣子只在 `widgets/settings_list.dart` 一份（`SettingsPage`／`SettingsGroup`／`SettingsRow`…）：守門、Health Connect、What friends can see、換寵物面板都用它 | 幾頁各長各的 |
 | ⚠️ `showReportSheet` 的外框是透明的，**面板的底色要內容自己畫**（`kSettingsSheetColor`）；`settings_screen_test` 守著 | 11-22 實機：Language 點開整片透明 |
 | Data 收成一列，右邊照實寫 **Live／Bundled**（退回打包檔不能省），點開是原本那一整塊 `DataStatusSection` | 使用者以為看到的是即時資料 |
 | 等級、邀請碼照抄後端；連不到就不畫那兩顆；Edit name 走 `AccountService.rename`（同 Replay welcome），沒有後端照實說 | — |
 | **主題色＋Reduce motion**（`theme/app_accent.dart`，Q5 A＋C）：紫／藍／粉／綠，只存在手機上、預設紫。App 的 `ThemeData` 由它產生（**底子維持 Flutter 預設的亮色**，只換 seed 與 primary——換成暗色的話對話框、輸入框會悄悄變樣）；介面的強調色一律 `accentOf(context)`／`accentSoftOf(context)`，**不要再寫死 `0xFF7657FF`**。🔴 **圖表裡有意思的顏色不跟著換**：睡著的淡紫（`NightSheets.asleepColor`）、睡眠階段、報告配色、心情顏色。Reduce motion 包在 `MaterialApp.builder`（`applyReduceMotion`），跟系統設定任一個開就把 `MediaQuery.disableAnimations` 設成 true——全 App 的動畫本來就看它。`app_accent_test` 守著 | 寫死的紫色換了主題也不會變；圖表換色後同一個顏色不再代表同一件事 |
+
+### ✅ email＋密碼登入（2026-11-22 grill，`feature/email-login`；記憶 `settings-redesign-and-login` 的 A'）
+
+只做一件事：換手機、重裝 App 時用 email＋密碼**拿回原本的 user_id**。規則在 `auth.py`（標準庫 scrypt），表 `user_logins`（**不在 users 表裡**：`GET /users/{id}` 回的是 `SELECT *`）。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 🔴 **API 照舊用 user_id 認人、沒有 token**：`POST /login` 回的就是 user_id，之後每個請求照舊帶它。密碼保護的是「怎麼找回 id」，不是每一個請求——拿到 id 的人照樣讀寫得到。上架前要補真正的認證 | 對外說「有登入所以安全」是假話 |
+| 端點：`GET`／`POST /users/{id}/login`（設一次，之後 409）、`POST /login`、`POST /users/{id}/password`（要舊密碼）。錯誤一律 `{"detail": {"code", "message"}}`，App 照抄 message | — |
+| email 只當登入名稱：轉小寫去空白（`auth.normalize_email`）、**不寄信、不驗證、沒有忘記密碼**；同一個 email 不能兩個帳號（唯一索引，MariaDB 那邊 `db_backend` 會建 `CREATE UNIQUE INDEX`） | — |
+| 密碼至少 8 個字元；**連錯 5 次鎖 15 分鐘**（鎖帳號，不是手機），鎖著時連對的也不放行；改密碼時舊密碼打錯也算。8／5／15 是設計決策、沒有文獻 | — |
+| 沒有這個 email 跟密碼錯回**同一句**、花一樣久（`auth.burn_time`） | 試得出哪些 email 有帳號 |
+| 🔴 **密碼誰都看不到**，管理員也一樣：忘了就 `SONNAP_DB_URL=mysql://root@localhost/sonnap python reset_password.py <email>` 發一組臨時密碼（同時解鎖），請對方登入後 Change password | 存原文或可還原的格式，資料庫外流就是密碼外流 |
+| 🔴 `export_teammate.py` **整張不帶** `user_logins`（`EXCLUDED_TABLES`，`test_export_teammate`【9】守著） | 隊友拿到你的登入名稱與雜湊（雜湊也能離線猜） |
+| App：設定頁名片底下 **Account**——沒設＝Set up login 一列；設好＝Email、Change password、Log out。拿不到登入狀態（連不到、舊版後端）整組不畫 | 不放按了才說連不上的 |
+| **建置參數那支 APK 不能登出**（照實寫原因）：它認的是寫死的 id，登出了下次打開還是它 | — |
+| 登出清掉手機上的帳號與助理對話，回到歡迎頁；睡眠資料在後端、再登入就回來；自己勾的習慣、寵物選擇只在手機上，留著 | — |
+| 歡迎頁 **I already have an account** → `LogInScreen` → 直接進首頁（不走後面幾頁）。🔴 **採用後端存的目標就寢／起床並記成已同步**（`/login` 一起回） | 新手機上的是預設值，`_syncBedtime`／`_syncWake` 會把預設值 PATCH 回去蓋掉原本的目標（`login_test`【6】守著） |
+| 第一次登入流程：暱稱之後一步「設登入」，可跳過；**帳號建好才送**（同暱稱 Q12），送不出去完成頁照實說、設定頁還能再設；跳過暱稱就沒有這一步；Replay 沒有 | — |
+| ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `user_logins`），再重開後端 | 後端啟動不建表 |
 
 ### ✅ 徽章（2026-11-22 grill，`feature/badges-backend`；獎勵頁「獎盃架」的後端）
 
@@ -542,7 +562,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 ### ✅ 第一次登入的流程（2026-11-22 grill Q9–Q14，`feature/onboarding`，取代原本只有一頁暱稱的 OnboardingScreen）
 
-`screens/welcome_flow.dart`：歡迎 → 暱稱 → 寵物 → 作息 → **想改善什麼** → 權限 → 完成，上面一排進度點。
+`screens/welcome_flow.dart`：歡迎 → 暱稱 →（設登入，可跳過，見「email＋密碼登入」）→ 寵物 → 作息 → **想改善什麼** → 權限 → 完成，上面一排進度點。歡迎頁另有 I already have an account。
 
 | 規則 | 不遵守的後果 |
 |---|---|
@@ -1730,8 +1750,9 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
 
 **後端（根目錄）**
 
-- `main.py` — FastAPI。23 個端點：
+- `main.py` — FastAPI。端點：
   使用者 `POST /users`、`GET`+`PATCH`+`DELETE /users/{id}`；
+  登入 `GET`+`POST /users/{id}/login`、`POST /login`、`POST /users/{id}/password`（2026-11-22，只用來拿回 user_id，見「email＋密碼登入」）；
   上傳 `POST /nightly /wearable`；
   讀取 `GET /home /insights /challenges /get-sleep-data /health`（`database_available` 照實際用的那種資料庫去問：MariaDB 真的連一次，2026-11-20 前一律看 SQLite 檔、跑 MariaDB 時永遠是 false）；
   攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
@@ -1747,7 +1768,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   因此跑在多執行緒裡：`main.py` 的記憶體快取（25 MB 原始檔、心率索引）**一次整份換掉**、重新載入加鎖，不分兩步改。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — 20 張表（2026-11-22 加了徽章三張），暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+- `db.py` — 21 張表（2026-11-22 加了徽章三張、`user_logins`），暱稱制免註冊（email＋密碼可另設）。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
   設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
   自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
@@ -1923,7 +1944,8 @@ python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規�
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
 python tests/test_badges.py              # 2026-11-22 新增：徽章——準時／連續／挑戰照用同一支函式、差的晚上不前進、連續沿日曆日走、Bounce back 要隔天、門檻在挑戰定義裡、Podium 不到 3 人不算、日期是跨過門檻那一晚、領 XP 一級一次、拿到的不收回、習慣只收數字、助理只算答出來的天數、舊版 badges 照在、刪帳號一起刪
 python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不直接讀它（只讀記下來的站數）、刪帳號一起刪
-python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
+python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣；email 與密碼雜湊不帶
+python tests/test_login.py               # 2026-11-22 新增：email＋密碼——雜湊有 salt、email 小寫、只能設一次、同 email 不能兩個帳號、沒這個 email 跟密碼錯同一句、連錯 5 次鎖 15 分鐘（鎖著連對的也不放）、改密碼要舊的、雜湊不出後端、reset_password、刪帳號一起刪、MariaDB 唯一索引
 python tests/test_no_blocking.py         # 2026-11-21 新增：慢的請求不准卡住別人（開真的 uvicorn 量 /health）、只有真的在 await 的端點才准 async、快取一次整份換掉
 python tests/test_camera_auto.py         # 2026-11-21 新增：按 Start Sleep 自動開錄——只認手機帳號＋區網、在錄不開第二個、停錄只放旗標（錄影程式自己收尾，拿掉檢查會紅）、Cancel 搬檔不刪、鎖檔死了當沒在錄、攝影機移動偵測（平移 40 判移動、亮度與床上的人不算、中間值）、早上匯入移動了只擋攝影機、重新框有備份並換基準、API 出錯不讓端點失敗
 ```
