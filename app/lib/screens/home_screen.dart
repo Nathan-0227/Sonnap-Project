@@ -36,6 +36,7 @@ import '../widgets/sleep_schedule_sheet.dart';
 import '../widgets/sleep_stages_card.dart';
 import '../services/morning_rating.dart';
 import '../services/morning_report.dart';
+import '../services/latest_night.dart';
 import '../services/report_loader.dart';
 import '../services/usage_stats.dart';
 import 'morning_report_screen.dart';
@@ -175,6 +176,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
   late Future<SleepSession> _sessionFuture;
 
+  /// 最近一晚重讀完的那一份：換 [_sessionFuture] 的那一下 FutureBuilder 會短暫回到 waiting，
+  /// 這時畫這一份，整頁才不會閃一下讀取中的轉圈（null＝照 FutureBuilder 原本的樣子）。
+  SleepSession? _swapped;
+
   /// `GET /game` 與 `GET /closet` 的結果。⚠️ 每一格都照抄後端。
   GameResult<GameState>? _game;
   GameResult<ClosetState>? _closet;
@@ -230,6 +235,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     NightSheetLinks.shared = _openLinkedSheet;
     _bedtime = widget.targetBedtime;
     _sessionFuture = widget.repository.load();
+    // 最近一晚換了（回到前景、關掉報告之後重讀）→ 整頁換成新的那一晚（2026-11-22，latest_night.dart）
+    final repo = widget.repository;
+    if (repo is LatestNightRepository) repo.addListener(_onLatestNight);
     _loadNotes();
     _loadGame();
     _loadCamera();
@@ -291,6 +299,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (NightSheetLinks.shared == _openLinkedSheet) NightSheetLinks.shared = null;
     _tick?.cancel();
     widget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
+    final repo = widget.repository;
+    if (repo is LatestNightRepository) repo.removeListener(_onLatestNight);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -568,6 +578,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           final r = await result;
           // 報告流程可能剛生成了 AI 寫的那一份 → 首頁的日記本跟著換（version 變了紅點會再亮）
           _loadNotes();
+          _refreshLatestNight();
           if (loadingRoute.isActive) navigator.removeRoute(loadingRoute);
           if (!finished.isCompleted) finished.complete(r);
         },
@@ -801,6 +812,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               source.fetchSummary(date, generate: generate),
     ));
     _loadNotes();
+    _refreshLatestNight();
     if (result == kReportOpenInsights && mounted) widget.onOpenInsights?.call();
   }
 
@@ -917,10 +929,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _reload() {
+    final repo = widget.repository;
+    if (repo is LatestNightRepository) repo.refresh();
     setState(() {
+      _swapped = null;
       _sessionFuture = widget.repository.load();
     });
     _loadNotes();
+  }
+
+  /// 最近一晚重讀完才換上去：用已經完成的 future，畫面不會先閃一下讀取中的轉圈。
+  void _onLatestNight() {
+    widget.repository.load().then((s) {
+      if (mounted) {
+        setState(() {
+          _swapped = s;
+          _sessionFuture = Future.value(s);
+        });
+      }
+    }, onError: (_) {});
+  }
+
+  /// 關掉早晨報告之後：那一晚的資料可能剛到（自評、手錶），三頁一起重讀。
+  void _refreshLatestNight() {
+    final repo = widget.repository;
+    if (repo is LatestNightRepository) repo.refresh();
   }
 
   /// 今天早上那一晚的寵物 notes；**沒有內容就退回前一晚**（[homeNotesDates]）。
@@ -1001,6 +1034,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: FutureBuilder<SleepSession>(
         future: _sessionFuture,
         builder: (context, snapshot) {
+          final swapped = _swapped;
+          if (snapshot.connectionState == ConnectionState.waiting && swapped != null) {
+            return _buildContent(swapped);
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const SafeArea(
               child: Center(

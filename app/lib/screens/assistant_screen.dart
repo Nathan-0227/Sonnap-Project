@@ -60,6 +60,10 @@ class AssistantScreen extends StatefulWidget {
   /// 頭像與狀態列的心情（同首頁那一份）；拿不到就是 bored。
   final Future<String?> Function()? petMood;
 
+  /// 最近一晚換了就重讀 [petMood]（main.dart 的 LatestNightRepository；分頁疊在 IndexedStack 裡，
+  /// 不重讀的話標題列會一直停在打開 App 那時的心情）。
+  final Listenable? moodChanges;
+
   /// 打招呼那一則要的那一晚：`/home?date=<今天>` 的回應（null＝沒有後端或拿不到 → 只打招呼）。
   final Future<Map<String, dynamic>?> Function(String date)? greetingNight;
 
@@ -75,6 +79,7 @@ class AssistantScreen extends StatefulWidget {
     this.chat,
     this.store,
     this.petMood,
+    this.moodChanges,
     this.greetingNight,
     this.visible = true,
     this.clock = DateTime.now,
@@ -159,6 +164,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
       if (!mounted || saved.isEmpty || _turns.isNotEmpty) return;
       setState(() => _turns.addAll(saved));
     });
+    _loadMood();
+    widget.moodChanges?.addListener(_loadMood);
+  }
+
+  void _loadMood() {
     widget.petMood?.call().then((m) {
       if (mounted) setState(() => _mood = m);
     }, onError: (_) {});
@@ -166,6 +176,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   @override
   void dispose() {
+    widget.moodChanges?.removeListener(_loadMood);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
