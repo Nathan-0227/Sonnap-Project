@@ -197,6 +197,7 @@ Future<void> pump(
   TownStub stub, {
   bool reduceMotion = false,
   KeyValueStore? store,
+  bool animateScenes = false,
 }) async {
   tester.view.physicalSize = const Size(411, 900);
   tester.view.devicePixelRatio = 1.0;
@@ -209,7 +210,12 @@ Future<void> pump(
           disableAnimations: reduceMotion,
         ),
         child: Scaffold(
-          body: FriendsScreen(key: UniqueKey(), service: stub, store: store ?? InMemoryKeyValueStore()),
+          body: FriendsScreen(
+            key: UniqueKey(),
+            service: stub,
+            store: store ?? InMemoryKeyValueStore(),
+            animateScenes: animateScenes,
+          ),
         ),
       ),
     ),
@@ -223,6 +229,17 @@ Future<void> settle(WidgetTester tester) async {
   for (var i = 0; i < 8; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+/// 這一頁的字都不是 Flutter 沒有 Material 時的備用樣式（黃色雙底線）。
+bool noFallbackText(WidgetTester tester, Finder page) {
+  final texts = find.descendant(of: page, matching: find.byType(RichText));
+  expect(texts, findsWidgets);
+  for (final e in texts.evaluate()) {
+    final style = (e.widget as RichText).text.style;
+    if (style?.decoration == TextDecoration.underline) return false;
+  }
+  return true;
 }
 
 Finder townie(String handle) => find.byKey(Key('town-$handle'));
@@ -912,6 +929,125 @@ void main() {
     final b = opacity();
     await tester.pump(const Duration(milliseconds: 700));
     expect(opacity(), isNot(b), reason: '反向對照：沒開減少動態效果時會閃');
+  });
+
+  group('【12】收禮場景、送禮推門（2026-11-22，animateScenes 只有正式 App 打開）', () {
+    TownStub withVisits() => TownStub(
+      town: FriendsResult(
+        FriendsStatus.ok,
+        value: townOf(
+          [
+            person('ME0001', 'Nathan', mine: true),
+            person('EAR111', 'Early', visitedMe: 'hugs'),
+            person('LAT222', 'Late', visitedMe: 'good_night'),
+          ],
+          visits: [
+            {'display_name': 'Early', 'handle': 'EAR111', 'pet_species': 'cat', 'kind': 'hugs', 'message': 'HUG-FROM-BACKEND'},
+            {'display_name': 'Late', 'handle': 'LAT222', 'kind': 'good_night', 'message': 'NIGHT-FROM-BACKEND'},
+          ],
+        ),
+      ),
+    );
+
+    Future<void> throughScene(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+    }
+
+    testWidgets('點愛心：還沒看過的先在客廳一位一位播，See all 才接清單；看過就不再播', (tester) async {
+      await pump(tester, withVisits(), animateScenes: true);
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      expect(find.byKey(const Key('visit-received-scene')), findsOneWidget);
+      expect(find.text('HUG-FROM-BACKEND'), findsOneWidget, reason: '泡泡照抄後端那句');
+      expect(find.text('Early stopped by today'), findsOneWidget);
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(noFallbackText(tester, find.byKey(const Key('visit-received-scene'))), isTrue);
+      expect(find.byKey(const Key('town-send-back-EAR111')), findsNothing, reason: '清單還沒開');
+
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+      expect(find.text('NIGHT-FROM-BACKEND'), findsOneWidget);
+      expect(find.text('See all'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+      expect(find.byKey(const Key('visit-received-scene')), findsNothing);
+      expect(find.byKey(const Key('town-send-back-EAR111')), findsOneWidget, reason: 'See all 接原本的清單');
+
+      // 看過了：再點愛心直接開清單
+      await tester.tapAt(const Offset(200, 60));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      expect(find.byKey(const Key('visit-received-scene')), findsNothing);
+      expect(find.byKey(const Key('town-send-back-EAR111')), findsOneWidget);
+    });
+
+    testWidgets('關掉場景就不開清單，也算看過', (tester) async {
+      await pump(tester, withVisits(), animateScenes: true);
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('visit-received-close')));
+      await settle(tester);
+      expect(find.byKey(const Key('visit-received-scene')), findsNothing);
+      expect(find.byKey(const Key('town-send-back-EAR111')), findsNothing);
+      expect(
+        find.descendant(of: find.byKey(const Key('town-visits-button')), matching: find.text('2')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('沒打開（測試預設）：點愛心照舊直接開清單', (tester) async {
+      await pump(tester, withVisits());
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      expect(find.byKey(const Key('visit-received-scene')), findsNothing);
+      expect(find.byKey(const Key('town-send-back-EAR111')), findsOneWidget);
+    });
+
+    testWidgets('送禮推門：先看到地圖推近，最後是送禮頁', (tester) async {
+      await pump(tester, withVisits(), animateScenes: true);
+      await throughScene(tester);
+      await tester.tap(find.byKey(const Key('town-send-back-LAT222')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const Key('town-door-map')), findsOneWidget, reason: '推門的地圖');
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const Key('town-door-map')), findsNothing);
+      expect(find.byKey(const Key('visit-gift-sheet')), findsOneWidget);
+      // 另外一頁要自己包 Material：不然字是等寬字＋黃色雙底線（2026-11-22 實機）
+      expect(noFallbackText(tester, find.byKey(const Key('visit-gift-sheet'))), isTrue);
+    });
+
+    testWidgets('減少動態效果：不推門、寵物不走（只淡入）', (tester) async {
+      // ⚠️ 要設在系統那一層：場景與推門是另外推的一頁，看不到 pump() 包在首頁外面的那個 MediaQuery
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await pump(tester, withVisits(), animateScenes: true, reduceMotion: true);
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final pet = tester.getTopLeft(find.byKey(const Key('visit-received-pet')));
+      await settle(tester);
+      expect(tester.getTopLeft(find.byKey(const Key('visit-received-pet'))), pet, reason: '寵物一開始就在坐墊上');
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('visit-received-next')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('town-send-back-LAT222')));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byKey(const Key('town-door-map')), findsNothing);
+      }
+      expect(find.byKey(const Key('visit-gift-sheet')), findsOneWidget);
+    });
   });
 
   group('【11】收禮（2026-11-22 Q8、Q12–Q14）', () {

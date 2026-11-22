@@ -588,6 +588,9 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 減少動態效果：圖示不飛、寵物不跳，只換字 | — |
 | 小鎮資料先畫、「看過哪幾則」晚一點補 | 讀手機儲存慢時會拖住整個小鎮（測試裡 channel 不回應時整頁空白，寫的時候踩到） |
 | 成果展：`demo_accounts.py --live` 讓 Mia／Leo／Yuki **今天**各送你一則（先刪再寫，可重跑） | 拜訪只看今天，`--create` 那天寫的到展示當天看不到 |
+| **推門**（`widgets/town_door_route.dart`，2026-11-22 使用者選「放大朋友的房子」）：Send something → 地圖往他那一間（`kTownLots` 往左上 `kTownDoorHouseShift`）推近、窗戶暖光蓋滿之後才淡入客廳；關掉只淡出。時間軸 `TownDoorFrame.at()` | 光還沒滿就淡掉會像直接切換（`town_door_test`【3】） |
+| **收禮場景**（`widgets/visit_received_scene.dart`）：點愛心時**今天還沒看過的**先在同一個客廳播（你的寵物左、他的寵物從右邊走進來坐右邊坐墊、泡泡照抄後端那句），一位一位點 Next，最後 See all 才接原本的清單；直接關掉不開清單、照樣算看過 | — |
+| 推門與收禮場景只有正式 App 打開（`FriendsScreen(animateScenes:)`，跟進場動畫同一個開關），測試預設關；減少動態效果只淡入。⚠️ 測試要用 `accessibilityFeaturesTestValue` 設：場景是另外推的一頁，看不到包在首頁外面的 MediaQuery | `friends_town_test`【12】 |
 
 ### ✅ 按 Start Sleep 自動開攝影機（2026-11-21 grill Q1–Q17，`feature/camera-auto-start`）
 

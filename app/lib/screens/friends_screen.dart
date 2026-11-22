@@ -12,6 +12,7 @@ import '../widgets/home_pet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/friend_night_card.dart';
 import '../widgets/friends_town.dart';
+import '../widgets/visit_received_scene.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/leaderboard_section.dart';
 import 'friend_sharing_screen.dart';
@@ -58,7 +59,11 @@ class FriendsScreen extends StatefulWidget {
   /// 「要不要分享即時狀態」只問一次：問過了記在這裡。測試注入記憶體版。
   final KeyValueStore store;
 
+  /// 送禮推門、收禮場景（2026-11-22）。只有正式的 App 打開，測試預設關（同進場動畫）。
+  final bool animateScenes;
+
   const FriendsScreen({
+    this.animateScenes = false,
     super.key,
     this.service,
     this.clock = DateTime.now,
@@ -218,8 +223,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Future<String?> _openGifts(TownPerson p) async {
     final town = _town?.value;
     String? sent;
+    // 推門：對準他在地圖上那一間（我在第 0 間，朋友照順序住進去）
+    final lot = town == null ? -1 : town.friends.indexOf(p) + 1;
     await showVisitGiftSheet(
       context,
+      door: widget.animateScenes && lot > 0 && lot < kTownLots.length ? kTownLots[lot] : null,
       friend: p,
       me: town?.me,
       kinds: town?.kinds ?? const [],
@@ -768,11 +776,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  void _openVisits(TownState town) {
+  Future<void> _openVisits(TownState town) async {
     final visits = town.visits;
+    final unseen = [for (final v in visits) if (!_visitsSeen.contains(v.seenKey(town.day))) v];
     // 打開就算看過（Q12）：先在畫面上歸零，再記到手機上
     setState(() => _visitsSeen = {..._visitsSeen, for (final v in visits) v.seenKey(town.day)});
     VisitsSeenStore(widget.store).markSeen(town.day, visits);
+    // 收禮場景（2026-11-22）：還沒看過的先在客廳播一次，按 See all 才接清單；直接關掉就不開清單
+    if (widget.animateScenes && unseen.isNotEmpty) {
+      final seeAll = await showVisitReceivedScene(
+        context,
+        visits: unseen,
+        me: town.me,
+        friends: {for (final p in town.friends) p.handle: p},
+        kinds: town.kinds,
+      );
+      if (seeAll != true || !mounted) return;
+    }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFF10265A),
