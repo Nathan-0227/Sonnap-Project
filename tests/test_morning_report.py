@@ -340,6 +340,13 @@ ok("⚠️ 清單外的行動 → 擋", any("not in the tip list" in p for p in
    problems(notes("We slept 3h 35m.", ("X1", "Try melatonin gummies tonight.")))), "")
 ok("挑了 T3 卻沒講咖啡（換掉重點）→ 擋", any("lost its key point" in p for p in
    problems(notes("We slept 3h 35m.", ("T3", "Let's go to bed earlier tonight.")))), "")
+# 2026-11-22：重點字要從字首比。原本 "nap" 命中 "Sonnap"、"hot" 命中 "photo"，換掉建議的改寫照樣過關
+ok("⚠️ 挑了 P6 只寫到 Sonnap（不是 nap）→ 擋", any("lost its key point" in p for p in
+   problems(notes("We slept 3h 35m.", ("P6", "Sonnap says rest well and sleep early tonight.")))), "")
+ok("⚠️ 挑了 T6 只寫到 photo（不是 hot）→ 擋", any("lost its key point" in p for p in
+   problems(notes("We slept 3h 35m.", ("T6", "Put the photo away and sleep early tonight.")))), "")
+ok("反向對照：真的講到 nap 時不擋", not any("lost its key point" in p for p in
+   problems(notes("We slept 3h 35m.", ("P6", "A short, early nap helps keep deep sleep steady.")))), "")
 ok("總結裡塞建議 → 擋", any("advice" in p for p in
    problems(notes("We slept 3h 35m, so try to sleep earlier."))), "")
 ok("斷定因果（because）→ 擋", any("cause" in p for p in

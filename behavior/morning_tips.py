@@ -14,6 +14,7 @@
 ⚠️ 適用條件只用三種東西：使用者自己勾的標籤（起床自評）、後端算好的
    adherence_minutes、後端算好的生理判讀（評分器的級距、心率比平常高或低）。
 """
+import re
 
 # 起床自評可以勾的標籤（App 送 id，畫面顯示 label）。順序就是畫面上的順序。
 TAGS = {
@@ -86,6 +87,15 @@ WHEN = {
     "P7": "sleeping heart rate higher than usual and the user noted alcohol",
     "P8": "sleeping heart rate higher than usual and the user noted feeling unwell",
 }
+
+def mentions(tip_id, text):
+    """
+    這段話有沒有講到這一條的重點字（KEYWORDS）。**重點字要從字首比**：
+    2026-11-22 前 notes 直接 re.search，"nap" 會命中 "Sonnap"、"hot" 命中 "photo"——
+    換掉建議的改寫照樣過關。寵物 notes 與助理共用這一支，不各寫一份。
+    """
+    return re.search(r"\b(?:" + KEYWORDS[tip_id] + ")", text or "", re.IGNORECASE) is not None
+
 
 # AI 把句子換成寵物口吻時，必須留下的重點字（任一個出現即可）。
 # 這是「沒有換掉建議本身」的最低檢查：挑了 T3 卻沒提到咖啡，就是在講別的事。

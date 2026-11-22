@@ -488,8 +488,7 @@ def validate_parts(parts, facts_text, allowed_tips, allowed_links):
     for tid, (kind, _) in mt.TIPS.items():
         if kind != "tip" or tid in tip_ids or tid in _WHY_ALLOWED_ACTIONS:
             continue
-        # ⚠️ 開頭要 \b：notes 那份沒有，"nap" 會命中 "Sonnap"、"hot" 命中 "photo"
-        if re.search(r"\b(?:" + mt.KEYWORDS[tid] + ")", text, re.IGNORECASE):
+        if mt.mentions(tid, text):   # 從字首比（"nap" 不能命中 "Sonnap"）
             problems.append(f"the headline or why talks about tip {tid} without choosing it "
                             "(put it in tip_ids, or leave it out)")
 
