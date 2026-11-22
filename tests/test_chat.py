@@ -200,7 +200,7 @@ section("【6c】追問：前文一起送，但數字照舊只認 FACTS（2026-1
 # ═══════════════════════════════════════════════════════════════════
 hist = [{"role": "user", "text": "How late was I?"},
         {"role": "assistant", "text": "You put the phone down at 02:39."}]
-fake = FakeLLM("That counted as a late night.")
+fake = FakeLLM("That counted as a late night for you.")
 use(fake)
 r = client.post("/chat", json={"user_id": alice, "message": "Why?", "history": hist})
 check("帶前文 → 200", r.status_code, 200)
@@ -282,17 +282,17 @@ check("放行：一句＋一句＋清單裡的建議與連結",
       parts_problems("You put the phone down at 02:39.", "Late caffeine might make it harder to fall asleep.",
                      ["T3"], "total_sleep"), [])
 check("放行：Sonnap 不會被當成 nap（重點字要從字首比）",
-      parts_problems("Sonnap does not have that data."), [])
+      parts_problems("Sonnap does not have that data, so I can't tell."), [])
 check("放行：why 可以講準時放下手機（量測那幾列）",
       parts_problems("You were late on 3 of the 5 recorded nights.", "Putting the phone down on time can help."), [])
-ok("擋：清單外的建議", any("not in the TIP LIST" in p for p in parts_problems("Hi there.", tip_ids=["T4"])))
-ok("擋：清單外的連結", any("not in the LINKS" in p for p in parts_problems("Hi there.", link="deep")))
+ok("擋：清單外的建議", any("not in the TIP LIST" in p for p in parts_problems("Hi there, let's look.", tip_ids=["T4"])))
+ok("擋：清單外的連結", any("not in the LINKS" in p for p in parts_problems("Hi there, let's look.", link="deep")))
 ok("擋：why 偷塞建議（講咖啡卻沒選 T3）",
-   any("without choosing it" in p for p in parts_problems("Hi there.", "Try to keep caffeine earlier.")))
+   any("without choosing it" in p for p in parts_problems("Hi there, let's look.", "Try to keep caffeine earlier.")))
 ok("擋：headline 兩句", any("more than one sentence" in p for p in parts_problems("One. Two.")))
 ok("擋：headline 超過 25 字", any("longer than" in p for p in parts_problems(" ".join(["word"] * 26) + ".")))
 ok("擋：because", any("cause as certain" in p for p in parts_problems("You were late because of work.")))
-ok("擋：超過 2 條", any("more than 2" in p for p in parts_problems("Hi.", tip_ids=["T3", "T4", "T5"],
+ok("擋：超過 2 條", any("more than 2" in p for p in parts_problems("Hi, let's look.", tip_ids=["T3", "T4", "T5"],
                                                                    tips=("T3", "T4", "T5"))))
 ok("擋：數字不在事實裡（分段也照舊）", any("not in the facts" in p for p in parts_problems("You slept 7 hours.")))
 
@@ -323,11 +323,11 @@ check("沒手錶 → 沒有連結", main.chat_links(None), [])
 check("舊版 App 的 answer＝兩句合起來", body.get("answer"),
       "You put the phone down at 02:39. Late caffeine might make it harder to fall asleep.")
 
-fake = FakeLLM({"headline": "Hi.", "tip_ids": ["T5"]}, {"headline": "Hi.", "tip_ids": ["T5"]})
+fake = FakeLLM({"headline": "Hi, let's look.", "tip_ids": ["T5"]}, {"headline": "Hi, let's look.", "tip_ids": ["T5"]})
 use(fake)
 check("AI 兩次都挑清單外的建議 → 503",
       client.post("/chat", json={"user_id": alice, "message": "tips?"}).status_code, 503)
-fake = FakeLLM({"headline": "Nothing from last night stands out."})
+fake = FakeLLM({"headline": "Nothing from last night stands out to me."})
 use(fake)
 body = client.post("/chat", json={"user_id": alice, "message": "tips?"}).json()
 check("沒挑建議 → tips 是空的", body.get("tips"), [])
@@ -385,7 +385,7 @@ client.post("/rested", json={"user_id": carol, "date": "2026-11-19", "rested": 3
 
 
 def carol_asks(question, history=()):
-    fake = FakeLLM({"headline": "Here is that night."})
+    fake = FakeLLM({"headline": "Let's look at that night."})
     use(fake)
     r = client.post("/chat", json={"user_id": carol, "message": question, "history": list(history)})
     return r, (fake.prompts[0] if fake.prompts else "")
@@ -411,7 +411,7 @@ r, p0 = carol_asks("How was 9/1?")                     # 超過 30 天
 ok("30 天以前 → 照實說沒有紀錄、照樣標出那一晚",
    '"recorded": false' in p0 and r.json().get("period") == {"kind": "night", "date": "2026-09-02"})
 
-fake = FakeLLM({"headline": "Here is that night."})
+fake = FakeLLM({"headline": "Let's look at that night."})
 use(fake)
 r = client.post("/chat", json={"user_id": alice, "message": "How was 9/2?"})   # Alice 9/3 那晚有紀錄，但超過 30 天
 p0 = fake.prompts[0] if fake.prompts else ""
@@ -433,7 +433,7 @@ check("AI 自己算的數字（不在事實裡）→ 擋下",
 
 # 2026-11-22 手機實測：問上週「Why?」，AI 自己歸納出跨夜的相關（grill 決定不學 WHOOP 的那一步）
 ok("擋：跨夜的相關說法（手機實測那句）", any("pattern across nights" in p for p in parts_problems(
-    "Here is that week.", "Nights with later phone-down times in that week tended to have lower sleep scores.")))
+    "Let's look at that week.", "Nights with later phone-down times in that week tended to have lower sleep scores.")))
 ok("擋：the later ..., the lower ...", any("pattern across nights" in p for p in parts_problems(
     "The later you put the phone down, the lower your score.")))
 check("放行：「nights with a record」不是相關", parts_problems("You had records on 3 of the 5 recorded nights."), [])
@@ -475,6 +475,14 @@ got = chat.answer_question("How was last night?", FACTS, tips=(), links=())
 check("第一次說情緒＋評價 → 退回重寫，第二次才交出去", got["headline"], "I can see your night was marked as Good.")
 ok("退回時有告訴 AI 原因", "feelings" in fake.prompts[-1] and "evaluation" in fake.prompts[-1])
 ok("prompt 要寵物用第一人稱說話", "Speak as the user's sleep buddy" in chat.SYSTEM_PROMPT)
+# 手機實測（2026-11-22）：光寫在 prompt 裡，三題有兩題照舊是旁白 → headline 要有 I／we／let's／you
+for report in ["Last night came back marked as Poor.",
+               "Last night's grade came from the watch's sleep quality reading."]:
+    ok(f"擋旁白：{report}", any("reads like a report" in p for p in parts_problems(report)), parts_problems(report))
+ok("只看 headline：why 是旁白不擋", not any("reads like a report" in p for p in parts_problems(
+    "I saw your night was marked as Good.", "Late caffeine might make it harder to fall asleep.")))
+ok("Sonnap 的 nap、your 的 you 這種字中字不算（要完整單詞）", any("reads like a report" in p for p in parts_problems(
+    "Sonnap shows a younger night.")))
 
 # ═══════════════════════════════════════════════════════════════════
 section("【6b】⚠️ 夢境程式刪掉之後（2026-11-18），兩件壞掉不會報錯的事")

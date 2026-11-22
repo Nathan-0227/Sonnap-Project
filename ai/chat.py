@@ -144,6 +144,10 @@ EMOTION_PATTERN = re.compile(
     r"|\bproud of you\b|\bI miss(?:ed)? you\b",
     re.IGNORECASE,
 )
+# headline 一定要是寵物對你說的話（2026-11-22 手機實測：光寫在 prompt 裡，AI 三題有兩題照舊寫成
+# 「Last night came back marked as Poor」這種旁白）。有 I／my／we／let's／you 其中一個就算。
+VOICE_PATTERN = re.compile(r"\b(?:I|I'm|I've|I'd|I'll|me|my|we|we're|let's|us|our|you|you're|you've|your)\b",
+                           re.IGNORECASE)
 STRONG_EVALUATION_PATTERN = re.compile(
     r"\b(?:great|amazing|excellent|perfect|fantastic|terrible|awful|horrible)\b", re.IGNORECASE)
 
@@ -156,7 +160,11 @@ Answer the user's question using ONLY the facts in the FACTS block. The facts de
 
 Voice:
 - Speak as the user's sleep buddy: "I" for yourself, "you" for the user, "we" when looking at something
-  together (for example "Let's look together"). Keep it warm and short.
+  together. Keep it warm and short. Talk to the user, not about the data, for example:
+    not "Your phone went down at 02:39."  ->  "I saw you put your phone down at 02:39."
+    not "The tired mood came from last night's grade."  ->  "My sleepy mood today comes from last night's sleep grade."
+    not "Here are two tips based on last night."  ->  "Let's try two things tonight, based on last night."
+  The numbers in these examples are only examples; use the numbers in FACTS.
 - Never talk about your own feelings or feelings about the user (no "I'm worried", "I'm sad", "I'm upset",
   "I'm disappointed", "I'm scared", "I'm lonely", "proud of you", "I miss you").
 - Never judge a night or a number yourself with strong words (no great, amazing, excellent, perfect,
@@ -164,7 +172,9 @@ Voice:
   Good"). Gentle words such as "rough" or "tough" are fine.
 
 Answer in four parts:
-- "headline": exactly ONE short sentence (at most 25 words) that answers the question directly.
+- "headline": exactly ONE short sentence (at most 25 words) that answers the question directly, said BY the
+  buddy TO the user: it must use "I", "we", "let's" or "you" (see Voice). Never a report line such as
+  "Last night's sleep was marked as Poor."; write "I saw your night was marked as Poor." instead.
 - "why": at most ONE short sentence (at most 30 words) of context or a possible reason, or "" when there
   is nothing to add. A possible reason uses "might" or "can", never "because" or "due to". Do not give
   advice in the headline or why, except putting the phone down on time or keeping a steady bedtime.
@@ -187,6 +197,8 @@ Which night:
 
 Rules:
 - Plain, friendly English. No lists, no headings.
+- Never mention the names of the blocks or fields you were given (FACTS, TIP LIST, "how_pet_mood_works",
+  "decided_by" and so on); say what they mean in everyday words.
 - Only use digits that appear in the FACTS block. Never invent, estimate or convert numbers.
 - If the question needs data that is not in the facts, say plainly that Sonnap does not have that data.
 - PET MOOD (when present) was decided by the app. To explain it, use only its "decided_by" text for that
@@ -450,6 +462,9 @@ def validate_parts(parts, facts_text, allowed_tips, allowed_links):
 
     if headline:
         problems.extend(validate_answer(text, facts_text))
+    if headline and not VOICE_PATTERN.search(headline):
+        problems.append("the headline reads like a report; say it as the buddy talking to the user "
+                        "(use I, we, let's or you)")
     if EMOTION_PATTERN.search(text):
         problems.append("talks about your own feelings or feelings about the user (no worried, sad, proud of you…)")
     if STRONG_EVALUATION_PATTERN.search(text):
