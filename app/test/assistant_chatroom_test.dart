@@ -10,6 +10,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/screens/assistant_screen.dart';
@@ -39,6 +40,16 @@ class _StubChat implements ChatService {
 
 final _morning = DateTime(2026, 11, 22, 9, 30);
 
+/// 模擬「頭像圖讀不到」：assets/avatars/ 底下一律丟錯，其他照常（2026-11-22 起資料夾裡真的有 8 張圖，
+/// 不能再靠「資料夾裡沒有圖」測退路）。
+class _MissingAvatarsBundle extends CachingAssetBundle {
+  @override
+  Future<ByteData> load(String key) async {
+    if (key.startsWith('assets/avatars/')) throw FlutterError('missing avatar: $key');
+    return rootBundle.load(key);
+  }
+}
+
 Map<String, dynamic> _night({String date = '2026-11-22', num? score, num? minutes, String? lightsOut}) => {
       'date': date,
       'scoring': {'final_score': score},
@@ -47,11 +58,15 @@ Map<String, dynamic> _night({String date = '2026-11-22', num? score, num? minute
     };
 
 Future<void> _pump(WidgetTester tester,
-    {ChatService? chat, bool visible = true, bool reduceMotion = false, Map<String, dynamic>? night}) async {
+    {ChatService? chat,
+    bool visible = true,
+    bool reduceMotion = false,
+    Map<String, dynamic>? night,
+    AssetBundle? bundle}) async {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
+  Widget app = MaterialApp(
     home: MediaQuery(
       data: MediaQueryData(disableAnimations: reduceMotion),
       child: Scaffold(
@@ -65,7 +80,9 @@ Future<void> _pump(WidgetTester tester,
         ),
       ),
     ),
-  ));
+  );
+  if (bundle != null) app = DefaultAssetBundle(bundle: bundle, child: app);
+  await tester.pumpWidget(app);
   await tester.pump();
   await tester.pump();
 }
@@ -125,8 +142,17 @@ void main() {
       expect(buddyStatus('happy', thinking: true), 'thinking…');
     });
 
-    testWidgets('還沒有生成的頭像 → 用裁切版，而且整個在圓框裡（不漫出來）', (tester) async {
+    testWidgets('有生成的頭像 → 用那張圖，不走裁切版（反向對照）', (tester) async {
       await _pump(tester);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.pump();
+      expect(find.byKey(const Key('buddy-avatar-image')), findsOneWidget);
+      expect(find.byKey(const Key('buddy-avatar-fallback')), findsNothing);
+    });
+
+    testWidgets('頭像圖讀不到 → 用裁切版，而且整個在圓框裡（不漫出來）', (tester) async {
+      await _pump(tester, bundle: _MissingAvatarsBundle());
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
       await tester.pump(const Duration(milliseconds: 50));
       final circle = tester.getRect(find.byKey(const Key('buddy-avatar')));
       expect(circle.width, 44);
