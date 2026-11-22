@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
 import '../pet2d/pet_catalog.dart' show accessories;
 import '../pet2d/pet_models.dart';
 import '../services/account_service.dart' show kFallbackDisplayName;
@@ -85,7 +86,6 @@ class _ClosetScreenState extends State<ClosetScreen> {
   static const _card = Color(0xFF1B2A66);
   static const _cardOn = Color(0xFF2B3C82);
   static const _gold = Color(0xFFFFD96A);
-  static const _purple = Color(0xFF7B61FF);
   static const _room = 'assets/backgrounds/closet_room.jpg';
 
   /// 圖的長寬比（941×1672）；寵物要站在地毯上，位置照圖算。
@@ -185,7 +185,7 @@ class _ClosetScreenState extends State<ClosetScreen> {
       return Stack(
         children: [
           _topBar(top),
-          const Center(child: CircularProgressIndicator(color: _purple)),
+          const Center(child: CircularProgressIndicator()),
         ],
       );
     }
@@ -333,7 +333,7 @@ class _ClosetScreenState extends State<ClosetScreen> {
         height: 44,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: highlight ? _purple : const Color(0xCC1B2A66),
+          color: highlight ? accentOf(context) : const Color(0xCC1B2A66),
           border: Border.all(
             color: highlight ? _gold : const Color(0x33FFFFFF),
             width: highlight ? 2 : 1,
@@ -457,7 +457,7 @@ class _ClosetScreenState extends State<ClosetScreen> {
                 angle: math.pi / 4,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: on ? _purple : _card,
+                    color: on ? accentOf(context) : _card,
                     borderRadius: BorderRadius.circular(on ? 14 : 12),
                     border: Border.all(
                       color: on ? _gold : const Color(0x33FFFFFF),

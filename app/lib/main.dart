@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'screens/assistant_screen.dart';
+import 'theme/app_accent.dart';
 import 'screens/rewards_screen.dart';
 import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
@@ -103,8 +104,13 @@ class SonnapApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // 主題色換了整個 App 重畫；App 內的減少動態效果疊在系統設定上（2026-11-22 Q5）
+    return ValueListenableBuilder<AccentTheme>(
+      valueListenable: AppLook.accent,
+      builder: (context, accent, _) => MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: sonnapTheme(accent),
+      builder: applyReduceMotion,
       home: MainPage(
         store: store,
         accounts: accounts,
@@ -115,6 +121,7 @@ class SonnapApp extends StatelessWidget {
         welcomePermissions: welcomePermissions,
         entryAnimation: entryAnimation,
       ),
+    ),
     );
   }
 }
@@ -488,6 +495,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   Future<void> _restoreSettings() async {
     // 選的寵物（小狗／貓，只存在手機上）：讀回來，首頁寵物插槽跟著換
     await PetChoice.load(widget.store ?? const PlatformKeyValueStore());
+    await AppLook.load(widget.store ?? const PlatformKeyValueStore());
     final stored = await _settings.load();
     if (!mounted) return;
     final parsed = parseBedtime(stored.targetBedtime);
@@ -985,7 +993,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       return const Scaffold(
         backgroundColor: Color(0xFF081326),
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF7657FF)),
+          child: CircularProgressIndicator(),
         ),
       );
     }

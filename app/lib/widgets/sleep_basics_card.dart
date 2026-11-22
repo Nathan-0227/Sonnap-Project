@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../content/sleep_basics.dart';
+import '../theme/app_accent.dart';
 
 /// 「Sleep basics」小知識（2026-11-19 從舊 Insights 搬到助理頁，預設收合）。
 ///
@@ -28,7 +29,7 @@ class SleepBasicsCard extends StatelessWidget {
           collapsedIconColor: Colors.white70,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          leading: const Icon(Icons.menu_book_rounded, color: Color(0xFF7657FF)),
+          leading: Icon(Icons.menu_book_rounded, color: accentOf(context)),
           title: const Text(
             'Sleep basics',
             style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),

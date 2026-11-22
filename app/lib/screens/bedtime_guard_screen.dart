@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/bedtime_guard.dart';
+import '../theme/app_accent.dart';
 import '../widgets/settings_list.dart';
 
 /// 就寢守門的設定：哪一種模式、守哪些 App、無障礙權限開了沒。
@@ -206,7 +207,7 @@ class _BedtimeGuardScreenState extends State<BedtimeGuardScreen> with WidgetsBin
                   key: const Key('guard-open-settings'),
                   onPressed: () => widget.controller.platform.openSettings(),
                   style: FilledButton.styleFrom(
-                    backgroundColor: kSettingsAccent,
+                    backgroundColor: accentOf(context),
                     minimumSize: const Size(0, 46),
                     textStyle: const TextStyle(fontWeight: FontWeight.w800),
                   ),

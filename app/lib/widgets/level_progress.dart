@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/game_service.dart';
+import '../theme/app_accent.dart';
 import '../theme/sonnap_colors.dart';
 
 /// 寵物頭上的等級（2026-11-21 使用者定）：★ Lv 徽章＋一條細進度條＋「185 XP to Lv 7」。
@@ -42,9 +43,9 @@ class LevelProgress extends StatelessWidget {
                 key: const Key('level-badge'),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
-                  color: SonnapColors.accent.withValues(alpha: 0.25),
+                  color: accentOf(context).withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: SonnapColors.accent),
+                  border: Border.all(color: accentOf(context)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

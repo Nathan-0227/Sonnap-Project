@@ -14,6 +14,7 @@ import 'report_tiles.dart';
 import '../theme/report_style.dart';
 import 'streak_card.dart' show StreakWeekRow, speciesOf;
 import 'visit_gift_sheet.dart' show VisitIcon, kVisitCircle, splitVisitLabel;
+import '../theme/app_accent.dart';
 
 /// 好友小鎮（2026-11-17 使用者定，照 Finch 的做法：朋友之間只看到寵物）。
 ///
@@ -724,7 +725,7 @@ class TownVisitsCard extends StatelessWidget {
                   TextButton(
                     key: Key('town-send-back-${v.handle}'),
                     onPressed: () => onSendBack!(v),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFB9A6FF)),
+                    style: TextButton.styleFrom(foregroundColor: accentSoftOf(context)),
                     child: const Text('Send back', style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
               ],
@@ -905,7 +906,7 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
                       key: const Key('town-see-night'),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.only(top: 8),
-                        foregroundColor: const Color(0xFFB9A6FF),
+                        foregroundColor: accentSoftOf(context),
                       ),
                       onPressed: () {
                         final card = p.card!;
@@ -1065,7 +1066,7 @@ class _TownFriendSheetState extends State<_TownFriendSheet> {
         key: const Key('town-send-something'),
         onPressed: widget.onOpenGifts == null ? null : _openGifts,
         style: FilledButton.styleFrom(
-          backgroundColor: _sent == null ? const Color(0xFF7B61FF) : const Color(0x22FFFFFF),
+          backgroundColor: _sent == null ? accentOf(context) : const Color(0x22FFFFFF),
           foregroundColor: _sent == null ? Colors.white : kTownGold,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         ),

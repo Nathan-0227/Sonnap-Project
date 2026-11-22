@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
 import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
 import '../widgets/entry_intro.dart';
@@ -106,7 +107,6 @@ class WelcomeFlow extends StatefulWidget {
   State<WelcomeFlow> createState() => _WelcomeFlowState();
 }
 
-const _accent = Color(0xFF7657FF);
 const _dim = Color(0xFF9AA8C7);
 const _font = 'Nunito';
 
@@ -275,7 +275,7 @@ class _WelcomeFlowState extends State<WelcomeFlow>
                     width: s == _step ? 18 : 7,
                     height: 7,
                     decoration: BoxDecoration(
-                      color: s.index <= _step.index ? _accent : const Color(0x33FFFFFF),
+                      color: s.index <= _step.index ? accentOf(context) : const Color(0x33FFFFFF),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -370,7 +370,7 @@ class _WelcomeFlowState extends State<WelcomeFlow>
       key: key ?? const Key('welcome-next'),
       onPressed: onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: _accent,
+        backgroundColor: accentOf(context),
         disabledBackgroundColor: const Color(0x337657FF),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
@@ -491,7 +491,7 @@ class _WelcomeFlowState extends State<WelcomeFlow>
         decoration: BoxDecoration(
           color: chosen ? const Color(0x337657FF) : const Color(0x14FFFFFF),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: chosen ? _accent : const Color(0x22FFFFFF), width: chosen ? 2.5 : 1),
+          border: Border.all(color: chosen ? accentOf(context) : const Color(0x22FFFFFF), width: chosen ? 2.5 : 1),
         ),
         child: Column(
           children: [

@@ -161,7 +161,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   Widget _buildBody(BuildContext context) {
     final r = _result;
     if (r == null) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)));
+      return const Center(child: CircularProgressIndicator());
     }
     final game = r.value;
     if (!r.isOk || game == null) {

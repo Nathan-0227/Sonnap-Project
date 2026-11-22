@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/alarm.dart';
 import '../services/journey_service.dart';
+import '../theme/app_accent.dart';
 import '../theme/sonnap_colors.dart';
 import 'sleep_dial.dart';
 
@@ -292,7 +293,7 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                       value: _alarm,
                       onChanged: _toggle,
                       activeThumbColor: Colors.white,
-                      activeTrackColor: SonnapColors.accent,
+                      activeTrackColor: accentOf(context),
                     ),
                   ],
                 ),
@@ -327,7 +328,7 @@ class _SleepScheduleSheetState extends State<SleepScheduleSheet> {
                   context,
                 ).pop(SleepScheduleResult(_bed, _wake, _alarm)),
                 style: FilledButton.styleFrom(
-                  backgroundColor: SonnapColors.accent,
+                  backgroundColor: accentOf(context),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: const StadiumBorder(),
                 ),

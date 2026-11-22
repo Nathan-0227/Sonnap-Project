@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/bedtime_guard.dart' show guardWindow;
+import '../theme/app_accent.dart';
 
 /// 底部導覽列（2026-11-13 使用者定，參考圖：只有圖示、中間一顆發光的月亮凸出來）。
 ///
@@ -76,7 +77,7 @@ class MoonNavBar extends StatelessWidget {
                   Icon(
                     icon,
                     size: 26,
-                    color: on ? const Color(0xFFB9A6FF) : Colors.white54,
+                    color: on ? accentSoftOf(context) : Colors.white54,
                   ),
                   const SizedBox(height: 5),
                   AnimatedContainer(
@@ -207,7 +208,8 @@ class _SleepButtonState extends State<_SleepButton> with SingleTickerProviderSta
 
   @override
   Widget build(BuildContext context) {
-    const accent = MoonNavBar.accent;
+    final accent = accentOf(context);
+    final soft = accentSoftOf(context);
     return Semantics(
       button: true,
       label: 'Start sleep',
@@ -224,10 +226,10 @@ class _SleepButtonState extends State<_SleepButton> with SingleTickerProviderSta
               height: 66,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFB9A6FF), accent],
+                  colors: [soft, accent],
                 ),
                 border: _near
                     ? Border.all(color: Colors.white.withValues(alpha: 0.35 + 0.45 * t), width: 2)
