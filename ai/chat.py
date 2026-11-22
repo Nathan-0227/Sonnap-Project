@@ -51,6 +51,7 @@ ai/chat.py —— 睡眠助理的問答（B6）。
 import json
 import re
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -65,6 +66,8 @@ from text_guards import (  # noqa: E402
     SPELLED_NUMERAL_PATTERN,
 )
 from behavior import morning_tips as mt  # noqa: E402
+from behavior import sleep_efficiency  # noqa: E402
+import score_claim  # noqa: E402
 
 # 讀 ai/.env 的金鑰。⚠️ 原本由 generate_advice.py 在 import 時讀（chat 間接沾光），
 # 2026-11-18 夢境程式刪掉後搬到這裡——少了這一行，助理與寵物 notes 會悄悄變成
@@ -186,9 +189,12 @@ Answer in four parts:
 
 Which night:
 - The NIGHT block says which night the question is about (dated by the morning the user woke up). Talk
-  about that night. Only call it "last night" when "most_recent_night" is true; otherwise use its date.
+  about that night. Users name a night by the evening they went to bed ("went_to_bed_evening"), so a
+  question about Nov 13 is about the night whose date is Nov 14. When the user named a date or weekday,
+  use the evening they named; never say there is no record just because the two dates differ. Only call it "last night" when "most_recent_night" is true; otherwise use its date.
   If "recorded" is false, say plainly that Sonnap has no record for that night.
-- When a PERIOD block is present instead, the question is about those days. Use the "summary" numbers as
+- When a PERIOD block is present instead, the question is about those days. Call the period what the
+  user called it ("asked_as", for example "last week"); never call it a different period. Use the "summary" numbers as
   given (medians and counts) and say how many nights had records; never work out an average or any other
   number yourself. If no night has a record, say so plainly.
 - If the user asks to compare two nights or two periods, say you can look at one night or one week at a time.
@@ -210,6 +216,8 @@ Rules:
 - Do not give medical advice. Do not name health conditions, medicines or treatments. If the user sounds
   worried about their health, suggest talking to a doctor or the campus health service.
 - Always answer in English, even if the question is in another language.
+- A follow-up such as "why?" asks about what your previous answer said; answer about what your previous
+  answer said, and do not switch to a different topic (such as the pet's mood) unless asked.
 - CONVERSATION SO FAR (when present) is only there so you understand follow-up questions such as "why?".
   It is not a source of facts: every number you write must still come from the FACTS block."""
 
@@ -261,6 +269,11 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
     facts = {"current_target_bedtime": user.get("target_bedtime")}
     if night:
         facts["night"] = dict(night)
+        # 使用者用「哪天晚上睡的」稱呼一晚，資料記的是起床日（2026-11-22 chat_eval 抓到：問 11/13，
+        # AI 看到 11-14 就說沒紀錄）
+        if night.get("date"):
+            evening = date.fromisoformat(night["date"]) - timedelta(days=1)
+            facts["night"]["went_to_bed_evening"] = evening.isoformat()
 
     if latest_behavior:
         lights_out = latest_behavior.get("lights_out_at") or ""
@@ -288,6 +301,24 @@ def build_facts(user, latest_behavior, latest_wearable, streak, late, pet=None, 
             "sleep_minutes": round(duration) if duration is not None else None,
             "sleep_time": hm(duration) if duration is not None else None,
         }
+        # 2026-11-22 chat_eval 抓到：連結點得開深睡、醒著、效率那幾頁，AI 卻說「我沒有深睡的數字」
+        w, wn = latest_wearable, facts["watch_that_night"]
+        wn["deep_time"] = hm(w["deep_min"]) if w.get("deep_min") is not None else None
+        wn["awake_time"] = hm(w["waso_min"]) if w.get("waso_min") is not None else None
+        # REM 沒量到不寫 0（同 App 的 N/A：寫 0 會被讀成整晚沒有 REM）
+        if w.get("rem_measured"):
+            wn["rem_time"] = hm(w["rem_min"]) if w.get("rem_min") is not None else None
+        else:
+            wn["rem_time"] = "not measured"
+        # 效率給**算進分數的那一個**（三段式，同一支 scoring_efficiency）：App 的效率頁顯示的就是它。
+        # 按鈕只拿同一晚的
+        b = latest_behavior if latest_behavior and latest_behavior.get("date") == w.get("date") else {}
+        eff = sleep_efficiency.scoring_efficiency(
+            duration, w.get("efficiency"), w.get("wake_time"),
+            b.get("bed_start_at"), b.get("bed_end_at"), b.get("time_in_bed_minutes"))
+        if eff["value"] is not None:
+            wn["efficiency_percent"] = round(eff["value"])
+            wn["efficiency_kind"] = score_claim.EFFICIENCY_BASIS_LABELS.get(eff["basis"])
     if pet and pet[1] and pet[2] in PET_MOOD_DECIDED_BY:
         facts["pet_mood"] = {"date": pet[0], "mood": pet[1],
                              "decided_by": PET_MOOD_DECIDED_BY[pet[2]],
@@ -321,7 +352,7 @@ def _clock_text(minutes_from_noon):
     return f"{(m // 60 + 12) % 24:02d}:{m % 60:02d}"
 
 
-def build_range_facts(user, start, end, nights, behavior_by_date, wearable_by_date):
+def build_range_facts(user, start, end, nights, behavior_by_date, wearable_by_date, asked_as=None):
     """
     一段時間的事實區塊（2026-11-22）：每晚一列＋後端先算好的整段數字。
 
@@ -374,7 +405,7 @@ def build_range_facts(user, start, end, nights, behavior_by_date, wearable_by_da
 
     return {
         "current_target_bedtime": user.get("target_bedtime"),
-        "period": {"from": start, "to": end, "nights_in_period": len(nights),
+        "period": {"from": start, "to": end, "asked_as": asked_as, "nights_in_period": len(nights),
                    "nights_with_any_record": len(rows)},
         "nights": rows,
         "summary": summary,
@@ -535,6 +566,9 @@ def answer_question(question, facts, history=(), tips=(), links=()):
                 "attempts": attempt,
                 "model": model,
             }
+        # 退回原因印在後端（2026-11-22 chat_eval 跑到一題 503，事後查不出是哪一條擋的）。
+        # 只印原因，不印問題、不印帳號
+        print(f"chat: attempt {attempt} rejected - " + "; ".join(problems), file=sys.stderr)
         feedback = (
             "\nYOUR PREVIOUS ANSWER WAS REJECTED because: " + "; ".join(problems)
             + ". Write it again following every rule."

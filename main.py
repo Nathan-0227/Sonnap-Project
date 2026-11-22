@@ -2691,7 +2691,8 @@ def chat_context(user, message, earlier_questions):
                   if chat_period.in_range(d, today)]
         facts = chat_engine.build_range_facts(
             user, period["start"], period["end"], nights,
-            {r["date"]: r for r in behavior_rows}, {r["date"]: r for r in wearable_rows})
+            {r["date"]: r for r in behavior_rows}, {r["date"]: r for r in wearable_rows},
+            asked_as=period.get("label"))
         period_out = {"kind": "range", "start": period["start"], "end": period["end"]}
     else:
         night_date = latest if period["kind"] == "latest" else period["date"]
@@ -2711,12 +2712,9 @@ def chat_context(user, message, earlier_questions):
         tip_ids = [t["id"] for t in morning_tips.applicable_tips(
             tags, b_row.get("adherence_minutes") if b_row else None, judged)]
         links = chat_links(w_row)
-        if period["kind"] == "latest":
-            # 最近一晚：手機與手錶各給自己最新的那一列（手錶常晚一天到，照 2026-11-22 前的做法）
-            b_fact = behavior_rows[-1] if behavior_rows else None
-            w_fact = wearable_rows[-1] if wearable_rows else None
-        else:
-            b_fact, w_fact = b_row, w_row
+        # 最近一晚也只給**那一晚**的列（2026-11-22 chat_eval 抓到：原本手機與手錶各拿自己最新的一列，
+        # 昨晚沒有手機紀錄時把前一晚的放下手機時刻講成昨晚的）。缺哪一個就照實說缺
+        b_fact, w_fact = b_row, w_row
         streak, _ = challenge_engine.current_streak(behavior_rows)
         facts = chat_engine.build_facts(
             user, b_fact, w_fact, streak,
