@@ -363,7 +363,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
       ),
       for (var i = 0; i < _turns.length; i++) ...[
         if (chips.contains(i))
-          ChatDateChip(chatPeriodLabel(_turns[i].period!), key: const Key('assistant-period')),
+          // key 一定要每顆不同（同一晚可能問好幾次，所以用第幾則）：列表重建時用 key 找新位置，
+          // 重複的話兩顆被對到同一格，整片對話變紅畫面（11-22 實機）。
+          ChatDateChip(chatPeriodLabel(_turns[i].period!), key: Key('assistant-period-$i')),
         _turns[i].fromUser
             ? _UserBubble(text: _turns[i].text)
             : _BuddyBubble(
