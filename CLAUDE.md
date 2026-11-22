@@ -466,6 +466,22 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 背景兩張圖（山丘、湖面）是使用者以 prompt 生成的原創圖，左右翻轉過；**只鋪到內容結束**（Positioned） | 不用 Positioned 的話頁面被圖撐長，底下多一大段空白 |
 | 星星與流星是程式畫的；系統開「減少動態效果」時靜止 | — |
 
+### ✅ 徽章（2026-11-22 grill，`feature/badges-backend`；獎勵頁「獎盃架」的後端）
+
+13 個系列 × 5 級，定義與門檻只在 `game/badges.py`（`SERIES`）。`/game` 多回 `badge_series`、`badge_groups`、`claimable_badges`；舊版 App 讀的 `badges`（三個）改由新系列推出來。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 「做到了」**照用既有判定**：準時 `night_achieved`、連續 `current_streak`、上床少滑與作息收斂用**挑戰本身**（`evaluate_challenge`，門檻在挑戰定義裡）、準時起床 `up_on_time`、熬夜 `is_late` | 第二個定義處（`test_badges.py`【1】【5】守著） |
+| 拿到的**永遠留著**（`badges_earned`），日期是**跨過門檻那一晚**；資料改正後次數變少，那一級還在 | 收集到的徽章消失（使用者定） |
+| 每一級 XP 10·20·30·40·50，走 `POST /game/claim {badge: "badge:<系列>:<級>"}`，一級一次；422 沒拿到、409 領過、404 不存在 | — |
+| 🔴 **三個使用者知情的例外**（跟睡眠無關但照樣給 XP）：Good friend（拜訪次數）、Habits（自己勾、沒證據）、Ask your buddy（助理；數**天數**不是題數，只算答出來的） | 灌得到的有上限：5 級、150 XP |
+| 拜訪、助理、Journey 站數、Podium 記在 `game_activity`（只有次數、不存內容）；習慣記在 `habit_days`（只有勾幾條／總共幾條） | `friend_visits` 只留 14 天、`journeys` 只留最近一段，數不了累積 |
+| Podium：每個**已結束的週日**看一次 7 天榜（準時／連續／作息），**榜上 ≥3 人**才算，參加的人與公開與否照**現在**的朋友與設定；算過的週不再算；人數不到 3 不記（之後加朋友還能補算） | 只有 1 個朋友時第一名是一半機率 |
+| `/game`、領獎會**寫**（Journey 站數、Podium、新拿到的級）；動態牆與衣櫃用 `refresh=False` 只讀 | 動態牆替每個朋友各跑一次，會變慢 |
+| 門檻與 XP 是**設計決策、沒有文獻**（不進分數，不受紅線 2 約束） | — |
+| ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `badges_earned`、`game_activity`、`habit_days`） | 後端啟動不建表 |
+
 ### ✅ 衣櫃改版（2026-11-19，PR #148，`feature/closet-redesign`）
 
 照使用者給的遊戲換裝參考圖（`screens/closet_screen.dart`）：上半是使用者生成的更衣室 `assets/backgrounds/closet_room.jpg`，寵物站在地毯上；最上面大字是**暱稱**（寵物沒有名字）＋「Lv. N」；左上 ‹＝**不存離開**、右上 ✓＝存起來（取代底部 Confirm 長鈕，有改才亮）；分類是一排菱形鈕（All · 頭 · 臉 · 脖子）；格子選中金框＋勾、身上那件底下小點、沒解鎖變暗＋鎖＋Lv。**一次只穿一件**（後端只存一件）。
@@ -550,7 +566,7 @@ Out of bed／Cancel → 放停止旗標 `tapo_metrics/STOP`，錄影程式自己
 | **量測那幾列與進度條照抄 `/challenges`**，沒量到寫「—」不是空圈 | Dart 不判 |
 | **準時起床**（`behavior/wake.py`）：Out of bed 按鈕 → 手錶起床 → 都沒有＝沒量到；目標 **±60 分**、七天都算（Bootzin & Perlis 2011，⚠️ **不是 Bootzin 1972**——原文沒有起床那條）。**讀取時才併**（`main._behavior_rows_with_wake`），手錶晚到也算得出來；`/challenges` 與遊戲化都要經過它 | 不併的話一律 None，看起來跟沒量到一樣 |
 | 每晚存 `nightly_behavior.target_wake` 快照 | 改目標不改歷史（同 target_bedtime） |
-| **自己勾的只存在手機上**（`services/sleep_plan.dart`）、不送後端不給 AI；**不進分數、不改心情、不給 XP**，只寫「N days in a row」；沒勾是空心圈 | 紅線 4、5：自己勾不需要證據 |
+| **自己勾的只存在手機上**（`services/sleep_plan.dart`）、不給 AI；**不進分數、不改心情、勾選本身不給 XP**，只寫「N days in a row」；沒勾是空心圈。⚠️ **2026-11-22 起每天送「勾了幾條／總共幾條」到 `POST /habits/day`**（Habits 徽章，那一級給 XP；使用者知情：自己勾、沒有證據）——**是哪幾條、習慣的文字仍然只在手機上** | 紅線 4、5：自己勾不需要證據 |
 | **勾下去只有當下的回饋、不累積**（11-19 grill Q36，`widgets/plan_check_button.dart`）：方格彈一下＋金色光點、浮出「Nice!」（**只用這一個詞**）、輕震、寵物跳一下（11-19 改成蹲→拋物線→落地壓扁＋腳下影子、不冒星星，`petJumpPose()`；原本整張平移上下像被線提起來）；**寵物的臉不換**（臉＝後端心情）；取消勾選什麼都沒有；全勾完只換標題那行字；減少動態效果時不彈不跳不飄。參考圖的「每條 5⚡」「Complete a goal → Claim」「寵物去冒險」都不做 | 沒有東西可以累積就沒有東西可以灌（紅線 5） |
 | 版面（照使用者的參考圖）：整頁背景是使用者生成的直式長圖 `assets/plan/room.jpg`（**固定不動**），寵物站在地毯上（`kPlanRugCenter`＝0.43，換圖要重量），清單**從寵物腳下開始捲、不蓋過寵物**（11-19 改：要看得到牠跳，上緣淡出）；加習慣是「選一條 → 先開設定頁 → 按 Add to my plan 才加」，沒寫字或一天都沒選不能加；卡片深藍約 90% 不透明；習慣圖示 `assets/plan/<id>.png`（使用者生成的圖示表切的），缺圖退回系統圖示 | 使用者定（Q35、Q37–Q39） |
 | 建議清單**逐字照抄研究文件**（`sleep_plan_test` 讀文件比對）；對得上起床自評的 id 與 `morning_tips.TAGS` 相同，但**兩邊不互相代填** | 改措辭先改文件；之後才比得起來 |
@@ -571,7 +587,7 @@ Out of bed／Cancel → 放停止旗標 `tapo_metrics/STOP`，錄影程式自己
 | 每晚照**當晚的快照**判準時；前進之後以前的夜晚不重判 | — |
 | Journey 進行中**轉盤鎖住**，鎖在 `showSleepScheduleSheet` 一處（讀 `journey_active`），四個入口共用 | 鎖在入口的話漏一個就能把目標轉掉 |
 | 站、跨午夜、「已經到了」（422 `already_there`）**都在後端**；Dart 照抄 `stops`，30 分、建議睡 7 小時從 `step_minutes`／`recommended_sleep_minutes` 拿。**睡眠長度不設下限**（使用者 11-19 改：每個人需要的不一樣），7 小時只寫成參考、不擋、不變色 | 第二個定義處 |
-| 前進／走完：**不給 XP、不發通知**，計畫頁與首頁小卡各一行（`journeyNoticeText`），**離開計畫頁算看過**；第 1 站不提示 | 準時起床的 Quest 已給過 XP，同一件事不獎勵兩次 |
+| 前進／走完：**不給 XP、不發通知**（⚠️ 2026-11-22 起 Traveller 徽章數走過幾站，**徽章那一級**給 XP；每一站本身仍不給），計畫頁與首頁小卡各一行（`journeyNoticeText`），**離開計畫頁算看過**；第 1 站不提示 | 準時起床的 Quest 已給過 XP，同一件事不獎勵兩次 |
 | Stop：停在這一站、目標不還原；停了之後轉盤解鎖、後端不再拉回 | — |
 | ⚠️ 合併後要在 MariaDB 跑 `python db.py --init`（新表 `journeys`），再重開後端 | 後端啟動不建表 |
 
@@ -1645,7 +1661,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   上傳 `POST /nightly /wearable`；
   讀取 `GET /home /insights /challenges /get-sleep-data /health`（`database_available` 照實際用的那種資料庫去問：MariaDB 真的連一次，2026-11-20 前一律看 SQLite 檔、跑 MariaDB 時永遠是 false）；
   攝影機片段 `GET /camera/clips/{clip_id}.gif`（**不收 user_id**，見 `camera_clips.py`）；
-  遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip`；
+  遊戲化 `GET /game /closet`、`POST /game/claim /closet/equip /habits/day`（`/game/claim` 2026-11-22 起也收 `badge`）；
   好友 `GET`+`POST /friends`、`GET`+`DELETE /friends/{handle}`；
   助理 `POST /chat`；
   早晨報告 `POST /rested`（起床自評）、`GET /night-summary`（寵物 notes：AI 總結＋從清單挑的建議；`generate=false` 只讀不生成，首頁用）。
@@ -1657,7 +1673,7 @@ Tier A 沒有這個問題）。`target_bedtime` **不能給所有人同一個預
   因此跑在多執行緒裡：`main.py` 的記憶體快取（25 MB 原始檔、心率索引）**一次整份換掉**、重新載入加鎖，不分兩步改。
   ⚠️ `/get-sleep-data` **已接真實資料**（讀打包的 asset 檔），檔案不存在時回 **503
   而不 fallback 回假資料**——這是刻意的，見該函式的 docstring。
-- `db.py` — 17 張表，暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
+- `db.py` — 20 張表（2026-11-22 加了徽章三張），暱稱制免註冊。預設 SQLite（標準庫 `sqlite3`，測試一律用它）；
   設了 `SONNAP_DB_URL` 就走 MariaDB（`db_backend.py`，DDL 從 SQLite 的 `SCHEMA`
   自動產生——**`SCHEMA` 是唯一定義處**，`tests/test_db_backends.py` 守著）。
   ⚠️ 有 `COLUMN_MIGRATIONS` 欄位遷移機制：`CREATE TABLE IF NOT EXISTS` 對**已存在**
@@ -1831,7 +1847,8 @@ python tests/test_nightly_is_late.py    # 2026-11-15 新增：每晚的 is_late 
 python tests/test_lights_out_resolve.py  # 2026-11-16 新增：手機挑錯時後端用手錶改正——11-16 真實事件流要挑回 00:49；沒手錶／沒候選／換了日期三種都不動；一段都沒過關存 NULL 不是繼續說熬夜；可重複執行
 python tests/test_bridged_unlocks.py     # 2026-11-15 新增：就寢偵測規則 4 的標記——POST /nightly 收 bridged_unlocks；沒送存 NULL 不是 0、送 0 存 0、負數 422、舊資料庫遷移補欄位
 python tests/test_wake_on_time.py        # 2026-11-19 新增：準時起床——跨午夜、按鈕優先於手錶、沒量到是 None、牆鐘不差 8 小時、快照不被改目標改寫、手錶晚到讀取時才算、遊戲化走同一份
-python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不讀它、刪帳號一起刪
+python tests/test_badges.py              # 2026-11-22 新增：徽章——準時／連續／挑戰照用同一支函式、差的晚上不前進、連續沿日曆日走、Bounce back 要隔天、門檻在挑戰定義裡、Podium 不到 3 人不算、日期是跨過門檻那一晚、領 XP 一級一次、拿到的不收回、習慣只收數字、助理只算答出來的天數、舊版 badges 照在、刪帳號一起刪
+python tests/test_journey.py             # 2026-11-19 新增：Journey——每站與最後一站、往後移不建立、連 3 天才前進（沒準時重數、沒量到不打斷、不退站）、睡眠長度照送來的存（不拉到 7 小時）、前進後目標＝下一站但以前的快照不變、舊版 App PATCH 掉會被拉回、Stop 後不再拉回、game/ 不直接讀它（只讀記下來的站數）、刪帳號一起刪
 python tests/test_export_teammate.py     # 2026-11-19 新增：給隊友的副本——真的 id 在輸出檔裡一個位元組都找不到、別的帳號不帶、好友兩個方向都在、沿用 id、不動來源、後端讀副本跟讀來源一樣
 python tests/test_no_blocking.py         # 2026-11-21 新增：慢的請求不准卡住別人（開真的 uvicorn 量 /health）、只有真的在 await 的端點才准 async、快取一次整份換掉
 python tests/test_camera_auto.py         # 2026-11-21 新增：按 Start Sleep 自動開錄——只認手機帳號＋區網、在錄不開第二個、停錄只放旗標（錄影程式自己收尾，拿掉檢查會紅）、Cancel 搬檔不刪、鎖檔死了當沒在錄、攝影機移動偵測（平移 40 判移動、亮度與床上的人不算、中間值）、早上匯入移動了只擋攝影機、重新框有備份並換基準、API 出錯不讓端點失敗

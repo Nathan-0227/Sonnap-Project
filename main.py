@@ -65,7 +65,7 @@ from behavior import (adherence, challenges as challenge_engine,
 from wearable.healthconnect_adapter import HealthConnectError, to_wearable_row
 
 # 遊戲化層。⚠️ 只讀評分層（設計紅線 4），見 game/__init__.py。
-from game import inventory, state as game_state
+from game import badges as game_badges, inventory, state as game_state
 
 # 好友。⚠️ 只分享行為指標，別人的 user_id 永遠不出後端，見 social/__init__.py。
 from social import friends as social_friends
@@ -1840,7 +1840,15 @@ GAME_HISTORY_DAYS = 3650
 
 class ClaimRequest(BaseModel):
     user_id: str
-    challenge_id: str
+    challenge_id: Optional[str] = None
+    badge: Optional[str] = None       # "badge:<系列>:<級>"（2026-11-22）；跟 challenge_id 二選一
+
+
+class HabitDayRequest(BaseModel):
+    user_id: str
+    date: str                          # YYYY-MM-DD（手機上「計畫的一天」，起床前 3 小時起算）
+    checked: int = Field(ge=0, le=50)
+    total: int = Field(ge=0, le=50)
 
 
 class EquipRequest(BaseModel):
@@ -1858,17 +1866,107 @@ def _game_inputs(user_id):
     return behavior_rows, wearable_rows, achievement_rows, evaluated, defs
 
 
+def _record_journey_stops(user_id):
+    """
+    Traveller 徽章：這一段 Journey 走過幾站，記在 game_activity（journeys 只留最近一段，
+    換一段之後就數不到上一段了）。只增不減。日期是那一段開始的那天。
+    """
+    j = db.get_journey(user_id)
+    if not j or not j.get("started_at"):
+        return
+    walked = int(j.get("stop_index") or 0) + (1 if j.get("status") == journey.STATUS_DONE else 0)
+    if walked > 0:
+        db.raise_game_activity(user_id, "journey", str(j["started_at"])[:10], walked)
+
+
+def _refresh_podium(user_id, behavior_rows):
+    """
+    Podium 徽章：每個已經結束的週日，看一次 7 天榜（準時／連續／作息）有沒有進前三，
+    算過的週記在 game_activity（之後不再算）。
+    參加的人＝我＋現在的朋友，公開與否照現在的分享設定（同排行榜）。
+    ⚠️ 人數不到 PODIUM_MIN_PEOPLE 時**不記**：之後加了朋友，那幾週還能再算一次。
+    """
+    friend_ids = db.list_friend_ids(user_id)
+    if len(friend_ids) + 1 < game_badges.PODIUM_MIN_PEOPLE:
+        return
+    dates = [str(r["date"])[:10] for r in behavior_rows if r.get("date")]
+    if not dates:
+        return
+    yesterday = (date_cls.today() - timedelta(days=1)).isoformat()
+    done = {str(a["date"])[:10] for a in db.get_game_activity(user_id, "podium")}
+    todo = [d for d in game_badges.sundays_between(min(dates), yesterday) if d not in done]
+    if not todo:
+        return
+    people = []
+    for uid in [user_id, *friend_ids]:
+        items = _sharing(uid)["items"]
+        people.append({
+            "key": uid,
+            "shares_by": {m: bool(items.get(social_leaderboard.METRICS[m]["share"]))
+                          for m in game_badges.PODIUM_METRICS},
+            "behavior": behavior_rows if uid == user_id else db.get_nightly_behavior(uid, days=800),
+        })
+    for sunday in todo:
+        db.set_game_activity(user_id, "podium", sunday,
+                             1 if game_badges.on_podium(people, user_id, sunday) else 0)
+
+
+def _badge_inputs(user_id, behavior_rows, wearable_rows, defs, refresh=True):
+    """
+    徽章要的全部東西 → (算出來的, 已經記下的)。
+
+    refresh=True（/game、領獎）：先把 Journey 站數與還沒算過的週的 Podium 記下來，
+    算完再把新達成的那幾級寫進 badges_earned（第一次達成的日期永遠留著）。
+    refresh=False（好友動態牆、衣櫃）：只讀，不寫、不算 Podium（動態牆替每個朋友各跑一次，要快）。
+    """
+    if refresh:
+        try:
+            _record_journey_stops(user_id)
+            _refresh_podium(user_id, behavior_rows)
+        except Exception:
+            # 徽章的附加紀錄失敗不能讓 /game 跟著壞；下次打開再補
+            pass
+    ctx = {
+        "behavior": behavior_rows,
+        "wearable": wearable_rows,
+        "challenges": {d["kind"]: d for d in defs or []},
+        "today": date_cls.today().isoformat(),
+        "visits": db.get_game_activity(user_id, "visit"),
+        "assistant": db.get_game_activity(user_id, "assistant"),
+        "journey": db.get_game_activity(user_id, "journey"),
+        "podium": db.get_game_activity(user_id, "podium"),
+        "habits": db.get_habit_days(user_id),
+    }
+    computed = game_badges.compute(ctx)
+    stored = db.get_badges_earned(user_id)
+    if refresh:
+        new = game_badges.newly_earned(computed, stored)
+        if new:
+            db.add_badges_earned(user_id, new)
+            stored = db.get_badges_earned(user_id)
+    return computed, stored
+
+
+def _game_state_for(user_id, refresh=True):
+    """一個人的完整 /game 狀態。回傳 (state, 挑戰判定結果, 挑戰定義, 每晚行為列)。"""
+    behavior_rows, wearable_rows, achievement_rows, evaluated, defs = _game_inputs(user_id)
+    computed, stored = _badge_inputs(user_id, behavior_rows, wearable_rows, defs, refresh=refresh)
+    state = game_state.build_game_state(
+        behavior_rows, wearable_rows, achievement_rows, evaluated,
+        badge_computed=computed, badge_stored=stored)
+    return state, evaluated, defs
+
+
 @app.get("/game")
 def get_game(user_id: str = Query(...)):
     """
     XP、等級、寵物成長階段、可以領的挑戰獎勵、徽章。
 
-    ⚠️ 每一格都是即時算的，沒有任何一格存在資料庫裡（除了「領過了沒」）。
+    ⚠️ XP 與等級每一格都是即時算的；存在資料庫裡的只有「領過了沒」與
+       「徽章第一次拿到是哪一晚」（拿到的徽章不收回，見 game/badges.py）。
     """
     require_user(user_id)
-    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
-    state = game_state.build_game_state(
-        behavior_rows, wearable_rows, achievement_rows, evaluated)
+    state, _, _ = _game_state_for(user_id)
     return {
         "user_id": user_id,
         **state,
@@ -1890,13 +1988,19 @@ def get_game(user_id: str = Query(...)):
 @app.post("/game/claim", status_code=201)
 def claim_reward(req: ClaimRequest):
     """
-    領一個已完成挑戰的獎勵。每個挑戰每個窗格一次（見 game/rewards.py）。
+    領一個已完成挑戰的獎勵（challenge_id），或一個徽章那一級的 XP（badge＝`badge:<系列>:<級>`，
+    2026-11-22）。挑戰每個窗格一次（見 game/rewards.py）；徽章每一級一次（game/badges.py）。
 
-    404 = 沒有這個挑戰；422 = 還沒完成；409 = 這個窗格已經領過了。
+    404 = 沒有這個挑戰／徽章；422 = 還沒完成；409 = 已經領過了。
     ⚠️ 422 與 409 要分開：前者是「去做」，後者是「做過了、下個窗格再來」，
        給使用者的話完全不同。
     """
     require_user(req.user_id)
+    if (req.challenge_id is None) == (req.badge is None):
+        raise HTTPException(status_code=422, detail="Send exactly one of challenge_id or badge.")
+    if req.badge is not None:
+        return _claim_badge(req.user_id, req.badge)
+
     behavior_rows, wearable_rows, achievement_rows, evaluated, defs = _game_inputs(req.user_id)
     if not any(d["challenge_id"] == req.challenge_id for d in defs):
         raise HTTPException(status_code=404, detail=f"Unknown challenge {req.challenge_id!r}.")
@@ -1927,10 +2031,53 @@ def claim_reward(req: ClaimRequest):
     }
 
 
+def _claim_badge(user_id, badge):
+    parts = str(badge).split(":")
+    series = game_badges.SERIES_BY_ID.get(parts[1]) if len(parts) == 3 and parts[0] == "badge" else None
+    if series is None or not parts[2].isdigit() or not 1 <= int(parts[2]) <= len(series["thresholds"]):
+        raise HTTPException(status_code=404, detail=f"Unknown badge {badge!r}.")
+    before, _, _ = _game_state_for(user_id)
+    s = next(x for x in before["badge_series"] if x["series_id"] == parts[1])
+    tier = s["tiers"][int(parts[2]) - 1]
+    if not tier["earned"]:
+        raise HTTPException(status_code=422, detail="This badge is not earned yet.")
+    if tier["claimed"] or not db.add_achievement(user_id, badge, tier["xp"]):
+        raise HTTPException(status_code=409, detail="Already claimed.")
+    after, _, _ = _game_state_for(user_id, refresh=False)
+    claimed = next(c for c in game_badges.claimable(before["badge_series"])
+                   if c["achievement_id"] == badge)
+    return {
+        "user_id": user_id,
+        "claimed": claimed,
+        "level": after["level"],
+        "xp_total": after["xp_total"],
+        "leveled_up": after["level"] > before["level"],
+    }
+
+
+@app.post("/habits/day")
+def post_habit_day(req: HabitDayRequest):
+    """
+    睡眠計畫的習慣：那一天勾了幾條、總共幾條（2026-11-22，「Habits」徽章用）。
+    ⚠️ **只收數字**——是哪幾條、習慣的文字都只在手機上。同一天重送就覆寫（取消勾選也算得回去）。
+    🔴 自己勾、沒有證據；使用者知情（game/badges.py 檔頭）。
+    """
+    require_user(req.user_id)
+    try:
+        date_cls.fromisoformat(req.date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD.")
+    if req.checked > req.total:
+        raise HTTPException(status_code=422, detail="checked cannot be more than total.")
+    if req.date > (date_cls.today() + timedelta(days=1)).isoformat():
+        raise HTTPException(status_code=422, detail="date is in the future.")
+    db.upsert_habit_day(req.user_id, req.date, req.checked, req.total)
+    return {"date": req.date, "checked": req.checked, "total": req.total}
+
+
 def _closet_level(user_id):
-    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
-    return game_state.build_game_state(
-        behavior_rows, wearable_rows, achievement_rows, evaluated)["level"]
+    state, _, _ = _game_state_for(user_id, refresh=False)
+    return state["level"]
 
 
 @app.get("/closet")
@@ -2067,8 +2214,8 @@ def _recent_dates(user_id, days=FEED_DAYS):
 
 def _cards_for(user_id, days=FEED_DAYS):
     settings = _sharing(user_id)
-    behavior_rows, wearable_rows, achievement_rows, evaluated, _ = _game_inputs(user_id)
-    game = game_state.build_game_state(behavior_rows, wearable_rows, achievement_rows, evaluated)
+    # refresh=False：動態牆替每個朋友各跑一次，只讀不寫（不算 Podium）
+    game, evaluated, _ = _game_state_for(user_id, refresh=False)
     closet = db.get_game_state(user_id) or {}
     return [
         {"date": d, "scene": settings["scene"],
@@ -2419,7 +2566,8 @@ def get_friends_town(user_id: str = Query(...)):
 def visit_friend(handle: str, req: VisitRequest):
     """
     拜訪朋友：摸摸或一句預設的話。同一個朋友一天（起床日）一次 → 第二次 409。
-    不給 XP、不影響分數、不推播。不認得的動作 422；不是朋友 404。
+    **每次拜訪**不給 XP、不影響分數、不推播；累積次數進「Good friend」徽章，徽章那一級才給 XP
+    （2026-11-22 使用者定）。不認得的動作 422；不是朋友 404。
     """
     require_user(req.user_id)
     if req.kind not in social_town.KINDS:
@@ -2431,6 +2579,11 @@ def visit_friend(handle: str, req: VisitRequest):
     keep_since = social_town.visit_day(now - _td(days=social_town.VISIT_KEEP_DAYS))
     if not db.add_friend_visit(req.user_id, friend_id, day, req.kind, keep_since):
         raise HTTPException(status_code=409, detail="You already visited today. Come back tomorrow.")
+    # friend_visits 只留 14 天，累積次數另外記（Good friend 徽章）。記不進去不擋拜訪。
+    try:
+        db.bump_game_activity(req.user_id, "visit", day)
+    except Exception:
+        pass
     return {"sent": req.kind, "label": social_town.button_label(req.kind), "day": day}
 
 
@@ -2554,6 +2707,12 @@ def chat(req: ChatRequest):
             tips=tip_ids, links=links)
     except chat_engine.ChatUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    # 「Ask your buddy」徽章：只記「這一天有答出來」，不存問題（game/badges.py）。
+    # 記不進去不能讓回答失敗——徽章只是附加的。
+    try:
+        db.bump_game_activity(req.user_id, "assistant", chat_today().isoformat())
+    except Exception:
+        pass
     return {"answer": result["answer"], "source": "llm",
             # 分段（2026-11-22）。舊版 App 只讀 answer
             "headline": result["headline"], "why": result["why"], "tips": result["tips"],

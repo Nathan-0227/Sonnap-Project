@@ -1,5 +1,5 @@
 """
-game/rewards.py —— 挑戰獎勵的領取規則、成就徽章。純函式。
+game/rewards.py —— 挑戰獎勵的領取規則。純函式。（徽章在 game/badges.py）
 
 ═══════════════════════════════════════════════════════════════════
 挑戰獎勵：每個挑戰「每一個窗格」可以領一次
@@ -19,7 +19,8 @@ game/rewards.py —— 挑戰獎勵的領取規則、成就徽章。純函式。
 ═══════════════════════════════════════════════════════════════════
 
 「第一次記錄」「記錄滿 7 晚」這種徽章看起來無害，但它們獎勵的正是
-紅線 5 禁止的東西——只跟「有資料」耦合。這裡每一個徽章都要做到某件事。
+紅線 5 禁止的東西——只跟「有資料」耦合。徽章（game/badges.py）的每一個系列都要做到某件事；
+那裡也記了使用者知情的三個例外（拜訪、習慣、助理）。
 """
 from datetime import date as date_cls
 
@@ -33,23 +34,7 @@ from datetime import date as date_cls
 CLAIM_XP = {"time": 10, "phone_in_bed": 10, "wake_time": 10,
             "streak": 40, "consistency": 40}
 
-BADGES = (
-    {
-        "badge_id": "first_on_time",
-        "title": "First on-time night",
-        "description": "Put your phone down before your target bedtime.",
-    },
-    {
-        "badge_id": "on_time_x5",
-        "title": "Five on-time nights",
-        "description": "Five nights on time, not necessarily in a row.",
-    },
-    {
-        "badge_id": "good_sleep",
-        "title": "A good night",
-        "description": "Your watch rated a night as Good.",
-    },
-)
+# 徽章在 game/badges.py（2026-11-22 改成 13 個系列 × 5 級），這裡不再判。
 
 
 def claim_period(window_days, as_of):
@@ -86,20 +71,3 @@ def claimable(evaluated, as_of, claimed_ids):
             "xp": CLAIM_XP.get(ch["kind"], 0),
         })
     return out
-
-
-def badges(nights):
-    """
-    nights 是 xp.nights_xp() 的輸出。回傳每個徽章與是否已經拿到。
-
-    ⚠️ 徽章是**即時算**的，不存資料庫——事實來源是每晚的資料，
-       存起來的話就會有「資料改了、徽章沒跟著改」的第二份真相。
-    """
-    on_time = sum(1 for n in nights if n["behaviour_tier"] == "on_time")
-    good = any(n["final_quality"] == "Good" for n in nights)
-    earned = {
-        "first_on_time": on_time >= 1,
-        "on_time_x5": on_time >= 5,
-        "good_sleep": good,
-    }
-    return [{**b, "earned": earned[b["badge_id"]]} for b in BADGES]
