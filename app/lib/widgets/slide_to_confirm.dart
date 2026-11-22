@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_accent.dart';
 
 /// 滑動確認（2026-11-12 使用者要求：Out of bed 用滑的結束）。
 ///
@@ -70,7 +71,7 @@ class _SlideToConfirmState extends State<SlideToConfirm>
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.06 + 0.10 * t),
               borderRadius: BorderRadius.circular(widget.height / 2),
-              border: Border.all(color: const Color(0xFFB9A6FF), width: 2),
+              border: Border.all(color: accentSoftOf(context), width: 2),
             ),
             child: Stack(
               children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
 import '../services/account_service.dart';
 import '../services/chat_service.dart';
 import '../services/chat_thread.dart';
@@ -137,7 +138,6 @@ Set<int> periodChipsAt(List<ChatTurn> turns) {
   return out;
 }
 
-const _purple = Color(0xFF7B61FF);
 const _bubble = Color(0xFF1E2C6B);
 const _bar = Color(0xFF121A47);
 
@@ -420,7 +420,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Widget _chip(String q, {bool big = false}) {
     return Material(
       color: const Color(0xCC24346F),
-      shape: StadiumBorder(side: BorderSide(color: _purple.withValues(alpha: 0.55))),
+      shape: StadiumBorder(side: BorderSide(color: accentOf(context).withValues(alpha: 0.55))),
       child: InkWell(
         customBorder: const StadiumBorder(),
         onTap: _loading ? null : () => _send(q),
@@ -454,7 +454,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               textInputAction: TextInputAction.send,
               onSubmitted: _send,
               style: const TextStyle(color: Colors.white, fontSize: 15),
-              cursorColor: _purple,
+              cursorColor: accentOf(context),
               decoration: const InputDecoration(
                 hintText: 'Message your buddy…',
                 hintStyle: TextStyle(color: Colors.white38),
@@ -465,7 +465,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
         ),
         const SizedBox(width: 8),
         Material(
-          color: _purple,
+          color: accentOf(context),
           shape: const CircleBorder(),
           child: IconButton(
             key: const Key('assistant-send'),
@@ -495,9 +495,9 @@ class _UserBubble extends StatelessWidget {
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              decoration: const BoxDecoration(
-                color: _purple,
-                borderRadius: BorderRadius.only(
+              decoration: BoxDecoration(
+                color: accentOf(context),
+                borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(18),
                   topRight: Radius.circular(18),
                   bottomLeft: Radius.circular(18),
@@ -507,7 +507,7 @@ class _UserBubble extends StatelessWidget {
               child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14.5, height: 1.35)),
             ),
           ),
-          const BubbleTail(color: _purple, left: false),
+          BubbleTail(color: accentOf(context), left: false),
         ]),
       ),
     );

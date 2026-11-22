@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
 import '../services/plan_goals.dart';
 import '../services/sleep_plan.dart';
 import 'plan_habit_editor.dart' show planIconAsset;
@@ -35,7 +36,6 @@ class PlanGoalPicker extends StatefulWidget {
   State<PlanGoalPicker> createState() => _PlanGoalPickerState();
 }
 
-const _accent = Color(0xFF7657FF);
 const _dim = Color(0xFF9AA8C7);
 
 class _PlanGoalPickerState extends State<PlanGoalPicker> {
@@ -79,7 +79,7 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
           key: key,
           onPressed: onPressed,
           style: FilledButton.styleFrom(
-            backgroundColor: _accent,
+            backgroundColor: accentOf(context),
             disabledBackgroundColor: const Color(0x337657FF),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
@@ -124,7 +124,7 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
               decoration: BoxDecoration(
                 color: on ? const Color(0x337657FF) : const Color(0x14FFFFFF),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: on ? _accent : const Color(0x22FFFFFF), width: on ? 2 : 1),
+                border: Border.all(color: on ? accentOf(context) : const Color(0x22FFFFFF), width: on ? 2 : 1),
               ),
               child: Row(
                 children: [
@@ -135,7 +135,7 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
                         style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
                   ),
                   Icon(on ? Icons.check_circle_rounded : Icons.circle_outlined,
-                      color: on ? _accent : const Color(0x55FFFFFF)),
+                      color: on ? accentOf(context) : const Color(0x55FFFFFF)),
                 ],
               ),
             ),
@@ -172,8 +172,8 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
                     key: const Key('goal-journey'),
                     style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
                     onPressed: widget.onTryJourney,
-                    child: const Text(kGoalJourneyLine,
-                        style: TextStyle(color: Color(0xFFB9A6FF), fontSize: 13.5, fontWeight: FontWeight.w700)),
+                    child: Text(kGoalJourneyLine,
+                        style: TextStyle(color: accentSoftOf(context), fontSize: 13.5, fontWeight: FontWeight.w700)),
                   ),
           ),
         const SizedBox(height: 16),
@@ -198,7 +198,7 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
           decoration: BoxDecoration(
             color: const Color(0x14FFFFFF),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: on ? _accent : const Color(0x22FFFFFF)),
+            border: Border.all(color: on ? accentOf(context) : const Color(0x22FFFFFF)),
           ),
           child: Row(
             children: [
@@ -213,7 +213,7 @@ class _PlanGoalPickerState extends State<PlanGoalPicker> {
               Expanded(child: Text(s.text, style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.35))),
               const SizedBox(width: 8),
               Icon(on ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                  color: on ? _accent : const Color(0x77FFFFFF)),
+                  color: on ? accentOf(context) : const Color(0x77FFFFFF)),
             ],
           ),
         ),

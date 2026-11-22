@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../theme/app_accent.dart';
 import '../models/sleep_session.dart';
 import '../services/live_sleep_status.dart';
 import '../services/account_service.dart';
@@ -1053,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen>
             if (widget.intro?.pending ?? false) return const EntrySky();
             return const SafeArea(
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF8B6DFF)),
+                child: CircularProgressIndicator(),
               ),
             );
           }
@@ -1406,7 +1407,7 @@ class _HomeScreenState extends State<HomeScreen>
       onPressed: onTap,
       tooltip: tooltip,
       visualDensity: VisualDensity.compact,
-      icon: Icon(icon, color: SonnapColors.accentSoft, size: 22),
+      icon: Icon(icon, color: accentSoftOf(context), size: 22),
     );
   }
 
@@ -1955,10 +1956,10 @@ class _HomeScreenState extends State<HomeScreen>
           TextButton(
             key: const Key('backfill-last-night'),
             onPressed: _backfillLastNight,
-            child: const Text(
+            child: Text(
               'Forgot to tap last night? Add times',
               style: TextStyle(
-                color: Color(0xFFB9A6FF),
+                color: accentSoftOf(context),
                 fontSize: 12,
                 decoration: TextDecoration.underline,
                 decorationColor: Color(0xFFB9A6FF),

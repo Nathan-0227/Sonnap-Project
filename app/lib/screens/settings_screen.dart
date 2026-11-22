@@ -6,6 +6,7 @@ import '../services/alarm.dart';
 import '../services/game_service.dart';
 import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
+import '../theme/app_accent.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/settings_list.dart';
 import '../widgets/sleep_schedule_sheet.dart';
@@ -109,7 +110,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 const _sub = kSettingsSub;
-const _accent = kSettingsAccent;
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late bool reminderOn;
@@ -335,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SettingsRow(
                     key: const Key('settings-sleep-schedule'),
                     icon: Icons.nightlight_round,
-                    color: _accent,
+                    color: accentOf(context),
                     title: 'Sleep schedule',
                     value: _wake == null ? _hm(targetBedtime) : '${_hm(targetBedtime)} → ${_hm(_wake!)}',
                     onTap: _pickBedtime,
@@ -391,6 +391,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                 ]),
                 SettingsGroup(title: 'APP', rows: [
+                  // 主題色：深色底不變，只換強調色（2026-11-22 Q5）
+                  ValueListenableBuilder<AccentTheme>(
+                    valueListenable: AppLook.accent,
+                    builder: (context, current, _) => SettingsRow(
+                      key: const Key('settings-theme'),
+                      title: 'Theme color',
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final t in AccentTheme.values) _Swatch(theme: t, selected: t == current, store: widget.store),
+                        ],
+                      ),
+                    ),
+                  ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: AppLook.reduceMotion,
+                    builder: (context, on, _) => SettingsRow(
+                      key: const Key('settings-reduce-motion'),
+                      title: 'Reduce motion',
+                      subtitle: 'Stars, pets and glows stay still',
+                      trailing: SettingsSwitch(
+                        key: const Key('settings-reduce-motion-switch'),
+                        value: on,
+                        onChanged: (v) => AppLook.setReduceMotion(widget.store, v),
+                      ),
+                      onTap: () => AppLook.setReduceMotion(widget.store, !on),
+                    ),
+                  ),
                   SettingsRow(
                     key: const Key('settings-language'),
                     title: 'Language',
@@ -512,6 +540,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
+/// 主題色的一個圓點：選中的外面一圈白；點了就換（存在手機上）。
+class _Swatch extends StatelessWidget {
+  final AccentTheme theme;
+  final bool selected;
+  final KeyValueStore store;
+  const _Swatch({required this.theme, required this.selected, required this.store});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        selected: selected,
+        label: '${accentLabel(theme)} theme',
+        excludeSemantics: true,
+        child: InkResponse(
+          key: Key('settings-accent-${theme.name}'),
+          radius: 22,
+          onTap: () => AppLook.chooseAccent(store, theme),
+          // 點得到的範圍 44 寬，圓點本身 24
+          child: SizedBox(
+            width: 36,
+            height: 44,
+            child: Center(
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: kAccentPalettes[theme]!.accent,
+                  border: selected ? Border.all(color: Colors.white, width: 2.5) : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 /// 換寵物面板裡的一張卡。
 class _PetCard extends StatelessWidget {
   final PetSpecies species;
@@ -528,7 +593,7 @@ class _PetCard extends StatelessWidget {
           color: selected ? const Color(0xFF2A2470) : kSettingsCard,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: selected ? kSettingsAccent : kSettingsLine, width: selected ? 2.5 : 1),
+            side: BorderSide(color: selected ? accentOf(context) : kSettingsLine, width: selected ? 2.5 : 1),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/health_connect.dart';
+import '../theme/app_accent.dart';
 import '../widgets/settings_list.dart';
 
 /// Health Connect 的設定：連上、手動同步、看上一次同步的結果。
@@ -131,8 +132,8 @@ class _HealthConnectScreenState extends State<HealthConnectScreen> {
     );
   }
 
-  static final _button = FilledButton.styleFrom(
-    backgroundColor: kSettingsAccent,
+  ButtonStyle get _button => FilledButton.styleFrom(
+    backgroundColor: accentOf(context),
     minimumSize: const Size(0, 46),
     textStyle: const TextStyle(fontWeight: FontWeight.w800),
   );

@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import '../services/friends_service.dart';
 import '../services/pet_choice.dart';
 import '../widgets/friend_night_card.dart';
+import '../theme/app_accent.dart';
 import '../widgets/settings_list.dart';
 import '../widgets/streak_card.dart';
 
@@ -127,7 +128,7 @@ class _FriendSharingScreenState extends State<FriendSharingScreen> {
                   ],
                 )
               else
-                const Center(child: CircularProgressIndicator(color: kSettingsAccent)),
+                const Center(child: CircularProgressIndicator()),
             ],
     );
   }
@@ -154,7 +155,7 @@ class _FriendSharingScreenState extends State<FriendSharingScreen> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: id == s.scene ? kSettingsAccent : const Color(0x22FFFFFF),
+                                color: id == s.scene ? accentOf(context) : const Color(0x22FFFFFF),
                                 width: id == s.scene ? 3 : 1,
                               ),
                             ),

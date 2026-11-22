@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_accent.dart';
+
 /// 設定頁與它點進去的頁面（守門、Health Connect、What friends can see、換寵物）共用的樣子
 /// （2026-11-22 設定頁改版，畫布「A 分組＋B 名片」）：深藍底、分組小標、圓角卡片裡一列一列、
 /// 前面彩色小圖示。改樣子只改這裡，幾頁才不會各長各的。
@@ -8,6 +10,7 @@ const kSettingsBg = Color(0xFF0B1430);
 const kSettingsCard = Color(0xFF16224A);
 const kSettingsLine = Color(0xFF24335F);
 const kSettingsSub = Color(0xFFA9B2D6);
+/// 紫色主題的主色。⚠️ 畫面上一律用 `accentOf(context)`（跟著主題色換），這個只當預設值。
 const kSettingsAccent = Color(0xFF7657FF);
 
 /// 點開的面板底色。⚠️ showReportSheet 的外框是透明的，底色要內容自己畫。
@@ -52,7 +55,7 @@ class SettingsPage extends StatelessWidget {
                 ),
                 Expanded(
                   child: loading
-                      ? const Center(child: CircularProgressIndicator(color: kSettingsAccent))
+                      ? const Center(child: CircularProgressIndicator())
                       : placeholder ??
                           ListView(
                             key: listKey,
@@ -202,7 +205,7 @@ class SettingsRow extends StatelessWidget {
                 Container(
                   width: 34,
                   height: 34,
-                  decoration: BoxDecoration(color: color ?? kSettingsAccent, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: color ?? accentOf(context), borderRadius: BorderRadius.circular(10)),
                   child: Icon(icon, color: Colors.white, size: 19),
                 ),
                 const SizedBox(width: 12),
@@ -240,7 +243,7 @@ class SettingsRadio extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Icon(
         selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-        color: selected ? kSettingsAccent : kSettingsSub,
+        color: selected ? accentOf(context) : kSettingsSub,
         size: 24,
       );
 }
@@ -253,7 +256,7 @@ class SettingsCheck extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Icon(
         checked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-        color: checked ? kSettingsAccent : kSettingsSub,
+        color: checked ? accentOf(context) : kSettingsSub,
         size: 24,
       );
 }
@@ -269,6 +272,6 @@ class SettingsSwitch extends StatelessWidget {
         value: value,
         onChanged: onChanged,
         activeThumbColor: Colors.white,
-        activeTrackColor: kSettingsAccent,
+        activeTrackColor: accentOf(context),
       );
 }
