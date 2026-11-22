@@ -83,8 +83,12 @@ class WelcomeFlow extends StatefulWidget {
   /// 完成頁那隻寵物。按 Let's go 之後首頁從天空降下來，寵物從這個位置飄到山頂（進場動畫長版）。
   final GlobalKey? donePetKey;
 
+  /// 歡迎頁的開場動畫（星星亮起、寵物浮上來、字依序進來；`WelcomeOpening`）。只有正式的 App 打開，測試預設關。
+  final bool animateOpening;
+
   const WelcomeFlow({
     this.donePetKey,
+    this.animateOpening = false,
     super.key,
     this.replay = false,
     this.initialName,
@@ -106,7 +110,8 @@ const _accent = Color(0xFF7657FF);
 const _dim = Color(0xFF9AA8C7);
 const _font = 'Nunito';
 
-class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
+class _WelcomeFlowState extends State<WelcomeFlow>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   WelcomeStep _step = WelcomeStep.welcome;
   late final TextEditingController _name = TextEditingController(text: widget.initialName ?? '');
   String? _nameError;
@@ -120,6 +125,33 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
   bool _finishing = false;
   String? _finishProblem;
 
+  /// 開場動畫（null＝不播）。
+  AnimationController? _opening;
+
+  WelcomeOpening get _open {
+    final c = _opening;
+    if (c == null || !c.isAnimating || _step != WelcomeStep.welcome) return WelcomeOpening.rest;
+    return WelcomeOpening.at(c.value * WelcomeOpening.seconds);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.animateOpening && _opening == null && !(MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+      _opening = AnimationController(
+        vsync: this,
+        duration: Duration(milliseconds: (WelcomeOpening.seconds * 1000).round()),
+      )
+        ..addListener(() => setState(() {}))
+        ..forward();
+    }
+  }
+
+  /// 開場時一個元件淡入、往上浮一點（沒在播時原樣）。
+  Widget _fadeUp(double p, Widget child, {double dy = 14}) => p >= 1
+      ? child
+      : Opacity(opacity: p, child: Transform.translate(offset: Offset(0, (1 - p) * dy), child: child));
+
   @override
   void initState() {
     super.initState();
@@ -130,6 +162,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _opening?.dispose();
     _name.dispose();
     super.dispose();
   }
@@ -183,13 +216,13 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
       // 背景是首頁山頂上方那一片天空（進場動畫長版）：按 Let's go 之後鏡頭從這裡往下降到首頁。
       body: Stack(
         children: [
-        const Positioned.fill(child: EntrySky()),
+        Positioned.fill(child: EntrySky(starOpacity: _open.stars)),
         SafeArea(
           child: DefaultTextStyle.merge(
             style: const TextStyle(fontFamily: _font, color: Colors.white),
             child: Column(
               children: [
-                _topBar(),
+                _fadeUp(_open.topBar, _topBar(), dy: 0),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: MediaQuery.maybeDisableAnimationsOf(context) ?? false
@@ -310,20 +343,20 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title,
+                _fadeUp(_open.title, Text(title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.2)),
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.2))),
                 if (subtitle != null) ...[
                   const SizedBox(height: 8),
-                  Text(subtitle,
+                  _fadeUp(_open.subtitle, Text(subtitle,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 15, color: _dim, height: 1.35)),
+                      style: const TextStyle(fontSize: 15, color: _dim, height: 1.35))),
                 ],
                 const SizedBox(height: 24),
                 body,
                 const Spacer(),
                 const SizedBox(height: 24),
-                bottom,
+                _fadeUp(_open.button, bottom),
               ],
             ),
             ),
@@ -361,11 +394,13 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
     subtitle: 'Your sleep becomes your buddy\'s day.',
     body: Column(
       children: [
-        Center(child: _pet(150)),
+        _fadeUp(_open.pet, Center(child: _pet(150)), dy: 24),
         const SizedBox(height: 20),
-        _point(Icons.watch_rounded, 'If you wear a watch, it measures your sleep.'),
-        _point(Icons.phone_android_rounded, 'Your phone notices when you put it down at night.'),
-        _point(Icons.pets_rounded, 'Your buddy\'s mood follows your nights.'),
+        _fadeUp(_open.body, Column(children: [
+          _point(Icons.watch_rounded, 'If you wear a watch, it measures your sleep.'),
+          _point(Icons.phone_android_rounded, 'Your phone notices when you put it down at night.'),
+          _point(Icons.pets_rounded, 'Your buddy\'s mood follows your nights.'),
+        ])),
       ],
     ),
     bottom: _primary('Get started', _next, key: const Key('welcome-start')),

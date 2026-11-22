@@ -556,6 +556,8 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 不等網路：首頁內容（打包檔）一畫出來就開始；還在讀時畫天空，**不轉圈** | — |
 | Android 啟動畫面底色＝`res/values/colors.xml` 的 `sonnap_sky`（#010B2E）＝`kEntrySkyBottom`；Android 12 以上中間是 App 圖示（`values-v31`）。改一邊要改另一邊 | 原本是白色，每次開 App 閃白 |
 | 只寫事實：不放分數、XP、Great job | 紅線 5 |
+| **歡迎頁開場**（`WelcomeOpening`，1.6 秒，只有歡迎頁、`animateOpening` 只有正式 App 打開）：星星一顆顆亮 → 寵物浮上來 → 標題、說明、按鈕依序；開 App 認帳號那一下星星先不畫 | `entry_intro_test`【12】–【14】 |
+| 首頁卡片**一張張錯開**（`entryCardDelay`：一張晚 0.05 秒、最晚 0.3 秒）；播完前最晚那張也要到位 | 不然播完那一下卡片跳到原位（【10】） |
 
 #### 想改善什麼（2026-11-22 grill Q1–Q8，`feature/plan-goals`）
 

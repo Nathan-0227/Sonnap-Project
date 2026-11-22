@@ -1212,14 +1212,14 @@ class _HomeScreenState extends State<HomeScreen>
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: _introUi(0, Column(
+                              child: Column(
                                 children: [
-                                  _buildHeader(session, now, game),
+                                  _introItem(0, _buildHeader(session, now, game), dy: -14),
                                   // Hi 上方加了留白，這裡收一點，免得時鐘卡壓到寵物上面的等級
                                   const SizedBox(height: 8),
-                                  _buildClockRow(now),
+                                  _introItem(.06, _buildClockRow(now), dy: -14),
                                 ],
-                              ), dy: -14),
+                              ),
                             ),
                             Positioned(
                               left: 0,
@@ -1591,8 +1591,25 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  List<Widget> _introUiAll(int group, List<Widget> children) =>
-      _introFrame == null ? children : [for (final c in children) _introUi(group, c)];
+  /// 一個元件在 [delay] 秒後才輪到它進場（一張張錯開）。
+  Widget _introItem(double delay, Widget child, {double dy = 18}) {
+    final f = _introFrame;
+    if (f == null) return child;
+    final p = f.item(delay);
+    return Opacity(
+      opacity: p,
+      child: Transform.translate(offset: Offset(0, (1 - p) * dy), child: child),
+    );
+  }
+
+  /// 底下的卡片一張張錯開進場（間隔不算一張）。
+  List<Widget> _introUiAll(int group, List<Widget> children) {
+    if (_introFrame == null) return children;
+    var i = 0;
+    return [
+      for (final c in children) c is SizedBox ? c : _introItem(entryCardDelay(i++), c),
+    ];
+  }
 
   /// 寵物：短版先睡（睡姿）再醒；長版從登入流程完成頁的位置飄下來。落地都蹲一下、跳一下。
   Widget _introPet(Widget awakePet, GameState? game) {
