@@ -1,5 +1,6 @@
 // 底部導覽列（2026-11-13 使用者定，照參考圖）：只有圖示、中間一顆月亮＝開始睡覺。
 // 守：左右各兩個、月亮在正中間而且凸出導覽列、選中的有小點、沒有文字但朗讀念得出名稱。
+import 'package:app/services/pet_choice.dart';
 import 'package:app/widgets/moon_nav_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,6 +51,18 @@ void main() {
     await tester.tap(find.byKey(const Key('start-sleep')));
     expect(moon, 1);
     expect(find.byKey(const Key('start-sleep-dog')), findsOneWidget, reason: '中間畫狗頭表情');
+  });
+
+  testWidgets('中間那顆畫自己選的寵物：小狗是狗頭、選貓是貓頭（2026-11-22）', (tester) async {
+    addTearDown(() => PetChoice.current.value = PetSpecies.dog);
+    String drawn() =>
+        ((tester.widget<Image>(find.byKey(const Key('start-sleep-dog'))).image) as AssetImage)
+            .assetName;
+    await pump(tester);
+    expect(drawn(), 'assets/moods/dog_tired.png');
+    PetChoice.current.value = PetSpecies.cat;
+    await tester.pump();
+    expect(drawn(), 'assets/moods/cat_tired.png', reason: '選貓之後導覽列不能還是狗頭');
   });
 
   testWidgets('沒有文字，但朗讀念得出名稱；選中的那個標成 selected', (tester) async {

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../services/pet_choice.dart';
+import 'week_mood_strip.dart' show moodFaceAsset;
+
 /// 底部導覽列（2026-11-13 使用者定，參考圖：只有圖示、中間一顆發光的月亮凸出來）。
 ///
 /// - 左右各兩個分頁：Home、Friends ｜ ☾ ｜ Insights、Assistant。Settings 搬到首頁右上角。
-/// - **中間那顆＝開始睡覺**（原本首頁那顆 Start Sleep），哪個分頁都按得到；畫睡著的狗頭表情。
+/// - **中間那顆＝開始睡覺**（原本首頁那顆 Start Sleep），哪個分頁都按得到；畫睡著的寵物頭（小狗或貓，跟著 PetChoice）。
 /// - 沒有文字：選中的那個用紫色＋底下一個小點；每個圖示仍有朗讀用的名稱。
 class MoonNavBar extends StatelessWidget {
   /// 目前在哪個分頁（0 Home、1 Friends、2 Insights、3 Assistant）
@@ -135,16 +138,19 @@ class MoonNavBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // 睡著的狗頭表情（使用者 2026-11-13：「emoji 就好」）；缺圖退回月亮
+                  // 睡著的寵物頭（使用者 2026-11-13：「emoji 就好」；11-22 選貓時畫貓）；缺圖退回月亮
                   padding: const EdgeInsets.all(9),
-                  child: Image.asset(
-                    'assets/moods/dog_tired.png',
-                    key: const Key('start-sleep-dog'),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(
-                      Icons.nightlight_round,
-                      color: Colors.white,
-                      size: 30,
+                  child: ValueListenableBuilder<PetSpecies>(
+                    valueListenable: PetChoice.current,
+                    builder: (_, species, _) => Image.asset(
+                      moodFaceAsset('tired', species),
+                      key: const Key('start-sleep-dog'),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.nightlight_round,
+                        color: Colors.white,
+                        size: 30,
+                      ),
                     ),
                   ),
                 ),
