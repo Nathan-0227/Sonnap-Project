@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import '../services/key_value_store.dart';
 import '../services/pet_choice.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/plan_goal_picker.dart';
 import '../widgets/sleep_dial.dart';
 
 /// 第一次登入的流程（2026-11-22 grill Q9–Q14，取代原本只有一頁暱稱的 OnboardingScreen）。
 ///
-/// 歡迎 → 暱稱 → 寵物 → 作息 → 權限 → 完成。每一頁一件事、上面一排進度點，**每一頁都能跳過**。
-/// 「想改善什麼」那一步之後接在作息後面（PR B，等研究文件的對應表審過）。
+/// 歡迎 → 暱稱 → 寵物 → 作息 → 想改善什麼 → 權限 → 完成。每一頁一件事、上面一排進度點，**每一頁都能跳過**。
+/// 「想改善什麼」照 `睡眠計畫.md`「目標 → 建議」（11-22 使用者審過），元件跟計畫頁的 Help me pick 共用。
 ///
 /// ═══════════════════════════════════════════════════════════════════
 /// ⚠️ 這個流程一定要能被跳過、而且建不了帳號也不能擋住 App
@@ -20,15 +21,24 @@ import '../widgets/sleep_dial.dart';
 /// ⚠️ 權限說明要跟實際做的事一致（2026-11-22 查過原生端）：讀的是螢幕亮暗、解鎖的時間與每個 App 開了多久；
 ///    送出手機的只有時間與手機型號，App 名字只在手機上顯示。改原生端就要回來改這段話。
 
-enum WelcomeStep { welcome, name, pet, schedule, permissions, done }
+enum WelcomeStep { welcome, name, pet, schedule, goals, permissions, done }
 
 /// 走完流程要存的東西。[name] 是 null＝跳過暱稱（不建帳號）。
+/// [goals] 是空的＝跳過「想改善什麼」；[habits] 是推薦頁勾著的那幾條（建議清單的 id）。
 @immutable
 class WelcomeResult {
   final String? name;
   final TimeOfDay bedtime;
   final TimeOfDay wake;
-  const WelcomeResult({required this.name, required this.bedtime, required this.wake});
+  final List<String> goals;
+  final List<String> habits;
+  const WelcomeResult({
+    required this.name,
+    required this.bedtime,
+    required this.wake,
+    this.goals = const [],
+    this.habits = const [],
+  });
 }
 
 /// 權限那一頁要用到的兩件事（測試注入假的）。
@@ -58,6 +68,9 @@ class WelcomeFlow extends StatefulWidget {
 
   /// 寵物選擇存在這裡（同設定頁）。
   final KeyValueStore store;
+
+  /// 已經在計畫裡的習慣（Replay 時不再推薦）。
+  final Set<String> alreadyInPlan;
   final WelcomePermissions permissions;
 
   /// 進到完成頁時呼叫一次。回 null＝都存好了；否則是完成頁要照實說的那句（照樣能進 App）。
@@ -74,6 +87,7 @@ class WelcomeFlow extends StatefulWidget {
     required this.initialWake,
     this.scheduleLocked = false,
     required this.store,
+    this.alreadyInPlan = const {},
     required this.permissions,
     required this.onFinish,
     required this.onDone,
@@ -96,6 +110,8 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
   bool _nameSkipped = false;
   late TimeOfDay _bed = widget.initialBedtime;
   late TimeOfDay _wake = widget.initialWake;
+  List<String> _goals = const [];
+  List<String> _habits = const [];
   bool _usageOn = false;
   bool _notifyAsked = false;
   bool _finishing = false;
@@ -146,6 +162,8 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
       name: (name == null || name.isEmpty) ? null : name,
       bedtime: _bed,
       wake: _wake,
+      goals: _goals,
+      habits: _habits,
     ));
     if (!mounted) return;
     setState(() {
@@ -255,6 +273,9 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
       case WelcomeStep.schedule:
         _bed = widget.initialBedtime;
         _wake = widget.initialWake;
+      case WelcomeStep.goals:
+        _goals = const [];
+        _habits = const [];
       default:
         break;
     }
@@ -266,6 +287,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
     WelcomeStep.name => _namePage(),
     WelcomeStep.pet => _petPage(),
     WelcomeStep.schedule => _schedulePage(),
+    WelcomeStep.goals => _goalsPage(),
     WelcomeStep.permissions => _permissionsPage(),
     WelcomeStep.done => _donePage(),
   };
@@ -502,7 +524,24 @@ class _WelcomeFlowState extends State<WelcomeFlow> with WidgetsBindingObserver {
     ),
   );
 
-  // ── 5 權限 ────────────────────────────────────────────────────
+  // ── 5 想改善什麼 ───────────────────────────────────────────────
+
+  /// 選完或跳過都往下一頁；真的加進計畫要等最後（onFinish）一次做。
+  /// Journey 那一行在這裡只寫字（流程中間沒有地方可以帶過去）；Journey 進行中＝作息鎖住的那個狀態，就不提。
+  Widget _goalsPage() => SingleChildScrollView(
+    padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+    child: PlanGoalPicker(
+      alreadyInPlan: widget.alreadyInPlan,
+      journeyActive: widget.scheduleLocked,
+      onDone: (goals, habits) {
+        _goals = goals;
+        _habits = habits;
+        _next();
+      },
+    ),
+  );
+
+  // ── 6 權限 ────────────────────────────────────────────────────
 
   Widget _permissionsPage() => _layout(
     title: 'Two quick permissions',

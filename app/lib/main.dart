@@ -12,6 +12,8 @@ import 'services/pet_choice.dart';
 import 'services/start_sleep_requests.dart';
 import 'widgets/moon_nav_bar.dart';
 import 'screens/welcome_flow.dart';
+import 'services/plan_goals.dart';
+import 'widgets/plan_goal_picker.dart' show addGoalHabits;
 import 'services/usage_stats.dart';
 import 'screens/settings_screen.dart';
 import 'services/account_service.dart';
@@ -633,9 +635,17 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     await alarm.save(wake: wake, enabled: await alarm.enabled());
   }
 
+  /// 想改善什麼：記下選了什麼（跳過也算問過了，計畫頁就不會再自己跳出來），勾著的加進計畫。只存在手機上。
+  Future<void> _saveGoals(WelcomeResult r) async {
+    await PlanGoalsStore(widget.store ?? const PlatformKeyValueStore()).save(r.goals);
+    if (!_plan.loaded) await _plan.load();
+    await addGoalHabits(_plan, r.habits);
+  }
+
   /// 第一次登入流程（Q12）：作息先存，最後才一次建帳號。送不出去時回那句話給完成頁照實說。
   Future<String?> _finishWelcome(WelcomeResult r) async {
     await _saveSchedule(r.bedtime, r.wake);
+    await _saveGoals(r);
     final name = r.name;
     if (name == null) return null;
     _pendingAccount = await _createAccount(name);
@@ -671,11 +681,13 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         scheduleLocked: locked,
         store: store,
         permissions: _welcomePermissions,
+        alreadyInPlan: {for (final i in _plan.items) i.id},
         onFinish: (r) async {
           if (!locked) {
             await _saveSchedule(r.bedtime, r.wake);
             unawaited(_syncWake());
           }
+          await _saveGoals(r);
           final name = r.name;
           if (name == null || account == null || name == account.displayName) return null;
           final renamed = await _accounts.rename(account, name);

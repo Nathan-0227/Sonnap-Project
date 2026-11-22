@@ -1,5 +1,5 @@
 // 第一次登入的流程（2026-11-22 grill Q9–Q14）。守的事：
-// 【1】走完：歡迎 → 暱稱 → 寵物 → 作息 → 權限 → 完成，最後才一次交出結果（Q12）
+// 【1】走完：歡迎 → 暱稱 → 寵物 → 作息 → 想改善什麼 → 權限 → 完成，最後才一次交出結果（Q12）
 // 【2】暱稱空白／太長擋在本地，不往下走、不送出
 // 【3】每一頁都能跳過；跳過暱稱＝不建帳號（name 是 null），跳過作息＝原本的值
 // 【4】⚠️ 建不了帳號不能擋住 App：送不出去時完成頁照實說，Let's go 照樣能按
@@ -16,6 +16,8 @@ import 'package:app/screens/welcome_flow.dart';
 import 'package:app/services/account_service.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/pet_choice.dart';
+import 'package:app/services/plan_goals.dart';
+import 'package:app/services/sleep_plan.dart';
 import 'package:app/widgets/sleep_dial.dart';
 
 class FakePermissions implements WelcomePermissions {
@@ -93,8 +95,17 @@ void main() {
     expect(find.text('01:30'), findsOneWidget);
     expect(find.text('09:30'), findsOneWidget);
     await tapKey(tester, 'welcome-next');
+    // 想改善什麼：選兩個 → 推薦頁取消一條 → Add 2 habits
+    await tapKey(tester, 'goal-earlier');
+    await tapKey(tester, 'goal-sound');
+    await tapKey(tester, 'goal-next');
+    expect(find.text('Add 3 habits'), findsOneWidget);
+    await tapKey(tester, 'goal-rec-temperature');
+    await tapKey(tester, 'goal-add');
     await tapKey(tester, 'welcome-next'); // 權限頁：Continue
     expect(f.results, hasLength(1));
+    expect(f.results.single.goals, ['earlier', 'sound']);
+    expect(f.results.single.habits, ['morning_light', 'dim_screen'], reason: '交錯取、取消的那條不加');
     expect(f.results.single.name, 'Nathan');
     expect(f.results.single.bedtime, bed);
     expect(f.results.single.wake, wake);
@@ -128,10 +139,12 @@ void main() {
     final f = await pumpFlow(tester);
     await tapKey(tester, 'welcome-start');
     await tester.enterText(find.byKey(const Key('welcome-name')), 'Nathan');
-    for (var i = 0; i < 4; i++) {
-      await tapKey(tester, 'welcome-skip'); // 暱稱、寵物、作息、權限
+    for (var i = 0; i < 5; i++) {
+      await tapKey(tester, 'welcome-skip'); // 暱稱、寵物、作息、想改善什麼、權限
     }
     expect(f.results.single.name, isNull, reason: '跳過暱稱＝不建帳號，打了字也一樣');
+    expect(f.results.single.goals, isEmpty);
+    expect(f.results.single.habits, isEmpty);
     expect(f.results.single.bedtime, bed);
     expect(f.results.single.wake, wake);
     expect(PetChoice.current.value, PetSpecies.dog);
@@ -143,9 +156,10 @@ void main() {
     await tapKey(tester, 'welcome-start');
     await tester.enterText(find.byKey(const Key('welcome-name')), 'Nathan');
     await tapKey(tester, 'welcome-next');
-    for (var i = 0; i < 3; i++) {
-      await tapKey(tester, 'welcome-next');
-    }
+    await tapKey(tester, 'welcome-next'); // 寵物
+    await tapKey(tester, 'welcome-next'); // 作息
+    await tapKey(tester, 'goal-skip'); // 想改善什麼：Not sure — skip
+    await tapKey(tester, 'welcome-next'); // 權限
     expect(find.text('COULD-NOT-REACH'), findsOneWidget);
     await tapKey(tester, 'welcome-done');
     expect(f.done, [1]);
@@ -163,7 +177,7 @@ void main() {
     await tapKey(tester, 'welcome-start');
     expect(find.textContaining('No email, no password'), findsOneWidget);
     noClaims('name');
-    for (final page in ['pet', 'schedule', 'permissions', 'done']) {
+    for (final page in ['pet', 'schedule', 'goals', 'permissions', 'done']) {
       await tapKey(tester, 'welcome-skip');
       noClaims(page);
       if (page == 'permissions') {
@@ -178,7 +192,7 @@ void main() {
   testWidgets('【6】手機使用權限：回到 App 自動打勾；通知只寫 Asked', (tester) async {
     final f = await pumpFlow(tester);
     await tapKey(tester, 'welcome-start');
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       await tapKey(tester, 'welcome-skip');
     }
     expect(find.byKey(const Key('welcome-usage-action')), findsOneWidget);
@@ -218,7 +232,7 @@ void main() {
       addTearDown(tester.view.reset);
       final accounts = _Accounts(AccountState.needsOnboarding);
       await tester.pumpWidget(SonnapApp(
-        store: InMemoryKeyValueStore(),
+        store: _kv,
         accounts: accounts,
         welcomePermissions: FakePermissions(),
       ));
@@ -228,11 +242,18 @@ void main() {
       await tapKey(tester, 'welcome-start');
       await tester.enterText(find.byKey(const Key('welcome-name')), 'Nathan');
       await tapKey(tester, 'welcome-next');
-      for (var i = 0; i < 3; i++) {
-        await tapKey(tester, 'welcome-next');
-      }
+      await tapKey(tester, 'welcome-next'); // 寵物
+      await tapKey(tester, 'welcome-next'); // 作息
+      await tapKey(tester, 'goal-rested');
+      await tapKey(tester, 'goal-next');
+      await tapKey(tester, 'goal-add'); // 3 條全加
+      await tapKey(tester, 'welcome-next'); // 權限
       await tester.pump();
       expect(accounts.created, ['Nathan']);
+      expect(PlanStore.shared?.items.map((i) => i.id).toList(), ['late_caffeine', 'alcohol', 'dim_screen'],
+          reason: '勾著的加進計畫，照推薦的順序');
+      expect(PlanStore.shared?.items.every((i) => !i.notify), isTrue, reason: '提醒預設關');
+      expect(await PlanGoalsStore(_kv).goals(), ['rested']);
       expect(find.byType(WelcomeFlow), findsOneWidget, reason: '建好了也先停在完成頁');
       // 首頁有一直在動的動畫（星星、流星），pumpAndSettle 等不完 → 點了只往前推幾格
       await tester.tap(find.byKey(const Key('welcome-done')));
@@ -255,6 +276,8 @@ void main() {
     });
   });
 }
+
+final _kv = InMemoryKeyValueStore();
 
 class _Accounts implements AccountService {
   final AccountState state;

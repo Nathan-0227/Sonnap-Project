@@ -18,6 +18,9 @@ import '../widgets/plan_habit_editor.dart';
 import '../widgets/sleep_dial.dart';
 import '../widgets/sleep_schedule_sheet.dart';
 import '../services/journey_service.dart';
+import '../services/plan_goals.dart';
+import '../widgets/plan_goal_picker.dart';
+import '../widgets/report_sheet.dart';
 import '../widgets/journey_section.dart';
 
 /// 睡眠計畫頁（2026-11-19；版面照使用者給的參考圖，配色維持深色）。由上到下：
@@ -151,6 +154,7 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     // 打開這一頁時問一次（後端會重算、需要就換站）
     unawaited(widget.journey?.refresh());
     if (!widget.plan.loaded) unawaited(widget.plan.load());
+    unawaited(_maybeAskGoals());
     unawaited(_loadWake());
     unawaited(_loadGame());
     unawaited(_loadMood());
@@ -291,10 +295,59 @@ class _PlanScreenState extends State<PlanScreen> with SingleTickerProviderStateM
     _resyncReminders();
   }
 
+  /// 第一次打開計畫頁、清單是空的、而且還沒被問過（第一次登入流程裡跳過也算問過）→ 問一次（Q2）。
+  Future<void> _maybeAskGoals() async {
+    if (!widget.plan.loaded) await widget.plan.load();
+    final goals = PlanGoalsStore(widget.plan.store);
+    if (!mounted || widget.plan.items.isNotEmpty || await goals.asked()) return;
+    await goals.markAsked();
+    if (mounted) await _helpMePick();
+  }
+
+  /// Help me pick（Q2 B）：選目標 → 推薦頁 → 勾著的加進計畫。Journey 那一行點了就關掉，回到上面的 Journey 卡。
+  Future<void> _helpMePick() async {
+    final store = widget.plan.store;
+    final journeyActive = await journeyLocksSchedule(store);
+    if (!mounted) return;
+    await showReportSheet<void>(
+      context: context,
+      builder: (sheet) => Container(
+        key: const Key('plan-goal-sheet'),
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          color: ReportColors.sheet,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: PlanGoalPicker(
+              alreadyInPlan: {for (final i in widget.plan.items) i.id},
+              journeyActive: journeyActive,
+              onTryJourney: () => Navigator.of(sheet).pop(),
+              onDone: (goals, habits) async {
+                Navigator.of(sheet).pop();
+                await PlanGoalsStore(store).save(goals);
+                await addGoalHabits(widget.plan, habits);
+                _resyncReminders();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _add() async {
     final wake = _wake;
     if (wake == null) return;
-    final picked = await showPlanAddSheet(context, plan: widget.plan, bedtime: _bedtime, wake: wake);
+    var help = false;
+    final picked = await showPlanAddSheet(context,
+        plan: widget.plan, bedtime: _bedtime, wake: wake, onHelpMePick: () => help = true);
+    if (help && mounted) {
+      await _helpMePick();
+      return;
+    }
     if (picked == null || !mounted) return;
     // 先開設定頁，按了 Add 才真的加進計畫（使用者 11-19 定）
     final out = await openPlanHabitEditor(context, item: picked, bedtime: _bedtime, wake: wake, isNew: true);

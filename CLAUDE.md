@@ -529,7 +529,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 ### ✅ 第一次登入的流程（2026-11-22 grill Q9–Q14，`feature/onboarding`，取代原本只有一頁暱稱的 OnboardingScreen）
 
-`screens/welcome_flow.dart`：歡迎 → 暱稱 → 寵物 → 作息 → 權限 → 完成，上面一排進度點。「想改善什麼」那一步（PR B）等 `睡眠計畫.md`「目標 → 建議」審過才接在作息後面。
+`screens/welcome_flow.dart`：歡迎 → 暱稱 → 寵物 → 作息 → **想改善什麼** → 權限 → 完成，上面一排進度點。
 
 | 規則 | 不遵守的後果 |
 |---|---|
@@ -543,6 +543,20 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 頁面裡的寵物要包 `IgnorePointer` | HomePet 自己會吃點擊，寵物卡點不下去 |
 | Journey 進行中：作息那一頁轉不動、照實說（`journeyLocksSchedule`） | 第二個改目標的入口 |
 | **設定頁 Replay welcome**（Q11）：從頭走一次，不建帳號；暱稱改了走 `AccountService.rename`（PATCH display_name，存回各自的鍵） | 本人手機靠建置參數認人，永遠看不到這個流程 |
+
+#### 想改善什麼（2026-11-22 grill Q1–Q8，`feature/plan-goals`）
+
+4 個目標、最多選 2 個 → 推薦頁最多 3 條、預設打勾 → 勾著的加進計畫（`widgets/plan_goal_picker.dart`，第一次登入流程與計畫頁的 **Help me pick** 共用）。資料與字在 `services/plan_goals.dart`。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 目標、推薦順序、畫面上的字**逐字照抄** `睡眠計畫.md`「目標 → 建議」（11-22 使用者審過），`plan_goals_test`【1】讀文件比對 | 對應表本身就是建議，改了沒審等於多一套沒出處的說法 |
+| 推薦的句子是建議清單那一整句；**不寫「會讓你…」**；提醒預設關（`PlanItem.fromSuggestion`） | — |
+| 兩個目標**交錯取**、重複只算一次、已經在計畫裡的跳過、最多 3 條（`recommendHabits`） | — |
+| 目標**只存在手機上**（`plan_goals_v1`）：不送後端、不給 AI、不進分數與徽章 | 同自己勾的習慣（紅線 4、5） |
+| 計畫頁：清單空的、**沒問過**才自己跳出來一次，一跳出來就記成問過（`plan_goals_asked_v1`）；第一次登入流程裡跳過也算問過 | 每次打開計畫頁都被擋住 |
+| Journey 那一行只在選了 earlier、沒有進行中的 Journey；流程裡只寫字（中途沒地方帶過去），計畫頁裡點了關掉面板回到 Journey 卡 | — |
+| ⚠️ 測試用空清單打開計畫頁、又不是在測這件事的，store 先放 `PlanGoalsStore.askedKey: '1'`（`journey_test`、`level_progress_test`） | 面板跳出來把整頁擋住 |
 
 ### ✅ 小鎮送禮（2026-11-22 grill Q1–Q15，`feature/friend-gifts`，照 Finch 的送禮頁）
 
