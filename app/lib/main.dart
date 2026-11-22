@@ -985,6 +985,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
           ),
           child: MoonNavBar(
             currentIndex: currentIndex,
+            bedtime: targetBedtime, // 快到就寢時中間那顆發亮（同守門那一窗）
             onTab: (index) => setState(() => currentIndex = index),
             onMoon: () {
               // 在別的分頁按也一樣：先回首頁，起床後的報告流程從首頁接下去
