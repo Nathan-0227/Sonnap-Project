@@ -548,6 +548,8 @@ finally:
     sys.stderr = old_err
 ok("退回原因印在後端", "rejected" in err.getvalue() and "the number 7 is not in the facts" in err.getvalue(),
    err.getvalue().strip())
+ok("prompt：解釋寵物心情不用 because（第二次跑 Q4 兩次都被「把原因說成確定」擋下）",
+   'without "because" or "due to"' in chat.SYSTEM_PROMPT)
 ok("prompt：追問 why 要接著上一題講的那件事", "do not switch to a different topic" in chat.SYSTEM_PROMPT)
 
 # ═══════════════════════════════════════════════════════════════════
