@@ -7,6 +7,7 @@ import '../screens/plan_screen.dart' show petJumpPose;
 import '../services/friends_service.dart';
 import 'home_pet.dart';
 import 'streak_card.dart' show speciesOf;
+import 'town_door_route.dart';
 
 /// 送禮頁（2026-11-22 使用者定，照 Finch 的做法；共識摘要見對話 Q1–Q15）。
 ///
@@ -109,7 +110,28 @@ Future<void> showVisitGiftSheet(
   Map<String, String> invites = const {},
   required Future<String?> Function(String kind) onSend,
   DateTime Function() clock = DateTime.now,
+  Offset? door,
 }) {
+  // [door]：朋友那塊草地在地圖上的位置 → 推門進來（town_door_route.dart）；null＝原本從下面滑上來
+  if (door != null) {
+    return Navigator.of(context).push<void>(townDoorRoute<void>(
+      focus: door,
+      builder: (context) => Align(
+        alignment: Alignment.bottomCenter,
+        child: FractionallySizedBox(
+          heightFactor: 0.95,
+          child: VisitGiftSheet(
+            friend: friend,
+            me: me,
+            kinds: kinds,
+            invites: invites,
+            onSend: onSend,
+            clock: clock,
+          ),
+        ),
+      ),
+    ));
+  }
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,

@@ -862,7 +862,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         onBedtimeChanged: _setBedtime,
         onReminderChanged: _setReminder,
       ),
-      FriendsScreen(service: _friends),
+      FriendsScreen(service: _friends, animateScenes: widget.entryAnimation),
       // Insights（2026-11-19 改版：頂端 Day／Week／Month／Year）。
       InsightsScreen(
         nightly: _nightly,
