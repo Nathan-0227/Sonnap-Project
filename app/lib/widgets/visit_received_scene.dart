@@ -29,11 +29,15 @@ Future<bool?> showVisitReceivedScene(
     barrierColor: const Color(0x99000000),
     transitionDuration: const Duration(milliseconds: 350),
     reverseTransitionDuration: const Duration(milliseconds: 250),
-    pageBuilder: (context, _, _) => VisitReceivedScene(
-      visits: visits,
-      me: me,
-      friends: friends,
-      kinds: kinds,
+    // ⚠️ 另外一頁要自己包 Material，不然字是等寬字＋黃色雙底線
+    pageBuilder: (context, _, _) => Material(
+      type: MaterialType.transparency,
+      child: VisitReceivedScene(
+        visits: visits,
+        me: me,
+        friends: friends,
+        kinds: kinds,
+      ),
     ),
     transitionsBuilder: (context, animation, _, child) =>
         FadeTransition(opacity: animation, child: child),

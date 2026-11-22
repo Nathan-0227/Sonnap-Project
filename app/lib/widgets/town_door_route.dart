@@ -102,6 +102,28 @@ Route<T> townDoorRoute<T>({required WidgetBuilder builder, required Offset focus
   );
 }
 
+/// 推門那一刻的位置（純函式，`town_door_test.dart` 守著）：
+/// [map]＝地圖用 cover 鋪滿畫面時的位置（沒放大前）；[house]＝房子在那張地圖上的位置；
+/// [anchor]＝放大之後房子要落在畫面哪裡。
+typedef TownDoorGeometry = ({Rect map, Offset house, Offset anchor});
+
+TownDoorGeometry townDoorGeometry(Size size, Offset focus, TownDoorFrame frame) {
+  final s = math.max(size.width / kTownDoorMapSize.width, size.height / kTownDoorMapSize.height);
+  final w = kTownDoorMapSize.width * s, h = kTownDoorMapSize.height * s;
+  final map = Rect.fromLTWH((size.width - w) / 2, (size.height - h) / 2, w, h);
+  final house = Offset(map.left + focus.dx * w, map.top + focus.dy * h);
+  // 房子一邊被放大、一邊移到畫面中間
+  final want = Offset.lerp(house, size.center(Offset.zero), frame.center)!;
+  // 但地圖的邊不能跑進畫面裡（房子在地圖邊上時，直接移到中間會露出地圖外面）
+  double keep(double v, double lo, double hi) => lo > hi ? (lo + hi) / 2 : v.clamp(lo, hi);
+  final k = frame.scale;
+  final anchor = Offset(
+    keep(want.dx, size.width - k * (map.right - house.dx), k * (house.dx - map.left)),
+    keep(want.dy, size.height - k * (map.bottom - house.dy), k * (house.dy - map.top)),
+  );
+  return (map: map, house: house, anchor: anchor);
+}
+
 /// 地圖往房子推近＋窗戶暖光。
 class TownDoorZoom extends StatelessWidget {
   final Offset focus;
@@ -113,32 +135,34 @@ class TownDoorZoom extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, box) {
       final size = box.biggest;
-      // 地圖用 cover 鋪滿畫面時，房子落在哪裡
-      final s = math.max(size.width / kTownDoorMapSize.width, size.height / kTownDoorMapSize.height);
-      final w = kTownDoorMapSize.width * s, h = kTownDoorMapSize.height * s;
-      final ox = (size.width - w) / 2, oy = (size.height - h) / 2;
-      final house = Offset(ox + focus.dx * w, oy + focus.dy * h);
-      final mid = size.center(Offset.zero);
-      // 房子一邊被放大、一邊移到畫面中間
-      final anchor = Offset.lerp(house, mid, frame.center)!;
+      final g = townDoorGeometry(size, focus, frame);
+      final anchor = g.anchor;
       final m = Matrix4.identity()
         ..translateByDouble(anchor.dx, anchor.dy, 0, 1)
         ..scaleByDouble(frame.scale, frame.scale, 1, 1)
-        ..translateByDouble(-house.dx, -house.dy, 0, 1);
+        ..translateByDouble(-g.house.dx, -g.house.dy, 0, 1);
       final radius = size.shortestSide * (.15 + .9 * frame.glow);
       return Stack(
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: Color(0xFF081326)),
+          // ⚠️ 整張地圖照原本 cover 的大小畫（比畫面寬），不先裁成畫面大小：
+          //    先裁的話地圖往中間移時，被裁掉的那一邊是空的（2026-11-22 實機：左半邊整片黑）
           Transform(
             transform: m,
-            child: Image.asset(
-              kTownDoorMap,
-              key: const Key('town-door-map'),
-              fit: BoxFit.cover,
-              width: size.width,
-              height: size.height,
-              errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF101A3F)),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fromRect(
+                  rect: g.map,
+                  child: Image.asset(
+                    kTownDoorMap,
+                    key: const Key('town-door-map'),
+                    fit: BoxFit.fill,
+                    errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF101A3F)),
+                  ),
+                ),
+              ],
             ),
           ),
           // 窗戶的燈：從房子那裡亮起來，最後蓋滿畫面

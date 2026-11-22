@@ -231,6 +231,17 @@ Future<void> settle(WidgetTester tester) async {
   }
 }
 
+/// 這一頁的字都不是 Flutter 沒有 Material 時的備用樣式（黃色雙底線）。
+bool noFallbackText(WidgetTester tester, Finder page) {
+  final texts = find.descendant(of: page, matching: find.byType(RichText));
+  expect(texts, findsWidgets);
+  for (final e in texts.evaluate()) {
+    final style = (e.widget as RichText).text.style;
+    if (style?.decoration == TextDecoration.underline) return false;
+  }
+  return true;
+}
+
 Finder townie(String handle) => find.byKey(Key('town-$handle'));
 
 /// 先把地圖滑到那個人（離你家遠的房子一打開時在畫面外），再點他。
@@ -955,6 +966,7 @@ void main() {
       expect(find.text('HUG-FROM-BACKEND'), findsOneWidget, reason: '泡泡照抄後端那句');
       expect(find.text('Early stopped by today'), findsOneWidget);
       expect(find.text('1 / 2'), findsOneWidget);
+      expect(noFallbackText(tester, find.byKey(const Key('visit-received-scene'))), isTrue);
       expect(find.byKey(const Key('town-send-back-EAR111')), findsNothing, reason: '清單還沒開');
 
       await tester.tap(find.byKey(const Key('visit-received-next')));
@@ -1009,6 +1021,8 @@ void main() {
       }
       expect(find.byKey(const Key('town-door-map')), findsNothing);
       expect(find.byKey(const Key('visit-gift-sheet')), findsOneWidget);
+      // 另外一頁要自己包 Material：不然字是等寬字＋黃色雙底線（2026-11-22 實機）
+      expect(noFallbackText(tester, find.byKey(const Key('visit-gift-sheet'))), isTrue);
     });
 
     testWidgets('減少動態效果：不推門、寵物不走（只淡入）', (tester) async {
