@@ -183,7 +183,7 @@ flutter build apk --debug --dart-define=SONNAP_API_BASE=http://<當下的IP>:800
   --dart-define=SONNAP_USER_ID=$(cat <暫存資料夾>/phone_uid.txt)
 ```
 
-驗收：設定頁「Data」寫「Last night sent」（上傳要帶 id 才會成功）；logcat 有 `NightlyUpload: ok`。
+驗收：設定頁「Data」（點那一列開面板）寫「Last night sent」（上傳要帶 id 才會成功）；logcat 有 `NightlyUpload: ok`。
 ⚠️ **不要拿首頁的「Hi, Sleeper!」判斷漏帶 id。** 2026-11-21 前建置參數那條路**從來不拿暱稱**，帶了 id 也一律是 Sleeper；
 現在改成打開時向後端 `GET /users/{id}` 要一次、記在手機上（`AccountService.refreshBuildTimeName`），
 所以後端連不到、又從沒連到過的時候**仍然是 Sleeper**——那代表沒連到後端，不代表沒帶 id。
@@ -451,7 +451,7 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 首頁右上**沒有 notes 圖示**（11-15 使用者定：草地上那本日記就是入口），只剩衣櫃、獎勵、設定 | — |
 | **導覽列**（2026-11-13 使用者定，照參考圖）：只有圖示、沒有文字；Home · Friends ｜ **中間一顆凸出的紫色圓鈕＝開始睡覺**（2026-11-22 使用者定：**月亮＋「Sleep」**，原本畫睡著的狗頭看不出是開始睡覺；**目標前 30 分 → 目標後 6 小時**＝守門那一窗（`guardWindow`）光暈呼吸、白邊，減少動態效果時只變亮不動，`moon_nav_bar_test` 守著）：**先滑出 Sleep schedule**（同時鐘卡那個轉盤，按鈕字換成 Start Sleep），按了才開始；把面板關掉＝不開始、不記上床。面板背景是使用者生成的夜晚窗景 `assets/backgrounds/schedule_night.jpg`（三個入口共用；讀不到退回深藍）｜ Insights · Assistant。**Settings 搬到首頁右上角的人像**，按返回回首頁。選中的分頁紫色＋底下小點，圖示保留朗讀名稱（`widgets/moon_nav_bar.dart`） | 中間那顆只送一個請求（`StartSleepRequests`），**開始睡覺的流程只在首頁一份**；在別的分頁按會先切回 Home，起床報告才接得下去。⚠️ **換分頁左右滑＋視差**（2026-11-22，`widgets/tab_switcher.dart`）：照導覽列順序決定方向，新頁走滿、舊頁只退 0.3；跟 IndexedStack 一樣所有分頁一直留著，**每頁固定 key** 才不會在換順序時掉狀態（`tab_switcher_test`【4】，拿掉 key 會紅）；只有正式 App 打開、減少動態效果直接換、Replay welcome 降落時不滑（要量首頁寵物位置）。⚠️ Settings 刻意留在分頁裡（不另開一頁）：首頁與設定頁共用就寢時間，要即時同步（`bedtime_sync_test`）。⚠️ 頁面延伸到導覽列後面（extendBody），但內容只排到導覽列上緣：高度用 body 的 `padding.bottom`，**不能用 `viewPadding`**（Scaffold 已經拿掉系統那段，實機量過，首頁最底那列會被蓋住） |
 | **等級徽章在寵物正上方**，不在標題旁（2026-11-13 使用者定）；沒有後端不畫。**11-21 起底下一條細進度條＋「430 XP to Lv 8」**；有接後端時背景、山頂、寵物與底下全部**往下推 `kHomeLevelExtra`（30）**，寵物照樣站在山頂、上面空出來的補 `kHomeBackgroundTop`。⚠️ 看「有沒有接後端」不看「/game 拿到了沒」，不然資料晚到時整頁往下跳；不往下推的話等級條只能往上長、實機壓到時鐘卡（`game_test` 量**整張**時鐘卡 `countdown-border`，原本量的倒數字在卡片內距裡、抓不到）（`widgets/level_progress.dart`，**睡眠計畫頁寵物頭上也是同一個**，點了都開獎勵頁）：條填多少照抄 `/game` 的 `progress`、還差幾 XP 照抄 `xp_for_next`，**不從 xp_total 自己算**；最高級條滿、寫 Max level | `game_test.dart` 量位置守著；`level_progress_test.dart` 守照抄、最高級、計畫頁也有 |
-| **寵物用隊友的 2D 分層寵物**（`lib/pet2d/`，2026-11-15 換成 v4.6.45：**小狗四種心情都有圖、多一隻灰色虎斑貓**，經 `widgets/home_pet.dart` 這個插槽）。**設定頁「Pet」選小狗或貓**（`services/pet_choice.dart`，**只存在手機上**、預設小狗、不認得的值當小狗）。**缺圖的心情畫 bored，絕不畫 happy**（`PetDefinition.resolve()`，隊友原版退回 happy）。⚠️ 起床／等報告／睡覺的 GIF 與睡姿圖**只有小狗版**：選貓時走各自的程式版退路（寵物是 `HomePet`，所以是貓；睡覺畫面是 tired 的貓）；一週心情列、心情標籤、Insights 的心情與導覽列中間那顆**跟著選的寵物換頭**（`assets/moods/cat_*.png`，2026-11-22 使用者生成；`moodFaceAsset(mood, species)` 一處，`week_mood_strip_test`、`moon_nav_bar_test` 守著） | 焦慮的夜晚畫成開心的寵物＝紅線 5。`pet2d_test.dart` 用一隻故意缺圖的假寵物守退路、守兩隻四種心情都畫自己的圖；`pet_choice_test.dart` 守選貓時三個畫面都不出現小狗 GIF（拿掉判斷三條都會紅） |
+| **寵物用隊友的 2D 分層寵物**（`lib/pet2d/`，2026-11-15 換成 v4.6.45：**小狗四種心情都有圖、多一隻灰色虎斑貓**，經 `widgets/home_pet.dart` 這個插槽）。**設定頁名片的 Change pet 選小狗或貓**（`services/pet_choice.dart`，**只存在手機上**、預設小狗、不認得的值當小狗）。**缺圖的心情畫 bored，絕不畫 happy**（`PetDefinition.resolve()`，隊友原版退回 happy）。⚠️ 起床／等報告／睡覺的 GIF 與睡姿圖**只有小狗版**：選貓時走各自的程式版退路（寵物是 `HomePet`，所以是貓；睡覺畫面是 tired 的貓）；一週心情列、心情標籤、Insights 的心情與導覽列中間那顆**跟著選的寵物換頭**（`assets/moods/cat_*.png`，2026-11-22 使用者生成；`moodFaceAsset(mood, species)` 一處，`week_mood_strip_test`、`moon_nav_bar_test` 守著） | 焦慮的夜晚畫成開心的寵物＝紅線 5。`pet2d_test.dart` 用一隻故意缺圖的假寵物守退路、守兩隻四種心情都畫自己的圖；`pet_choice_test.dart` 守選貓時三個畫面都不出現小狗 GIF（拿掉判斷三條都會紅） |
 | **「跟上一晚比」只代表方向：上升紅、下降綠**（台灣股市慣例，使用者定） | 改成「變好綠、變差紅」就是在 Dart 判斷好壞——睡得多不一定好，攝影機動作更已驗證與任何結果無關 |
 | 比的是**上一個有資料的晚上**；那一項沒逐夜資料時**不畫比較** | 編出比較數字。效率、深睡的逐夜資料來自後端 PR（`feat/history-eff-deep`） |
 | **首頁分數卡、效率、深睡、Movement 點開＝早晨報告同一份詳細頁**（2026-11-21，`widgets/night_sheets.dart` 的 `NightSheets`；報告點分數圓弧也開分數頁；Movement 開報告那頁攝影機頁，**跟分數無關、那晚有錄影就開**；首頁舊的通用長條圖頁 `_showMetricSheet` 已刪）。分數頁：大數字＋等級＋星星＋圓環、這一晚五個量（睡多久、效率、醒著、深睡、REM）**只寫數字不寫得分**、有詳細頁的可點（點了先收掉分數頁再開）、REM 沒量到寫 **N/A**、沒資料寫「—」；一週照每晚等級上色，顏色照抄後端 `/insights` 的 `score_color`（**Dart 沒有等級顏色表**）。深睡頁：幾分鐘＋佔總睡眠幾成＋幾段、時間軸只亮深睡、各階段平均心率（`stageHeartRates`，不寫正常範圍）、一週不畫常模線。Usually＝中間值、跟前一週比只代表方向。**App 上一處警語都不放**（11-19 定） | 同一個量兩頁的話兩邊遲早說的不一樣；`night_sheets_test.dart` 守顏色照抄、N/A 與「—」分開、不出現得分、列點了不疊兩層 |
@@ -466,6 +466,18 @@ App 卻已經被擋了——`bedtime_guard_test.dart` 有一條在守。
 | 倒數光條**剩 30 分鐘內變紅**，與提醒、守門同一個 30 分鐘 | 三個 30 分鐘不一致時，通知說還有 30 分、倒數卻還是綠的 |
 | 背景兩張圖（山丘、湖面）是使用者以 prompt 生成的原創圖，左右翻轉過；**只鋪到內容結束**（Positioned） | 不用 Positioned 的話頁面被圖撐長，底下多一大段空白 |
 | 星星與流星是程式畫的；系統開「減少動態效果」時靜止 | — |
+
+### ✅ 設定頁改版（2026-11-22 grill，`feature/settings-redesign`；畫布 https://claude.ai/artifact/BL9vYMP4sxDBdFX53XK4Tr 的「定案」）
+
+`screens/settings_screen.dart`：最上面**寵物名片**（寵物頭＝首頁那一份心情、沒有是 bored；暱稱；Lv 膠囊點了開獎勵頁、Dog/Cat、邀請碼點了複製；Edit name、Change pet）→ 分組 **Sleep**（作息「01:30 → 09:30」點了開首頁同一個轉盤、提醒開關、守門）／**Friends**（What friends can see）／**Data & devices**（Health Connect、Data）／**App**（Language、Replay welcome、About）。左上返回鈕回首頁。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 🔴 **不放按了沒反應的東西**：Appearance、Log Out、名片上的 email（原本寫死 `jeremy@email.com`）都拿掉了。主題色＋減少動態效果、email＋密碼登入各有自己的 PR（記憶 `settings-redesign-and-login`）；Language 照實寫 English，點了說之後會有中文 | 點了只跳「以後才有」 |
+| 樣子只在 `widgets/settings_list.dart` 一份（`SettingsPage`／`SettingsGroup`／`SettingsRow`…）：守門、Health Connect、What friends can see、換寵物面板都用它 | 幾頁各長各的 |
+| ⚠️ `showReportSheet` 的外框是透明的，**面板的底色要內容自己畫**（`kSettingsSheetColor`）；`settings_screen_test` 守著 | 11-22 實機：Language 點開整片透明 |
+| Data 收成一列，右邊照實寫 **Live／Bundled**（退回打包檔不能省），點開是原本那一整塊 `DataStatusSection` | 使用者以為看到的是即時資料 |
+| 等級、邀請碼照抄後端；連不到就不畫那兩顆；Edit name 走 `AccountService.rename`（同 Replay welcome），沒有後端照實說 | — |
 
 ### ✅ 徽章（2026-11-22 grill，`feature/badges-backend`；獎勵頁「獎盃架」的後端）
 

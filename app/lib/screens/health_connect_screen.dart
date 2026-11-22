@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/health_connect.dart';
+import '../widgets/settings_list.dart';
 
 /// Health Connect 的設定：連上、手動同步、看上一次同步的結果。
 ///
@@ -64,54 +65,75 @@ class _HealthConnectScreenState extends State<HealthConnectScreen> {
   @override
   Widget build(BuildContext context) {
     final availability = _availability;
-    return Scaffold(
-      backgroundColor: const Color(0xFF081326),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF081326),
-        foregroundColor: Colors.white,
-        title: const Text('Health Connect'),
-      ),
-      body: availability == null
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))
-          : ListView(
+    final ok = availability == HealthAvailability.available && _granted;
+    return SettingsPage(
+      title: 'Health Connect',
+      loading: availability == null,
+      children: [
+        const SettingsNote(
+          'If your watch or band saves sleep to Health Connect, Sonnap can read '
+          'those sleep sessions (start, end and sleep stages) and score them the '
+          'same way as the Garmin data. Sonnap does not read heart rate, steps '
+          'or anything else.',
+        ),
+        if (availability != null)
+          SettingsGroup(title: 'STATUS', rows: [
+            Padding(
               padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'If your watch or band saves sleep to Health Connect, Sonnap can read '
-                  'those sleep sessions (start, end and sleep stages) and score them the '
-                  'same way as the Garmin data. Sonnap does not read heart rate, steps '
-                  'or anything else.',
-                  style: TextStyle(color: Colors.white70, height: 1.4),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  _statusText(availability),
-                  key: const Key('health-status'),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                if (availability == HealthAvailability.needsUpdate)
-                  FilledButton(
-                    key: const Key('health-install'),
-                    onPressed: _platform.openProviderStore,
-                    child: const Text('Get Health Connect'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                        color: ok ? const Color(0xFF4FE0A0) : const Color(0xFFFFC83D),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _statusText(availability),
+                          key: const Key('health-status'),
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
                   ),
-                if (availability == HealthAvailability.available)
-                  FilledButton(
-                    key: const Key('health-sync'),
-                    onPressed: _busy ? null : _sync,
-                    child: Text(_granted ? 'Sync now' : 'Connect and sync'),
-                  ),
-                if (_message != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _message!,
-                    key: const Key('health-message'),
-                    style: const TextStyle(color: Colors.white70, height: 1.4),
-                  ),
+                  if (availability != HealthAvailability.unavailable) const SizedBox(height: 14),
+                  if (availability == HealthAvailability.needsUpdate)
+                    FilledButton(
+                      key: const Key('health-install'),
+                      onPressed: _platform.openProviderStore,
+                      style: _button,
+                      child: const Text('Get Health Connect'),
+                    ),
+                  if (availability == HealthAvailability.available)
+                    FilledButton(
+                      key: const Key('health-sync'),
+                      onPressed: _busy ? null : _sync,
+                      style: _button,
+                      child: Text(_granted ? 'Sync now' : 'Connect and sync'),
+                    ),
+                  if (_message != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _message!,
+                      key: const Key('health-message'),
+                      style: const TextStyle(color: kSettingsSub, fontSize: 13, height: 1.4),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
+          ]),
+      ],
     );
   }
+
+  static final _button = FilledButton.styleFrom(
+    backgroundColor: kSettingsAccent,
+    minimumSize: const Size(0, 46),
+    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+  );
 }

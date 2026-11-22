@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/bedtime_guard.dart';
+import '../widgets/settings_list.dart';
 
 /// 就寢守門的設定：哪一種模式、守哪些 App、無障礙權限開了沒。
 ///
@@ -91,97 +92,102 @@ class _BedtimeGuardScreenState extends State<BedtimeGuardScreen> with WidgetsBin
     }
   }
 
+  static IconData _modeIcon(GuardMode m) => switch (m) {
+        GuardMode.off => Icons.do_not_disturb_off_outlined,
+        GuardMode.reminder => Icons.notifications_active_outlined,
+        GuardMode.block => Icons.home_outlined,
+      };
+
+  static Color _modeColor(GuardMode m) => switch (m) {
+        GuardMode.off => const Color(0xFF5B6B9A),
+        GuardMode.reminder => const Color(0xFFE58A3A),
+        GuardMode.block => const Color(0xFFD2557A),
+      };
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF081326),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF081326),
-        foregroundColor: Colors.white,
-        title: const Text('Bedtime guard'),
-      ),
-      body: !_loaded
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF7657FF)))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'From 30 minutes before your target bedtime, opening an app on your list '
-                  'will either show a reminder or send you back to the home screen.',
-                  style: TextStyle(color: Colors.white70, height: 1.4),
-                ),
-                const SizedBox(height: 16),
-                RadioGroup<GuardMode>(
-                  groupValue: _settings.mode,
-                  onChanged: (v) => _update(_settings.copyWith(mode: v)),
-                  child: Column(
-                    children: [
-                      for (final m in GuardMode.values)
-                        RadioListTile<GuardMode>(
-                          key: Key('guard-mode-${m.name}'),
-                          value: m,
-                          title: Text(modeTitle(m), style: const TextStyle(color: Colors.white)),
-                          subtitle: Text(modeSubtitle(m), style: const TextStyle(color: Colors.white54)),
-                        ),
-                    ],
-                  ),
-                ),
-                if (_settings.mode != GuardMode.off) ...[
-                  const SizedBox(height: 8),
-                  _permissionCard(),
-                ],
-                const SizedBox(height: 16),
-                const Text('Apps to guard',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                if (_apps.isEmpty)
-                  const Text(
-                    'No apps could be listed on this device.',
-                    style: TextStyle(color: Colors.white54),
-                  )
-                else
+    return SettingsPage(
+      title: 'Bedtime guard',
+      loading: !_loaded,
+      children: [
+        const SettingsNote(
+          'From 30 minutes before your target bedtime, opening an app on your list '
+          'will either show a reminder or send you back to the home screen.',
+        ),
+        SettingsGroup(title: 'MODE', rows: [
+          for (final m in GuardMode.values)
+            SettingsRow(
+              key: Key('guard-mode-${m.name}'),
+              icon: _modeIcon(m),
+              color: _modeColor(m),
+              title: modeTitle(m),
+              subtitle: modeSubtitle(m),
+              trailing: SettingsRadio(selected: _settings.mode == m),
+              onTap: _settings.mode == m ? null : () => _update(_settings.copyWith(mode: m)),
+            ),
+        ]),
+        if (_settings.mode != GuardMode.off) _permissionCard(),
+        SettingsGroup(
+          title: 'APPS TO GUARD',
+          rows: _apps.isEmpty
+              ? const [SettingsRow(title: 'No apps could be listed on this device.')]
+              : [
                   for (final app in _apps)
-                    CheckboxListTile(
+                    SettingsRow(
                       key: Key('guard-app-${app.packageName}'),
-                      value: _settings.packages.contains(app.packageName),
-                      onChanged: (checked) {
+                      dense: true,
+                      title: app.label,
+                      trailing: SettingsCheck(checked: _settings.packages.contains(app.packageName)),
+                      onTap: () {
                         final next = {..._settings.packages};
-                        if (checked == true) {
-                          next.add(app.packageName);
-                        } else {
-                          next.remove(app.packageName);
-                        }
+                        if (!next.remove(app.packageName)) next.add(app.packageName);
                         _update(_settings.copyWith(packages: next));
                       },
-                      title: Text(app.label, style: const TextStyle(color: Colors.white)),
                     ),
-              ],
-            ),
+                ],
+        ),
+      ],
     );
   }
 
   Widget _permissionCard() => Container(
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 18),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF10265A),
-          borderRadius: BorderRadius.circular(16),
+          color: kSettingsCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _enabled ? const Color(0x554FE0A0) : const Color(0x66FFC83D),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _enabled ? 'Accessibility access is on.' : 'Accessibility access is off.',
-              key: const Key('guard-permission'),
-              style: TextStyle(
-                color: _enabled ? const Color(0xFF7ED957) : const Color(0xFFFFC83D),
-                fontWeight: FontWeight.w700,
-              ),
+            Row(
+              children: [
+                Icon(
+                  _enabled ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                  color: _enabled ? const Color(0xFF4FE0A0) : const Color(0xFFFFC83D),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _enabled ? 'Accessibility access is on.' : 'Accessibility access is off.',
+                    key: const Key('guard-permission'),
+                    style: TextStyle(
+                      color: _enabled ? const Color(0xFF4FE0A0) : const Color(0xFFFFC83D),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             const Text(
               'Sonnap only sees which app is opening, never what is on the screen. '
               'Without this access the guard cannot work.',
-              style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4),
+              style: TextStyle(color: kSettingsSub, fontSize: 12, height: 1.4),
             ),
             if (!_enabled) ...[
               const SizedBox(height: 6),
@@ -191,13 +197,21 @@ class _BedtimeGuardScreenState extends State<BedtimeGuardScreen> with WidgetsBin
                 "If Sonnap's switch is greyed out: open Sonnap's App info, "
                 'tap the menu in the top corner, then "Allow restricted settings".',
                 key: Key('guard-restricted-hint'),
-                style: TextStyle(color: Colors.white60, fontSize: 12, height: 1.4),
+                style: TextStyle(color: kSettingsSub, fontSize: 12, height: 1.4),
               ),
-              const SizedBox(height: 8),
-              FilledButton(
-                key: const Key('guard-open-settings'),
-                onPressed: () => widget.controller.platform.openSettings(),
-                child: const Text('Open accessibility settings'),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const Key('guard-open-settings'),
+                  onPressed: () => widget.controller.platform.openSettings(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kSettingsAccent,
+                    minimumSize: const Size(0, 46),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  child: const Text('Open accessibility settings'),
+                ),
               ),
             ],
           ],

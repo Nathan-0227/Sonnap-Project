@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'screens/assistant_screen.dart';
+import 'screens/rewards_screen.dart';
 import 'screens/bedtime_guard_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/friend_sharing_screen.dart';
@@ -687,6 +688,31 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     unawaited(_syncWake());
   }
 
+  /// 設定頁名片的 Lv：開獎勵頁，房間裡的寵物用首頁同一份心情。
+  Future<void> _openRewardsFromSettings() async {
+    final game = _game;
+    if (game == null) return;
+    String? mood;
+    try {
+      mood = (await _latest.load()).status.petMood;
+    } catch (_) {
+      mood = null;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => RewardsScreen(service: game, mood: mood)));
+  }
+
+  /// 設定頁名片的 Edit name：同 Replay welcome 的改暱稱（PATCH display_name）。回 null＝成功。
+  Future<String?> _renameFromSettings(String name) async {
+    final account = _account;
+    if (account == null) return "We couldn't reach Sonnap's server, so your name didn't change.";
+    final renamed = await _accounts.rename(account, name);
+    if (renamed == null) return "We couldn't reach Sonnap's server, so your name didn't change.";
+    if (mounted) setState(() => _account = renamed);
+    return null;
+  }
+
   /// 設定頁的 Replay welcome（Q11）：從頭走一次，不建帳號、不覆蓋資料；暱稱改了走 PATCH。
   Future<void> _replayWelcome() async {
     final store = widget.store ?? const PlatformKeyValueStore();
@@ -900,6 +926,24 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
       ),
       SettingsScreen(
         username: account.displayName ?? kFallbackDisplayName,
+        visible: currentIndex == _settingsIndex,
+        onBack: () => setState(() => currentIndex = 0),
+        // 名片：寵物頭用首頁那一份心情、等級與邀請碼照抄後端（2026-11-22 設定頁改版）
+        petMood: () async => (await _latest.load()).status.petMood,
+        moodChanges: _latest,
+        loadGame: _game == null ? null : () async => (await _game!.fetchGame()).value,
+        loadInviteCode: _friends == null
+            ? null
+            : () async {
+                final r = await _friends!.fetch();
+                return r.isOk ? r.value!.myInviteCode : null;
+              },
+        onOpenRewards: _game == null ? null : _openRewardsFromSettings,
+        onRename: ApiSleepRepository.configuredBaseUrl.trim().isEmpty ? null : _renameFromSettings,
+        dataLive: () {
+          final r = _repository;
+          return r is FallbackSleepRepository ? r.lastSource == SleepDataSource.api : null;
+        },
         initialTargetBedtime: targetBedtime,
         initialReminderOn: reminderOn,
         onBedtimeChanged: _setBedtime,
