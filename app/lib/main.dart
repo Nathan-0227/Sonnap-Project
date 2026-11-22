@@ -648,6 +648,9 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
   /// 在 `build()` 裡組而不是 `late final`——就寢時間改變時整個清單要重建，
   /// 新的值才傳得下去。IndexedStack 依「型別 ＋ 位置」保留 State，
   /// 所以重建 widget 不會讓首頁重新讀一次 payload。
+  /// 助理頁在第幾個分頁（Home · Friends · Insights · Assistant · Settings）。
+  static const int _assistantIndex = 3;
+
   List<Widget> _buildPages(AccountStatus account) {
     return <Widget>[
       HomeScreen(
@@ -688,6 +691,10 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         username: account.displayName ?? kFallbackDisplayName,
         store: widget.store,
         petMood: () async => (await _repository.load()).status.petMood,
+        // 打招呼那一則：今天起床的那一晚（照抄 /home 的數字，App 不呼叫 AI）
+        greetingNight: _morningReport == null ? null : (date) => _morningReport!.fetchNight(date),
+        // 分頁疊在 IndexedStack 裡：不在畫面上時背景動畫要停，不然在背後一直跑
+        visible: currentIndex == _assistantIndex,
       ),
       SettingsScreen(
         username: account.displayName ?? kFallbackDisplayName,

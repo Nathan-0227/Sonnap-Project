@@ -8,11 +8,24 @@ import 'package:flutter/material.dart';
 /// 背景圖的山頂高度算出），不會蓋到寵物與卡片。
 ///
 /// ⚠️ 系統開了「減少動態效果」時只畫靜止的星星，不跑動畫。
+///
+/// 2026-11-22 助理頁也用它（聊天室的背景），多三個選項；預設值＝首頁原本的樣子：
+/// [period] 流星多久一次、[avoidTopLeft] 左上角留給問候文字、[excited] 寵物在想答案時星星閃快一點、亮一點。
 class NightSkyEffects extends StatefulWidget {
   final double width;
   final double height;
+  final Duration period;
+  final bool avoidTopLeft;
+  final bool excited;
 
-  const NightSkyEffects({super.key, required this.width, required this.height});
+  const NightSkyEffects({
+    super.key,
+    required this.width,
+    required this.height,
+    this.period = kShootingStarPeriod,
+    this.avoidTopLeft = true,
+    this.excited = false,
+  });
 
   @override
   State<NightSkyEffects> createState() => _NightSkyEffectsState();
@@ -28,12 +41,14 @@ class _Sparkle {
 const Duration kShootingStarPeriod = Duration(seconds: 7);
 const double kShootingStarFlight = 0.16; // 佔週期的比例（約 1.1 秒）
 
+/// 星星在一個 7 秒週期裡閃幾次（週期變長時照比例加，閃的速度不變）。
+const double _kTwinklesPer7s = 4;
+
 class _NightSkyEffectsState extends State<NightSkyEffects>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  // 固定種子：每次打開位置都一樣，畫面不會「跳」。
-  static final List<_Sparkle> _sparkles = () {
+  static List<_Sparkle> _place(bool avoidTopLeft) {
     final r = math.Random(11);
     final out = <_Sparkle>[];
     while (out.length < 14) {
@@ -43,18 +58,22 @@ class _NightSkyEffectsState extends State<NightSkyEffects>
       final phase = r.nextDouble() * math.pi * 2;
       final speed = 0.6 + r.nextDouble() * 1.2;
       // 左上角是問候文字，星星不要閃在字上。
-      if (x < 0.62 && y < 0.36) continue;
+      if (avoidTopLeft && x < 0.62 && y < 0.36) continue;
       out.add(_Sparkle(x, y, size, phase, speed));
     }
     return out;
-  }();
+  }
+
+  // 固定種子：每次打開位置都一樣，畫面不會「跳」。
+  static final List<_Sparkle> _home = _place(true);
+  static final List<_Sparkle> _open = _place(false);
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: kShootingStarPeriod,
+      duration: widget.period,
     );
   }
 
@@ -88,8 +107,14 @@ class _NightSkyEffectsState extends State<NightSkyEffects>
             builder: (context, _) => CustomPaint(
               painter: _SkyPainter(
                 t: _controller.value,
-                sparkles: _sparkles,
+                sparkles: widget.avoidTopLeft ? _home : _open,
                 animate: _controller.isAnimating,
+                // 流星每次飛的時間固定約 1.1 秒；星星閃的速度不跟著週期變慢
+                flight: kShootingStarFlight * kShootingStarPeriod.inMilliseconds /
+                    widget.period.inMilliseconds,
+                twinkles: _kTwinklesPer7s * widget.period.inMilliseconds /
+                    kShootingStarPeriod.inMilliseconds * (widget.excited ? 3 : 1),
+                excited: widget.excited,
               ),
             ),
           ),
@@ -103,17 +128,27 @@ class _SkyPainter extends CustomPainter {
   final double t;
   final List<_Sparkle> sparkles;
   final bool animate;
+  final double flight;
+  final double twinkles;
+  final bool excited;
 
-  _SkyPainter({required this.t, required this.sparkles, required this.animate});
+  _SkyPainter({
+    required this.t,
+    required this.sparkles,
+    required this.animate,
+    this.flight = kShootingStarFlight,
+    this.twinkles = _kTwinklesPer7s,
+    this.excited = false,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     // ── 會閃的星：小小的圓形光點，從中心往外漸淡 ──
     for (final s in sparkles) {
       final wave = animate
-          ? (math.sin(t * math.pi * 2 * 4 * s.speed + s.phase) + 1) / 2
+          ? (math.sin(t * math.pi * 2 * twinkles * s.speed + s.phase) + 1) / 2
           : 0.6;
-      final alpha = 0.35 + 0.65 * wave;
+      final alpha = excited ? 0.6 + 0.4 * wave : 0.35 + 0.65 * wave;
       final core = s.size * (0.85 + 0.25 * wave);
       final glow = core * 3.5;
       final c = Offset(s.x * size.width, s.y * size.height);
@@ -134,8 +169,8 @@ class _SkyPainter extends CustomPainter {
     }
 
     // ── 流星：每個週期開頭劃過一次 ──
-    if (!animate || t > kShootingStarFlight) return;
-    final p = Curves.easeOut.transform(t / kShootingStarFlight);
+    if (!animate || t > flight) return;
+    final p = Curves.easeOut.transform(t / flight);
     final fade = p < 0.8 ? 1.0 : (1 - p) / 0.2;
     final start = Offset(size.width * 0.15, size.height * 0.08);
     final end = Offset(size.width * 0.75, size.height * 0.48);
@@ -167,5 +202,5 @@ class _SkyPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SkyPainter old) =>
-      old.t != t || old.animate != animate;
+      old.t != t || old.animate != animate || old.excited != excited;
 }
