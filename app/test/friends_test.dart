@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/screens/friends_screen.dart';
 import 'package:app/services/friends_service.dart';
+import 'package:app/services/pet_choice.dart';
 import 'package:app/services/user_identity.dart';
 import 'package:app/widgets/friend_night_card.dart' show FriendNightPage;
 
@@ -573,6 +574,35 @@ void main() {
       await tester.tap(find.byKey(const Key('invite-submit')));
       await tester.pumpAndSettle();
       expect(find.text('That is your own invite code.'), findsOneWidget);
+    });
+
+    testWidgets('加朋友面板：Add 不被系統導覽列蓋住（11-22 手機上被蓋掉下半截）', (tester) async {
+      await pump(tester, _StubFriends());
+      // 手機大小，底部 48 點是系統導覽列
+      tester.view.physicalSize = const Size(400, 860);
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      addTearDown(tester.view.resetPadding);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('add-friend')));
+      await tester.pumpAndSettle();
+      final add = tester.getRect(find.byKey(const Key('invite-submit')));
+      final field = tester.getRect(find.byKey(const Key('invite-field')));
+      expect(add.bottom, lessThanOrEqualTo(860 - 48), reason: 'Add 畫到導覽列後面去了');
+      expect(field.bottom, lessThanOrEqualTo(860 - 48), reason: '輸入框畫到導覽列後面去了');
+    });
+
+    testWidgets('加朋友面板：明信片上是我的碼，郵票跟著選的寵物（不是心情臉）', (tester) async {
+      final saved = PetChoice.current.value;
+      addTearDown(() => PetChoice.current.value = saved);
+      PetChoice.current.value = PetSpecies.cat;
+      await pump(tester, _StubFriends());
+      await tester.tap(find.byKey(const Key('add-friend')));
+      await tester.pumpAndSettle();
+      final postcard = find.byKey(const Key('invite-postcard'));
+      expect(find.descendant(of: postcard, matching: find.text('K7QM2P')), findsOneWidget);
+      final stamp = tester.widget<Image>(
+          find.descendant(of: find.byKey(const Key('invite-stamp')), matching: find.byType(Image)));
+      expect((stamp.image as AssetImage).assetName, 'assets/plan/journey_cat.png');
     });
 
     testWidgets('點朋友 → 可以解除好友', (tester) async {

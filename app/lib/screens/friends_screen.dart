@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../services/friends_service.dart';
 import '../services/key_value_store.dart';
@@ -9,6 +8,7 @@ import '../services/pet_choice.dart';
 import '../widgets/friend_live_card.dart';
 import '../widgets/friend_live_sheet.dart';
 import '../widgets/home_pet.dart';
+import '../widgets/invite_postcard_sheet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/friend_night_card.dart';
 import '../widgets/friends_town.dart';
@@ -305,6 +305,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   /// 標題右邊的「人＋」（2026-11-19 使用者定 Q2）：上面是我的邀請碼（可以複製），下面輸入朋友的。
+  /// 11-22 起是小鎮明信片（`InvitePostcardSheet`）。
   Future<void> _addFriend() async {
     final service = widget.service;
     if (service == null) return;
@@ -312,88 +313,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final controller = TextEditingController();
     final code = await showReportSheet<String>(
       context: context,
-      builder: (context) => Container(
-        key: const Key('add-friend-sheet'),
-        decoration: const BoxDecoration(
-          color: Color(0xFF141A45),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-            20, 8, 20, 24 + MediaQuery.viewInsetsOf(context).bottom),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Add a friend',
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 16),
-              const Text('YOUR INVITE CODE',
-                  style: TextStyle(
-                      color: Color(0x99FFFFFF), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: SelectableText(
-                      myCode,
-                      key: const Key('my-invite-code'),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 3),
-                    ),
-                  ),
-                  TextButton.icon(
-                    key: const Key('copy-invite-code'),
-                    onPressed: myCode.isEmpty
-                        ? null
-                        : () {
-                            Clipboard.setData(ClipboardData(text: myCode));
-                            ScaffoldMessenger.maybeOf(context)
-                                ?.showSnackBar(const SnackBar(content: Text('Invite code copied.')));
-                          },
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    label: const Text('Copy'),
-                  ),
-                ],
-              ),
-              const Text('Send it to a friend. They enter it here to add you.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-              const SizedBox(height: 20),
-              const Text('THEIR INVITE CODE',
-                  style: TextStyle(
-                      color: Color(0x99FFFFFF), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.1)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('invite-field'),
-                      controller: controller,
-                      textCapitalization: TextCapitalization.characters,
-                      style: const TextStyle(color: Colors.white, letterSpacing: 2),
-                      decoration: InputDecoration(
-                        hintText: '6 characters',
-                        hintStyle: const TextStyle(color: Colors.white38),
-                        filled: true,
-                        fillColor: const Color(0x14FFFFFF),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  FilledButton(
-                    key: const Key('invite-submit'),
-                    onPressed: () => Navigator.pop(context, controller.text),
-                    child: const Text('Add'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      builder: (context) => InvitePostcardSheet(
+        myCode: myCode,
+        controller: controller,
+        onSubmit: () => Navigator.pop(context, controller.text),
       ),
     );
     if (code == null || code.trim().isEmpty) return;
