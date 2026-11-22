@@ -2640,20 +2640,49 @@ def chat(req: ChatRequest):
     """
     user = require_user(req.user_id)
     from ai import chat as chat_engine
-    from ai import chat_period
 
     if not chat_engine.key_available():
         raise HTTPException(status_code=503, detail="The AI assistant is not configured on this server.")
+    ctx = chat_context(user, req.message, [t.text for t in req.history if t.role == "user"])
+    try:
+        result = chat_engine.answer_question(
+            req.message.strip(), ctx["facts"], history=[(t.role, t.text) for t in req.history],
+            tips=ctx["tip_ids"], links=ctx["links"])
+    except chat_engine.ChatUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    # 「Ask your buddy」徽章：只記「這一天有答出來」，不存問題（game/badges.py）。
+    # 記不進去不能讓回答失敗——徽章只是附加的。
+    try:
+        db.bump_game_activity(req.user_id, "assistant", chat_today().isoformat())
+    except Exception:
+        pass
+    return {"answer": result["answer"], "source": "llm",
+            # 分段（2026-11-22）。舊版 App 只讀 answer
+            "headline": result["headline"], "why": result["why"], "tips": result["tips"],
+            "link": {"key": result["link"], "date": ctx["night_date"]} if result["link"] else None,
+            # 回答講的是哪一晚／哪一段（App 寫在泡泡上方，日期一律起床日）
+            "period": ctx["period"]}
 
+
+def chat_context(user, message, earlier_questions):
+    """
+    /chat 交給 AI 的材料：事實、那一晚適用的建議、能連的頁面、問的是哪一晚。**不呼叫 AI。**
+
+    抽出來是為了 chat_eval.py（2026-11-22）：評估真的回答時，要知道後端當時給 AI 的是什麼，
+    又不能為了知道這個多花一次額度。回傳 {"facts", "tip_ids", "links", "period", "night_date"}。
+    """
+    from ai import chat as chat_engine
+    from ai import chat_period
+
+    user_id = user["user_id"]
     # 讀「最近 30 筆」：一晚最多一筆，所以一定涵蓋 chat_period.MAX_DAYS_BACK 天內的每一晚
-    behavior_rows = db.get_nightly_behavior(req.user_id, days=DEFAULT_HISTORY_DAYS)
-    wearable_rows = db.get_wearable_nightly(req.user_id, days=DEFAULT_HISTORY_DAYS)
+    behavior_rows = db.get_nightly_behavior(user_id, days=DEFAULT_HISTORY_DAYS)
+    wearable_rows = db.get_wearable_nightly(user_id, days=DEFAULT_HISTORY_DAYS)
     latest = pick_latest_date(behavior_rows, wearable_rows)
 
     # 問的是哪一晚／哪一段（2026-11-22，ai/chat_period.py）：這一題沒有時間詞就往前面自己問過的找
     today = chat_today()
-    period = chat_period.resolve(
-        req.message, [t.text for t in req.history if t.role == "user"], today)
+    period = chat_period.resolve(message, list(earlier_questions), today)
 
     tip_ids, links, night_date = [], [], None
     if period["kind"] == "range":
@@ -2673,7 +2702,7 @@ def chat(req: ChatRequest):
         w_row = _row_for(wearable_rows, night_date) if asked_known else None
         # 寵物心情、建議、連結都講**那一晚**（跟 /home、寵物 notes 同一套挑法）
         pet_mood, _, pet_driver = resolve_mood(b_row, w_row)
-        rating = db.get_morning_rating(req.user_id, night_date) if asked_known else None
+        rating = db.get_morning_rating(user_id, night_date) if asked_known else None
         tags = rating["tags"] if rating else ()
         judged = {}
         if w_row and w_row.get("final_score") is not None:
@@ -2701,24 +2730,7 @@ def chat(req: ChatRequest):
             },
         )
         period_out = {"kind": "night", "date": night_date} if night_date else None
-    try:
-        result = chat_engine.answer_question(
-            req.message.strip(), facts, history=[(t.role, t.text) for t in req.history],
-            tips=tip_ids, links=links)
-    except chat_engine.ChatUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    # 「Ask your buddy」徽章：只記「這一天有答出來」，不存問題（game/badges.py）。
-    # 記不進去不能讓回答失敗——徽章只是附加的。
-    try:
-        db.bump_game_activity(req.user_id, "assistant", chat_today().isoformat())
-    except Exception:
-        pass
-    return {"answer": result["answer"], "source": "llm",
-            # 分段（2026-11-22）。舊版 App 只讀 answer
-            "headline": result["headline"], "why": result["why"], "tips": result["tips"],
-            "link": {"key": result["link"], "date": night_date} if result["link"] else None,
-            # 回答講的是哪一晚／哪一段（App 寫在泡泡上方，日期一律起床日）
-            "period": period_out}
+    return {"facts": facts, "tip_ids": tip_ids, "links": links, "period": period_out, "night_date": night_date}
 
 
 def chat_today():
