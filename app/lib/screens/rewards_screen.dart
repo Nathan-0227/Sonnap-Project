@@ -304,16 +304,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
             Positioned(
               left: 0,
               right: 0,
-              top: petTop - 56,
-              // 深色半透明底：房間圖那一塊有檯燈、很亮，進度條的底色會看不清（實機）
+              top: petTop - 48,
+              // 不加深色底（2026-11-22 使用者試過後拿掉）
               child: Center(
-                child: Container(
+                child: KeyedSubtree(
                   key: const Key('rewards-level'),
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xB3081326),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
                   child: LevelProgress(game: game),
                 ),
               ),
@@ -331,13 +326,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (n == 0) {
       return Container(
         key: const Key('rewards-empty'),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(22)),
-        child: const Text(
-          'Nothing to claim yet. Rewards appear when you finish a challenge in your plan '
-          'or reach a new badge level - for example, putting your phone down on time '
-          'three nights in a row.',
-          style: TextStyle(color: _muted, fontSize: 12.5, height: 1.45),
+        // 兩行就好（使用者 2026-11-22：字太多）。仍然要說「從哪裡來」——
+        // 不然會以為多開幾次 App 就會有（紅線 5）
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Nothing to claim',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+            SizedBox(height: 2),
+            Text('New rewards come from challenges and badges.',
+                style: TextStyle(color: _muted, fontSize: 12.5)),
+          ],
         ),
       );
     }
