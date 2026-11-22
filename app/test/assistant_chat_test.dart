@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/content/sleep_basics.dart';
 import 'package:app/screens/assistant_screen.dart';
 import 'package:app/services/chat_service.dart';
 import 'package:app/services/chat_thread.dart';
@@ -272,6 +273,73 @@ void main() {
       final src = File('lib/screens/assistant_screen.dart').readAsStringSync();
       expect(src.contains('answerQuestion('), isFalse);
       expect(src.contains("assistant_answers.dart'"), isFalse);
+    });
+  });
+
+  group('Sleep basics（2026-11-22 使用者定 A＋B）', () {
+    // 背景一直在動（飄的塗鴉、星星），pumpAndSettle 永遠等不到停，改成等固定時間
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+    }
+
+    final first = kSleepBasics.first;
+    final last = kSleepBasics.last;
+
+    testWidgets('【B1】點膠囊：寵物回原文＋出處，不經過 AI；那顆膠囊收掉', (tester) async {
+      final stub = _StubChat(const ChatResult(ChatStatus.ok, answer: 'unused'));
+      await pump(tester, stub);
+      expect(find.byKey(Key('assistant-basic-${first.id}')), findsOneWidget);
+
+      await tester.tap(find.byKey(Key('assistant-basic-${first.id}')));
+      await settle(tester);
+      expect(find.text(first.summary), findsOneWidget);
+      expect(find.text(first.source), findsOneWidget);
+      expect(stub.asked, isEmpty, reason: '固定原文不呼叫 AI、不花額度');
+      expect(find.byKey(Key('assistant-basic-${first.id}')), findsNothing, reason: '看過的那顆不再出現');
+    });
+
+    testWidgets('【B2】看過的 basics 不當前文送給 AI；存起來、重開還在', (tester) async {
+      final store = InMemoryKeyValueStore();
+      final stub = _StubChat(const ChatResult(ChatStatus.ok, answer: 'You put the phone down at 02:39.'));
+      await pump(tester, stub, store: store);
+      await tester.tap(find.byKey(Key('assistant-basic-${first.id}')));
+      await settle(tester);
+      await ask(tester, 'How late was I?');
+      await ask(tester, 'And the night before?');
+      final history = stub.histories.last;
+      expect(history.map((m) => m['text']), isNot(contains(first.summary)));
+      expect(history.map((m) => m['text']), contains('How late was I?'),
+          reason: '反向對照：一般的一問一答照樣當前文');
+
+      final saved = await ChatThreadStore(store).load();
+      expect(saved.where((t) => t.basic == first.id), hasLength(1));
+      await tester.pumpWidget(const SizedBox());
+      await pump(tester, stub, store: store);
+      await settle(tester);
+      expect(find.text(first.source), findsOneWidget, reason: '重開之後出處還在');
+      expect(find.byKey(Key('assistant-basic-${first.id}')), findsNothing);
+    });
+
+    testWidgets('【A】📖 面板捲到底，最後一條的出處不被系統導覽列蓋住', (tester) async {
+      const nav = 48.0; // 三顆按鈕的導覽列
+      tester.view.physicalSize = const Size(1000, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: nav);
+      tester.view.viewPadding = const FakeViewPadding(bottom: nav);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(body: AssistantScreen(store: InMemoryKeyValueStore()))));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assistant-basics')));
+      await settle(tester);
+      final scroll = find.descendant(
+          of: find.byKey(const Key('assistant-basics-sheet')), matching: find.byType(Scrollable));
+      await tester.drag(scroll.first, const Offset(0, -3000));
+      await settle(tester);
+      final src = find.descendant(
+          of: find.byKey(const Key('assistant-basics-sheet')), matching: find.text(last.source));
+      expect(tester.getRect(src).bottom, lessThanOrEqualTo(2000 - nav));
     });
   });
 }
