@@ -488,16 +488,20 @@ Future<PlanItem?> showPlanAddSheet(
   required PlanStore plan,
   required TimeOfDay bedtime,
   required TimeOfDay wake,
+  VoidCallback? onHelpMePick,
 }) {
   return showReportSheet<PlanItem>(
     context: context,
-    builder: (context) => _AddSheet(plan: plan),
+    builder: (context) => _AddSheet(plan: plan, onHelpMePick: onHelpMePick),
   );
 }
 
 class _AddSheet extends StatelessWidget {
   final PlanStore plan;
-  const _AddSheet({required this.plan});
+
+  /// 2026-11-22：Help me pick（選目標 → 推薦幾條）。null＝不畫那一列。按了先關掉這一頁再呼叫。
+  final VoidCallback? onHelpMePick;
+  const _AddSheet({required this.plan, this.onHelpMePick});
 
   @override
   Widget build(BuildContext context) {
@@ -523,6 +527,43 @@ class _AddSheet extends StatelessWidget {
                 const Text('Small ones are fine. Each suggestion has a study behind it.',
                     style: TextStyle(color: ReportColors.muted, fontSize: 12.5)),
                 const SizedBox(height: 16),
+                if (onHelpMePick case final help?)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
+                      color: const Color(0x337657FF),
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        key: const Key('plan-help-me-pick'),
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          help();
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.fromLTRB(14, 14, 12, 14),
+                          child: Row(
+                            children: [
+                              Icon(Icons.auto_awesome_rounded, color: ReportColors.lilac),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Help me pick',
+                                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                                    Text('Pick a goal, get a few to start with',
+                                        style: TextStyle(color: ReportColors.muted, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: ReportColors.faint),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 _choice(
                   context,
                   key: const Key('plan-custom-add'),

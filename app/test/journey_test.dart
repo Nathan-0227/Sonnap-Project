@@ -6,6 +6,7 @@ import 'package:app/services/journey_service.dart';
 import 'package:app/services/key_value_store.dart';
 import 'package:app/services/pet_choice.dart';
 import 'package:app/services/plan_reminders.dart';
+import 'package:app/services/plan_goals.dart';
 import 'package:app/services/sleep_plan.dart';
 import 'package:app/widgets/journey_section.dart';
 import 'package:app/widgets/sleep_dial.dart';
@@ -205,7 +206,8 @@ void main() {
       tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final kv = InMemoryKeyValueStore();
+      // 已經問過「想改善什麼」：這支測試不是在測那一頁，空清單打開計畫頁時不要讓它跳出來擋住
+      final kv = InMemoryKeyValueStore({PlanGoalsStore.askedKey: '1'});
       final plan = PlanStore(kv);
       await plan.load();
       final api = _FakeApi(info);
