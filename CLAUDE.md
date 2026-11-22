@@ -590,6 +590,7 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 
 點小鎮裡的朋友 → 資料卡最下面 **Send something** → 送禮頁（`widgets/visit_gift_sheet.dart`）：你的寵物＋朋友的寵物、泡泡一句、**3×3 九種**，**先選再按 Send**。兩隻寵物（與地圖上的寵物）穿各自的衣服：朋友的要他有分享 Pet outfit，後端給 `equipped_item_id` 才畫。背景 `assets/backgrounds/visit_gift.jpg`（使用者照這一頁生成的 1:2 夜晚客廳）**鋪滿整頁、貼上緣**，面板是**半透明**梅紫（`kVisitPanel`×`kVisitPanelAlpha`），下面的地板與玩具隱約透出來；**你的寵物站左邊坐墊、朋友的站右邊**，泡泡貼在你的寵物頭上方；坐墊位置用原圖比例寫在 `kVisitSeatMine／kVisitSeatFriend`，**換圖要重量（連 `kVisitGiftImageSize`）**。格子固定 84 高。讀不到退回漸層。
 收的一方：小鎮右下**愛心＋還沒看過的數量**（`services/visits_seen.dart`，打開就算看過、只存手機）→ Stopped by today（寵物頭＋那句＋**Send back**）；地圖上今天送過你的朋友頭頂冒那一種的小圖示（只是裝飾）。
+**2026-11-22 使用者從設計圖選（A／B／A）**：Stopped by today 是**信箱明信片**（一則一張：Journey 那張側面的寵物頭＋FROM 誰＋後端那句＋郵票＝他送的那一種的圖；回送過寫 `✓ Sent today`、不畫按鈕）；左下 ✨ 說明鈕**拿掉**（壓到 ＋ Invite），改成進小鎮時上面浮 6 秒「✨ Leo put the phone down on time last night」（`TownGlowNote`，只數**朋友**的 glow、沒人就不出現，測試裡不淡掉）；🔥 膠囊旁邊畫這週 7 點（`StreakWeekDots`：準時金點、晚了空心圈、沒資料短線，照抄 `streak_week`），點開的這一週面板只有一層、底部留導覽列高度；週列的準時從打勾改成**月亮**（好友頁大卡、朋友面板同一個元件）。
 
 | 規則 | 不遵守的後果 |
 |---|---|

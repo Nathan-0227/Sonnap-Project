@@ -13,6 +13,7 @@ import '../services/morning_rating.dart' show restedFaceAsset;
 import 'report_tiles.dart';
 import '../theme/report_style.dart';
 import 'streak_card.dart' show StreakWeekRow, speciesOf;
+import 'journey_section.dart' show journeyHeadAsset;
 import 'visit_gift_sheet.dart' show VisitIcon, kVisitCircle, splitVisitLabel;
 import '../theme/app_accent.dart';
 
@@ -662,78 +663,158 @@ class TownRoundButton extends StatelessWidget {
 
 /// 「今天誰來看過你」（右下角愛心點開）。訊息照抄後端。
 /// 2026-11-22（Q13）：每一則前面是他的寵物頭；今天還沒送他的話右邊一顆 Send back，點了開他的送禮頁。
+/// 2026-11-22 使用者從三案選 A：**信箱明信片**——每一則一張小明信片（跟加朋友的明信片同一套），
+/// 郵票是他送的那一種的圖；回送過的寫「✓ Sent today」、不畫按鈕。寵物頭用 Journey 那張側面的頭（不是心情臉）。
 class TownVisitsCard extends StatelessWidget {
   final List<TownVisit> visits;
 
   /// 點 Send back；null＝不畫那顆（舊版後端沒給 handle、或沒有後端）。
   final void Function(TownVisit visit)? onSendBack;
 
-  /// 今天已經送過的朋友（邀請碼）→ 不畫 Send back。
+  /// 今天已經送過的朋友（邀請碼）→ 不畫 Send back，改寫 Sent today。
   final Set<String> alreadySent;
+
+  /// 拜訪的種類（key, 按鈕字），只用來在圖讀不到時退回 emoji。
+  final List<(String, String)> kinds;
 
   const TownVisitsCard({
     super.key,
     required this.visits,
     this.onSendBack,
     this.alreadySent = const {},
+    this.kinds = const [],
   });
 
+  static const _paper = Color(0xFFF3E9D2);
+  static const _ink = Color(0xFF3B2F22);
+  static const _inkSoft = Color(0xFF8A6C45);
+
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Column(
     key: const Key('town-visits'),
-    width: double.infinity,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFF10265A),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Stopped by today',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        for (final v in visits)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: HomePet(
-                    mood: 'bored',
-                    species: speciesOf(v.petSpecies),
-                    size: 38,
-                    animate: false,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    v.message,
-                    style: const TextStyle(color: Color(0xDDFFFFFF), fontSize: 14),
-                  ),
-                ),
-                if (onSendBack != null && v.handle != null && !alreadySent.contains(v.handle))
-                  TextButton(
-                    key: Key('town-send-back-${v.handle}'),
-                    onPressed: () => onSendBack!(v),
-                    style: TextButton.styleFrom(foregroundColor: accentSoftOf(context)),
-                    child: const Text('Send back', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-              ],
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Row(
+        children: [
+          const Icon(Icons.favorite_rounded, color: Color(0xFFFF8FB1), size: 20),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Stopped by today',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
             ),
           ),
+          Text(
+            '${visits.length} TODAY',
+            style: const TextStyle(
+              color: Color(0x99FFFFFF),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      for (var i = 0; i < visits.length; i++) ...[
+        Transform.rotate(angle: i.isEven ? -0.014 : 0.01, child: _letter(context, visits[i])),
+        const SizedBox(height: 12),
       ],
-    ),
+    ],
   );
+
+  Widget _letter(BuildContext context, TownVisit v) {
+    final sent = v.handle != null && alreadySent.contains(v.handle);
+    final canSend = onSendBack != null && v.handle != null && !sent;
+    final emoji = splitVisitLabel(kinds.where((k) => k.$1 == v.kind).firstOrNull?.$2 ?? '💌').$1;
+    // 一列：寵物頭｜誰送的＋那句話｜郵票；下面靠右 Send back（或 Sent today）
+    return Container(
+      key: Key('town-visit-${v.handle ?? v.displayName}'),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: _paper,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 12, offset: Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 38,
+                height: 38,
+                child: Image.asset(
+                  journeyHeadAsset(speciesOf(v.petSpecies)),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(Icons.pets_rounded, color: _inkSoft, size: 22),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FROM ${v.displayName.toUpperCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _inkSoft,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      v.message,
+                      style: const TextStyle(color: _ink, fontSize: 15, fontWeight: FontWeight.w800, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              // 郵票：他送的那一種的圖
+              Container(
+                key: Key('town-visit-stamp-${v.handle ?? v.displayName}'),
+                width: 46,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9D6AE),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: const Color(0xFFB99558), width: 1.4),
+                ),
+                padding: const EdgeInsets.all(6),
+                child: VisitIcon(kind: v.kind, emoji: emoji),
+              ),
+            ],
+          ),
+          if (sent) ...[
+            const SizedBox(height: 6),
+            Text(
+              '✓ Sent today',
+              key: Key('town-visit-sent-${v.handle}'),
+              style: const TextStyle(color: Color(0xFF6F8F5A), fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ] else if (canSend) ...[
+            const SizedBox(height: 8),
+            FilledButton(
+              key: Key('town-send-back-${v.handle}'),
+              onPressed: () => onSendBack!(v),
+              style: FilledButton.styleFrom(
+                backgroundColor: accentOf(context),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                minimumSize: const Size(0, 36),
+              ),
+              child: const Text('Send back', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 /// 資訊面板一打開佔螢幕多高（2026-11-19 使用者定，照參考圖：上面還看得到地圖）。
@@ -1357,3 +1438,88 @@ String _comma(int v) => v.toString().replaceAllMapped(
   RegExp(r'(\d)(?=(\d{3})+$)'),
   (m) => '${m[1]},',
 );
+
+/// 進小鎮時上面淡淡浮出的那一行（2026-11-22 使用者選：拿掉 ✨ 說明鈕，說明跟著星星出現）。
+/// 沒有朋友昨晚準時 → null（不出現）。誰發光照抄後端的 glow。
+String? glowNoteText(List<String> names) {
+  if (names.isEmpty) return null;
+  final who = switch (names.length) {
+    1 => names[0],
+    2 => '${names[0]} and ${names[1]}',
+    _ => '${names[0]} and ${names.length - 1} friends',
+  };
+  return '✨ $who put the phone down on time last night';
+}
+
+/// [fade]＝正式 App：浮出、停幾秒、淡掉（減少動態效果時不淡、時間到直接收）。
+/// 測試預設不淡：一直留著，才量得到。
+class TownGlowNote extends StatefulWidget {
+  final List<String> names;
+  final bool fade;
+  const TownGlowNote({super.key, required this.names, this.fade = false});
+
+  /// 整段多長（含浮出與淡掉）。
+  static const duration = Duration(seconds: 6);
+
+  @override
+  State<TownGlowNote> createState() => _TownGlowNoteState();
+}
+
+class _TownGlowNoteState extends State<TownGlowNote> with SingleTickerProviderStateMixin {
+  AnimationController? _c;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fade && glowNoteText(widget.names) != null) {
+      _c = AnimationController(vsync: this, duration: TownGlowNote.duration)..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+
+  double _opacity(double t, bool reduce) {
+    if (t >= 1) return 0;
+    if (reduce) return 1;
+    if (t < 0.06) return t / 0.06;
+    if (t > 0.85) return (1 - t) / 0.15;
+    return 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = glowNoteText(widget.names);
+    if (text == null) return const SizedBox.shrink();
+    final pill = IgnorePointer(
+      child: Container(
+        key: const Key('town-glow-note'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xD10A0E28),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0x55F5C96A)),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Color(0xFFF2EEFF), fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+    final c = _c;
+    if (c == null) return pill;
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return AnimatedBuilder(
+      animation: c,
+      builder: (context, child) {
+        final o = _opacity(c.value, reduce);
+        return o <= 0 ? const SizedBox.shrink() : Opacity(opacity: o, child: child);
+      },
+      child: pill,
+    );
+  }
+}

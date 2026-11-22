@@ -24,6 +24,7 @@ import 'package:app/widgets/friends_town.dart';
 import 'package:app/widgets/home_pet.dart';
 import 'package:app/widgets/last_night_art.dart';
 import 'package:app/widgets/report_tiles.dart';
+import 'package:app/widgets/visit_gift_sheet.dart' show VisitIcon;
 
 Map<String, dynamic> person(
   String handle,
@@ -353,11 +354,38 @@ void main() {
     ];
     expect(shape('LAT222'), shape('BLA333'));
     expect(shape('BLA333'), shape('SHY444'));
-    // ✨ 的說明收在左下的小圓鈕裡，點了才出現
-    expect(find.byKey(const Key('town-legend')), findsNothing);
-    await tester.tap(find.byKey(const Key('town-legend-button')));
-    await settle(tester);
-    expect(find.byKey(const Key('town-legend')), findsOneWidget);
+    // 2026-11-22：✨ 說明鈕拿掉了（壓到 Invite）；說明改成上面浮一行，只寫昨晚準時的「朋友」（不含自己）
+    expect(find.byKey(const Key('town-legend-button')), findsNothing);
+    expect(
+      tester.widget<Text>(find.descendant(of: find.byKey(const Key('town-glow-note')), matching: find.byType(Text))).data,
+      '✨ Early put the phone down on time last night',
+    );
+  });
+
+  test('準時那一行：沒人不出現、一位、兩位、三位以上', () {
+    expect(glowNoteText([]), isNull);
+    expect(glowNoteText(['Leo']), '✨ Leo put the phone down on time last night');
+    expect(glowNoteText(['Leo', 'Mia']), '✨ Leo and Mia put the phone down on time last night');
+    expect(glowNoteText(['Leo', 'Mia', 'Yuki']), '✨ Leo and 2 friends put the phone down on time last night');
+  });
+
+  testWidgets('準時那一行：沒有朋友發光就不出現（只有自己發光也一樣）', (tester) async {
+    final stub = TownStub(
+      town: FriendsResult(
+        FriendsStatus.ok,
+        value: townOf([person('ME0001', 'Nathan', mine: true, glow: true), person('LAT222', 'Late')]),
+      ),
+    );
+    await pump(tester, stub);
+    expect(find.byKey(const Key('town-glow-note')), findsNothing);
+  });
+
+  testWidgets('準時那一行：正式 App 浮出幾秒就收掉', (tester) async {
+    await pump(tester, TownStub(), animateScenes: true);
+    expect(find.byKey(const Key('town-glow-note')), findsOneWidget);
+    await tester.pump(TownGlowNote.duration);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const Key('town-glow-note')), findsNothing);
   });
 
   testWidgets('【3】小鎮裡不畫心情：每一隻都是 bored，連 happy 的人也一樣', (tester) async {
@@ -817,6 +845,37 @@ void main() {
     expect(find.byKey(const Key('my-week-sheet')), findsOneWidget);
   });
 
+  Map<String, dynamic> withWeek() {
+    final s = stateJson();
+    (s['me'] as Map<String, dynamic>)['streak_week'] = [
+      for (final (i, st) in ['late', 'late', 'none', 'on_time', 'late', 'on_time', 'future'].indexed)
+        {'date': '2026-11-${17 + i}', 'status': st},
+    ];
+    return s;
+  }
+
+  testWidgets('連續晚數膠囊旁邊畫這週 7 個點，狀態照抄後端（2026-11-22 選 B）', (tester) async {
+    await pump(tester, TownStub(state: withWeek()));
+    final dots = find.byKey(const Key('town-streak-week'));
+    expect(find.descendant(of: find.byKey(const Key('town-streak')), matching: dots), findsOneWidget);
+    for (final (i, st) in ['late', 'late', 'none', 'on_time', 'late', 'on_time', 'future'].indexed) {
+      expect(find.descendant(of: dots, matching: find.byKey(Key('streak-dot-$i-$st'))), findsOneWidget);
+    }
+  });
+
+  testWidgets('這一週的面板只有一層、最下面那行不被系統導覽列蓋住', (tester) async {
+    tester.view.padding = const FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.resetPadding);
+    await pump(tester, TownStub(state: withWeek()));
+    await tester.tap(find.byKey(const Key('town-streak')));
+    await settle(tester);
+    final sheet = find.byKey(const Key('my-week-sheet'));
+    final card = tester.widget<Container>(find.descendant(of: sheet, matching: find.byKey(const Key('streak-card'))));
+    expect(card.decoration, isNull, reason: '面板裡不再包一張有框的卡');
+    final line = tester.getRect(find.byKey(const Key('streak-week-line')));
+    expect(line.bottom, lessThanOrEqualTo(900 - 48), reason: '最下面那行畫到導覽列後面去了');
+  });
+
   testWidgets('【7】下一間空房子門口有 ＋ Invite，按了切到 Friends 分頁', (tester) async {
     final stub = TownStub(
       town: FriendsResult(
@@ -1111,6 +1170,17 @@ void main() {
       await settle(tester);
       expect(find.text('HUG-FROM-BACKEND'), findsOneWidget);
       expect(find.byKey(const Key('town-send-back-EAR111')), findsNothing);
+      expect(find.byKey(const Key('town-visit-sent-EAR111')), findsOneWidget, reason: '回送過的寫 Sent today');
+    });
+
+    testWidgets('信箱明信片：一則一張，郵票是他送的那一種的圖（2026-11-22 選 A）', (tester) async {
+      await pump(tester, withVisits());
+      await tester.tap(find.byKey(const Key('town-visits-button')));
+      await settle(tester);
+      final stamp = find.byKey(const Key('town-visit-stamp-EAR111'));
+      final icon = tester.widget<VisitIcon>(find.descendant(of: stamp, matching: find.byType(VisitIcon)));
+      expect(icon.kind, 'hugs');
+      expect(find.text('FROM EARLY'), findsOneWidget);
     });
 
     testWidgets('地圖上：今天送過我的人頭頂有那一種的小圖示，其他人沒有；點了跟點寵物一樣', (tester) async {

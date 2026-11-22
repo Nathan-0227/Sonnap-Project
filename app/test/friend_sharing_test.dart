@@ -200,13 +200,13 @@ void main() {
       expect(f.streakWeek, isNull);
     });
 
-    testWidgets('一週：準時打勾、晚了空心圈不打叉、沒資料「—」、還沒到只寫日期', (tester) async {
+    testWidgets('一週：準時畫月亮（11-22 起取代打勾）、晚了空心圈不打叉、沒資料「—」、還沒到只寫日期', (tester) async {
       await tester.pumpWidget(
         host(StreakCard(summary: FriendSummary.fromJson(summaryJson()))),
       );
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('3 Days Streak'), findsOneWidget);
-      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.nightlight_round), findsNWidgets(2));
       expect(find.byIcon(Icons.close_rounded), findsNothing);
       expect(find.byIcon(Icons.close), findsNothing);
       expect(find.bySemanticsLabel('late'), findsOneWidget);
