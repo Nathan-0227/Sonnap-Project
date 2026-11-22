@@ -25,7 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/main.dart';
 import 'package:app/screens/assistant_screen.dart';
 import 'package:app/screens/home_screen.dart';
-import 'package:app/screens/onboarding_screen.dart';
+import 'package:app/screens/welcome_flow.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:app/services/account_service.dart';
 import 'package:app/services/key_value_store.dart';
@@ -281,7 +281,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.byType(OnboardingScreen), findsNothing);
+      expect(find.byType(WelcomeFlow), findsNothing);
       expect(find.byKey(const Key('nav-home')), findsOneWidget);
     });
   });
@@ -311,63 +311,5 @@ void main() {
     });
   });
 
-  group('⚠️ 建不了帳號不能擋住 App', () {
-    testWidgets('連不上時顯示錯誤，但「Skip for now」還能按', (tester) async {
-      var skipped = false;
-      await tester.pumpWidget(MaterialApp(
-        home: OnboardingScreen(
-          onCreate: (_) async => false, // 模擬連不上
-          onSkip: () => skipped = true,
-        ),
-      ));
-
-      await tester.enterText(find.byType(TextField), 'Nathan');
-      await tester.tap(find.text('Start'));
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.textContaining('Could not reach the server'), findsOneWidget);
-      expect(
-        find.textContaining('your sleep reports work offline'),
-        findsOneWidget,
-        reason: '只說「連不上」會讓人以為整個 App 壞了，但睡眠報告是離線可用的',
-      );
-
-      await tester.tap(find.text('Skip for now'));
-      await tester.pump();
-      expect(skipped, isTrue);
-    });
-
-    testWidgets('暱稱空白時擋在本地，不要打一趟 API 才被退回', (tester) async {
-      var createCalls = 0;
-      await tester.pumpWidget(MaterialApp(
-        home: OnboardingScreen(
-          onCreate: (_) async {
-            createCalls++;
-            return true;
-          },
-          onSkip: () {},
-        ),
-      ));
-
-      await tester.tap(find.text('Start'));
-      await tester.pump();
-
-      expect(createCalls, 0);
-      expect(find.textContaining('Pick any name'), findsOneWidget);
-    });
-
-    testWidgets('這個畫面不得宣稱安全或加密', (tester) async {
-      // 後端是暱稱制免註冊，user_id 本身就是憑證。寫「安全」是謊，
-      // 而且會讓同意書與畫面自相矛盾。
-      await tester.pumpWidget(MaterialApp(
-        home: OnboardingScreen(onCreate: (_) async => true, onSkip: () {}),
-      ));
-
-      for (final word in ['secure', 'Secure', 'encrypted', 'private and']) {
-        expect(find.textContaining(word), findsNothing, reason: word);
-      }
-      expect(find.textContaining('No email, no password'), findsOneWidget);
-    });
-  });
+  // 暱稱畫面那三條（連不上照樣能進、空白擋在本地、不得宣稱安全）2026-11-22 搬到 welcome_flow_test.dart。
 }

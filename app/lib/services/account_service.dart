@@ -223,6 +223,23 @@ class AccountService {
     }
   }
 
+  /// 改暱稱（2026-11-22，Replay welcome 的暱稱那一步）。成功回新的狀態，失敗回 null（畫面照實說）。
+  /// 兩條身分各存在自己的鍵：建置參數那條存 [buildTimeDisplayNameKey]，存在手機上的帳號存 [displayNameKey]。
+  Future<AccountStatus?> rename(AccountStatus status, String displayName) async {
+    final userId = status.userId;
+    if (userId == null || userId.isEmpty) return null;
+    if (!await _patchUser(userId, 'display_name', displayName)) return null;
+    try {
+      await store.setString(
+        status.state == AccountState.buildTime ? buildTimeDisplayNameKey : displayNameKey,
+        displayName,
+      );
+    } catch (_) {
+      // 存不進手機也沒關係：後端已經改了，下次打開會再拿一次
+    }
+    return AccountStatus(status.state, userId: userId, displayName: displayName);
+  }
+
   /// 把改過的目標就寢時間送去後端（`PATCH /users/{id}`）。成功回 true。
   ///
   /// ═══════════════════════════════════════════════════════════════

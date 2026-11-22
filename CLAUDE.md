@@ -526,6 +526,23 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | 第一次**切到 Friends 分頁**才問一次要不要分享；**不在 initState 問**；連不到後端／舊版後端／點旁邊關掉都不記成問過（`friends_live_test.dart` 守著） | 好友頁在 IndexedStack 裡，App 一打開就建好了，會在首頁上跳出來 |
 | 卡片頭像 `HomePet(animate: false)` | 一排寵物同時動太吵；`pumpAndSettle` 也會逾時 |
 
+### ✅ 第一次登入的流程（2026-11-22 grill Q9–Q14，`feature/onboarding`，取代原本只有一頁暱稱的 OnboardingScreen）
+
+`screens/welcome_flow.dart`：歡迎 → 暱稱 → 寵物 → 作息 → 權限 → 完成，上面一排進度點。「想改善什麼」那一步（PR B）等 `睡眠計畫.md`「目標 → 建議」審過才接在作息後面。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| **每一頁都能跳過**；跳過暱稱＝不建帳號（同原本的 Skip，不寫進儲存、下次再問）；跳過作息＝原本的值 | 建不了帳號擋住 App（後端沒開是 demo 的常態） |
+| **最後一步才一次送出**（Q12）：先存作息（`_setBedtime`＋起床存手機），再建帳號；建好也**先停在完成頁**，按 Let's go 才換成那個帳號（`_pendingAccount`） | 暱稱一按就建帳號的話，畫面立刻切走、後面幾頁走不到 |
+| 送不出去：完成頁照實說，Let's go 照樣能按 | — |
+| 權限說明**照原生端實際做的事寫**：讀螢幕亮暗、解鎖時間與每個 App 開了多久；送出手機的**只有時間與手機型號**，App 名字只在手機上。改 `UsageStatsService.kt` 或上傳的欄位就要回來改那段話 | 說明與行為不一致 |
+| 手機使用權限從系統設定回來（resumed）自動重查；通知只寫 **Asked**（系統視窗按了什麼拿不到） | 寫成已開啟是假話 |
+| 不得出現 secure／encrypted／safe（`welcome_flow_test`【5】逐頁掃） | 暱稱制免註冊，user_id 本身就是憑證 |
+| 淡出中的舊頁**不能點**（AnimatedSwitcher 的 transitionBuilder 包 IgnorePointer） | 連點兩下 Next 一次跳兩頁 |
+| 頁面裡的寵物要包 `IgnorePointer` | HomePet 自己會吃點擊，寵物卡點不下去 |
+| Journey 進行中：作息那一頁轉不動、照實說（`journeyLocksSchedule`） | 第二個改目標的入口 |
+| **設定頁 Replay welcome**（Q11）：從頭走一次，不建帳號；暱稱改了走 `AccountService.rename`（PATCH display_name，存回各自的鍵） | 本人手機靠建置參數認人，永遠看不到這個流程 |
+
 ### ✅ 小鎮送禮（2026-11-22 grill Q1–Q15，`feature/friend-gifts`，照 Finch 的送禮頁）
 
 點小鎮裡的朋友 → 資料卡最下面 **Send something** → 送禮頁（`widgets/visit_gift_sheet.dart`）：你的寵物＋朋友的寵物、泡泡一句、**3×3 九種**，**先選再按 Send**。兩隻寵物（與地圖上的寵物）穿各自的衣服：朋友的要他有分享 Pet outfit，後端給 `equipped_item_id` 才畫。背景 `assets/backgrounds/visit_gift.jpg`（使用者照這一頁生成的 1:2 夜晚客廳）**鋪滿整頁、貼上緣**，面板是**半透明**梅紫（`kVisitPanel`×`kVisitPanelAlpha`），下面的地板與玩具隱約透出來；**你的寵物站左邊坐墊、朋友的站右邊**，泡泡貼在你的寵物頭上方；坐墊位置用原圖比例寫在 `kVisitSeatMine／kVisitSeatFriend`，**換圖要重量（連 `kVisitGiftImageSize`）**。格子固定 84 高。讀不到退回漸層。

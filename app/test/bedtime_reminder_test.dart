@@ -60,6 +60,8 @@ class _NoBackendAccounts implements AccountService {
   @override
   Future<AccountStatus> refreshBuildTimeName(AccountStatus status) async => status;
   @override
+  Future<AccountStatus?> rename(AccountStatus status, String displayName) async => null;
+  @override
   String? get buildTimeUserIdOverride => null;
 
   @override
