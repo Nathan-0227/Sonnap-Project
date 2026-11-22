@@ -544,6 +544,19 @@ Sleep Circle 卡拿掉（它講昨晚）；右上只放**狀態圖示**，不放
 | Journey 進行中：作息那一頁轉不動、照實說（`journeyLocksSchedule`） | 第二個改目標的入口 |
 | **設定頁 Replay welcome**（Q11）：從頭走一次，不建帳號；暱稱改了走 `AccountService.rename`（PATCH display_name，存回各自的鍵） | 本人手機靠建置參數認人，永遠看不到這個流程 |
 
+#### 進場動畫（2026-11-22，`feature/entry-animation`，`widgets/entry_intro.dart`）
+
+鏡頭從夜空往下降到首頁的山頂。**短版**（冷啟動）：寵物先用睡姿（tired 的姿勢）躺在山頂，鏡頭停下才醒、換成首頁那一份心情（使用者選 B：不先露一張可能是錯的臉）。**長版**（第一次登入流程、設定頁 Replay welcome）：流程的背景就是那片天空，按 Let's go 之後流程淡出、寵物從完成頁的位置飄到山頂、落地跳一下（第一次開還沒有任何一晚，所以醒著）。介面依序淡入，導覽列最後從下面滑上來。
+
+| 規則 | 不遵守的後果 |
+|---|---|
+| 時間軸只在 `EntryFrame.at()` 一份（純函式）；短版鏡頭停下前 `awake`＝0、介面＝0 | `entry_intro_test`【1】守著 |
+| 只有 `main()` 打開（`SonnapApp(entryAnimation: true)`），**測試預設關** | 每條測試多等 2 秒、播的時候點不到東西（`entry_intro_test`【9】） |
+| 只在冷啟動播一次（`_introPlayed`）；回到前景不播；點一下跳過；減少動態效果只淡入 0.3 秒 | — |
+| 不等網路：首頁內容（打包檔）一畫出來就開始；還在讀時畫天空，**不轉圈** | — |
+| Android 啟動畫面底色＝`res/values/colors.xml` 的 `sonnap_sky`（#010B2E）＝`kEntrySkyBottom`；Android 12 以上中間是 App 圖示（`values-v31`）。改一邊要改另一邊 | 原本是白色，每次開 App 閃白 |
+| 只寫事實：不放分數、XP、Great job | 紅線 5 |
+
 #### 想改善什麼（2026-11-22 grill Q1–Q8，`feature/plan-goals`）
 
 4 個目標、最多選 2 個 → 推薦頁最多 3 條、預設打勾 → 勾著的加進計畫（`widgets/plan_goal_picker.dart`，第一次登入流程與計畫頁的 **Help me pick** 共用）。資料與字在 `services/plan_goals.dart`。

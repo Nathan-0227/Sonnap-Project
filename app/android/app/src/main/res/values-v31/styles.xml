@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 以上：系統自己畫啟動畫面（中間是 App 圖示），底色換成天空的深藍，不閃白。
+         接著 Flutter 第一幀是同一片天空，然後進場動畫降落到首頁。 -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/sonnap_sky</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/sonnap_sky</item>
+    </style>
+</resources>

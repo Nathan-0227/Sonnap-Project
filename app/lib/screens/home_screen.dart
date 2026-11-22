@@ -44,6 +44,7 @@ import 'report_loading_screen.dart';
 import 'rested_screen.dart';
 import 'wake_up_screen.dart';
 import '../widgets/week_mood_strip.dart';
+import '../widgets/entry_intro.dart';
 import 'closet_screen.dart';
 import 'rewards_screen.dart';
 import 'sleep_mode_screen.dart';
@@ -115,7 +116,11 @@ class HomeScreen extends StatefulWidget {
   /// 分數卡上面。null＝不畫（測試、或沒接上計畫的地方）。
   final Widget? planCard;
 
+  /// 進場動畫（2026-11-22，`widgets/entry_intro.dart`）。null＝不播（測試預設）。
+  final EntryIntro? intro;
+
   const HomeScreen({
+    this.intro,
     super.key,
     this.usageStats = const UsageStatsService(),
     this.bedMarks = const BedMarkStore(PlatformKeyValueStore()),
@@ -172,7 +177,8 @@ const double kHomePetSize = 230;
 /// 問候＋時鐘＋倒數圓環那一塊的高度。
 const double kHomeHeaderHeight = 230;
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   /// 在 initState 建立而不是在 build 裡——放 build 的話每次重繪都會重讀檔案。
   late Future<SleepSession> _sessionFuture;
 
@@ -250,6 +256,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
     widget.startSleepRequests?.addListener(_onStartSleepRequestListener);
+    widget.intro?.addListener(_onIntroRequest);
+    if (widget.intro?.pending ?? false) _onIntroRequest();
   }
 
   /// 導覽列中間那顆（2026-11-13 使用者定）：先滑出 Sleep schedule（就寢／起床／鬧鐘），
@@ -299,6 +307,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (NightSheetLinks.shared == _openLinkedSheet) NightSheetLinks.shared = null;
     _tick?.cancel();
     widget.startSleepRequests?.removeListener(_onStartSleepRequestListener);
+    widget.intro?.removeListener(_onIntroRequest);
+    _introCtlOrNull?.dispose();
     final repo = widget.repository;
     if (repo is LatestNightRepository) repo.removeListener(_onLatestNight);
     WidgetsBinding.instance.removeObserver(this);
@@ -1039,6 +1049,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             return _buildContent(swapped);
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
+            // 進場動畫等著播：先畫那片天空（從系統啟動畫面接過來，不要出現轉圈）
+            if (widget.intro?.pending ?? false) return const EntrySky();
             return const SafeArea(
               child: Center(
                 child: CircularProgressIndicator(color: Color(0xFF8B6DFF)),
@@ -1121,6 +1133,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final width = media.size.width;
     final topInset = media.padding.top;
     final contentWidth = width > 520 ? 520.0 : width;
+    final intro = _introFrame;
+    final introCam = intro == null ? 0.0 : media.size.height * (1 - intro.camera);
+    _introCamUsed = introCam;
+    if (_introWaitingForContent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startIntro());
+    }
 
     // 圖片以整個螢幕寬度從最上面鋪下來，所以山頂的位置可以算出來。
     // 寵物的腳（圖框底部往上約 8%）踩在山頂稍下方一點的草地上。
@@ -1136,7 +1154,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       kHomeHeaderHeight + kHomePetSize - 20 + lift,
     );
 
-    return SingleChildScrollView(
+    final scroll = SingleChildScrollView(
       child: Stack(
         clipBehavior: Clip.hardEdge,
         children: [
@@ -1194,14 +1212,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: Column(
+                              child: _introUi(0, Column(
                                 children: [
                                   _buildHeader(session, now, game),
                                   // Hi 上方加了留白，這裡收一點，免得時鐘卡壓到寵物上面的等級
                                   const SizedBox(height: 8),
                                   _buildClockRow(now),
                                 ],
-                              ),
+                              ), dy: -14),
                             ),
                             Positioned(
                               left: 0,
@@ -1212,6 +1230,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
+                      ..._introUiAll(2, [
                       if (_needsUsageAccess) ...[
                         const SizedBox(height: 8),
                         _buildUsageAccessBanner(),
@@ -1280,6 +1299,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         onDayTap: _openReport,
                         today: widget.clock(),
                       ),
+                      ]),
                     ],
                   ),
                 ),
@@ -1289,6 +1309,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+    return _wrapIntro(scroll, intro, introCam);
   }
 
   // ── 頂端：問候、名字、後端的一句話；右上是日記／衣櫃／獎勵與等級 ─────
@@ -1395,24 +1416,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final notes = _notes;
     final color = moodColor(mood);
     final pet = SizedBox(
+      key: _introPetKey,
       height: kHomePetSize,
       child: Stack(
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          HomePet(
+          _introPet(HomePet(
             mood: mood,
             size: kHomePetSize,
             equippedItemId: _closet?.value?.equippedItemId,
             accessoryEmoji: _closet?.value?.equipped?.emoji,
             growthStage: game?.growthStage,
-          ),
+          ), game),
           // 心情標籤在小狗正下方中間（2026-11-15 使用者定）
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: Center(
+            child: _introUi(1, Center(
               child: Container(
               key: const Key('mood-chip'),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -1436,7 +1458,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-          ),
+          )),
           ),
         ],
       ),
@@ -1461,13 +1483,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       right: 6,
                       // 貼在草地上（使用者定：再往下靠近草地）
                       bottom: 2,
-                      child: NotesBook(
+                      child: _introUi(1, NotesBook(
                         // 空的日記本不亮紅點、不抖：沒有新東西可讀
                         unread: notes.hasContent &&
                             _notesAskedVersion == notes.version &&
                             _notesReadVersion != notes.version,
                         onTap: () => unawaited(_showNotes(notes, mood)),
-                      ),
+                      )),
                     ),
                   ],
                 ),
@@ -1480,9 +1502,200 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        LevelProgress(game: game, onTap: _openRewards),
+        _introUi(1, LevelProgress(game: game, onTap: _openRewards)),
         const SizedBox(height: 4),
         petWithNotes,
+      ],
+    );
+  }
+
+  // ── 進場動畫（2026-11-22，時間軸在 widgets/entry_intro.dart 的 EntryFrame）──────────
+
+  /// 用到才建（沒給 intro 的首頁從來不建）。⚠️ 不能用 late final：dispose 時才第一次碰到它，
+  /// 會在已經拆掉的畫面上建 ticker，整批測試在收尾時出錯。
+  AnimationController? _introCtlOrNull;
+  AnimationController get _introCtl =>
+      _introCtlOrNull ??= AnimationController(vsync: this)..addListener(_onIntroTick);
+
+  /// 已經接手的是第幾次要求。
+  int _introSerial = 0;
+  bool _introLong = false;
+
+  /// 系統開了「減少動態效果」：只淡入。
+  bool _introFadeOnly = false;
+
+  /// 收到要求了，等首頁內容畫出來才開始（資料還在讀時先畫天空）。
+  bool _introWaitingForContent = false;
+
+  /// 這一幀鏡頭往下推了多少（長版算寵物位置用）。
+  double _introCamUsed = 0;
+
+  /// 長版：寵物在首頁原位的中心（螢幕座標、不含鏡頭）。量到之前寵物先不畫（登入流程的淡出蓋著）。
+  Offset? _introPetRest;
+  final GlobalKey _introPetKey = GlobalKey();
+
+  void _onIntroRequest() {
+    final intro = widget.intro;
+    if (intro == null || intro.serial == _introSerial) return;
+    _introSerial = intro.serial;
+    _introLong = intro.long;
+    _introPetRest = null;
+    _introCtl.stop();
+    _introWaitingForContent = true;
+    if (mounted) setState(() {});
+  }
+
+  void _startIntro() {
+    if (!_introWaitingForContent || !mounted) return;
+    _introWaitingForContent = false;
+    _introFadeOnly = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final seconds = _introFadeOnly ? 0.3 : EntryFrame.totalSeconds(long: _introLong);
+    _introCtl.duration = Duration(milliseconds: (seconds * 1000).round());
+    _introCtl.forward(from: 0).whenCompleteOrCancel(() {
+      widget.intro?.finish();
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _onIntroTick() {
+    final f = _introFrame;
+    widget.intro?.ui.value = f?.ui[3] ?? 1;
+    setState(() {});
+  }
+
+  /// 點一下跳過。
+  void _skipIntro() => _introCtl.stop();
+
+  /// 這一刻的樣子；null＝沒在播（照首頁原本的樣子畫）。
+  EntryFrame? get _introFrame {
+    if (_introWaitingForContent) {
+      return (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
+          ? null
+          : EntryFrame.at(0, long: _introLong);
+    }
+    final ctl = _introCtlOrNull;
+    if (ctl == null || !ctl.isAnimating || _introFadeOnly) return null;
+    final total = EntryFrame.totalSeconds(long: _introLong);
+    final f = EntryFrame.at(_introCtl.value * total, long: _introLong);
+    return f.done ? null : f;
+  }
+
+  /// 一組介面跟著進場淡入、滑進來（沒在播時原樣回傳）。
+  Widget _introUi(int group, Widget child, {double dy = 18}) {
+    final f = _introFrame;
+    if (f == null) return child;
+    final p = f.ui[group];
+    return Opacity(
+      opacity: p,
+      child: Transform.translate(offset: Offset(0, (1 - p) * dy), child: child),
+    );
+  }
+
+  List<Widget> _introUiAll(int group, List<Widget> children) =>
+      _introFrame == null ? children : [for (final c in children) _introUi(group, c)];
+
+  /// 寵物：短版先睡（睡姿）再醒；長版從登入流程完成頁的位置飄下來。落地都蹲一下、跳一下。
+  Widget _introPet(Widget awakePet, GameState? game) {
+    final f = _introFrame;
+    if (f == null) return awakePet;
+    var art = awakePet;
+    if (f.awake < 1) {
+      // 睡姿用 tired 的姿勢（趴著、閉眼）。醒來才換成首頁那一份心情——不先露一張可能是錯的臉。
+      art = Stack(
+        alignment: Alignment.center,
+        children: [
+          Opacity(
+            opacity: 1 - f.awake,
+            child: HomePet(
+              mood: 'tired',
+              size: kHomePetSize,
+              equippedItemId: _closet?.value?.equippedItemId,
+              growthStage: game?.growthStage,
+            ),
+          ),
+          Opacity(opacity: f.awake, child: awakePet),
+        ],
+      );
+    }
+    art = Transform(
+      alignment: Alignment.bottomCenter,
+      transform: Matrix4.diagonal3Values(f.squashX, f.squashY, 1),
+      child: art,
+    );
+    art = Transform.translate(offset: Offset(0, -f.hop), child: art);
+    if (_introLong) art = _introLongPet(art, f);
+    return art;
+  }
+
+  Widget _introLongPet(Widget art, EntryFrame f) {
+    final from = widget.intro?.petFrom;
+    if (from == null) return art;
+    final rest = _introPetRest;
+    if (rest == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureIntroPet());
+      return Opacity(opacity: 0, child: art);
+    }
+    final e = f.camera;
+    final t = _introCtl.value * EntryFrame.totalSeconds(long: true);
+    // 還在天空時輕輕飄，越接近山頂越穩
+    final bob = math.sin(t * 2.2) * 6 * (1 - e);
+    final desired = Offset.lerp(from.center, rest, e)! + Offset(0, bob);
+    final actual = rest + Offset(0, _introCamUsed);
+    final scale = _lerp(from.width / kHomePetSize, 1, e);
+    return Transform.translate(
+      offset: desired - actual,
+      child: Transform.scale(scale: scale, child: art),
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  void _measureIntroPet() {
+    if (!mounted || _introPetRest != null) return;
+    final box = _introPetKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final center = box.localToGlobal(box.size.center(Offset.zero));
+    setState(() => _introPetRest = center - Offset(0, _introCamUsed));
+  }
+
+  /// 鏡頭：整頁往下推、上面接一段天空，星星慢一點跟著移。播的時候點一下就跳過。
+  Widget _wrapIntro(Widget scroll, EntryFrame? f, double cam) {
+    if (f == null) {
+      if (_introFadeOnly && _introCtl.isAnimating) {
+        return Opacity(opacity: _introCtl.value, child: scroll);
+      }
+      if (_introWaitingForContent) return const Opacity(opacity: 0, child: SizedBox.expand());
+      return scroll;
+    }
+    final h = MediaQuery.of(context).size.height;
+    return Stack(
+      children: [
+        const Positioned.fill(child: ColoredBox(color: kEntrySkyTop)),
+        // 首頁背景圖上方那一段天空，跟著世界一起移
+        Positioned(
+          top: cam - h,
+          left: 0,
+          right: 0,
+          height: h + 1,
+          child: const EntrySky(starOpacity: 0),
+        ),
+        Positioned.fill(
+          child: Transform.translate(offset: Offset(0, cam), child: scroll),
+        ),
+        Positioned.fill(
+          child: EntrySky(
+            gradient: false,
+            starShift: -kEntryParallax * h * f.camera,
+            starOpacity: f.stars,
+          ),
+        ),
+        Positioned.fill(
+          child: GestureDetector(
+            key: const Key('entry-intro-skip'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _skipIntro,
+          ),
+        ),
       ],
     );
   }
