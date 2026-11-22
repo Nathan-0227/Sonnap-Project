@@ -10,6 +10,7 @@ import '../services/sleep_plan.dart';
 import 'morning_report_screen.dart' show reportDateTitle;
 import '../widgets/assistant_chrome.dart';
 import '../widgets/report_sheet.dart';
+import '../content/sleep_basics.dart';
 import '../widgets/sleep_basics_card.dart';
 
 /// 睡眠助理（2026-11-19 第二版：對話介面）。答案來自後端的 Claude（`POST /chat`），
@@ -235,11 +236,31 @@ class _AssistantScreenState extends State<AssistantScreen> {
   void _openBasics() {
     showReportSheet<void>(
       context: context,
-      builder: (_) => const Padding(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: SingleChildScrollView(child: SleepBasicsCard(initiallyExpanded: true)),
+      // 底部留系統導覽列的高度：三顆按鈕的導覽原本蓋住最後一條的出處（2026-11-22 實機）
+      builder: (context) => Padding(
+        key: const Key('assistant-basics-sheet'),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24 + MediaQuery.paddingOf(context).bottom),
+        child: const SingleChildScrollView(child: SleepBasicsCard(initiallyExpanded: true)),
       ),
     );
+  }
+
+  /// 點 Sleep basics 的膠囊：問題＝那一條的標題，寵物回的是**原文＋出處**（不經過 AI、不花額度）。
+  Future<void> _showBasic(SleepBasic b) async {
+    if (_loading) return;
+    setState(() {
+      _turns
+        ..add(ChatTurn.user(b.title))
+        ..add(ChatTurn.buddy(b.summary, basic: b.id));
+    });
+    _toBottom();
+    await _thread.save(_turns);
+  }
+
+  /// 這段對話還沒看過的 Sleep basics（看過的那顆就不再出現；開新對話又全部回來）。
+  List<SleepBasic> _unseenBasics() {
+    final seen = {for (final t in _turns) if (t.basic != null) t.basic};
+    return [for (final b in kSleepBasics) if (!seen.contains(b.id)) b];
   }
 
   void _toBottom() {
@@ -266,6 +287,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   _header(),
                   Expanded(child: _messages()),
                   _suggestions(),
+                  _basicsRow(),
                   const Padding(
                     key: Key('assistant-disclaimer'),
                     padding: EdgeInsets.fromLTRB(16, 2, 16, 0),
@@ -346,6 +368,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
             ? _UserBubble(text: _turns[i].text)
             : _BuddyBubble(
                 text: _turns[i].text,
+                source: _basicSource(_turns[i].basic),
                 headline: _turns[i].headline,
                 why: _turns[i].why,
                 failed: _turns[i].failed,
@@ -388,6 +411,56 @@ class _AssistantScreenState extends State<AssistantScreen> {
           ),
         ),
     ];
+  }
+
+  /// Sleep basics 那則底下的出處（照 `kSleepBasics` 原文；不認得的 id 不寫）。
+  String? _basicSource(String? id) {
+    if (id == null) return null;
+    for (final b in kSleepBasics) {
+      if (b.id == id) return b.source;
+    }
+    return null;
+  }
+
+  /// 輸入框上方一排可以左右滑的 Sleep basics 膠囊（2026-11-22 使用者定：A＋B，📖 面板也留著）。
+  Widget _basicsRow() {
+    final items = _unseenBasics();
+    if (items.isEmpty) return const SizedBox.shrink();
+    final accent = accentOf(context);
+    return SizedBox(
+      key: const Key('assistant-basics-row'),
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final b = items[i];
+          return Center(
+            child: Material(
+              color: const Color(0xCC17305A),
+              shape: StadiumBorder(side: BorderSide(color: accent.withValues(alpha: 0.7))),
+              child: InkWell(
+                key: Key('assistant-basic-${b.id}'),
+                customBorder: const StadiumBorder(),
+                onTap: _loading ? null : () => _showBasic(b),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.menu_book_rounded, size: 15, color: accent),
+                    const SizedBox(width: 6),
+                    Text(b.title,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _followUps() {
@@ -521,12 +594,16 @@ class _BuddyBubble extends StatelessWidget {
   final String? headline;
   final String? why;
 
+  /// Sleep basics 那則的出處（第一作者＋期刊），小字放在泡泡最底下。
+  final String? source;
+
   final bool failed;
   final bool typing;
   final VoidCallback? onRetry;
   const _BuddyBubble(
       {super.key,
       this.text,
+      this.source,
       this.headline,
       this.why,
       this.failed = false,
@@ -583,6 +660,13 @@ class _BuddyBubble extends StatelessWidget {
                                 color: failed ? const Color(0xFFFFD9D2) : Colors.white,
                                 fontSize: 15,
                                 height: 1.35)),
+                      if (source != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(source!,
+                              key: const Key('assistant-basic-source'),
+                              style: const TextStyle(color: Color(0xFF9FB3D1), fontSize: 11.5)),
+                        ),
                       if (onRetry != null)
                         TextButton.icon(
                           key: const Key('assistant-retry'),

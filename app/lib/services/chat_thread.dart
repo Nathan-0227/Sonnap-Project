@@ -90,6 +90,10 @@ class ChatTurn {
   final ChatLink? link;
   final ChatPeriod? period;
 
+  /// Sleep basics 的哪一條（`kSleepBasics` 的 id）。有值＝這則是 App 照抄的固定原文，
+  /// 不是 AI 寫的：不花額度、不當前文送給 AI（2026-11-22 使用者定，設計 B）。
+  final String? basic;
+
   const ChatTurn.user(this.text)
       : fromUser = true,
         failed = false,
@@ -97,14 +101,16 @@ class ChatTurn {
         why = null,
         tips = const [],
         link = null,
-        period = null;
+        period = null,
+        basic = null;
   const ChatTurn.buddy(this.text,
       {this.failed = false,
       this.headline,
       this.why,
       this.tips = const [],
       this.link,
-      this.period})
+      this.period,
+      this.basic})
       : fromUser = false;
 
   /// 有沒有分段（舊的訊息、答不出來的那則沒有）。
@@ -118,6 +124,7 @@ class ChatTurn {
         if (tips.isNotEmpty) 'tips': [for (final t in tips) t.toJson()],
         if (link != null) 'link': link!.toJson(),
         if (period != null) 'period': period!.toJson(),
+        if (basic != null) 'basic': basic,
       };
 
   static ChatTurn? fromJson(Object? raw) {
@@ -138,6 +145,7 @@ class ChatTurn {
           tips: tips is List ? [for (final t in tips.map(ChatTip.fromJson)) ?t] : const [],
           link: ChatLink.fromJson(raw['link']),
           period: ChatPeriod.fromJson(raw['period']),
+          basic: raw['basic'] is String ? raw['basic'] as String : null,
         );
       default:
         return null;
@@ -159,6 +167,11 @@ List<Map<String, String>> chatContext(List<ChatTurn> turns) {
   for (var i = 0; i + 1 < turns.length; i++) {
     final q = turns[i];
     final a = turns[i + 1];
+    // Sleep basics 那幾則是 App 自己放的固定原文，不是跟 AI 的對話：整輪跳過、不當前文
+    if (q.fromUser && !a.fromUser && a.basic != null) {
+      i++;
+      continue;
+    }
     if (q.fromUser && !a.fromUser && !a.failed) {
       rounds.add([
         {'role': 'user', 'text': q.text},
