@@ -694,6 +694,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     Widget builder(BuildContext context) => WelcomeFlow(
         replay: true,
         donePetKey: petKey,
+        animateOpening: widget.entryAnimation,
         initialName: account?.displayName,
         initialBedtime: targetBedtime,
         initialWake: wake,
@@ -787,6 +788,7 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
         store: widget.store ?? const PlatformKeyValueStore(),
         permissions: _welcomePermissions,
         donePetKey: _welcomePetKey,
+        animateOpening: widget.entryAnimation,
         onFinish: _finishWelcome,
         onDone: _enterApp,
       );
@@ -924,7 +926,8 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     if (account == null) {
       // 進場動畫：系統啟動畫面之後直接是那片天空（不轉圈），接著降落到首頁
       if (widget.entryAnimation) {
-        return const Scaffold(backgroundColor: kEntrySkyTop, body: EntrySky());
+        // 星星先不畫：接下來不管是首頁降落還是歡迎頁開場，星星都要從暗一顆顆亮起來
+        return const Scaffold(backgroundColor: kEntrySkyTop, body: EntrySky(starOpacity: 0));
       }
       return const Scaffold(
         backgroundColor: Color(0xFF081326),

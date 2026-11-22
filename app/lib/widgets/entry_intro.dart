@@ -59,6 +59,13 @@ class EntryFrame {
   /// 播完了。
   final bool done;
 
+  /// 第幾秒、介面從第幾秒開始進場（[item] 用）。
+  final double t, uiStart;
+
+  /// 一個介面元件的進度：鏡頭快停時開始，[delay] 秒後才輪到它（首頁一張張卡片錯開進場）。
+  double item(double delay) =>
+      done ? 1 : _easeOut(_prog(t, uiStart + delay, uiStart + delay + kEntryItemSeconds));
+
   const EntryFrame({
     required this.camera,
     required this.stars,
@@ -68,6 +75,8 @@ class EntryFrame {
     required this.squashY,
     required this.ui,
     required this.done,
+    this.t = 0,
+    this.uiStart = 0,
   });
 
   /// 停在首頁原本的樣子（沒有在播、或播完）。
@@ -80,7 +89,7 @@ class EntryFrame {
   static const double shortSeconds = 1.95;
 
   /// 長版（按 Let's go 之後）多長（秒）。
-  static const double longSeconds = 1.9;
+  static const double longSeconds = 2.0;
 
   static double totalSeconds({required bool long}) => long ? longSeconds : shortSeconds;
 
@@ -126,7 +135,7 @@ class EntryFrame {
     // 介面：鏡頭快停時依序進來（導覽列跟寵物身邊那組差不多同時）
     final uiStart = land + .05;
     const delays = [0.0, .16, .1, .12];
-    final ui = [for (final d in delays) _easeOut(_prog(t, uiStart + d, uiStart + d + .35))];
+    final ui = [for (final d in delays) _easeOut(_prog(t, uiStart + d, uiStart + d + kEntryItemSeconds))];
 
     return EntryFrame(
       camera: camera,
@@ -137,9 +146,17 @@ class EntryFrame {
       squashY: sy,
       ui: ui,
       done: false,
+      t: t,
+      uiStart: uiStart,
     );
   }
 }
+
+/// 一個介面元件從看不到到原位要多久（秒）。
+const double kEntryItemSeconds = .35;
+
+/// 首頁底下第 [index] 張卡片的延遲：一張晚 0.05 秒，最晚 0.3 秒（不然播完時還有卡片沒到位、最後一下跳到原位）。
+double entryCardDelay(int index) => math.min(.14 + .05 * index, .3);
 
 /// 要求播一次。首頁聽它；導覽列聽 [ui]。
 class EntryIntro extends ChangeNotifier {
@@ -226,11 +243,13 @@ class EntryStarsPainter extends CustomPainter {
 
   EntryStarsPainter({required this.shift, required this.opacity});
 
-  static final List<(double, double, double, double)> _stars = () {
+  /// （x, y, 半徑, 亮度, 亮起來的先後）。先後讓星星一顆一顆亮，不是整片一起出現。
+  static final List<(double, double, double, double, double)> _stars = () {
     final r = math.Random(7);
     return [
       for (var i = 0; i < 70; i++)
-        (r.nextDouble(), r.nextDouble() * 1.4, r.nextDouble() * 1.2 + .5, .35 + r.nextDouble() * .65),
+        (r.nextDouble(), r.nextDouble() * 1.4, r.nextDouble() * 1.2 + .5, .35 + r.nextDouble() * .65,
+            r.nextDouble() * .4),
     ];
   }();
 
@@ -238,14 +257,44 @@ class EntryStarsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (opacity <= 0) return;
     final paint = Paint()..color = Colors.white;
-    for (final (x, y, radius, alpha) in _stars) {
+    for (final (x, y, radius, alpha, delay) in _stars) {
       final dy = y * size.height + shift;
       if (dy < -4 || dy > size.height + 4) continue;
-      paint.color = Colors.white.withValues(alpha: alpha * opacity);
+      final a = _clamp01(opacity * 1.4 - delay);
+      if (a <= 0) continue;
+      paint.color = Colors.white.withValues(alpha: alpha * a);
       canvas.drawCircle(Offset(x * size.width, dy), radius, paint);
     }
   }
 
   @override
   bool shouldRepaint(EntryStarsPainter old) => old.shift != shift || old.opacity != opacity;
+}
+
+/// 第一次登入流程的開場（只有歡迎頁、只播一次）：星星一顆顆亮起來 → 寵物浮上來 → 標題、說明、按鈕依序進來。
+/// 跟 [EntryFrame] 一樣是純函式。
+@immutable
+class WelcomeOpening {
+  final double stars, topBar, pet, title, subtitle, body, button;
+
+  const WelcomeOpening._(this.stars, this.topBar, this.pet, this.title, this.subtitle, this.body, this.button);
+
+  static const WelcomeOpening rest = WelcomeOpening._(1, 1, 1, 1, 1, 1, 1);
+
+  /// 多長（秒）。
+  static const double seconds = 1.6;
+
+  factory WelcomeOpening.at(double t) {
+    if (t >= seconds) return rest;
+    double p(double a, double b) => _easeOut(_prog(t, a, b));
+    return WelcomeOpening._(
+      _prog(t, 0, .9),
+      p(.5, .9),
+      p(.6, 1.1),
+      p(.8, 1.2),
+      p(.9, 1.3),
+      p(1.0, 1.4),
+      p(1.2, 1.6),
+    );
+  }
 }
