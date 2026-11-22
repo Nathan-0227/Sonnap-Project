@@ -7,16 +7,14 @@ import '../services/key_value_store.dart';
 import '../services/night_sheet_link.dart';
 import '../services/sleep_plan.dart';
 import 'morning_report_screen.dart' show reportDateTitle;
-import '../widgets/home_pet.dart';
+import '../widgets/assistant_chrome.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/sleep_basics_card.dart';
 
 /// 睡眠助理（2026-11-19 第二版：對話介面）。答案來自後端的 Claude（`POST /chat`），
 /// 只根據這個人自己的資料。
 ///
-/// 版面（使用者定）：上半是使用者生成的寵物房間（`assets/backgrounds/assistant_room.jpg`，
-/// 下半自己淡成 [_bg]），寵物站在房間地板上；回答的角色是**寵物**（標題 Your buddy，
-/// 跟寵物 notes 同一個角色）。訊息從底部往上長；輸入框固定在最下面；建議問題是固定清單
+/// 回答的角色是**寵物**（標題 Your buddy，跟寵物 notes 同一個角色；外觀見下面「聊天室外觀」）。訊息從底部往上長；輸入框固定在最下面；建議問題是固定清單
 /// （不讓 AI 生，免得多花額度）；右上 📖 睡眠小知識、✎ 開新對話。對話存在手機上，
 /// 只留一段。舊版寫死的「What affected your sleep」三條拿掉了（每個人每天都一樣，
 /// 是在 Dart 自己下判斷）。
@@ -39,6 +37,17 @@ import '../widgets/sleep_basics_card.dart';
 /// 「+ Add "caffeine earlier" to my plan」＋後端那句 Why（設計稿 A）→ 詳細頁連結 → 兩顆追問
 /// （[kAssistantSuggestions] 裡這段對話還沒問過的，不經過 AI）。輸入框上方固定 [kAssistantDisclaimer]。
 /// ⚠️ 加進計畫的是清單原句（`kPlanSuggestions`），不是 AI 寫的字；Why 也是後端固定表的字。
+///
+/// ═══════════════════════════════════════════════════════════════════
+/// 聊天室外觀（2026-11-22 使用者 grill 定，設計稿 D；元件在 widgets/assistant_chrome.dart）
+/// ═══════════════════════════════════════════════════════════════════
+///
+/// 房間圖與站在房間裡的大寵物拿掉了（泡泡一捲就蓋住牠、頭像又漫出圓框）。現在：
+/// 會動的背景（深藍＋往上飄的塗鴉＋星星與流星）、實心標題列（頭像＋Your buddy＋照後端心情的狀態）、
+/// 第一則是 App 用固定句型組的打招呼（照抄 `/home` 那一晚的數字，不呼叫 AI、不當前文送出）、
+/// 日期改成置中膠囊（換晚上或換一段時才出現）、泡泡有小尾巴、每則旁邊不再放小頭像。
+/// 想答案時：狀態 thinking…、頭像歪頭、星星閃快。⚠️ [visible] 為 false（切到別的分頁）
+/// 或系統開「減少動態效果」時動畫全停。
 class AssistantScreen extends StatefulWidget {
   final String username;
 
@@ -48,8 +57,17 @@ class AssistantScreen extends StatefulWidget {
   /// 對話存在哪（null＝手機的 `sonnap/store`）。
   final KeyValueStore? store;
 
-  /// 房間裡那隻寵物的心情（同首頁那一份）；拿不到就是 bored（`HomePet` 的退路）。
+  /// 頭像與狀態列的心情（同首頁那一份）；拿不到就是 bored。
   final Future<String?> Function()? petMood;
+
+  /// 打招呼那一則要的那一晚：`/home?date=<今天>` 的回應（null＝沒有後端或拿不到 → 只打招呼）。
+  final Future<Map<String, dynamic>?> Function(String date)? greetingNight;
+
+  /// 這一頁現在在不在畫面上（App 的分頁疊在 IndexedStack 裡）。false 時動畫全停。
+  final bool visible;
+
+  /// 測試換時鐘用。
+  final DateTime Function() clock;
 
   const AssistantScreen({
     super.key,
@@ -57,6 +75,9 @@ class AssistantScreen extends StatefulWidget {
     this.chat,
     this.store,
     this.petMood,
+    this.greetingNight,
+    this.visible = true,
+    this.clock = DateTime.now,
   });
 
   @override
@@ -93,12 +114,27 @@ List<String> followUpQuestions(List<ChatTurn> turns) {
   return [for (final q in kAssistantSuggestions) if (!asked.contains(q)) q].take(kFollowUpCount).toList();
 }
 
-const _bg = Color(0xFF0D164D); // 房間圖最底下的顏色
-const _room = 'assets/backgrounds/assistant_room.jpg';
-const _roomAspect = 1672 / 941;
-const _floorY = 0.50; // 地板（床與地毯之間）在圖高的哪裡
+/// 日期膠囊的鍵：同一晚、同一段只出一次。
+String chatPeriodKey(ChatPeriod p) => p.kind == 'night' ? 'n:${p.date}' : 'r:${p.start}:${p.end}';
+
+/// 哪幾則回答上面要放日期膠囊（2026-11-22 使用者定）：最上面已經有「Today」，
+/// 之後只在講的晚上或那一段**跟上一個膠囊不同**時才再放一個。
+Set<int> periodChipsAt(List<ChatTurn> turns) {
+  final out = <int>{};
+  String? last;
+  for (var i = 0; i < turns.length; i++) {
+    final p = turns[i].period;
+    if (turns[i].fromUser || p == null) continue;
+    final key = chatPeriodKey(p);
+    if (key != last) out.add(i);
+    last = key;
+  }
+  return out;
+}
+
 const _purple = Color(0xFF7B61FF);
-const _bubble = Color(0xF21B2A66);
+const _bubble = Color(0xFF1E2C6B);
+const _bar = Color(0xFF121A47);
 
 class _AssistantScreenState extends State<AssistantScreen> {
   final List<ChatTurn> _turns = [];
@@ -108,10 +144,17 @@ class _AssistantScreenState extends State<AssistantScreen> {
       ChatThreadStore(widget.store ?? const PlatformKeyValueStore());
   bool _loading = false;
   String? _mood;
+  Map<String, dynamic>? _greetingNight;
 
   @override
   void initState() {
     super.initState();
+    final now = widget.clock();
+    final today = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}'
+        '-${now.day.toString().padLeft(2, '0')}';
+    widget.greetingNight?.call(today).then((n) {
+      if (mounted && n != null) setState(() => _greetingNight = n);
+    }, onError: (_) {});
     _thread.load().then((saved) {
       if (!mounted || saved.isEmpty || _turns.isNotEmpty) return;
       setState(() => _turns.addAll(saved));
@@ -198,28 +241,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final w = c.maxWidth;
-      final imgH = w * _roomAspect;
-      const petSize = 120.0;
-      return Container(
-        color: _bg,
-        child: Stack(children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: imgH,
-            child: Image.asset(_room,
-                fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
-          ),
-          Positioned(
-            left: w / 2 - petSize / 2,
-            top: imgH * _floorY - petSize * 0.86,
-            child: IgnorePointer(
-              child: HomePet(mood: _mood, size: petSize, animate: false),
-            ),
-          ),
+    return TickerMode(
+      enabled: widget.visible,
+      child: LayoutBuilder(builder: (context, c) {
+        final w = c.maxWidth;
+        return Stack(children: [
+          Positioned.fill(child: ChatBackdrop(thinking: _loading)),
           SafeArea(
             child: Center(
               child: SizedBox(
@@ -240,23 +267,30 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
             ),
           ),
-        ]),
-      );
-    });
+        ]);
+      }),
+    );
   }
 
+  /// 實心標題列：訊息只在它底下捲，不會再被切一半疊在標題後面。
   Widget _header() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+    return Container(
+      decoration: BoxDecoration(
+        color: _bar.withValues(alpha: 0.94),
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
       child: Row(children: [
-        const _Avatar(size: 40),
+        BuddyAvatar(mood: _mood, size: 44, tilt: _loading),
         const SizedBox(width: 10),
-        const Expanded(
+        Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Your buddy',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text('Answers from your own sleep data',
-                style: TextStyle(color: Colors.white70, fontSize: 12)),
+            const Text('Your buddy',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(buddyStatus(_mood, thinking: _loading),
+                key: const Key('assistant-status'),
+                style: TextStyle(
+                    color: _loading ? const Color(0xFFC8BCFF) : const Color(0xFF9FE6C4), fontSize: 12)),
           ]),
         ),
         _roundIcon(Icons.menu_book_rounded, 'Sleep basics', _openBasics,
@@ -271,7 +305,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     return Padding(
       padding: const EdgeInsets.only(left: 6),
       child: Material(
-        color: const Color(0x66101A4A),
+        color: Colors.white.withValues(alpha: 0.08),
         shape: const CircleBorder(),
         child: IconButton(
           key: key,
@@ -287,19 +321,22 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   Widget _messages() {
     // 從底部往上長：最新的在最下面、靠近輸入框。
+    final chips = periodChipsAt(_turns);
     final items = <Widget>[
+      const ChatDateChip('Today', key: Key('assistant-chip-today')),
       _BuddyBubble(
-        text: "Hi ${widget.username}! Ask me anything about your sleep. "
-            "I only use your own data.",
+        key: const Key('assistant-greeting'),
+        text: buildGreeting(name: widget.username, now: widget.clock(), night: _greetingNight),
       ),
       for (var i = 0; i < _turns.length; i++) ...[
+        if (chips.contains(i))
+          ChatDateChip(chatPeriodLabel(_turns[i].period!), key: const Key('assistant-period')),
         _turns[i].fromUser
             ? _UserBubble(text: _turns[i].text)
             : _BuddyBubble(
                 text: _turns[i].text,
                 headline: _turns[i].headline,
                 why: _turns[i].why,
-                period: _turns[i].period,
                 failed: _turns[i].failed,
                 onRetry: _turns[i].failed && widget.chat != null ? () => _retry(i) : null,
               ),
@@ -328,7 +365,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
           if (kTipToPlan[tip.id] != null) _TipLine(tip: tip, planId: kTipToPlan[tip.id]!, plan: plan),
       if (open != null && label != null)
         Padding(
-          padding: const EdgeInsets.only(left: 38),
+          padding: const EdgeInsets.only(left: 14),
           child: Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
@@ -347,7 +384,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     if (qs.isEmpty) return const SizedBox.shrink();
     return Padding(
       key: const Key('assistant-follow-ups'),
-      padding: const EdgeInsets.only(left: 38, top: 4, bottom: 4),
+      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
       child: Wrap(spacing: 8, runSpacing: 8, children: [for (final q in qs) _chip(q)]),
     );
   }
@@ -408,7 +445,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 15),
               cursorColor: _purple,
               decoration: const InputDecoration(
-                hintText: 'Ask your buddy…',
+                hintText: 'Message your buddy…',
                 hintStyle: TextStyle(color: Colors.white38),
                 border: InputBorder.none,
               ),
@@ -433,33 +470,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
   }
 }
 
-/// 寵物頭像：圓框裡的 [HomePet]（跟著設定頁選的小狗／貓）。
-class _Avatar extends StatelessWidget {
-  final double size;
-  const _Avatar({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFF2B3C82),
-        border: Border.all(color: _purple.withValues(alpha: 0.7), width: 1.5),
-      ),
-      child: ClipOval(
-        child: OverflowBox(
-          maxWidth: size * 1.7,
-          maxHeight: size * 1.7,
-          alignment: const Alignment(0.15, 0.55),
-          child: HomePet(size: size * 1.7, animate: false, mood: 'happy'),
-        ),
-      ),
-    );
-  }
-}
-
 class _UserBubble extends StatelessWidget {
   final String text;
   const _UserBubble({required this.text});
@@ -468,19 +478,26 @@ class _UserBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(left: 56, top: 6, bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: const BoxDecoration(
-          color: _purple,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(18),
-            topRight: Radius.circular(18),
-            bottomLeft: Radius.circular(18),
-            bottomRight: Radius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 56, top: 6, bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: const BoxDecoration(
+                color: _purple,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14.5, height: 1.35)),
+            ),
           ),
-        ),
-        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.35)),
+          const BubbleTail(color: _purple, left: false),
+        ]),
       ),
     );
   }
@@ -493,30 +510,28 @@ class _BuddyBubble extends StatelessWidget {
   final String? headline;
   final String? why;
 
-  /// 講的是哪一晚／哪一段：寫在粗體那句上面的小字。
-  final ChatPeriod? period;
   final bool failed;
   final bool typing;
   final VoidCallback? onRetry;
   const _BuddyBubble(
-      {this.text,
+      {super.key,
+      this.text,
       this.headline,
       this.why,
-      this.period,
       this.failed = false,
       this.typing = false,
       this.onRetry});
 
   @override
   Widget build(BuildContext context) {
+    // 每則旁邊不再放小頭像（標題列已經有牠）；靠左、深藍、左下一個小尾巴
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        const _Avatar(size: 30),
-        const SizedBox(width: 8),
+        const BubbleTail(color: _bubble, left: true),
         Flexible(
           child: Container(
-            margin: const EdgeInsets.only(right: 40),
+            margin: const EdgeInsets.only(right: 48),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: _bubble,
@@ -536,31 +551,20 @@ class _BuddyBubble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (headline != null) ...[
-                        if (period != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text(chatPeriodLabel(period!),
-                                key: const Key('assistant-period'),
-                                style: const TextStyle(
-                                    color: Color(0xFFB9A9FF),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3)),
-                          ),
                         Text(headline!,
                             key: const Key('assistant-headline'),
                             style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.w700,
-                                height: 1.35)),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                height: 1.38)),
                         if (why != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(why!,
                                 key: const Key('assistant-why'),
                                 style: const TextStyle(
-                                    color: Color(0xFFD3D8F5), fontSize: 14, height: 1.35)),
+                                    color: Color(0xFFC9CFEE), fontSize: 13.5, height: 1.38)),
                           ),
                       ] else
                         Text(text ?? '',
@@ -625,7 +629,7 @@ class _TipLineState extends State<_TipLine> {
     if (s == null || name == null || !widget.plan.loaded) return const SizedBox.shrink();
     final inPlan = widget.plan.contains(s.id);
     return Padding(
-      padding: const EdgeInsets.only(left: 38, top: 2, bottom: 2),
+      padding: const EdgeInsets.only(left: 14, top: 2, bottom: 2),
       child: inPlan
           ? Row(key: Key('assistant-in-plan-${widget.planId}'), children: [
               const Icon(Icons.check_rounded, size: 16, color: Color(0xFF7FE0B0)),

@@ -89,6 +89,8 @@ flutter:
     - assets/moods/
     # 獎勵頁的徽章（使用者生成，2026-11-22；缺圖時程式退回獎盃圖示）
     - assets/badges/
+    # 助理頁的寵物頭像（使用者生成，2026-11-22）：檔名與規格見資料夾裡的 README
+    - assets/avatars/
 
   # 早晨報告與起床自評用的字（使用者 2026-11-12 定）。SIL OFL 1.1，授權檔在同一個資料夾。
   # 官方只出可變字型；Flutter 不會把 fontWeight 對應到 wght 軸，所以切成五個固定粗細
