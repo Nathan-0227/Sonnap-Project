@@ -196,6 +196,13 @@
       "time_in_bed_minutes": 360.0,
       "bed_start_kind": "recalled",
       "bed_end_kind": "recalled"
+    },
+    "2026-11-21": {
+      "bed_start_at": "2026-11-20T21:00:00",
+      "bed_end_at": "2026-11-21T03:40:00",
+      "time_in_bed_minutes": 400.0,
+      "bed_start_kind": "recalled",
+      "bed_end_kind": "recalled"
     }
   }
 }
