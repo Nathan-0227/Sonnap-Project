@@ -2442,7 +2442,7 @@
    "active_kcal": 193,
    "highly_active_sec": 1229,
    "active_sec": 5845,
-   "sedentary_sec": 70326,
+   "sedentary_sec": 68526,
    "floors_up": 7.0,
    "stress_rest_sec": 31080,
    "stress_low_sec": 15360,
@@ -2454,7 +2454,7 @@
    "move_iq": [],
    "resting_kcal": 1422,
    "total_kcal": 1615,
-   "sleeping_sec": 9000,
+   "sleeping_sec": 10800,
    "stress_activity_sec": 15900,
    "stress_uncategorized_sec": 14520
   },
@@ -2586,27 +2586,66 @@
    "stress_uncategorized_sec": 8820
   },
   "2026-11-21": {
-   "steps": 112,
+   "steps": 7771,
    "step_goal": 7490,
-   "distance_m": 76,
-   "active_kcal": 35,
-   "highly_active_sec": 0,
-   "active_sec": 300,
-   "sedentary_sec": 7680,
-   "floors_up": 0.0,
-   "stress_rest_sec": 17520,
-   "stress_low_sec": 900,
-   "stress_medium_sec": 1380,
-   "stress_high_sec": 420,
+   "distance_m": 5112,
+   "active_kcal": 437,
+   "highly_active_sec": 1601,
+   "active_sec": 7540,
+   "sedentary_sec": 63699,
+   "floors_up": 10.2,
+   "stress_rest_sec": 40440,
+   "stress_low_sec": 7980,
+   "stress_medium_sec": 8820,
+   "stress_high_sec": 4320,
+   "body_battery_charged": null,
+   "body_battery_drained": null,
+   "vo2max": null,
+   "move_iq": [
+    {
+     "type": "cycling",
+     "start": "14:54",
+     "minutes": 16
+    },
+    {
+     "type": "cycling",
+     "start": "18:36",
+     "minutes": 21
+    },
+    {
+     "type": "cycling",
+     "start": "22:53",
+     "minutes": 27
+    }
+   ],
+   "resting_kcal": 1422,
+   "total_kcal": 1859,
+   "sleeping_sec": 13560,
+   "stress_activity_sec": 15180,
+   "stress_uncategorized_sec": 6600
+  },
+  "2026-11-22": {
+   "steps": 2404,
+   "step_goal": 7520,
+   "distance_m": 1545,
+   "active_kcal": 60,
+   "highly_active_sec": 945,
+   "active_sec": 1861,
+   "sedentary_sec": 40814,
+   "floors_up": 4.0,
+   "stress_rest_sec": 37500,
+   "stress_low_sec": 6420,
+   "stress_medium_sec": 2940,
+   "stress_high_sec": 360,
    "body_battery_charged": null,
    "body_battery_drained": null,
    "vo2max": null,
    "move_iq": [],
-   "resting_kcal": 354,
-   "total_kcal": 389,
-   "sleeping_sec": 13560,
-   "stress_activity_sec": 420,
-   "stress_uncategorized_sec": 600
+   "resting_kcal": 1090,
+   "total_kcal": 1150,
+   "sleeping_sec": 22620,
+   "stress_activity_sec": 7860,
+   "stress_uncategorized_sec": 9060
   }
  }
 }
